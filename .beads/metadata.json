@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "tikajs",
+  "project_id": "2a18c473-aa8b-4080-a93e-c1f34d81f4f2"
+}
