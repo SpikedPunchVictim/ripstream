@@ -245,7 +245,12 @@ export class Ripstream {
       signal,
     });
     try {
-      return await action(stream, metadata, ctx);
+      const result = await action(stream, metadata, ctx);
+      ctx.throwIfAborted(); // a parser that swallowed/rewrapped the abort must not report success
+      return result;
+    } catch (error) {
+      if (signal.aborted) ctx.throwIfAborted();
+      throw error;
     } finally {
       if (timer !== null) clearTimeout(timer);
       await stream.close();

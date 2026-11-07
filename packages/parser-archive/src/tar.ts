@@ -1,6 +1,7 @@
 import {
   LimitExceededError,
   MalformedDocumentError,
+  RipstreamError,
   MediaType,
   type ContentHandler,
   type Metadata,
@@ -112,7 +113,12 @@ export class TarParser implements Parser {
       } catch (error) {
         // Let the in-flight entry settle so nothing rejects unobserved.
         await chain;
-        throw failure ?? error;
+        // #21: a limit/other RipstreamError from an entry keeps its code; a raw
+        // tar-stream parse error becomes a 422 MalformedDocumentError, not a 500.
+        const reason = failure ?? error;
+        throw reason instanceof RipstreamError
+          ? reason
+          : new MalformedDocumentError("Invalid tar archive", { cause: reason });
       }
       await chain;
       if (failure !== null) throw failure;

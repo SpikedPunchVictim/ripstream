@@ -145,3 +145,35 @@ test("reads BPG dimensions", async () => {
   assert.equal(metadata.get("tiff:ImageWidth"), "512");
   assert.equal(metadata.get("tiff:ImageLength"), "256");
 });
+
+async function dimsOf(bytes: Uint8Array): Promise<[string | null, string | null]> {
+  const stream = await RipstreamInputStream.from(bytes);
+  const metadata = new Metadata();
+  await new ImageParser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  await stream.close();
+  return [metadata.get("tiff:ImageWidth"), metadata.get("tiff:ImageLength")];
+}
+
+function webpHeader(fourcc: string): Uint8Array {
+  const webp = new Uint8Array(40);
+  webp.set([0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
+  webp.set(new TextEncoder().encode(fourcc), 12);
+  return webp;
+}
+
+test("reads lossy WebP (VP8) dimensions at the correct offset", async () => {
+  const webp = webpHeader("VP8 ");
+  webp.set([0x30, 0x01, 0x00], 20); // frame tag
+  webp.set([0x9d, 0x01, 0x2a], 23); // start code
+  webp.set([0x80, 0x02], 26); // width 640
+  webp.set([0xe0, 0x01], 28); // height 480
+  assert.deepEqual(await dimsOf(webp), ["640", "480"]);
+});
+
+test("reads lossless WebP (VP8L) dimensions", async () => {
+  const webp = webpHeader("VP8L");
+  const bits = (640 - 1) | ((480 - 1) << 14);
+  webp[20] = 0x2f;
+  new DataView(webp.buffer).setUint32(21, bits >>> 0, true);
+  assert.deepEqual(await dimsOf(webp), ["640", "480"]);
+});

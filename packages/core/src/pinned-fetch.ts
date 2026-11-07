@@ -71,7 +71,8 @@ export async function pinnedFetch(
   for (let i = 0; i < incoming.rawHeaders.length; i += 2) {
     responseHeaders.append(incoming.rawHeaders[i] as string, incoming.rawHeaders[i + 1] as string);
   }
-  const status = incoming.statusCode ?? 502;
+  const raw = incoming.statusCode ?? 502;
+  const status = raw >= 200 && raw <= 599 ? raw : 502;
   const init2 = { status, statusText: incoming.statusMessage ?? "", headers: responseHeaders };
   if (NULL_BODY_STATUSES.includes(status) || req.method === "HEAD") {
     incoming.resume();

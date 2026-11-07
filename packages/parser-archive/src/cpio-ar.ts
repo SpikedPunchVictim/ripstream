@@ -83,7 +83,7 @@ export class ArParser implements Parser {
         const header = new TextDecoder("latin1").decode(data.subarray(position, position + 60));
         const name = header.slice(0, 16).trim().replace(/\/$/, "");
         const size = Number.parseInt(header.slice(48, 58).trim(), 10);
-        if (!Number.isFinite(size)) break;
+        if (!Number.isFinite(size) || size < 0) break;
         const start = position + 60;
         if (start + size > data.length) break;
         if (name.length > 0 && name !== "/") {
@@ -92,7 +92,9 @@ export class ArParser implements Parser {
           await parseEntry(xhtml, name, data.subarray(start, start + size), metadata, ctx);
           await xhtml.endElement("div");
         }
-        position = start + size + (size % 2);
+        const next = start + size + (size % 2);
+        if (next <= position) break; // require strictly monotonic advance
+        position = next;
       }
     });
   }

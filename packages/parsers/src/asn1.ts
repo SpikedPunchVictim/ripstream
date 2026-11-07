@@ -61,9 +61,17 @@ export class Asn1Parser implements Parser {
 
 function decodePem(data: Uint8Array): Uint8Array {
   const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
-  const match = /-----BEGIN [^-]+-----([\s\S]*?)-----END [^-]+-----/.exec(text);
-  if (match === null) return data;
-  return Uint8Array.from(Buffer.from(match[1]!.replace(/\s+/g, ""), "base64"));
+  // Linear scan: a lazy [\s\S]*? regex rescans to EOF from every BEGIN marker.
+  const begin = text.indexOf("-----BEGIN ");
+  if (begin === -1) return data;
+  const headerEnd = text.indexOf("-----", begin + 11);
+  if (headerEnd <= begin + 11) return data;
+  const bodyStart = headerEnd + 5;
+  const bodyEnd = text.indexOf("-----END ", bodyStart);
+  if (bodyEnd === -1) return data;
+  return Uint8Array.from(
+    Buffer.from(text.slice(bodyStart, bodyEnd).replace(/\s+/g, ""), "base64"),
+  );
 }
 
 function walk(

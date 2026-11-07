@@ -28,7 +28,7 @@ test("reads SQLite tables", async () => {
   assert.match(handler.toString(), /Grace/);
 });
 
-test("truncates oversized generated cells instead of materializing them", async () => {
+test("drops generated columns instead of materializing them", async () => {
   const SQL = await initSqlJs({
     locateFile: (file) => join(dirname(require.resolve("sql.js")), file),
   });
@@ -44,6 +44,10 @@ test("truncates oversized generated cells instead of materializing them", async 
   const handler = new BodyContentHandler();
   await new SqliteParser().parse(stream, handler, new Metadata(), new ParseContext());
   await stream.close();
-  assert.ok(handler.toString().length < 20_000);
-  assert.match(handler.toString(), /0000/);
+  const output = handler.toString();
+  // The generated column g = hex(zeroblob(~6MB)) must never be materialized inside WASM:
+  // it is dropped entirely rather than SELECTed and truncated as a result string.
+  assert.ok(output.length < 20_000);
+  assert.doesNotMatch(output, /0000/); // generated column absent from output
+  assert.match(output, /\b1\b/); // real column `a` still emitted
 });

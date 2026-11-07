@@ -176,28 +176,49 @@ function readWorkbook(workbook: Uint8Array): Sheet[] {
   }
 
   const sheets: Sheet[] = [];
+  // Records are offset-sorted, so binary search finds each sheet start in O(log N);
+  // identical starts are memoized and each sheet is bounded by the next sheet's start.
+  const starts = [...new Set(boundSheets.map((b) => firstRecordAt(records, b.offset)))]
+    .filter((s) => s !== -1)
+    .sort((a, b) => a - b);
+  const stopFor = new Map(starts.map((s, i) => [s, starts[i + 1] ?? records.length]));
+  const rowsByStart = new Map<number, Sheet["rows"]>();
   for (const bound of boundSheets) {
-    const start = records.findIndex((record) => record.offset >= bound.offset);
+    const start = firstRecordAt(records, bound.offset);
     if (start === -1) continue;
-    const cells = readSheet(
-      records,
-      start,
-      biff8,
-      codepage,
-      formats,
-      xfFormats,
-      sst,
-    );
-    sheets.push({
-      name: bound.name,
-      rows: toRows(cells, date1904, formats),
-    });
+    let rows = rowsByStart.get(start);
+    if (rows === undefined) {
+      const cells = readSheet(
+        records,
+        start,
+        stopFor.get(start)!,
+        biff8,
+        codepage,
+        formats,
+        xfFormats,
+        sst,
+      );
+      rows = toRows(cells, date1904, formats);
+      rowsByStart.set(start, rows);
+    }
+    sheets.push({ name: bound.name, rows });
   }
   return sheets;
 }
 
 interface RecordWithOffset extends BiffRecord {
   readonly offset: number;
+}
+
+function firstRecordAt(records: RecordWithOffset[], offset: number): number {
+  let low = 0;
+  let high = records.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (records[mid]!.offset < offset) low = mid + 1;
+    else high = mid;
+  }
+  return low === records.length ? -1 : low;
 }
 
 function readRecords(data: Uint8Array): RecordWithOffset[] {
@@ -233,6 +254,7 @@ function readBoundSheet(
 function readSheet(
   records: RecordWithOffset[],
   start: number,
+  stop: number,
   biff8: boolean,
   codepage: number,
   formats: Map<number, string>,
@@ -255,7 +277,7 @@ function readSheet(
 
   const formatFor = (xf: number): number => xfFormats[xf] ?? 0;
 
-  for (let index = start; index < records.length; index++) {
+  for (let index = start; index < stop; index++) {
     const record = records[index]!;
     if (record.type === 0x000a) break;
 

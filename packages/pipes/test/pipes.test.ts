@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { LimitExceededError } from "@spikedpunch/ripstream-core";
 import {
   FileSystemEmitter,
   FileSystemFetcher,
@@ -183,5 +184,68 @@ test("FileSystemFetcher skips symlinks when followSymlinks is false", async () =
     assert.deepEqual(await ids(true), ["a.txt", "dir/secret.txt", "file.txt"]);
   } finally {
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a worker failure stops siblings, closes the emitter once and rejects with the original error", async () => {
+  const text = (value: string): Uint8Array => new TextEncoder().encode(value);
+  const fetcher = {
+    async *fetch() {
+      for (let index = 0; index < 12; index++) {
+        yield {
+          id: `doc${index}.txt`,
+          data: index === 3 ? text("x".repeat(5000)) : text(`small ${index}`),
+        };
+      }
+    },
+  };
+  class SpyEmitter extends MemoryEmitter {
+    closes = 0;
+    emits = 0;
+    override async emit(document: Parameters<MemoryEmitter["emit"]>[0]): Promise<void> {
+      this.emits++;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await super.emit(document);
+    }
+    close(): void {
+      this.closes++;
+    }
+  }
+  const emitter = new SpyEmitter();
+  const engine = new PipesEngine({
+    fetcher,
+    emitter,
+    concurrency: 3,
+    maxQueue: 1,
+    limits: { maxOutputChars: 100 },
+  });
+  await assert.rejects(engine.run(), LimitExceededError);
+  assert.equal(emitter.closes, 1);
+  assert.equal(engine.stats.failed, 1);
+  const emitsAtReject = emitter.emits;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(emitter.emits, emitsAtReject, "no emit after run() rejected");
+  assert.equal(emitter.closes, 1);
+  assert.ok(emitter.emits < 11, `siblings kept running: ${emitter.emits} emits`);
+});
+
+test("FileSystemEmitter keeps distinct unsafe ids in distinct files", async () => {
+  const output = mkdtempSync(join(tmpdir(), "ripstream-emit-"));
+  try {
+    const emitter = new FileSystemEmitter(output);
+    await emitter.emit({ id: "a/x", text: "slash" });
+    await emitter.emit({ id: "a:x", text: "colon" });
+    await emitter.emit({ id: "a_x", text: "underscore" });
+    await emitter.emit({ id: "one.txt", text: "plain" });
+    const files = readdirSync(output);
+    assert.equal(files.length, 4);
+    assert.ok(files.includes("one.txt.txt"));
+    const contents = files.map((file) => readFileSync(join(output, file), "utf8")).sort();
+    assert.deepEqual(contents, ["colon", "plain", "slash", "underscore"]);
+    // Rerun-stable: same id maps to the same file.
+    await emitter.emit({ id: "a/x", text: "slash2" });
+    assert.equal(readdirSync(output).length, 4);
+  } finally {
+    rmSync(output, { recursive: true, force: true });
   }
 });

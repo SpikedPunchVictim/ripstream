@@ -46,3 +46,22 @@ test("AFM metrics with long whitespace/CR lines parse in linear time", { timeout
   assert.ok(performance.now() - start < 5000);
   assert.equal(metadata.get("font:postscript-name"), "Demo");
 });
+
+test("non-font text containing 'FontName ' is rejected, not accepted as empty AFM", async () => {
+  const text = "this is just a document that mentions FontName  somewhere\nand nothing else useful\n";
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(text));
+  await assert.rejects(
+    new FontParser().parse(stream, new BodyContentHandler(), new Metadata(), new ParseContext()),
+    (error: Error) => error.name === "MalformedDocumentError",
+  );
+  await stream.close();
+});
+
+test("StartFontMetrics with no recognised metric fields is rejected", async () => {
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode("StartFontMetrics 4.1\nEndFontMetrics\n"));
+  await assert.rejects(
+    new FontParser().parse(stream, new BodyContentHandler(), new Metadata(), new ParseContext()),
+    (error: Error) => error.name === "MalformedDocumentError",
+  );
+  await stream.close();
+});

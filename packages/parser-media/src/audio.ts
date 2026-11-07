@@ -18,8 +18,10 @@ export class AudioParser implements Parser {
       [
         "audio/mpeg",
         "audio/flac",
+        "audio/x-flac",
         "audio/ogg",
         "audio/wav",
+        "audio/vnd.wave",
         "audio/x-wav",
         "audio/aiff",
         "audio/x-aiff",

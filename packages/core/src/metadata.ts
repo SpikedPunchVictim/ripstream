@@ -1,4 +1,12 @@
+import { LimitExceededError } from "./errors.ts";
+
 export type MetadataValue = string | number | boolean | Date;
+
+/**
+ * Max values stored under a single key. A hostile file (for example a JPEG
+ * full of COM segments) can otherwise drive millions of values per key.
+ */
+const MAX_VALUES_PER_KEY = 100_000;
 
 /**
  * Port of org.apache.tika.metadata.Metadata storage semantics.
@@ -29,6 +37,11 @@ export class Metadata implements Iterable<[string, string]> {
     if (existing === undefined) {
       this.values.set(name, [encoded]);
     } else {
+      if (existing.length >= MAX_VALUES_PER_KEY) {
+        throw new LimitExceededError(
+          `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
+        );
+      }
       existing.push(encoded);
     }
   }
@@ -104,6 +117,13 @@ export class Metadata implements Iterable<[string, string]> {
     if (values.length === 0) {
       this.values.delete(name);
       return;
+    }
+    // Keep the per-key cap a true invariant: the replace path must bound count
+    // too, not only `add` (M17 — otherwise an oversized array slips past).
+    if (values.length > MAX_VALUES_PER_KEY) {
+      throw new LimitExceededError(
+        `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
+      );
     }
     this.values.set(name, values.map((v) => this.encodeValue(v)));
   }

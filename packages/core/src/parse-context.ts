@@ -1,4 +1,4 @@
-import { AbortError } from "./errors.ts";
+import { AbortError, ParseTimeoutError } from "./errors.ts";
 import { assertValidOutputLimit } from "./handlers/limits.ts";
 
 /**
@@ -142,6 +142,9 @@ export class ParseContext implements AsyncDisposable {
   throwIfAborted(): void {
     if (!this.signal.aborted) return;
     const reason: unknown = this.signal.reason;
+    if (reason instanceof DOMException && reason.name === "TimeoutError") {
+      throw new ParseTimeoutError(reason.message);
+    }
     if (
       reason instanceof Error &&
       !(reason instanceof DOMException && reason.name === "AbortError")

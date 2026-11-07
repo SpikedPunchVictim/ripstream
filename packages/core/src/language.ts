@@ -1,3 +1,5 @@
+import { RipstreamError } from "./errors.ts";
+
 export interface LanguageResult {
   readonly language: string;
   readonly confidence: number;
@@ -8,10 +10,9 @@ export interface LanguageDetector {
   detect(text: string): LanguageResult | Promise<LanguageResult>;
 }
 
-export class TranslationError extends Error {
+export class TranslationError extends RipstreamError {
   constructor(message: string, options: { cause?: unknown } = {}) {
-    super(message, options);
-    this.name = "TranslationError";
+    super("TRANSLATION_FAILED", message, options);
   }
 }
 

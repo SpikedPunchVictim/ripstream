@@ -68,15 +68,17 @@ export class SqliteParser implements Parser {
       let totalChars = 0;
       for (const table of names) {
         await xhtml.element("h1", table);
-        // Truncate inside SQLite: generated columns such as hex(zeroblob(N))
-        // would otherwise materialize N-sized cells in JS before any cap runs.
+        // table_xinfo hidden flag: 0 normal, 1 hidden, 2 VIRTUAL generated, 3 STORED generated.
+        // Select only real columns. substr(...) below caps a real cell's length, but a generated
+        // column's expression (e.g. hex(zeroblob(N))) is fully materialized inside WASM *before*
+        // substr truncates the result, so generated columns must be excluded entirely.
         const columns = database.exec(
           `PRAGMA table_xinfo(${quoteIdentifier(table)})`,
         )[0];
         const nameIndex = columns?.columns.indexOf("name") ?? -1;
         const hiddenIndex = columns?.columns.indexOf("hidden") ?? -1;
         const selected = (columns?.values ?? [])
-          .filter((column) => column[hiddenIndex] !== 1)
+          .filter((column) => column[hiddenIndex] === 0)
           .map(
             (column) =>
               `substr(${quoteIdentifier(String(column[nameIndex]))}, 1, ${MAX_CELL_CHARS})`,

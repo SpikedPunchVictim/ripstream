@@ -66,12 +66,13 @@ export class StdoutEmitter implements Emitter {
 
 export class JsonlEmitter implements Emitter {
   readonly #path: string;
+  #tail: Promise<void> = Promise.resolve();
   constructor(path: string) { this.#path = path; }
   async emit(document: EmittedDocument): Promise<void> {
-    await appendFile(
-      this.#path,
-      `${JSON.stringify({ id: document.id, text: document.text, metadata: document.metadata })}\n`,
-    );
+    const line = `${JSON.stringify({ id: document.id, text: document.text, metadata: document.metadata })}\n`;
+    const run = this.#tail.then(() => appendFile(this.#path, line));
+    this.#tail = run.catch(() => undefined); // keep the chain alive after a failed append
+    await run; // caller still observes this append's rejection
   }
 }
 
@@ -111,9 +112,13 @@ export class LoggingReporter implements Reporter {
 
 export class JsonlReporter implements Reporter {
   readonly #path: string;
+  #tail: Promise<void> = Promise.resolve();
   constructor(path: string) { this.#path = path; }
   async report(stats: PipesStats): Promise<void> {
-    await appendFile(this.#path, `${JSON.stringify(stats)}\n`);
+    const line = `${JSON.stringify(stats)}\n`;
+    const run = this.#tail.then(() => appendFile(this.#path, line));
+    this.#tail = run.catch(() => undefined); // keep the chain alive after a failed append
+    await run; // caller still observes this append's rejection
   }
 }
 

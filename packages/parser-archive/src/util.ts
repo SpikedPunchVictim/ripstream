@@ -97,7 +97,7 @@ export async function parseEntry(
         | undefined) ?? new ParsingEmbeddedDocumentExtractor();
     await extractor.parseEmbedded(stream, handler, childMetadata, ctx);
   } catch (error) {
-    if (error instanceof LimitExceededError) throw error;
+    if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
     childMetadata.set(
       `X-TIKA:EXCEPTION:${error instanceof Error ? error.constructor.name : "Error"}`,
       error instanceof Error ? error.message : String(error),

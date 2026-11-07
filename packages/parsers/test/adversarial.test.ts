@@ -10,6 +10,7 @@ import {
   type Parser,
 } from "@spikedpunch/ripstream-core";
 import {
+  CsvParser,
   DbfParser,
   DicomParser,
   HtmlDocumentParser,
@@ -46,13 +47,26 @@ async function timed<T>(action: () => Promise<T>): Promise<T> {
 }
 
 test("tnef: NUL runs and unclosed script tags parse in linear time", { timeout: 30_000 }, async () => {
+  // MS-OXTNEF layout: level, tag (type<<16 | id), length, data, 2-byte checksum.
   const attribute = (tag: number, value: Uint8Array): number[] => {
     const header = new Uint8Array(9);
     const view = new DataView(header.buffer);
     header[0] = 1;
     view.setUint32(1, tag, true);
     view.setUint32(5, value.length, true);
-    return [...header, ...value];
+    return [...header, ...value, 0, 0];
+  };
+  // attMsgProps blob holding a single PT_BINARY PR_BODY_HTML property.
+  const htmlProperty = (value: Uint8Array): Uint8Array => {
+    const prefix = new Uint8Array(16);
+    const view = new DataView(prefix.buffer);
+    view.setUint32(0, 1, true); // property count
+    view.setUint16(4, 0x0102, true); // PT_BINARY
+    view.setUint16(6, 0x1013, true); // PR_BODY_HTML
+    view.setUint32(8, 1, true); // value count
+    view.setUint32(12, value.length, true);
+    const padding = new Uint8Array((4 - (value.length % 4)) % 4);
+    return Uint8Array.from([...prefix, ...value, ...padding]);
   };
   const nuls = encoder.encode("\0".repeat(200_000) + "x");
   const html = encoder.encode("<script ".repeat(30_000) + "<b ".repeat(30_000));
@@ -60,8 +74,8 @@ test("tnef: NUL runs and unclosed script tags parse in linear time", { timeout: 
   new DataView(head.buffer).setUint32(0, 0x223e9f78, true);
   const data = Uint8Array.from([
     ...head,
-    ...attribute(0x8004, nuls),
-    ...attribute(0x800d, html),
+    ...attribute(0x00018004, nuls), // attSubject
+    ...attribute(0x00069003, htmlProperty(html)), // attMsgProps
   ]);
   await timed(() => run(new TnefParser(), data));
 });
@@ -106,6 +120,14 @@ test("html: deeply unclosed tags fail fast with a limit error", { timeout: 30_00
       run(new HtmlDocumentParser(), encoder.encode("<b>".repeat(300_000))),
       LimitExceededError,
     ),
+  );
+});
+
+test("csv: an unterminated comma bomb fails fast with a limit error", { timeout: 30_000 }, async () => {
+  // #23: 1,000,001 commas form one unterminated row of empty cells. Must throw
+  // LimitExceededError (-> 422) rather than buffer the whole amplified input to OOM.
+  await timed(() =>
+    assert.rejects(run(new CsvParser(), encoder.encode(",".repeat(1_000_001))), LimitExceededError),
   );
 });
 

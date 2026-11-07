@@ -380,10 +380,19 @@ function webpDimensions(
     return { width, height };
   }
   if (chunk === "VP8 " && data.length >= 30) {
-    const start = 20;
-    const width = ((data[start + 1] ?? 0) | ((data[start + 2] ?? 0) << 8)) & 0x3fff;
-    const height = ((data[start + 3] ?? 0) | ((data[start + 4] ?? 0) << 8)) & 0x3fff;
+    // Payload starts at 20: 3-byte frame tag, 3-byte start code (9d 01 2a),
+    // then 14-bit width and 14-bit height (upper 2 bits of each are scaling).
+    if (data[23] !== 0x9d || data[24] !== 0x01 || data[25] !== 0x2a) return null;
+    const width = (data[26]! | (data[27]! << 8)) & 0x3fff;
+    const height = (data[28]! | (data[29]! << 8)) & 0x3fff;
     if (width > 0 && height > 0) return { width, height };
+  }
+  if (chunk === "VP8L" && data.length >= 30) {
+    // Payload starts at 20: signature 0x2f, then 14-bit (width-1) and
+    // 14-bit (height-1) packed little-endian in the next 32 bits.
+    if (data[20] !== 0x2f) return null;
+    const bits = (data[21]! | (data[22]! << 8) | (data[23]! << 16) | (data[24]! << 24)) >>> 0;
+    return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
   }
   return null;
 }

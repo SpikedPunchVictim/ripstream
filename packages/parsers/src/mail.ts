@@ -8,6 +8,8 @@ import {
   RipstreamInputStream,
   XHTMLContentHandler,
   LimitExceededError,
+  ParseTimeoutError,
+  AbortError,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
   type ParseContext,
@@ -88,6 +90,11 @@ async function renderEntity(
   if (type.startsWith("multipart/")) {
     const boundary = contentType.parameters.get("boundary");
     if (boundary === undefined) return;
+    // RFC 2046 section 5.1.1 caps boundaries at 70 characters; longer ones make
+    // the naive byte search O(body * boundary).
+    if (boundary.length > 70) {
+      throw new MalformedDocumentError("Multipart boundary exceeds 70 characters");
+    }
     for (const part of splitMultipart(entity.body, boundary)) {
       await renderEntity(part, xhtml, metadata, ctx, depth + 1);
     }
@@ -158,6 +165,15 @@ async function dispatchEmbedded(
   try {
     await extractor.parseEmbedded(stream, xhtml, partMetadata, ctx);
   } catch (error) {
+    // Resiliency errors must reach the server (422/408) instead of becoming a 200.
+    if (
+      error instanceof LimitExceededError ||
+      error instanceof ParseTimeoutError ||
+      error instanceof AbortError ||
+      ctx.signal.aborted
+    ) {
+      throw error;
+    }
     partMetadata.set(
       `X-TIKA:EXCEPTION:${error instanceof Error ? error.constructor.name : "Error"}`,
       error instanceof Error ? error.message : String(error),

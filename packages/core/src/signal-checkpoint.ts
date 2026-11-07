@@ -1,4 +1,4 @@
-import { AbortError } from "./errors.ts";
+import { AbortError, ParseTimeoutError } from "./errors.ts";
 
 /** Anything carrying an optional AbortSignal (e.g. ParseContext). */
 export interface SignalHolder {
@@ -15,6 +15,9 @@ export function throwIfAborted(holder: SignalHolder | undefined): void {
   const signal = holder?.signal;
   if (signal?.aborted !== true) return;
   const reason: unknown = signal.reason;
+  if (reason instanceof DOMException && reason.name === "TimeoutError") {
+    throw new ParseTimeoutError(reason.message);
+  }
   if (
     reason instanceof Error &&
     !(reason instanceof DOMException && reason.name === "AbortError")

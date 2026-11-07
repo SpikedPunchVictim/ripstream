@@ -1,5 +1,6 @@
 import { createDecoder } from "./charset.ts";
 import {
+  MalformedDocumentError,
   MediaType,
   XHTMLContentHandler,
   type ContentHandler,
@@ -49,6 +50,13 @@ export class FeedParser implements Parser {
     const entries: FeedEntry[] = [];
 
     const parser = new SaxesParser({ xmlns: false });
+    // #21: without a handler saxes throws a raw Error on malformed XML (→ 500);
+    // surface it as a 422 MalformedDocumentError at the source instead.
+    parser.on("error", (error) => {
+      throw new MalformedDocumentError(`Malformed feed XML: ${error.message}`, {
+        cause: error,
+      });
+    });
     parser.on("opentag", (tag) => {
       const name = local(tag.name);
       if (name === "item" || name === "entry") {

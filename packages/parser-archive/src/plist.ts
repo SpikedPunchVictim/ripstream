@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   XHTMLContentHandler,
@@ -39,6 +40,7 @@ export class PlistParser implements Parser {
         const [parsed] = parseBuffer(Buffer.from(data));
         await xhtml.element("p", JSON.stringify(parsed));
       } catch (error) {
+        if (error instanceof LimitExceededError) throw error;
         throw new MalformedDocumentError("Invalid binary plist", { cause: error });
       }
     } else {

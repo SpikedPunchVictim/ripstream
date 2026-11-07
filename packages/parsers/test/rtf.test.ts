@@ -59,3 +59,26 @@ test("negative \\bin does not hang", async () => {
   const result = await parse("{\\rtf1 \\bin-7 x}");
   assert.match(result.text, /x/);
 });
+
+test("decodes double-byte code page escapes as a run (cp932)", async () => {
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 \'82\'a0\'82\'a2}`);
+  assert.match(result.text, /あい/);
+});
+
+test("decodes cp936 and cp949 multibyte escapes", async () => {
+  const gbk = await parse(String.raw`{\rtf1\ansi\ansicpg936 \'c4\'e3\'ba\'c3}`);
+  assert.match(gbk.text, /你好/);
+  const kr = await parse(String.raw`{\rtf1\ansi\ansicpg949 \'b0\'a1}`);
+  assert.match(kr.text, /가/);
+});
+
+test("single-byte cp1252 escapes still decode", async () => {
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg1252 caf\'e9 \'e9\'e8}`);
+  assert.match(result.text, /café éè/);
+});
+
+test("multibyte run interleaved with text and a \\u fallback", async () => {
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 a\'82\'a0b \uc1\u233\'e9c}`);
+  assert.match(result.text, /aあb é/);
+  assert.match(result.text, /éc/);
+});

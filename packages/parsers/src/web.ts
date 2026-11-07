@@ -10,6 +10,8 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { parseEntry } from "@spikedpunch/ripstream-parser-archive";
 import { SaxesParser } from "saxes";
+import { createDecoder } from "./charset.ts";
+import { detectXmlEncoding } from "./xml-encoding.ts";
 
 /** WARC/ARC record reader with embedded payload parsing. */
 export class WarcParser implements Parser {
@@ -38,6 +40,10 @@ export class WarcParser implements Parser {
 
     let offset = 0;
     while (offset < data.length) {
+      // Each record is followed by a mandatory CRLF CRLF trailer; skip it (and
+      // any stray line breaks) so the next record header is found.
+      while (data[offset] === 0x0d || data[offset] === 0x0a) offset++;
+      if (offset >= data.length) break;
       const headerEnd = indexOfDoubleCrlf(data, offset);
       if (headerEnd === -1) break;
       const header = new TextDecoder("latin1").decode(
@@ -172,10 +178,12 @@ export class TmxParser implements Parser {
 }
 
 async function readText(stream: RipstreamInputStream): Promise<string> {
-  let text = "";
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  for await (const chunk of stream) text += decoder.decode(chunk, { stream: true });
-  return text + decoder.decode();
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  const data = concat(chunks);
+  // Honor the BOM / XML declaration like the sibling XML parsers do.
+  const { decoder } = createDecoder(detectXmlEncoding(data));
+  return decoder.decode(data);
 }
 
 function xmlSegments(xml: string, containers: Set<string>): string[] {
@@ -183,6 +191,13 @@ function xmlSegments(xml: string, containers: Set<string>): string[] {
   let depth = 0;
   let current = "";
   const parser = new SaxesParser({ xmlns: false });
+  // #21: without a handler saxes throws a raw Error on malformed XML (→ 500);
+  // surface it as a 422 MalformedDocumentError at the source instead.
+  parser.on("error", (error) => {
+    throw new MalformedDocumentError(`Malformed XML: ${error.message}`, {
+      cause: error,
+    });
+  });
   parser.on("opentag", (tag) => {
     const name = local(tag.name);
     if (containers.has(name)) {

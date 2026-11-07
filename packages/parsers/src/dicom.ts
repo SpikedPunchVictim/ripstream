@@ -91,8 +91,17 @@ function readTags(data: Uint8Array): Record<string, string> {
       length = view.getUint16(offset + 6, true);
       valueOffset = offset + 8;
     }
-    if (length === 0xffffffff || valueOffset + length > data.length) break;
     if (group === 0x7fe0 && element === 0x0010) break;
+    if (length === 0xffffffff) {
+      // Undefined length is standard for sequences: walk past the items to the
+      // sequence delimiter and keep reading the remaining tags.
+      if (vrChars !== "SQ" && vrChars !== "UN") break;
+      const next = skipUndefinedSequence(data, view, valueOffset, 0);
+      if (next === -1) break;
+      offset = next;
+      continue;
+    }
+    if (valueOffset + length > data.length) break;
     const name = TAGS[tag];
     if (name !== undefined) {
       const value = stripTrailingNuls(
@@ -105,6 +114,75 @@ function readTags(data: Uint8Array): Record<string, string> {
     offset = valueOffset + length;
   }
   return values;
+}
+
+const UNDEFINED_LENGTH = 0xffffffff;
+const MAX_SEQUENCE_DEPTH = 64;
+
+/**
+ * Skips the items of an undefined-length sequence (explicit VR little endian).
+ * `offset` is the start of the first item; returns the offset just past the
+ * sequence delimiter (FFFE,E0DD), or -1 if the structure cannot be followed.
+ */
+function skipUndefinedSequence(
+  data: Uint8Array,
+  view: DataView,
+  offset: number,
+  depth: number,
+): number {
+  if (depth > MAX_SEQUENCE_DEPTH) return -1;
+  while (offset + 8 <= data.length) {
+    const group = view.getUint16(offset, true);
+    const element = view.getUint16(offset + 2, true);
+    const length = view.getUint32(offset + 4, true);
+    if (group !== 0xfffe) return -1;
+    if (element === 0xe0dd) return offset + 8; // sequence delimiter
+    if (element !== 0xe000) return -1; // not an item
+    offset += 8;
+    if (length !== UNDEFINED_LENGTH) {
+      if (length > data.length - offset) return -1;
+      offset += length;
+      continue;
+    }
+    offset = skipUndefinedItem(data, view, offset, depth);
+    if (offset === -1) return -1;
+  }
+  return -1;
+}
+
+/** Skips explicit-VR elements up to the item delimiter (FFFE,E00D). */
+function skipUndefinedItem(
+  data: Uint8Array,
+  view: DataView,
+  offset: number,
+  depth: number,
+): number {
+  while (offset + 8 <= data.length) {
+    const group = view.getUint16(offset, true);
+    const element = view.getUint16(offset + 2, true);
+    if (group === 0xfffe && element === 0xe00d) return offset + 8;
+    const vr = String.fromCharCode(data[offset + 4]!, data[offset + 5]!);
+    if (!/^[A-Z]{2}$/.test(vr)) return -1;
+    let length: number;
+    let valueOffset: number;
+    if (LONG_VR.has(vr)) {
+      if (offset + 12 > data.length) return -1;
+      length = view.getUint32(offset + 8, true);
+      valueOffset = offset + 12;
+    } else {
+      length = view.getUint16(offset + 6, true);
+      valueOffset = offset + 8;
+    }
+    if (length === UNDEFINED_LENGTH) {
+      if (vr !== "SQ" && vr !== "UN") return -1;
+      offset = skipUndefinedSequence(data, view, valueOffset, depth + 1);
+      if (offset === -1) return -1;
+      continue;
+    }
+    if (length > data.length - valueOffset) return -1;
+    offset = valueOffset + length;
+  }
+  return -1;
 }
 
 /** Linear trailing-NUL strip (a /\0+$/ regex is quadratic on long NUL runs). */

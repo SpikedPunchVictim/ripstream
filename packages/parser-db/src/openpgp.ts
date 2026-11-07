@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -86,6 +87,8 @@ export class OpenPgpParser implements Parser {
   }
 }
 
+const MAX_PACKETS = 10_000;
+
 interface Packet {
   readonly tag: number;
   readonly body: Uint8Array;
@@ -101,9 +104,21 @@ function decodeArmor(data: Uint8Array): Uint8Array {
   const bodyStart = headerEnd + 5;
   const bodyEnd = text.indexOf("-----END ", bodyStart);
   if (bodyEnd === -1) return data;
-  return Uint8Array.from(
-    Buffer.from(text.slice(bodyStart, bodyEnd).replace(/\s+/g, ""), "base64"),
-  );
+  // RFC 4880 armor: [headers] blank-line, base64 lines, optional "=CRC24" line.
+  const lines = text.slice(bodyStart, bodyEnd).split(/\r?\n/);
+  // Skip the rest of the BEGIN line, then armor headers (up to first blank line).
+  let index = 1;
+  const blank = lines.findIndex((line, i) => i >= 1 && line.trim() === "");
+  if (blank !== -1 && lines.slice(1, blank).every((line) => line.includes(":"))) {
+    index = blank + 1;
+  }
+  const base64 = lines
+    .slice(index)
+    // CRC24 is "=" + 4 base64 chars; a bare "="/"==" line is base64 padding.
+    .filter((line) => !/^=[A-Za-z0-9+/]{4}\s*$/.test(line))
+    .join("")
+    .replace(/\s+/g, "");
+  return Uint8Array.from(Buffer.from(base64, "base64"));
 }
 
 function readPackets(data: Uint8Array): Packet[] {
@@ -148,6 +163,9 @@ function readPackets(data: Uint8Array): Packet[] {
       } else break;
     }
     if (length < 0 || offset + length > data.length) break;
+    if (packets.length >= MAX_PACKETS) {
+      throw new LimitExceededError(`OpenPGP packet count exceeds ${MAX_PACKETS}`);
+    }
     packets.push({ tag, body: data.subarray(offset, offset + length) });
     offset += length;
   }

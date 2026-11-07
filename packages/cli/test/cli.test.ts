@@ -47,9 +47,54 @@ test("returns usage and parse error exit codes", async () => {
   assert.equal(await main(["--nope"], sink), 2);
   assert.match(sink.err.join(""), /Unknown option/);
   sink = io();
-  assert.equal(await main(["/definitely/missing.pdf"], sink), 1);
+  assert.equal(await main(["/definitely/missing.pdf"], sink), 4);
   assert.equal(await main(["version"], io()), 0);
   assert.equal(await main(["help"], io()), 0);
+});
+
+test("maps malformed documents to exit code 3", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-"));
+  try {
+    const file = join(directory, "broken.pdf");
+    writeFileSync(file, "%PDF-1.4\nnot really a pdf");
+    const sink = io();
+    assert.equal(await main([file], sink), 3);
+    assert.match(sink.err.join(""), /ripstream:/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("help documents the exit code contract", async () => {
+  const sink = io();
+  assert.equal(await main(["--help"], sink), 0);
+  assert.match(sink.out.join(""), /Exit codes:[\s\S]*3 {2}bad input data[\s\S]*4 {2}environment/);
+});
+
+test("serve rejects invalid ports with usage exit code", async () => {
+  for (const port of ["abc", "-1", "70000", "1.5"]) {
+    const sink = io();
+    assert.equal(await main(["serve", "--port", port], sink), 2, port);
+    assert.match(sink.err.join(""), /--port expects an integer/);
+  }
+});
+
+test("jsonl output emits one JSON object per line", async () => {
+  let sink = io("Hello JSONL");
+  assert.equal(await main(["-o", "jsonl", "-"], sink), 0);
+  const lines = sink.out.join("").split("\n").filter((line) => line !== "");
+  assert.equal(lines.length, 1);
+  const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
+  assert.match(String(parsed["X-TIKA:content"]), /Hello JSONL/);
+  assert.ok(Array.isArray(parsed["Content-Type"]));
+
+  sink = io("Hello JSONL");
+  assert.equal(await main(["-r", "-o", "jsonl", "-"], sink), 0);
+  const recursive = sink.out.join("").split("\n").filter((line) => line !== "");
+  assert.ok(recursive.length >= 1);
+  const first = JSON.parse(recursive[0]!) as Record<string, unknown>;
+  assert.match(String(first["X-TIKA:content"]), /Hello JSONL/);
+  assert.ok("X-TIKA:embedded_depth" in first);
 });
 
 test("detects language from stdin", async () => {

@@ -1,5 +1,10 @@
 import type { ContentHandler, MaybePromise } from "./content-handler.ts";
-import { UnsupportedFormatError, ParserDeclinedError } from "./errors.ts";
+import {
+  MalformedDocumentError,
+  ParserDeclinedError,
+  RipstreamError,
+  UnsupportedFormatError,
+} from "./errors.ts";
 import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
@@ -121,7 +126,27 @@ export class CompositeParser implements Parser {
         return;
       } catch (error) {
         if (error instanceof ParserDeclinedError) continue;
-        throw error;
+        if (error instanceof RipstreamError) throw error;
+        // Backstop (#21): a parser leaked a raw library/runtime error. These are
+        // overwhelmingly malformed-input failures, so map them to a 422-class
+        // MalformedDocumentError instead of letting them read as a 500 server
+        // fault. The original is preserved as `cause` and logged so its stack is
+        // not lost; parsers that mean a genuine 500 throw a RipstreamError above.
+        // Native aborts/timeouts surface here as DOMException("AbortError") but are
+        // re-mapped to the correct status upstream — don't log those (stderr flood
+        // under adversarial load); log only genuine library faults.
+        if (!(error instanceof Error && error.name === "AbortError")) {
+          console.error(
+            `ripstream: parser ${parser.name} threw a non-Ripstream error`,
+            error,
+          );
+        }
+        throw new MalformedDocumentError(
+          `Parser ${parser.name} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          { cause: error },
+        );
       }
     }
   }

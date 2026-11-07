@@ -136,6 +136,7 @@ function parseMetrics(text: string, metadata: Metadata): void {
     Weight: "font:weight",
     ItalicAngle: "font:italic-angle",
   };
+  let matched = false;
   for (const line of text.split(/\r?\n/)) {
     // Manual split: a regex with \s+(.+)$ backtracks quadratically.
     const trimmed = line.trim();
@@ -144,9 +145,12 @@ function parseMetrics(text: string, metadata: Metadata): void {
     const name = trimmed.slice(0, split);
     if (!/^[A-Za-z]+$/.test(name)) continue;
     const key = fields[name];
-    if (key !== undefined) metadata.set(key, trimmed.slice(split).trim());
+    if (key !== undefined) {
+      metadata.set(key, trimmed.slice(split).trim());
+      matched = true;
+    }
   }
-  if (Object.keys(fields).length === 0) {
+  if (!matched) {
     throw new MalformedDocumentError("Empty font metrics");
   }
 }

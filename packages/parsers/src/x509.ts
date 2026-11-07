@@ -23,6 +23,7 @@ export class X509Parser implements Parser {
     return new Set(
       [
         "application/x-x509-ca-cert",
+        "application/x-x509-cert",
         "application/pkix-cert",
         "application/x-pem-file",
       ].map((type) => MediaType.parse(type)!),

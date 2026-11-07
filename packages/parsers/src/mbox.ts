@@ -41,7 +41,10 @@ export class MboxParser implements Parser {
       offset += chunk.byteLength;
     }
 
-    const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
+    // Decode as true latin1 (1 byte <-> 1 char, lossless) so 8-bit bytes that
+    // are not valid UTF-8 survive the split and each part's own charset can
+    // still be applied by the mail parser.
+    const text = bytesToLatin1(data);
     const messages = splitMessages(text);
     if (messages.length === 0) {
       throw new MalformedDocumentError("Not an mbox bundle");
@@ -54,7 +57,7 @@ export class MboxParser implements Parser {
       const captured = new BodyContentHandler();
       const messageMetadata = new Metadata();
       const messageStream = await RipstreamInputStream.from(
-        new TextEncoder().encode(message),
+        latin1ToBytes(message),
         { context: ctx },
       );
       try {
@@ -86,6 +89,23 @@ export class MboxParser implements Parser {
     void firstSubject;
     await xhtml.endDocument();
   }
+}
+
+function bytesToLatin1(data: Uint8Array): string {
+  const parts: string[] = [];
+  const step = 8192;
+  for (let index = 0; index < data.length; index += step) {
+    parts.push(String.fromCharCode(...data.subarray(index, index + step)));
+  }
+  return parts.join("");
+}
+
+function latin1ToBytes(text: string): Uint8Array {
+  const bytes = new Uint8Array(text.length);
+  for (let index = 0; index < text.length; index++) {
+    bytes[index] = text.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function splitMessages(text: string): string[] {

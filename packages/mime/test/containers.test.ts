@@ -241,15 +241,18 @@ async function detectOle2Bytes(bytes: Uint8Array): Promise<unknown> {
   }
 }
 
-test("OLE2 DIFAT self-loop is rejected", async () => {
+// Detection is best-effort: a malformed OLE2 header must terminate (no hang) and return
+// null so the detector falls through to magic/XML/text, rather than throwing at detect
+// time and defeating the fallback chain. Parsers surface the malformation later at parse.
+test("OLE2 DIFAT self-loop terminates and falls back (returns null, no hang)", async () => {
   const bytes = ole2Header(9, 2, 0);
   bytes.fill(0xff, 512, 1024);
   new DataView(bytes.buffer).setUint32(1020, 0, true);
-  await assert.rejects(() => detectOle2Bytes(bytes), /DIFAT sector loop/);
+  assert.equal(await detectOle2Bytes(bytes), null);
 });
 
-test("OLE2 oversize DIFAT count and bad sector shift are rejected", async () => {
-  await assert.rejects(() => detectOle2Bytes(ole2Header(9, 0xffffffff, 0)), /DIFAT count/);
-  await assert.rejects(() => detectOle2Bytes(ole2Header(31, 0, 0xfffffffe)), /sector shift/);
-  await assert.rejects(() => detectOle2Bytes(ole2Header(30, 0, 0xfffffffe)), /sector shift/);
+test("OLE2 oversize DIFAT count and bad sector shift fall back (return null)", async () => {
+  assert.equal(await detectOle2Bytes(ole2Header(9, 0xffffffff, 0)), null);
+  assert.equal(await detectOle2Bytes(ole2Header(31, 0, 0xfffffffe)), null);
+  assert.equal(await detectOle2Bytes(ole2Header(30, 0, 0xfffffffe)), null);
 });

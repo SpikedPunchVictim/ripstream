@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import {
+  EncryptedDocumentError,
+  LimitExceededError,
+  MalformedDocumentError,
+  MissingDependencyError,
   RipstreamError,
+  UnsupportedFormatError,
   loadConfig,
+  rmetaObject,
   serializeRmeta,
   type Metadata,
   type ParseRecord,
@@ -39,6 +45,32 @@ interface Options {
   readonly host: string;
 }
 
+/** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
+const EXIT_INTERNAL = 1;
+const EXIT_USAGE = 2;
+const EXIT_DATA = 3;
+const EXIT_ENVIRONMENT = 4;
+
+function exitCodeFor(error: unknown): number {
+  if (
+    error instanceof MalformedDocumentError ||
+    error instanceof UnsupportedFormatError ||
+    error instanceof EncryptedDocumentError ||
+    error instanceof LimitExceededError
+  ) {
+    return EXIT_DATA;
+  }
+  if (error instanceof MissingDependencyError) return EXIT_ENVIRONMENT;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "ENOENT"
+  ) {
+    return EXIT_ENVIRONMENT;
+  }
+  return EXIT_INTERNAL;
+}
+
 export async function main(
   argv: readonly string[],
   io: CliIO = defaultIO,
@@ -48,7 +80,7 @@ export async function main(
     options = parseArgs(argv);
   } catch (error) {
     io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 2;
+    return EXIT_USAGE;
   }
   if (options.command === "help") {
     io.stdout(usage());
@@ -59,6 +91,10 @@ export async function main(
     return 0;
   }
   if (options.command === "serve") {
+    if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+      io.stderr("ripstream: --port expects an integer between 0 and 65535\n");
+      return EXIT_USAGE;
+    }
     const instance = createRipstreamServer({ ripstream: createRipstream() });
     const port = await instance.listen(options.port, options.host);
     io.stdout(`ripstream server listening on http://${options.host}:${port}\n`);
@@ -126,13 +162,24 @@ export async function main(
         bytes,
         filename === undefined ? {} : { filename },
       );
-      io.stdout(`${serializeRmeta(records)}${options.output === "jsonl" ? "\n" : "\n"}`);
+      if (options.output === "jsonl") {
+        io.stdout(records.map((record) => `${JSON.stringify(rmetaObject(record))}\n`).join(""));
+      } else {
+        io.stdout(`${serializeRmeta(records)}\n`);
+      }
       return 0;
     }
 
     const result = await ripstream.parse(bytes, filename === undefined ? {} : { filename });
     if (options.metadataOnly) {
       io.stdout(`${JSON.stringify(metadataObject(result.metadata), null, options.json ? 2 : 0)}\n`);
+    } else if (options.output === "jsonl") {
+      io.stdout(
+        `${JSON.stringify({
+          ...metadataObject(result.metadata),
+          "X-TIKA:content": result.text,
+        })}\n`,
+      );
     } else if (options.output === "json" || options.json) {
       io.stdout(
         `${JSON.stringify({
@@ -155,7 +202,7 @@ export async function main(
     } else {
       io.stderr(`ripstream: ${error instanceof Error ? error.message : String(error)}\n`);
     }
-    return 1;
+    return exitCodeFor(error);
   }
 }
 
@@ -242,6 +289,13 @@ function usage(): string {
     "  -p, --password <pw>  Document password",
     "  -h, --help           Show help",
     "  -V, --version        Show version",
+    "",
+    "Exit codes:",
+    "  0  success",
+    "  1  internal error",
+    "  2  usage error (bad arguments or configuration)",
+    "  3  bad input data (malformed, unsupported, encrypted or over-limit document)",
+    "  4  environment problem (file not found, missing optional dependency)",
     "",
   ].join("\n");
 }

@@ -11,7 +11,8 @@ export type RipstreamErrorCode =
   | "PARSER_DECLINED"
   | "EMPTY_DOCUMENT"
   | "ABORTED"
-  | "UNSUPPORTED_RUNTIME";
+  | "UNSUPPORTED_RUNTIME"
+  | "TRANSLATION_FAILED";
 
 export class RipstreamError extends Error {
   readonly code: RipstreamErrorCode;
@@ -141,6 +142,10 @@ export function httpStatusForError(error: unknown): number {
       return 408;
     case "REQUEST_TOO_LARGE":
       return 413;
+    case "TRANSLATION_FAILED":
+      // Upstream translation dependency failed; this is a gateway fault, not a
+      // fault in the request document, so it is neither 422 nor a bare 500.
+      return 502;
     case "MISSING_DEPENDENCY":
     case "RANDOM_ACCESS_UNAVAILABLE":
     case "PARSER_DECLINED":

@@ -134,7 +134,9 @@ export class PdfParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     ctx.throwIfAborted();
-    const path = await stream.getFile();
+    // Bound the spill: the stream's length is unknown until EOF, so pass the cap
+    // into getFile() rather than writing an oversized input to disk first.
+    const path = await stream.getFile(this.#maxInputBytes);
     const { size } = await stat(path);
     if (size > this.#maxInputBytes) {
       throw new LimitExceededError(

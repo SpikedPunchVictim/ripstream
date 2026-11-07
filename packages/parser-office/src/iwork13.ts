@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -15,6 +16,7 @@ const TYPES = [
   "application/vnd.apple.keynote",
   "application/vnd.apple.pages",
   "application/vnd.apple.numbers",
+  "application/vnd.apple.iwork",
 ];
 
 /** iWork '13+ IWA metadata and best-effort strings. */
@@ -62,9 +64,10 @@ export class IWork13Parser implements Parser {
       const bytes = files.get(name)!;
       try {
         const decoded = uncompress === undefined ? bytes : decodeIwa(bytes, uncompress);
-        strings.push(...printable(decoded));
-      } catch {
-        strings.push(...printable(bytes));
+        appendStrings(strings, printable(decoded));
+      } catch (error) {
+        if (error instanceof LimitExceededError) throw error; // cap must stay a loud 422
+        appendStrings(strings, printable(bytes));
       }
     }
     const xhtml = new XHTMLContentHandler(handler, metadata);
@@ -99,6 +102,17 @@ function decodeIwa(
     position += piece.byteLength;
   }
   return result;
+}
+
+const MAX_STRINGS = 1_000_000;
+
+function appendStrings(target: string[], source: readonly string[]): void {
+  for (const value of source) {
+    if (target.length >= MAX_STRINGS) {
+      throw new LimitExceededError(`Extracted string count exceeds ${MAX_STRINGS}`);
+    }
+    target.push(value);
+  }
 }
 
 function printable(data: Uint8Array): string[] {

@@ -73,7 +73,7 @@ function findDescription(data: Uint8Array, view: DataView): string | null {
     const type = ascii(data, offset, 4);
     if (type === "desc") {
       const length = view.getUint32(offset + 8, false);
-      return ascii(data, offset + 12, Math.min(length, size - 12)).replace(/\0+$/, "").trim();
+      return stripTrailingNuls(ascii(data, offset + 12, Math.min(length, size - 12))).trim();
     }
     if (type === "mluc") {
       const records = view.getUint32(offset + 8, false);
@@ -97,4 +97,11 @@ function ascii(data: Uint8Array, offset: number, length: number): string {
     value += String.fromCharCode(data[offset + index] ?? 0);
   }
   return value.trim();
+}
+
+/** Linear trailing-NUL strip (a /\0+$/ regex is quadratic on long NUL runs). */
+function stripTrailingNuls(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0) end--;
+  return value.slice(0, end);
 }

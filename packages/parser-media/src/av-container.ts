@@ -23,24 +23,44 @@ export class AviParser implements Parser {
       throw new MalformedDocumentError("Not an AVI file");
     }
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    for (let offset = 12; offset + 8 <= data.length; ) {
-      const id = ascii(data, offset, 4);
-      const size = view.getUint32(offset + 4, true);
-      if (offset + 8 + size > data.length) break;
-      if (id === "avih") {
-        if (size < 40) throw new MalformedDocumentError("Truncated AVI header chunk");
-        const base = offset + 8;
-        const microsPerFrame = view.getUint32(base, true);
-        const totalFrames = view.getUint32(base + 16, true);
-        metadata.set("tiff:ImageWidth", String(view.getUint32(base + 32, true)));
-        metadata.set("tiff:ImageLength", String(view.getUint32(base + 36, true)));
-        metadata.set("audio:spi-duration", String((microsPerFrame * totalFrames) / 1_000_000));
-        return;
-      }
-      offset += 8 + size + (size % 2);
+    if (!readAviHeader(data, view, 12, data.length, metadata, 0)) {
+      throw new MalformedDocumentError("Missing AVI header chunk");
     }
-    throw new MalformedDocumentError("Missing AVI header chunk");
   }
+}
+
+const MAX_RIFF_DEPTH = 8;
+
+/** Walks RIFF chunks, descending into LIST chunks (avih lives in LIST hdrl). */
+function readAviHeader(
+  data: Uint8Array,
+  view: DataView,
+  start: number,
+  end: number,
+  metadata: Metadata,
+  depth: number,
+): boolean {
+  for (let offset = start; offset + 8 <= end; ) {
+    const id = ascii(data, offset, 4);
+    const size = view.getUint32(offset + 4, true);
+    if (offset + 8 + size > end) break;
+    if (id === "avih") {
+      if (size < 40) throw new MalformedDocumentError("Truncated AVI header chunk");
+      const base = offset + 8;
+      const microsPerFrame = view.getUint32(base, true);
+      const totalFrames = view.getUint32(base + 16, true);
+      metadata.set("tiff:ImageWidth", String(view.getUint32(base + 32, true)));
+      metadata.set("tiff:ImageLength", String(view.getUint32(base + 36, true)));
+      metadata.set("audio:spi-duration", String((microsPerFrame * totalFrames) / 1_000_000));
+      return true;
+    }
+    // LIST payload: 4-byte list type, then sub-chunks. movi holds only frame data.
+    if (id === "LIST" && size >= 4 && depth < MAX_RIFF_DEPTH && ascii(data, offset + 8, 4) !== "movi") {
+      if (readAviHeader(data, view, offset + 12, offset + 8 + size, metadata, depth + 1)) return true;
+    }
+    offset += 8 + size + (size % 2);
+  }
+  return false;
 }
 
 /** Matroska/WebM EBML metadata. */
@@ -83,7 +103,8 @@ export class AsfParser implements Parser {
     if (data.length < 30) throw new MalformedDocumentError("Truncated ASF header");
     const headerSize = Number(view.getBigUint64(16, true));
     let offset = 30;
-    const end = Math.min(24 + headerSize, data.length);
+    // The ASF object size includes its own 24-byte header.
+    const end = Math.min(headerSize, data.length);
     const fileProperties = [0xa1, 0xdc, 0xab, 0x8c, 0x47, 0xa9, 0xcf, 0x11, 0x8e, 0xe4, 0x00, 0xc0, 0x0c, 0x20, 0x53, 0x65];
     while (offset + 24 <= end) {
       const guid = [...data.subarray(offset, offset + 16)];
@@ -98,8 +119,8 @@ export class AsfParser implements Parser {
         metadata.set("audio:spi-duration", String(playDuration / 10_000_000 - preroll / 1000));
         return;
       }
-      if (size <= 0) break;
-      offset += 24 + size;
+      if (size < 24) break;
+      offset += size;
     }
     throw new MalformedDocumentError("Missing ASF file properties");
   }
@@ -134,10 +155,20 @@ function walkEbml(data: Uint8Array, start: number, end: number, metadata: Metada
     const id = readVint(data, offset, true);
     if (id === null) return;
     const size = readVint(data, id.next, false);
-    if (size === null || size.next + size.value > end) return;
+    if (size === null) return;
+    const descend =
+      id.value === 0x18538067 || // Segment
+      id.value === 0x1549a966 || // Info
+      id.value === 0x1654ae6b || // Tracks
+      id.value === 0xae || // TrackEntry
+      id.value === 0xe0; // Video
+    // Unknown-size (all-ones) elements run to the end of the parent. We can only
+    // follow that for master elements we descend into; anything else is unskippable.
+    if (size.unknown && !descend) return;
+    if (!size.unknown && size.next + size.value > end) return;
     const content = size.next;
-    const contentEnd = content + size.value;
-    if (id.value === 0x18538067 || id.value === 0x1549a966 || id.value === 0x1654ae6b || id.value === 0xe0) {
+    const contentEnd = size.unknown ? end : content + size.value;
+    if (descend) {
       walkEbml(data, content, contentEnd, metadata, depth + 1);
     } else if (id.value === 0x4489 && (size.value === 4 || size.value === 8)) {
       const view = new DataView(data.buffer, data.byteOffset);
@@ -156,7 +187,7 @@ function readVint(
   data: Uint8Array,
   offset: number,
   keepMarker: boolean,
-): { value: number; next: number } | null {
+): { value: number; next: number; unknown: boolean } | null {
   if (offset >= data.length) return null;
   const first = data[offset]!;
   let length = 1;
@@ -167,8 +198,12 @@ function readVint(
   }
   if (length > 8 || offset + length > data.length) return null;
   let value = keepMarker ? first : first & (mask - 1);
-  for (let index = 1; index < length; index++) value = value * 256 + data[offset + index]!;
-  return { value, next: offset + length };
+  let allOnes = (first & (mask - 1)) === mask - 1;
+  for (let index = 1; index < length; index++) {
+    value = value * 256 + data[offset + index]!;
+    if (data[offset + index] !== 0xff) allOnes = false;
+  }
+  return { value, next: offset + length, unknown: !keepMarker && allOnes };
 }
 
 function readUInt(data: Uint8Array, offset: number, length: number): number {

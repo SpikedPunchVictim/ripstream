@@ -32,6 +32,16 @@ test("extracts X.509 subject, issuer, serial and validity", async () => {
   assert.match(handler.toString(), /Serial/);
 });
 
+test("registers the detector's application/x-x509-cert type", async () => {
+  const types = [...new X509Parser().getSupportedTypes()].map((type) => type.toString());
+  assert.ok(types.includes("application/x-x509-cert"));
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(pem));
+  const metadata = new Metadata();
+  await new X509Parser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  await stream.close();
+  assert.match(metadata.get("x509:subject") ?? "", /CN=Test Cert/);
+});
+
 function tlv(tag: number, ...content: number[][]): number[] {
   const body = content.flat();
   return [tag, body.length, ...body];

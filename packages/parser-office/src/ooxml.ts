@@ -5,6 +5,8 @@ import {
   MalformedDocumentError,
   MediaType,
   Metadata,
+  ParseTimeoutError,
+  AbortError,
   UnsupportedFormatError,
   XHTMLContentHandler,
   type ContentHandler,
@@ -623,8 +625,17 @@ async function parseEmbeddedPart(
   const stream = await RipstreamInputStream.from(bytes, { context: ctx });
   try {
     await extractor.parseEmbedded(stream, handler, metadata, ctx);
-  } catch {
-    // Unsupported embedded formats are recorded but must not fail the package.
+  } catch (error) {
+    // Resiliency errors must reach the server (422/408) instead of a truncated 200.
+    if (
+      error instanceof LimitExceededError ||
+      error instanceof ParseTimeoutError ||
+      error instanceof AbortError ||
+      ctx.signal.aborted
+    ) {
+      throw error;
+    }
+    // Unsupported embedded formats must not fail the package.
   } finally {
     await stream.close();
   }

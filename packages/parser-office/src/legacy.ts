@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -61,17 +62,17 @@ export class LegacyOfficeParser implements Parser {
       }
       for (const entry of compound.entries) {
         if (entry.type !== "stream") continue;
-        strings.push(...printableStrings(compound.read(entry.path)));
+        appendStrings(strings, printableStrings(compound.read(entry.path)));
       }
     } else if (type.startsWith("application/onenote")) {
-      strings.push(...printableStrings(data));
+      appendStrings(strings, printableStrings(data));
     } else if (type === "application/x-msaccess") {
       const signature = new TextDecoder("latin1").decode(data.subarray(4, 20));
       if (!signature.startsWith("Standard Jet DB")) {
         throw new MalformedDocumentError("Not an Access database");
       }
       metadata.set("access:engine", signature.trim());
-      strings.push(...printableStrings(data));
+      appendStrings(strings, printableStrings(data));
     } else {
       throw new MalformedDocumentError("Unsupported legacy Office container");
     }
@@ -83,6 +84,17 @@ export class LegacyOfficeParser implements Parser {
     await xhtml.startDocument();
     for (const value of values) await xhtml.element("p", value);
     await xhtml.endDocument();
+  }
+}
+
+const MAX_STRINGS = 1_000_000;
+
+function appendStrings(target: string[], source: readonly string[]): void {
+  for (const value of source) {
+    if (target.length >= MAX_STRINGS) {
+      throw new LimitExceededError(`Extracted string count exceeds ${MAX_STRINGS}`);
+    }
+    target.push(value);
   }
 }
 

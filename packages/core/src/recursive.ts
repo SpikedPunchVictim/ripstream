@@ -146,6 +146,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       if (type !== null) record.mediaType = MediaType.parse(type) ?? record.mediaType;
     } catch (error) {
       record.exception = error instanceof Error ? error : new Error(String(error));
+      if (ctx.signal.aborted) throw error; // propagate aborts; don't swallow a timeout as success
     } finally {
       if (source !== stream) await source.close();
       markParseTiming(metadata, startedAt);

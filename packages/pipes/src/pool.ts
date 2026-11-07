@@ -51,7 +51,6 @@ export class WorkerPool {
     }
     await new Promise<void>((resolve) => {
       this.#waiters.push(() => {
-        this.#active++;
         resolve();
       });
     });

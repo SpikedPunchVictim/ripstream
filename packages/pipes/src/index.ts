@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath, stat, writeFile, mkdir } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
@@ -125,8 +126,12 @@ export class PipesEngine {
       }
     };
 
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const worker = async (): Promise<void> => {
       for (;;) {
+        if (signal.aborted) return;
         const item = await next();
         if (item === null) return;
         const document = item.document;
@@ -136,6 +141,7 @@ export class PipesEngine {
         } else if (mode === "RMETA" || mode === "UNPACK") {
           const records = await ripstream.parseRecursive(document.data, {
             filename: document.id,
+            signal,
             ...(limits === undefined ? {} : { limits }),
           });
           if (mode === "UNPACK") {
@@ -156,6 +162,7 @@ export class PipesEngine {
         } else {
           const result = await ripstream.parse(document.data, {
             filename: document.id,
+            signal,
             ...(limits === undefined ? {} : { limits }),
           });
           const metadata = metadataObject(result.metadata);
@@ -172,26 +179,44 @@ export class PipesEngine {
       }
     };
 
+    // On the first failure, abort so siblings stop pulling new work and
+    // in-flight parses cancel; wait for every worker to settle, then close the
+    // emitter (always) and rethrow the original error.
+    let failure: { readonly error: unknown } | null = null;
+    const guarded = async (): Promise<void> => {
+      try {
+        await worker();
+      } catch (error) {
+        // Keep the chronologically first error; later ones are usually abort echoes.
+        failure ??= { error };
+        controller.abort(error);
+      }
+    };
+
     try {
-      await Promise.all(Array.from({ length: concurrency }, () => worker()));
-    } catch (error) {
-      failed++;
-      throw error;
+      await Promise.all(Array.from({ length: concurrency }, () => guarded()));
+      if (failure !== null) {
+        failed++;
+        throw (failure as { readonly error: unknown }).error;
+      }
+      if (mode === "CONCATENATE") {
+        await this.#options.emitter.emit({
+          id: "concatenated",
+          text: concatenated.filter((value) => value !== undefined).join(""),
+        });
+      }
     } finally {
-      this.#stats = {
-        fetched,
-        emitted,
-        failed,
-        durationMs: performance.now() - started,
-      };
+      try {
+        await this.#options.emitter.close?.();
+      } finally {
+        this.#stats = {
+          fetched,
+          emitted,
+          failed,
+          durationMs: performance.now() - started,
+        };
+      }
     }
-    if (mode === "CONCATENATE") {
-      await this.#options.emitter.emit({
-        id: "concatenated",
-        text: concatenated.filter((value) => value !== undefined).join(""),
-      });
-    }
-    await this.#options.emitter.close?.();
     return emitted;
   }
 }
@@ -305,7 +330,14 @@ export class FileSystemEmitter implements Emitter {
 
   async emit(document: EmittedDocument): Promise<void> {
     await mkdir(this.#directory, { recursive: true });
-    const name = `${document.id.replace(/[^A-Za-z0-9._-]+/g, "_") || "document"}`;
+    // Ids that need sanitizing get a short stable hash of the RAW id appended so
+    // distinct ids ("a/b", "a_b") can never collide on one file. Filesystem-safe
+    // ids keep their exact name. Deliberate output-contract change for unsafe ids.
+    const safe = document.id.replace(/[^A-Za-z0-9._-]+/g, "_");
+    const name =
+      safe === document.id
+        ? safe || "document"
+        : `${safe || "document"}-${createHash("sha1").update(document.id).digest("hex").slice(0, 8)}`;
     if (document.bytes !== undefined) {
       await writeFile(join(this.#directory, `${name}.bin`), document.bytes);
     } else if (document.text !== undefined) {

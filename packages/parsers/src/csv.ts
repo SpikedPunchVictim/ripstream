@@ -1,5 +1,6 @@
 import { createDecoder } from "./charset.ts";
 import {
+  LimitExceededError,
   MediaType,
   XHTMLContentHandler,
   type ContentHandler,
@@ -11,6 +12,15 @@ import {
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 
 type CsvEvent = { readonly type: "row"; readonly cells: readonly string[] };
+
+// Resiliency stopgap for #23: a row with no terminator otherwise buffers the whole
+// (body-capped, ~9x-amplified) input in `field`/`row` and never hits the output cap,
+// OOMing the process. Both caps bound that: MAX_CELLS_PER_ROW catches a comma bomb
+// (millions of empty cells), MAX_ROW_CHARS catches one giant unterminated cell. Values
+// are generous vs any legitimate CSV; the proper fix is the streaming-row redesign
+// tracked separately.
+const MAX_ROW_CHARS = 10_000_000;
+const MAX_CELLS_PER_ROW = 1_000_000;
 
 /**
  * Port of TextAndCSVParser's CSV side. Streaming state machine with delimiter
@@ -99,6 +109,7 @@ class CsvScanner {
   private inQuotes = false;
   private pendingQuote = false;
   private skipLf = false;
+  private rowChars = 0;
 
   constructor(events: CsvEvent[]) {
     this.events = events;
@@ -108,12 +119,21 @@ class CsvScanner {
     this.delimiter = delimiter;
   }
 
+  private appendField(char: string): void {
+    this.field += char;
+    if (++this.rowChars > MAX_ROW_CHARS) {
+      throw new LimitExceededError(
+        `CSV row exceeds ${MAX_ROW_CHARS} buffered characters without a row terminator`,
+      );
+    }
+  }
+
   write(text: string): void {
     for (const char of text) {
       if (this.pendingQuote) {
         this.pendingQuote = false;
         if (char === '"') {
-          this.field += '"';
+          this.appendField('"');
           continue;
         }
         this.inQuotes = false;
@@ -121,7 +141,7 @@ class CsvScanner {
 
       if (this.inQuotes) {
         if (char === '"') this.pendingQuote = true;
-        else this.field += char;
+        else this.appendField(char);
         continue;
       }
 
@@ -134,6 +154,11 @@ class CsvScanner {
         this.row.push(this.field);
         this.field = "";
         this.skipLf = false;
+        if (this.row.length > MAX_CELLS_PER_ROW) {
+          throw new LimitExceededError(
+            `CSV row exceeds ${MAX_CELLS_PER_ROW} cells without a row terminator`,
+          );
+        }
         continue;
       }
 
@@ -153,7 +178,7 @@ class CsvScanner {
       }
 
       this.skipLf = false;
-      this.field += char;
+      this.appendField(char);
     }
   }
 
@@ -172,6 +197,7 @@ class CsvScanner {
       this.events.push({ type: "row", cells: this.row });
     }
     this.row = [];
+    this.rowChars = 0;
     this.skipLf = false;
   }
 }

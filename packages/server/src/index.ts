@@ -121,7 +121,6 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       }, requestTimeoutMs);
       const start = (): void => {
         clearTimeout(timer);
-        active++;
         resolve(release);
       };
       waiters.push(start);
@@ -149,8 +148,24 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         response.end();
         return;
       }
-      if (options.authenticate !== undefined && !(await options.authenticate(request))) {
+      let authorized: boolean;
+      try {
+        authorized = options.authenticate === undefined || (await options.authenticate(request));
+      } catch {
+        authorized = false; // fail closed; never echo authenticator internals
+      }
+      if (!authorized) {
         send(response, 401, "text/plain", "Unauthorized");
+        return;
+      }
+      const probePath = new URL(request.url ?? "/", "http://localhost").pathname;
+      if (request.method === "GET" && (probePath === "/health" || probePath === "/version" || probePath === "/status")) {
+        // Liveness/version endpoints must not be gated by the concurrency semaphore.
+        try {
+          await route(request, response, () => () => undefined);
+        } catch {
+          if (!response.headersSent) send(response, 500, "text/plain", "Internal error");
+        }
         return;
       }
       let release: (() => void) | null = null;
@@ -169,19 +184,32 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
               ? httpStatusForError(error)
               : 500;
         const message = error instanceof Error ? error.message : String(error);
-        const wantsJson = (request.headers.accept ?? "").includes("application/json");
-        if (wantsJson) {
-          sendJson(response, status, {
-            error: message,
-            code: error instanceof RipstreamError ? error.code : "ERROR",
-          });
-        } else {
-          send(response, status, "text/plain", message);
+        if (!response.headersSent && !response.writableEnded) {
+          const wantsJson = (request.headers.accept ?? "").includes("application/json");
+          if (wantsJson) {
+            sendJson(response, status, {
+              error: message,
+              code: error instanceof RipstreamError ? error.code : "ERROR",
+            });
+          } else {
+            send(response, status, "text/plain", message);
+          }
         }
       } finally {
         release?.();
       }
-    })();
+    })().catch(() => {
+      // Last-resort guard: a throw escaped the handler — e.g. a response write racing
+      // Node's requestTimeout 408 (headers already sent), or `new URL` on a malformed
+      // request target. Never let it become a process-killing unhandled rejection.
+      if (!response.headersSent && !response.writableEnded) {
+        try {
+          send(response, 500, "text/plain", "Internal error");
+        } catch {
+          /* response already committed; nothing more to do */
+        }
+      }
+    });
   };
 
   async function route(
@@ -336,7 +364,10 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       return;
     }
     if (endpoint === "/rmeta" || url.pathname === "/unpack") {
-      const records = await ripstream.parseRecursive(body, parseOptions);
+      const records = await ripstream.parseRecursive(body, {
+        ...parseOptions,
+        ...(Object.keys(limits).length === 0 ? {} : { limits }),
+      });
       sendJson(response, 200, JSON.parse(serializeRmeta(records)));
       return;
     }
@@ -358,7 +389,10 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     }
   }
 
-  const server = createServer(handler);
+  const server = createServer(
+    { requestTimeout: requestTimeoutMs, connectionsCheckingInterval: 30_000 },
+    handler,
+  );
 
   return {
     handler,

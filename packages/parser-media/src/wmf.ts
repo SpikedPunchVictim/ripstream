@@ -62,6 +62,16 @@ export class WmfEmfParser implements Parser {
       );
       return;
     }
+    // Standard (non-placeable) WMF: METAHEADER with no bounds. Type 1 = memory,
+    // 2 = disk; HeaderSize is 9 words; Version is 0x0100 or 0x0300.
+    if (
+      data.length >= 18 &&
+      (view.getUint16(0, true) === 1 || view.getUint16(0, true) === 2) &&
+      view.getUint16(2, true) === 9 &&
+      (view.getUint16(4, true) === 0x0100 || view.getUint16(4, true) === 0x0300)
+    ) {
+      return;
+    }
     throw new MalformedDocumentError("Not a WMF/EMF file");
   }
 }

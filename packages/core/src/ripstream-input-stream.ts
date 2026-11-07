@@ -82,7 +82,8 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
   }
 
   async readFully(maxBytes: number): Promise<Uint8Array> {
-    await this.ensureBuffered(maxBytes);
+    if (!(maxBytes >= 0)) throw new RangeError(`maxBytes must be >= 0, got ${maxBytes}`);
+    await this.ensureBuffered(maxBytes + 1);
     const available = this.bytesStored - this.cursor;
     if (available > maxBytes) {
       throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
@@ -119,8 +120,27 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
     return target;
   }
 
-  async getFile(): Promise<string> {
-    await this.drain();
+  /**
+   * Spills the whole stream to a temp file and returns its path. When
+   * `maxBytes` is given, draining stops with LimitExceededError as soon as
+   * more than `maxBytes` have been read, so an oversized stream is never
+   * fully written to disk.
+   */
+  async getFile(maxBytes?: number): Promise<string> {
+    if (maxBytes === undefined) {
+      await this.drain();
+    } else {
+      if (!(maxBytes >= 0)) throw new RangeError(`maxBytes must be >= 0, got ${maxBytes}`);
+      while (!this.eof) {
+        if (this.bytesStored > maxBytes) {
+          throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
+        }
+        await this.pull();
+      }
+      if (this.bytesStored > maxBytes) {
+        throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
+      }
+    }
     await this.spill();
     return this.path!;
   }

@@ -119,6 +119,7 @@ export class RtfParser implements Parser {
   }
 }
 
+const HEX_ESCAPE = /^[0-9a-fA-F]{2}$/;
 const MAX_GROUP_DEPTH = 1_000;
 
 interface TokenizeResult {
@@ -199,12 +200,25 @@ function tokenize(rtf: string): TokenizeResult {
       continue;
     }
     if (next === "'") {
-      const hex = rtf.slice(position + 1, position + 3);
-      const byte = Number.parseInt(hex, 16);
-      if (Number.isFinite(byte)) {
-        append(decodeAnsi(new Uint8Array([byte]), codepage));
+      // Collect the whole run of consecutive \'xx escapes so double-byte code
+      // pages (932/936/949/950) are decoded across byte boundaries.
+      const run: number[] = [];
+      let cursor = position; // points at the "'" of the next candidate escape
+      let end = position + 3; // malformed escapes are skipped, as before
+      while (HEX_ESCAPE.test(rtf.slice(cursor + 1, cursor + 3))) {
+        run.push(Number.parseInt(rtf.slice(cursor + 1, cursor + 3), 16));
+        end = cursor + 3;
+        if (rtf[end] === "\\" && rtf[end + 1] === "'") cursor = end + 1;
+        else break;
       }
-      position += 3;
+      position = end;
+      if (run.length === 0) continue;
+      // \ucN fallback bytes belong to a preceding \uN and are dropped.
+      const frame = top();
+      const dropped = Math.min(frame.unicodeFallback, run.length);
+      frame.unicodeFallback -= dropped;
+      const kept = run.slice(dropped);
+      if (kept.length > 0) append(decodeAnsi(new Uint8Array(kept), codepage));
       continue;
     }
     if (next === "\\" || next === "{" || next === "}") {

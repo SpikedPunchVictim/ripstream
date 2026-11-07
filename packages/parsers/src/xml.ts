@@ -3,6 +3,7 @@ import {
   MediaType,
   Metadata,
   MalformedDocumentError,
+  RipstreamError,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
@@ -103,6 +104,7 @@ export class XmlParser implements Parser {
       parser.close();
       await drain(events, xhtml);
     } catch (error) {
+      if (error instanceof RipstreamError) throw error;
       throw new MalformedDocumentError("Malformed XML", { cause: error });
     }
 

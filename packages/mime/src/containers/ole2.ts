@@ -85,6 +85,11 @@ export async function detectOle2Container(
     }
 
     return detectOle2Names(names);
+  } catch (error) {
+    // Detection is best-effort: a corrupt header must not abort the detector
+    // chain (magic/XML/text fallbacks); parsers report the malformation later.
+    if (error instanceof MalformedDocumentError) return null;
+    throw error;
   } finally {
     await handle.close();
   }

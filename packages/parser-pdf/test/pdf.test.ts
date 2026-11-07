@@ -315,6 +315,33 @@ test("rejects input larger than maxInputBytes", async () => {
   );
 });
 
+test("bounds the spill instead of writing an oversized stream to disk first", async () => {
+  const chunkSize = 64 * 1024;
+  const totalChunks = 4096; // 256 MiB if fully drained
+  let produced = 0;
+  async function* source(): AsyncGenerator<Uint8Array> {
+    for (let i = 0; i < totalChunks; i++) {
+      produced += chunkSize;
+      yield new Uint8Array(chunkSize);
+    }
+  }
+  const stream = await RipstreamInputStream.from(source());
+  try {
+    await assert.rejects(
+      new PdfParser({ maxInputBytes: 1024 * 1024 }).parse(
+        stream,
+        new BodyContentHandler(),
+        new Metadata(),
+        new ParseContext(),
+      ),
+      LimitExceededError,
+    );
+  } finally {
+    await stream.close();
+  }
+  assert.ok(produced <= 2 * 1024 * 1024, `pulled ${produced} bytes from the source`);
+});
+
 test("caps page text characters", async () => {
   await assert.rejects(
     parseWith(await samplePdf(), new PdfParser({ maxPageTextChars: 3 })),

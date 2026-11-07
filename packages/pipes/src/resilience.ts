@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export interface RetryOptions {
@@ -33,6 +33,7 @@ export async function withRetry<T>(
 export class CheckpointStore {
   readonly #path: string;
   readonly #completed = new Set<string>();
+  static #tmpCounter = 0;
 
   constructor(path: string) {
     this.#path = path;
@@ -40,12 +41,28 @@ export class CheckpointStore {
 
   static async open(path: string): Promise<CheckpointStore> {
     const store = new CheckpointStore(path);
+    let raw: string;
     try {
-      const value = JSON.parse(await readFile(path, "utf8")) as string[];
-      for (const id of value) store.#completed.add(id);
-    } catch {
-      // Fresh checkpoint.
+      raw = await readFile(path, "utf8");
+    } catch (error) {
+      // Genuinely absent: fresh checkpoint. Any other read failure is real.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return store;
+      throw error;
     }
+    // An empty file carries no checkpoint (nothing to lose), so it is fresh.
+    if (raw.trim() === "") return store;
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch (error) {
+      throw new Error(`Corrupt checkpoint file ${path}: ${(error as Error).message}`, {
+        cause: error,
+      });
+    }
+    if (!Array.isArray(value)) {
+      throw new Error(`Corrupt checkpoint file ${path}: expected a JSON array of ids`);
+    }
+    for (const id of value) store.#completed.add(String(id));
     return store;
   }
 
@@ -56,7 +73,16 @@ export class CheckpointStore {
   async mark(id: string): Promise<void> {
     this.#completed.add(id);
     await mkdir(dirname(this.#path), { recursive: true });
-    await writeFile(this.#path, `${JSON.stringify([...this.#completed].sort(), null, 2)}\n`);
+    // Write-then-rename so a crash mid-write never leaves a torn checkpoint.
+    const tmp = `${this.#path}.${process.pid}.${++CheckpointStore.#tmpCounter}.tmp`;
+    try {
+      await writeFile(tmp, `${JSON.stringify([...this.#completed].sort(), null, 2)}\n`);
+      await rename(tmp, this.#path);
+    } catch (error) {
+      // Don't leave a partial temp behind to accumulate under repeated failures.
+      await rm(tmp, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   get size(): number {
