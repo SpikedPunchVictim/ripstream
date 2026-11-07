@@ -1,0 +1,33 @@
+{
+  "name": "@spikedpunch/ripstream-cli",
+  "version": "0.0.0",
+  "description": "Command-line interface for ripstream",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "ripstream": "./bin/ripstream.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/main.d.ts",
+      "import": "./dist/main.js",
+      "require": "./dist/main.js",
+      "default": "./dist/main.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "main": "./dist/main.js",
+  "types": "./dist/main.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "@spikedpunch/ripstream-parsers": "workspace:*",
+    "@spikedpunch/ripstream-language": "workspace:*",
+    "@spikedpunch/ripstream-server": "workspace:*"
+  }
+}

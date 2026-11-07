@@ -1,0 +1,32 @@
+{
+  "name": "@spikedpunch/ripstream-bundle-standard",
+  "version": "0.0.0",
+  "description": "Standard ripstream bundle: core, mime, all standard parsers",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "@spikedpunch/ripstream-mime": "workspace:*",
+    "@spikedpunch/ripstream-parsers": "workspace:*",
+    "@spikedpunch/ripstream-parser-office": "workspace:*",
+    "@spikedpunch/ripstream-parser-archive": "workspace:*",
+    "@spikedpunch/ripstream-parser-pdf": "workspace:*",
+    "@spikedpunch/ripstream-parser-media": "workspace:*"
+  }
+}

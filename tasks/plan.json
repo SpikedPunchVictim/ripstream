@@ -1,0 +1,3879 @@
+{
+ "nodes": [
+  {
+   "key": "epic-core",
+   "title": "Core contracts and runtime",
+   "type": "epic",
+   "priority": 0,
+   "description": "Library-first core: zero-dependency contracts, streams, limits, config, facade. Parity: tika-core.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-detection",
+   "title": "Detection and MIME registry",
+   "type": "epic",
+   "priority": 0,
+   "description": "100% detection parity with Tika 4.2 including magic, globs, XML roots, text, ZIP and OLE2 containers.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-metadata",
+   "title": "Metadata schema and serialization",
+   "type": "epic",
+   "priority": 0,
+   "description": "Full tika-metadata-schema parity, write limits, JSON/XML/CSV/XMP serialization.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-handlers",
+   "title": "Output handlers",
+   "type": "epic",
+   "priority": 0,
+   "description": "SAX-shaped event model plus text/html/xhtml/xml/markdown/json handlers with parity.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-framework",
+   "title": "Parser framework and recursion",
+   "type": "epic",
+   "priority": 0,
+   "description": "Composite/auto-detect parsers, recursive wrapper, embedded extraction, limits, password provider, registry generation.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-types",
+   "title": "Core types: MediaType, Attributes, ByteStream, InputSource",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "Implement immutable MediaType parser/formatter, Attributes, ByteStream and InputSource per spec 01. Acceptance: RFC 2045 round-trip tests, zero deps.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-streams",
+   "title": "Stream adapters: AsyncIterable, Web, Node, Blob, file",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "toAsyncIterable/toReadableStream/toNodeReadable/collect with backpressure and limits. Acceptance: interop tests across Node, Bun, Deno, browser.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-tikainputstream",
+   "title": "RipstreamInputStream with lazy memory-to-disk spooling",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "peek/mark/reset/seek/getFile, threshold spooling, cleanup on abort. Acceptance: random-access parsers work; no full buffer for sequential paths.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-parsecontext",
+   "title": "ParseContext, typed keys, abort signal, limits",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "Implement context hierarchy, standard keys, ParseLimits defaults matching upstream. Acceptance: per-parse overrides and child contexts tested.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-errors",
+   "title": "Error taxonomy and HTTP/status mapping",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "RipstreamError subclasses per spec 01 section 12, stable codes, server mapping table. Acceptance: every parser error case classified.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-runtime",
+   "title": "Runtime abstraction (node/bun/deno/browser/worker)",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "Temp files, workers, fetch, digest, clock. Acceptance: capability detection throws typed errors, never at import time.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-events",
+   "title": "Event sink, metrics, stats snapshot",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-core",
+   "description": "RipstreamEvents parse/embedded/detect/warning/limit; non-throwing sinks; counters. Acceptance: no logging by default.",
+   "labels": [
+    "core",
+    "p1",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-config-json",
+   "title": "JSON config loader and validation",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "RipstreamConfig shape, component configs, fail-fast validation, configGeneration cache invalidation. Acceptance: schema fixtures.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-config-xml",
+   "title": "3.x XML config compatibility loader",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-core",
+   "description": "Parse upstream properties/parsers XML shape for migration. Acceptance: upstream sample configs load.",
+   "labels": [
+    "core",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "core-plugins",
+   "title": "Plugin loader and component registration",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-core",
+   "description": "Explicit dynamic imports; parsers/detectors/fetchers/emitters/iterators/reporters exports. Acceptance: no auto-registration, no document-driven code loading.",
+   "labels": [
+    "core",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "core-lifecycle",
+   "title": "Initializable/SelfConfiguring lifecycle and validation",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-core",
+   "description": "initialize/configure semantics, unknown IDs, load error handler, immutable resolved config. Acceptance: duplicate and unknown component tests.",
+   "labels": [
+    "core",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "core-facade",
+   "title": "Tika facade: detect/parse/parseToString/parseToStream/parseRecursive",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "Public convenience API per spec 01 section 11. Acceptance: parity with Tika facade behavior and defaults.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "core-api-freeze",
+   "title": "API Extractor report and semver policy",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-core",
+   "description": "Freeze public API, deprecation policy, no any in public types. Acceptance: API report diff gate and tsd tests.",
+   "labels": [
+    "core",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-registry-generator",
+   "title": "Generate MIME registry from tika-mimetypes.xml",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "Build-time generator emits types, aliases, hierarchy, globs, XML roots, magic rules with upstream version + checksum. Acceptance: zero hand edits; regeneration diff job.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-magic-engine",
+   "title": "Magic rule compiler and matcher",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "bytes/string/regex/unicodeLE/BE, offset/range/mask/minLength/submatcher, priority ordering. Acceptance: 50k ops/s and prefix truncation tests.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-name",
+   "title": "Name/glob/Content-Disposition detection",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "Case-insensitive globs, compound suffixes, RFC 2231/5987 filenames. Acceptance: parity test for every upstream glob.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-xmlroot",
+   "title": "Secure XML root element detector",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "Namespace-aware first-element mapping, no DTD/entities/network. Acceptance: RSS/Atom/KML/GPX/XLIFF/SVG/ODF-flat cases.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-text-encoding",
+   "title": "Text/binary heuristics and charset detection",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "BOM, UTF-8 validity, statistical detector, windows-1252 fallback, HTML meta and XML declaration. Acceptance: encoding fixture matrix.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-zip-container",
+   "title": "ZIP central-directory container detection",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "OOXML refinement, ODF mimetype, EPUB, JAR, APK, iWork, plain zip; ZIP64 and corrupt handling. Acceptance: no full extraction; maxZipEntries enforced.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-ole2-container",
+   "title": "OLE2/CFB root-entry detection",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "Word/Excel/PowerPoint/MSG/Visio/encrypted OOXML discrimination. Acceptance: upstream fixture set.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-other-containers",
+   "title": "Compressors, 7z, RAR, tar, WARC, ISO, AppleSingle, PDF magic",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-detection",
+   "description": "Non-ZIP container sniffing per spec 02. Acceptance: minimal header fixtures and malformed inputs decline safely.",
+   "labels": [
+    "detection",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "det-hierarchy-aliases",
+   "title": "MediaType hierarchy, aliases, supertypes, specificity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "isSpecializationOf, registry lookup, alias normalization. Acceptance: parity against upstream MediaTypeRegistry cases.",
+   "labels": [
+    "detection",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "det-custom-config",
+   "title": "Custom mimetypes merge and override detector",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-detection",
+   "description": "Overlay custom definitions and OverridingTypeDetector config. Acceptance: later definitions win; source marked custom.",
+   "labels": [
+    "detection",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "det-differential",
+   "title": "Detection differential suite vs Tika 4.2",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-detection",
+   "description": "Compare type/subtype/charset for full corpus; truncation and wrong-extension cases. Acceptance: 99% parity, failures triaged and documented.",
+   "labels": [
+    "detection",
+    "p0",
+    "test",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "meta-container",
+   "title": "Multi-valued Metadata container",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-metadata",
+   "description": "add/set/get/getAll, stable insertion order, clone/merge, typed accessors, no binary payloads. Acceptance: upstream semantics tests.",
+   "labels": [
+    "metadata",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "meta-schema-generator",
+   "title": "Generate metadata schema from tika-metadata-schema",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-metadata",
+   "description": "Property constants, namespaces, value types, case rules. Acceptance: regeneration diff job; unknown keys preserved.",
+   "labels": [
+    "metadata",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "meta-namespaces-types",
+   "title": "Namespaces and value types: dc/xmp/pdf/office/cp/media/scientific",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-metadata",
+   "description": "All prefixes in spec 02 section 7. Acceptance: key parity against upstream schema.",
+   "labels": [
+    "metadata",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "meta-dates-numbers",
+   "title": "Date, integer, long, boolean, real coercion",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-metadata",
+   "description": "UTC default, ISO-8601, invalid values null. Acceptance: timezone and malformed-value tests.",
+   "labels": [
+    "metadata",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-write-limits",
+   "title": "Metadata write limits, include/exclude filters",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-metadata",
+   "description": "Key/value/list/total caps applied at serialization boundary. Acceptance: upstream config mapping tests.",
+   "labels": [
+    "metadata",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-json",
+   "title": "rmeta and single-document JSON serialization",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-metadata",
+   "description": "Depth-first records, X-TIKA:content, exception keys, typedMetadata option, jsonShape compat switch. Acceptance: golden parity vs 4.2.",
+   "labels": [
+    "metadata",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-xml",
+   "title": "XML metadata serialization",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-metadata",
+   "description": "property elements, escaping, invalid XML char replacement. Acceptance: upstream /meta XML comparison.",
+   "labels": [
+    "metadata",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-csv",
+   "title": "CSV metadata serialization",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-metadata",
+   "description": "RFC 4180 quoting, optional header, 3.x /meta default behavior. Acceptance: golden output.",
+   "labels": [
+    "metadata",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-xmp",
+   "title": "XMP packet parse and write",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-metadata",
+   "description": "DC/PDF namespaces, round-trip, embedded XMP in PDF/images. Acceptance: XMP fixtures.",
+   "labels": [
+    "metadata",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-rmeta-fields",
+   "title": "X-TIKA recursive fields and parse timing",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-metadata",
+   "description": "content, embedded_resource_path, embedded_depth, parse_time_millis, digest, exception fields. Acceptance: names and ordering pinned.",
+   "labels": [
+    "metadata",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "meta-provenance",
+   "title": "Detected vs final Content-Type and charset provenance",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-metadata",
+   "description": "Track detector output, overrides, request-header trust. Acceptance: events and metadata agree.",
+   "labels": [
+    "metadata",
+    "p2",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "out-text",
+   "title": "TextContentHandler parity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "Block newlines, br, img alt, table tab/newline, list prefixes, nested indentation. Acceptance: golden text diffs across formats.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "out-xhtml",
+   "title": "XHTMLContentHandler well-formed writer",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "Wrapper, escaping, auto-close, element helpers, nesting validation. Acceptance: XML well-formedness property tests.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "out-html",
+   "title": "HTML serialization handler",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-handlers",
+   "description": "HTML5-ish void elements and escaping. Acceptance: /tika/html parity.",
+   "labels": [
+    "handlers",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "out-xml",
+   "title": "Raw XML content handler",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-handlers",
+   "description": "Declaration, encoding, no wrapper. Acceptance: encoding tests.",
+   "labels": [
+    "handlers",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "out-markdown",
+   "title": "Markdown handler (Tika 4 default)",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "Streaming events to GFM: headings, lists, tables, code, blockquotes, links, images, page separators. Acceptance: golden parity vs 4.2 defaults.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "out-json",
+   "title": "JSON content handler and shape compatibility",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-handlers",
+   "description": "Content + metadata JSON, tika-4 vs rmeta shapes. Acceptance: handler fixtures.",
+   "labels": [
+    "handlers",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "out-write-limit",
+   "title": "WriteOutContentHandler truncate/throw modes",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "Default 100k chars, partial output, WriteLimitReachedError semantics. Acceptance: upstream truncation parity.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "out-link-extractor",
+   "title": "LinkExtractor and metadata link collection",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-handlers",
+   "description": "href/src collection with base handling. Acceptance: HTML/PDF link fixtures.",
+   "labels": [
+    "handlers",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "out-decorators",
+   "title": "Tee, decorator chain, XHTML balancing, XMP handler",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-handlers",
+   "description": "Fan-out, balancing repairs, XMP serialization. Acceptance: decorator composition tests.",
+   "labels": [
+    "handlers",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "out-streaming",
+   "title": "Bounded-queue streaming output and cancellation",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "parseToStream lazy start, backpressure, cancel aborts parse, errors after bytes. Acceptance: memory and abort tests.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "out-recursive",
+   "title": "Recursive/rmeta handler and ParseRecord emission",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-handlers",
+   "description": "Pre-order records, exception capture, content field. Acceptance: rmeta golden tests.",
+   "labels": [
+    "handlers",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-composite",
+   "title": "CompositeParser/DefaultParser selection semantics",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "Exact then wildcard, registration order, ParserDeclinedError, exception handling. Acceptance: multi-parser fixtures.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "fw-autodetect",
+   "title": "AutoDetectParser detect-rewind-parse pipeline",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "No consumed stream, prefix memoization. Acceptance: stream position tests.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "fw-fallback-empty-error",
+   "title": "FallbackParser, EmptyParser, ErrorParser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-framework",
+   "description": "Unknown text fallback, empty success, unsupported error. Acceptance: upstream behavior matrix.",
+   "labels": [
+    "framework",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-decorators",
+   "title": "ParserDecorator and MimeFilteringDecorator",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-framework",
+   "description": "Delegate chaining and type filtering. Acceptance: composition tests.",
+   "labels": [
+    "framework",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "fw-recursive-wrapper",
+   "title": "RecursiveParserWrapper and embedded tree",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "Depth-first ParseRecords, paths, depths, exception capture, metadata. Acceptance: tree parity on Office/PDF/archives.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-embedded-extractor",
+   "title": "EmbeddedDocumentExtractor and default policy",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "shouldParseEmbedded, recursion, text vs media policy. Acceptance: content and media fixtures.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-embedded-bytes",
+   "title": "EmbeddedDocumentBytesHandler and embedded resource URIs",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-framework",
+   "description": "Raw byte streaming and embedded: references in handlers. Acceptance: no full buffering.",
+   "labels": [
+    "framework",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-limits",
+   "title": "Global depth/count/byte/time/ratio limit enforcement",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "Enforce before recursion; emit limit events and exception metadata. Acceptance: bomb corpus.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-capabilities",
+   "title": "Parser capabilities: random access, metadata-only, rendering, stateful",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-framework",
+   "description": "Framework behavior per capability; reset of stateful parsers. Acceptance: concurrency tests.",
+   "labels": [
+    "framework",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-password",
+   "title": "PasswordProvider and empty-password attempt",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-framework",
+   "description": "PDF/Office/S-MIME integration, never prompt. Acceptance: encrypted fixture matrix.",
+   "labels": [
+    "framework",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "fw-registry-generation",
+   "title": "Parser/detector registry generation from upstream service files",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-framework",
+   "description": "Generate supported-type maps; cache with configGeneration. Acceptance: completeness audit vs Tika 4.2 service files.",
+   "labels": [
+    "framework",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-text",
+   "title": "Text, web, and source parsers",
+   "type": "epic",
+   "priority": 0,
+   "description": "Plain text, CSV, HTML, XML, Markdown, feeds, JSON/YAML, source code.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-pdf",
+   "title": "PDF parser",
+   "type": "epic",
+   "priority": 0,
+   "description": "PDF text, metadata, annotations, forms, attachments, encryption, OCR integration.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "epic-ooxml",
+   "title": "OOXML parsers",
+   "type": "epic",
+   "priority": 0,
+   "description": "docx, xlsx, pptx, templates, embedded objects, encryption detection, metadata.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "epic-ole2",
+   "title": "OLE2 and legacy Microsoft parsers",
+   "type": "epic",
+   "priority": 0,
+   "description": "CFB, property sets, doc/xls/ppt/msg/tnef/visio/publisher/onenote, gap formats.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "epic-office-other",
+   "title": "OpenDocument, iWork, RTF, EPUB, CHM",
+   "type": "epic",
+   "priority": 0,
+   "description": "ODF and flat ODF, StarOffice, iWork generations, RTF, WordPerfect, legacy XML Office, EPUB, FB2, CHM, WinHelp.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "txt-text-csv",
+   "title": "TextAndCSVParser parity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-text",
+   "description": "Streaming text and RFC 4180 CSV/TSV, delimiter sniffing, quoted newlines, table and text rendering. Acceptance: encoding and dialect fixtures.",
+   "labels": [
+    "parser-text",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "txt-html",
+   "title": "HTMLParser parity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-text",
+   "description": "htmlparser2 SAX mode, script/style removal, title metadata, meta charset, links, no network or script execution. Acceptance: golden HTML corpus.",
+   "labels": [
+    "parser-text",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "txt-xml-dc",
+   "title": "XMLParser and DcXMLParser parity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-text",
+   "description": "saxes pull parse, DTD/entities off, Dublin Core elements to metadata, nesting cap. Acceptance: XXE and depth tests.",
+   "labels": [
+    "parser-text",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "txt-markdown-parse",
+   "title": "MarkdownParser parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-text",
+   "description": "mdast parse to blocks; headings, lists, code, links preserved in text/XHTML. Acceptance: upstream markdown fixture comparison.",
+   "labels": [
+    "parser-text",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "txt-feeds",
+   "title": "RSS and Atom FeedParser parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-text",
+   "description": "RSS 0.9x/1.0/2.0 and Atom, item content as XHTML, feed metadata. Acceptance: feed fixtures.",
+   "labels": [
+    "parser-text",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "txt-json-yaml-toml",
+   "title": "JSON/YAML/TOML text passthrough and optional structure",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-text",
+   "description": "Upstream has no structural parser; text passthrough for parity, optional summary behind config. Acceptance: no behavior drift by default.",
+   "labels": [
+    "parser-text",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "txt-source-code",
+   "title": "SourceCodeParser parity",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-text",
+   "description": "Linguist-derived extension map, preformatted output, language metadata. Acceptance: language coverage fixture.",
+   "labels": [
+    "parser-text",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "txt-charset-integration",
+   "title": "Charset detection integration with parsers",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-text",
+   "description": "Detected charset applied consistently, metadata written, replacement policy. Acceptance: cross-format encoding matrix.",
+   "labels": [
+    "parser-text",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "pdf-engine",
+   "title": "pdfjs-dist adapter with worker isolation",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-pdf",
+   "description": "Legacy build, worker lifecycle, optional peer dependency and MissingDependencyError. Acceptance: Node and worker runtime tests.",
+   "labels": [
+    "parser-pdf",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-range-transport",
+   "title": "Range-based random access over spooled file",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-pdf",
+   "description": "PDFDataRangeTransport backed by file handle; no full-file load for large PDFs. Acceptance: 500MB memory ceiling test.",
+   "labels": [
+    "parser-pdf",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-text-layout",
+   "title": "Per-page text extraction, reading order, page markers",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-pdf",
+   "description": "Transform-based line reconstruction, RTL handling, div.page markers, page separator config. Acceptance: text parity threshold on corpus.",
+   "labels": [
+    "parser-pdf",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-metadata-xmp",
+   "title": "Info dictionary, XMP, PDFVersion, permissions",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-pdf",
+   "description": "Metadata keys and values per upstream, encryption flags, page count. Acceptance: metadata diff.",
+   "labels": [
+    "parser-pdf",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-annotations",
+   "title": "Annotation text extraction and links",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pdf",
+   "description": "Text annotations, highlights, URI links, configurable extractAnnotationText. Acceptance: annotation fixtures.",
+   "labels": [
+    "parser-pdf",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-forms-xfa",
+   "title": "AcroForm and XFA extraction",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pdf",
+   "description": "Field names, values, types; XFA XML text. Acceptance: form fixtures.",
+   "labels": [
+    "parser-pdf",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-attachments",
+   "title": "Embedded files and portfolio parsing",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pdf",
+   "description": "Recursive parse, filenames, MIME detection, embedded paths. Acceptance: attachment tree parity.",
+   "labels": [
+    "parser-pdf",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-encryption",
+   "title": "Encryption: empty password, provider, AES/RC4",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pdf",
+   "description": "AES-128/256 and RC4, permission flags, EncryptedDocumentError. Acceptance: encrypted fixture matrix, no brute force.",
+   "labels": [
+    "parser-pdf",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "pdf-inline-images",
+   "title": "Inline image extraction",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pdf",
+   "description": "Per-page image extraction above minImageSize, routing to OCR or byte handler. Acceptance: no unbounded buffering.",
+   "labels": [
+    "parser-pdf",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "pdf-ocr-hook",
+   "title": "OCR strategy integration for PDF pages",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pdf",
+   "description": "AUTO/OCR_ONLY/NO_OCR/OCR_AND_TEXT_EXTRACTION, DPI, language, timeout. Acceptance: mixed text/image PDFs.",
+   "labels": [
+    "parser-pdf",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "pdf-recovery-limits",
+   "title": "Damaged xref recovery and page/time limits",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pdf",
+   "description": "Recover mode, per-page warnings, page cap, abort. Acceptance: malformed PDF corpus.",
+   "labels": [
+    "parser-pdf",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-opc-reader",
+   "title": "Streaming OPC/ZIP part reader",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "fflate streaming unzip, required-parts only, zip bomb guards, central-directory driven. Acceptance: 1GB docx bounded memory.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-docx",
+   "title": "WordprocessingML text extraction",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "Paragraphs, runs, tables, headers/footers, footnotes, comments, hyperlinks, text boxes, tracked changes, numbering. Acceptance: golden docx parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-xlsx",
+   "title": "SpreadsheetML text extraction",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "Sheet order, shared strings streaming, cached formulas, dates, merged cells, hidden sheets, defined names. Acceptance: xlsx golden parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-pptx",
+   "title": "PresentationML text extraction",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "Slide order, titles, notes, tables, grouped shapes, slide divs. Acceptance: pptx golden parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-metadata",
+   "title": "core/app/custom OOXML metadata",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "office, extended-properties, custom-properties namespaces; counts. Acceptance: metadata diff.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-embedded",
+   "title": "Embedded objects, charts, media recursion",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "Embedded workbooks/OLE/media, charts cached data, embedded: URIs, recursive parse. Acceptance: embedded tree parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-encryption",
+   "title": "Encrypted OOXML (Agile/Standard) detection and decryption",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-ooxml",
+   "description": "EncryptionInfo parsing, password provider, optional officecrypto dependency, EncryptedDocumentError. Acceptance: encrypted fixtures.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "oox-macros",
+   "title": "Macro presence metadata and optional VBA extraction",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-ooxml",
+   "description": "Never execute macros; record presence; opt-in stream extraction. Acceptance: docm/xlsm/pptm fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "oox-charts-smartart",
+   "title": "Charts and SmartArt cached text",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-ooxml",
+   "description": "Chart cache values, SmartArt data model text. Acceptance: chart fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "oox-tests",
+   "title": "OOXML differential suite",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ooxml",
+   "description": "docx/xlsx/pptx/templates plus malformed and encrypted cases vs Tika 4.2. Acceptance: P0 parity thresholds.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "test",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-cfb-reader",
+   "title": "Streaming CFB/OLE2 reader",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ole2",
+   "description": "Header, FAT/miniFAT, directory, stream reads with bounds; spooled file. Acceptance: malformed and huge CFB tests.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-property-sets",
+   "title": "OLE2 property sets to metadata",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ole2",
+   "description": "SummaryInformation, DocumentSummaryInformation, custom properties, cp/extended-properties namespaces. Acceptance: metadata diff.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-doc",
+   "title": ".doc Word 6/95/97-2003 extraction",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ole2",
+   "description": "FIB, piece table, fast-save, fields, footnotes, headers. Acceptance: golden doc parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-xls",
+   "title": ".xls BIFF5/8 extraction",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-ole2",
+   "description": "SST, LABELSST, NUMBER/RK/MULRK, cached FORMULA values, merged cells, date formats. Acceptance: golden xls parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-ppt",
+   "title": ".ppt 97-2003 extraction",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-ole2",
+   "description": "Slide records, TextChars/TextBytes atoms, notes. Acceptance: golden ppt parity.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-msg",
+   "title": "Outlook MSG extraction",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-ole2",
+   "description": "CFB property sets, headers, plain/RTF/HTML body, attachments recursive. Acceptance: msg fixtures.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "ole-tnef",
+   "title": "TNEF winmail.dat parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-ole2",
+   "description": "Attributes, body, attachments, nested MIME. Acceptance: tnef fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "ole-visio",
+   "title": "Visio VSD best-effort",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "CFB stream text and metadata. Acceptance: documented partial parity.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "ole-publisher",
+   "title": "Publisher PUB best-effort",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "CFB text records and metadata. Acceptance: documented partial parity.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "ole-onenote",
+   "title": "OneNote MS-ONESTORE parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "Note text extraction, metadata. High effort; P3 opt-in. Acceptance: note fixtures.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "ole-access",
+   "title": "Access MDB/ACCDB parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "Detect and emit UnsupportedFormatError with clear message unless a permissive decoder is adopted. Acceptance: gap recorded in parity report.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "ole-project",
+   "title": "Project MPP parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "Detect and emit UnsupportedFormatError; document gap. Acceptance: gap recorded.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "ole-owner-files",
+   "title": "MS owner/lock files (~$ files)",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-ole2",
+   "description": "Owner metadata probe. Acceptance: fixture.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "ole-encryption",
+   "title": "Encrypted OLE2 detection",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-ole2",
+   "description": "EncryptionInfo and stream detection, password provider. Acceptance: encrypted fixtures.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "off-odf",
+   "title": "OpenDocument packaged parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-office-other",
+   "description": "ODT/ODS/ODP/ODG/templates, content/styles/meta, embedded objects. Acceptance: odt golden parity; P1 others.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "off-flat-odf",
+   "title": "Flat ODF parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-office-other",
+   "description": "fodt/fods/fodp XML. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-staroffice",
+   "title": "StarOffice 5-7 legacy best-effort",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "Legacy binary probe and text best-effort. Acceptance: documented partial.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "off-iwork09",
+   "title": "iWork 09 package parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-office-other",
+   "description": "ZIP + XML index text. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-iwork13-18",
+   "title": "iWork 13+/18+ IWA metadata and previews",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "Snappy protobuf; metadata and preview images only, matching upstream limitation. Acceptance: parity with documented limitation.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "off-rtf",
+   "title": "RTF streaming tokenizer and extractor",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-office-other",
+   "description": "Groups, control words, unicode escapes, codepages, font/color tables, embedded pictures. Acceptance: rtf golden parity.",
+   "labels": [
+    "parser-office",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "off-wordperfect",
+   "title": "WordPerfect WPD parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "Prefix/stream parse, text and metadata. Acceptance: documented partial.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "off-wordml",
+   "title": "Word 2003 XML parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-office-other",
+   "description": "saxes, w:t, tables, properties. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-spreadsheetml",
+   "title": "Excel 2003 XML parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-office-other",
+   "description": "Rows, cells, formulas and cached values. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-word2006ml",
+   "title": "Word 2006 ML parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "Same as WordML with 2006 differences. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "off-old-excel",
+   "title": "Old Excel BIFF2-4 pre-OLE parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-office-other",
+   "description": "Custom record reader. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-epub",
+   "title": "EPUB 2/3 parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-office-other",
+   "description": "OPF spine order, XHTML chapters, NCX/nav, cover, metadata. Acceptance: epub parity.",
+   "labels": [
+    "parser-office",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "off-fb2",
+   "title": "FictionBook 2 parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-office-other",
+   "description": "XML sections, titles, poems, notes. Acceptance: fixtures.",
+   "labels": [
+    "parser-office",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "off-chm",
+   "title": "CHM parser with LZX decompression",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "ITSF/ITSP, LZX, HTML entries, index/toc. Acceptance: chm fixtures or declared blocker.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "off-winhelp",
+   "title": "WinHelp HLP parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-office-other",
+   "description": "Detect and gap-report unless a permissive decoder is adopted. Acceptance: gap recorded.",
+   "labels": [
+    "parser-office",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-archives",
+   "title": "Archives and compression",
+   "type": "epic",
+   "priority": 0,
+   "description": "ZIP/TAR/GZIP plus bzip2, xz, brotli, LZ4, snappy, 7z, RAR, AR/CPIO, ISO, AppleSingle, plist, and archive safety.",
+   "labels": [
+    "epic",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "epic-mail",
+   "title": "Mail, feeds, web archives, localization",
+   "type": "epic",
+   "priority": 1,
+   "description": "RFC822, mbox, vCard, iCal, WARC/ARC/WACZ, XLIFF, TMX, ANPA, S/MIME and PGP/MIME detection.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "epic-media",
+   "title": "Images, OCR, audio, video, fonts",
+   "type": "epic",
+   "priority": 1,
+   "description": "Image metadata and OCR/VLM, audio and video metadata, font parsing.",
+   "labels": [
+    "epic",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "epic-science",
+   "title": "Scientific, CAD, and DICOM",
+   "type": "epic",
+   "priority": 2,
+   "description": "MAT, NetCDF, HDF5/HDF4, FITS, GRIB, DICOM, geospatial, DWG/DXF/DGN, shapefile.",
+   "labels": [
+    "epic",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "epic-binary",
+   "title": "Executables, crypto, databases",
+   "type": "epic",
+   "priority": 2,
+   "description": "Class files, PE/ELF/Mach-O, PGP, X.509/PKCS/ASN.1, DBF, SQLite, columnar formats, MSI.",
+   "labels": [
+    "epic",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "arc-zip",
+   "title": "ZIP/JAR/WAR/EAR/APK package parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-archives",
+   "description": "fflate streaming unzip, entry list, package-entry XHTML, recursion, limits. Acceptance: archive tree parity.",
+   "labels": [
+    "parser-archive",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "arc-tar",
+   "title": "TAR parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-archives",
+   "description": "tar-stream, PAX/GNU long names, no symlink following. Acceptance: tar fixtures.",
+   "labels": [
+    "parser-archive",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "arc-gzip",
+   "title": "GZIP compressor parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-archives",
+   "description": "node:zlib/DecompressionStream, inner type detection, bounded prefix. Acceptance: gzip fixtures.",
+   "labels": [
+    "parser-archive",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "arc-bzip2",
+   "title": "BZIP2 compressor parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-archives",
+   "description": "seek-bzip streaming. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-xz",
+   "title": "XZ/LZMA compressor parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-archives",
+   "description": "xz-decompress, LZMA-alone header. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-brotli",
+   "title": "Brotli compressor parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-archives",
+   "description": "Node zlib or wasm fallback. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-unix-compress",
+   "title": "Unix compress .Z LZW parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-archives",
+   "description": "LZW decoder. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-lz4",
+   "title": "LZ4 frame parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-archives",
+   "description": "lz4js. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-snappy",
+   "title": "Snappy raw/framed parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-archives",
+   "description": "snappyjs; also used by iWork IWA. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-sevenzip",
+   "title": "7z parser (optional wasm)",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-archives",
+   "description": "Optional 7z-wasm; LGPL path, excluded from default bundle. Acceptance: fixtures and license gate.",
+   "labels": [
+    "parser-archive",
+    "p2",
+    "optional",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-rar",
+   "title": "RAR/RAR5 parser (optional external decoder)",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-archives",
+   "description": "Optional wasm; unrar licensing restricts redistribution, document external setup. Acceptance: fixtures where available.",
+   "labels": [
+    "parser-archive",
+    "p2",
+    "optional",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-ar-cpio",
+   "title": "AR/ARJ/CPIO/dump parsers",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-archives",
+   "description": "Custom readers. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "arc-iso9660",
+   "title": "ISO 9660 parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-archives",
+   "description": "Directory record walker. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "arc-applesingle",
+   "title": "AppleSingle/AppleDouble parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-archives",
+   "description": "Header and entry parser. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "arc-plist",
+   "title": "Apple plist XML and binary parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-archives",
+   "description": "bplist-parser plus XML plist, nested dict/array rendering. Acceptance: fixtures.",
+   "labels": [
+    "parser-archive",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "arc-safety",
+   "title": "Archive safety: traversal, bombs, symlinks, entry caps",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-archives",
+   "description": "Reject absolute/.. paths, no symlink following, ratio/entry/total caps. Acceptance: adversarial corpus green.",
+   "labels": [
+    "parser-archive",
+    "p0",
+    "security",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "mail-rfc822",
+   "title": "RFC822/MIME EML parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-mail",
+   "description": "Streaming multipart, headers to metadata, HTML-preferred body, attachments recursive, nested message/rfc822. Acceptance: golden email parity.",
+   "labels": [
+    "parser-document",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "mail-mbox",
+   "title": "mbox/Maildir parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-mail",
+   "description": "Streaming envelope splitter, per-message RFC822. Acceptance: mbox fixtures.",
+   "labels": [
+    "parser-document",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "mail-vcard",
+   "title": "vCard parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-mail",
+   "description": "Contact fields to metadata and text. Acceptance: vCard 2.1/3.0/4.0 fixtures.",
+   "labels": [
+    "parser-document",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "mail-ical",
+   "title": "iCalendar parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-mail",
+   "description": "ical.js; events/tasks as text and metadata. Acceptance: fixtures.",
+   "labels": [
+    "parser-document",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "web-warc",
+   "title": "WARC/ARC/WACZ parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-mail",
+   "description": "Record reader, HTTP payload detection, embedded records, WACZ ZIP+CDXJ. Acceptance: WARC fixtures.",
+   "labels": [
+    "parser-document",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "web-xliff",
+   "title": "XLIFF 1.2/2.0 parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-mail",
+   "description": "trans-unit source/target, notes, state, inline tag stripping. Acceptance: fixtures.",
+   "labels": [
+    "parser-document",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "web-tmx",
+   "title": "TMX translation memory parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-mail",
+   "description": "Translation units and languages. Acceptance: fixtures.",
+   "labels": [
+    "parser-document",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "web-anpa",
+   "title": "IPTC ANPA wire format parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-mail",
+   "description": "Line-based parse. Acceptance: fixtures.",
+   "labels": [
+    "parser-document",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "mail-smime-pgp",
+   "title": "S/MIME and PGP/MIME detection",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-mail",
+   "description": "Detect encrypted/signed parts; no decryption without keys; per-part EncryptedDocumentError. Acceptance: fixtures.",
+   "labels": [
+    "parser-document",
+    "p2",
+    "security",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-jpeg",
+   "title": "JPEG metadata parser",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-media",
+   "description": "exifr EXIF/GPS/IPTC/XMP, marker scan, comments, dimensions, orientation. Acceptance: metadata parity.",
+   "labels": [
+    "parser-media",
+    "p0",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-tiff",
+   "title": "TIFF metadata and multipage parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "IFD walker, EXIF, pages. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-png",
+   "title": "PNG chunk metadata parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "IHDR, pHYs, tEXt/zTXt/iTXt, eXIf, XMP. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-gif-bmp-ico-webp",
+   "title": "GIF/BMP/ICO/WebP metadata",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "Header, dimensions, comments, XMP where present. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-heif-avif",
+   "title": "HEIF/HEIC/AVIF metadata",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "ISO BMFF box walk, EXIF/XMP, optional decoder. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-jp2-bpg",
+   "title": "JPEG 2000 and BPG metadata",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "Header/box metadata. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-svg",
+   "title": "SVG parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "XML parse, text content, metadata. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-psd",
+   "title": "PSD parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-media",
+   "description": "Header, image resources, XMP. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-icc",
+   "title": "ICC profile parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-media",
+   "description": "Header/tag reader. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-raw",
+   "title": "Camera RAW metadata",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "TIFF/EXIF-based metadata only. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-ocr-tesseract",
+   "title": "Tesseract OCR integration",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "tesseract.js optional peer, worker pool, language/DPI/timeout/preprocessing, upstream config keys. Acceptance: OCR golden pages; off by default.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "ocr",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-vlm",
+   "title": "VLM OCR provider SPI",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-media",
+   "description": "Provider interface for Anthropic/OpenAI/Google/local, image/page routing, no default network. Acceptance: mock-provider tests.",
+   "labels": [
+    "parser-media",
+    "p3",
+    "ocr",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-audio",
+   "title": "Audio metadata: MP3/FLAC/OGG/WAV/AIFF/M4A/WMA",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "music-metadata streaming: tags, duration, bitrate, sample rate, channels, codec. Acceptance: metadata parity.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-midi",
+   "title": "MIDI parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-media",
+   "description": "Header, tracks, tempo, instrument names. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-mp4",
+   "title": "MP4/MOV/M4V/3GP parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-media",
+   "description": "Atom walk, tracks, codecs, duration, dimensions, creation date. Acceptance: metadata parity.",
+   "labels": [
+    "parser-media",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "med-flv",
+   "title": "FLV parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "Tag scan, codecs, duration. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-avi-mkv-asf",
+   "title": "AVI/MKV/WebM/ASF metadata",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "RIFF/EBML/ASF readers, metadata only. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "med-fonts",
+   "title": "Font parsers: TTF/OTF/TTC/WOFF/AFM/PFM",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-media",
+   "description": "fontkit optional, name table, family/style/version/metrics/glyph count. Acceptance: fixtures.",
+   "labels": [
+    "parser-media",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-mat",
+   "title": "MATLAB MAT v4/v5 parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "Variables, types, dimensions, numeric/text values. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-mat73",
+   "title": "MAT v7.3 HDF5 parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "h5wasm dataset listing and values. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-netcdf3",
+   "title": "NetCDF 3 classic parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "netcdfjs dimensions/variables/attributes. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-netcdf4",
+   "title": "NetCDF 4 HDF5 parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "h5wasm-backed. Acceptance: fixtures or declared gap.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-hdf5",
+   "title": "HDF5 parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "h5wasm; group/dataset/attribute listing. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-hdf4",
+   "title": "HDF4 parser parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "Detect and gap-report unless a permissive decoder exists. Acceptance: gap recorded.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "sci-fits",
+   "title": "FITS parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "Header cards, HDU list, table rows. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-grib",
+   "title": "GRIB 1/2 parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "Custom/wasm decoder, metadata and grid summary. Acceptance: fixtures or declared gap.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-dicom",
+   "title": "DICOM metadata parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "dicom-parser; patient/study/series metadata; no pixel dump. Acceptance: metadata parity.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-geo",
+   "title": "ISO 19115 and GeoTopic parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "Metadata parse; optional place-name enrichment. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-dwg",
+   "title": "DWG parser via libredwg wasm",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "Text entities and layers. Acceptance: fixtures or declared gap.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-dxf",
+   "title": "DXF text parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-science",
+   "description": "Group-code parse, text entities. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "sci-dgn",
+   "title": "DGN parser parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "Detect and gap-report. Acceptance: gap recorded.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "sci-shapefile",
+   "title": "Shapefile/DBF metadata parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-science",
+   "description": "DBF attributes and geometry metadata. Acceptance: fixtures.",
+   "labels": [
+    "parser-science",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-class",
+   "title": "Java class file parser",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-binary",
+   "description": "Constant pool, access flags, class/super, method/field counts. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "bin-pe",
+   "title": "PE/COFF parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-binary",
+   "description": "DOS/PE headers, machine, sections, imports, resources, version info. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-elf",
+   "title": "ELF parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-binary",
+   "description": "Class/endianness, machine, type, interpreter, sections, build-id. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-macho",
+   "title": "Mach-O parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-binary",
+   "description": "Thin/fat, load commands, architectures, UUID, dylibs. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-pgp",
+   "title": "OpenPGP message/key parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Packet parser, literal data, signatures, key IDs; no decryption. Optional LGPL dependency. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "optional",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-x509",
+   "title": "X.509 certificate parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-binary",
+   "description": "Subject, issuer, serial, validity, SANs, key usage, fingerprints. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-pkcs",
+   "title": "PKCS#7/CMS and PKCS#12 parsers",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Signer certs, encrypted content detection. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-asn1",
+   "title": "ASN.1/DER fallback parser",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Bounded structure dump. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-dbf",
+   "title": "DBF (dBASE) parser",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-binary",
+   "description": "Header, field descriptors, records, text/table rendering. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-sqlite",
+   "title": "SQLite parser (optional sql.js)",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Schema and bounded row dump. Acceptance: fixtures.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "bin-columnar",
+   "title": "Parquet/ORC/Avro parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Detect and gap-report. Acceptance: gap recorded.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "bin-msi",
+   "title": "MSI parity or declared gap",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-binary",
+   "description": "Detect and gap-report. Acceptance: gap recorded.",
+   "labels": [
+    "parser-code",
+    "p3",
+    "gap",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-nlp",
+   "title": "Language detection and translation",
+   "type": "epic",
+   "priority": 1,
+   "description": "LanguageDetector and Translator SPIs with backends and provider adapters.",
+   "labels": [
+    "epic",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "epic-pipes",
+   "title": "Pipes engine",
+   "type": "epic",
+   "priority": 1,
+   "description": "Iterator/fetcher/parser/emitter/reporter pipeline with worker pool, retries, checkpoints, observability.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-server",
+   "title": "Optional HTTP server",
+   "type": "epic",
+   "priority": 1,
+   "description": "Tika 4.2 endpoint parity and 3.3 compatibility mode, built on the library.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-cli",
+   "title": "Optional CLI",
+   "type": "epic",
+   "priority": 2,
+   "description": "tika-app parity for text/html/xml/md/json, metadata, detect, recursive, server mode.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-grpc-eval",
+   "title": "gRPC and eval modules",
+   "type": "epic",
+   "priority": 2,
+   "description": "Wire-compatible gRPC plus evaluation harness parity.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "nlp-langdetect-spi",
+   "title": "LanguageDetector SPI and LanguageResult",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-nlp",
+   "description": "detect, confidence, mixed-language policy, whitelist, short-text rules. Acceptance: SPI parity tests.",
+   "labels": [
+    "langdetect",
+    "p1",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-franc",
+   "title": "franc backend",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-nlp",
+   "description": "Default backend with ISO code mapping and confidence. Acceptance: language fixture matrix.",
+   "labels": [
+    "langdetect",
+    "p1",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-cld3",
+   "title": "Optional CLD3 wasm backend",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-nlp",
+   "description": "Alternative backend for higher accuracy; optional dependency. Acceptance: fixture comparison.",
+   "labels": [
+    "langdetect",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-streaming",
+   "title": "Streaming language detector",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-nlp",
+   "description": "Bounded accumulation, end-of-stream result, reset semantics. Acceptance: streaming tests.",
+   "labels": [
+    "langdetect",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-translate-spi",
+   "title": "Translator SPI and TranslationError",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-nlp",
+   "description": "isAvailable/translate, source auto-detect, abort signal. Acceptance: mock provider tests.",
+   "labels": [
+    "translate",
+    "p1",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-providers",
+   "title": "Google/Microsoft/DeepL/LibreTranslate/local adapters",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-nlp",
+   "description": "Credentials from env, batching, char caps, no default network. Acceptance: provider mocks.",
+   "labels": [
+    "translate",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-rate-limit",
+   "title": "Rate limiting, retries, timeout, markup validation",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-nlp",
+   "description": "Jittered retry, per-provider limits, HTML-preserving mode validation. Acceptance: failure injection tests.",
+   "labels": [
+    "translate",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "nlp-tests",
+   "title": "NLP differential and quality suite",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-nlp",
+   "description": "Language detection quality thresholds and translation contract tests. Acceptance: published scores.",
+   "labels": [
+    "langdetect",
+    "translate",
+    "p2",
+    "test",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "pipe-engine",
+   "title": "Pipes engine: bounded queue and lifecycle",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Iterator to queue to workers to emitter; ordering option; graceful drain. Acceptance: throughput and memory tests.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-worker-pool",
+   "title": "Worker pool with crash isolation and recycling",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "child_process/worker_threads, memory cap, timeout kill, recycle after N docs, health ping. Acceptance: OOM/crash recovery tests.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-fetchers-core",
+   "title": "Filesystem and HTTP fetchers",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Base-path confinement, SSRF protections, redirect and size caps. Acceptance: security tests.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-fetchers-cloud",
+   "title": "S3/GCS/Azure/Drive/Graph/Atlassian fetchers",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pipes",
+   "description": "Optional peer SDKs or signed HTTP; env credentials only. Acceptance: mock integration tests.",
+   "labels": [
+    "pipes",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-emitters",
+   "title": "FS/stdout/S3/Azure/Solr/ES/OpenSearch/Kafka/JDBC emitters",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Batching, retries, keyed emission, bulk APIs. Acceptance: sink contract tests.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-iterators",
+   "title": "FS/CSV/JSON/S3/Azure/Solr/JDBC/Kafka iterators",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Enumeration, filtering, stable ordering option. Acceptance: fixture sources.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-reporters",
+   "title": "Logging/FS/JSONL/JDBC/ES/OpenSearch/composite reporters",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Per-tuple status, timings, exception class, worker ID. Acceptance: report schema tests.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-modes",
+   "title": "RMETA/CONCATENATE/CONTENT_ONLY/NO_PARSE/UNPACK modes",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Payload shaping and ON_PARSE_EXCEPTION behavior. Acceptance: mode fixture matrix.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-config",
+   "title": "Pipes JSON config parity and schema",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-pipes",
+   "description": "Upstream component IDs and keys; generated schema and fixtures. Acceptance: config conformance.",
+   "labels": [
+    "pipes",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-retries",
+   "title": "Retry, checkpoint, idempotency",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pipes",
+   "description": "Per-stage retry policy, checkpoint file, safe resume. Acceptance: failure/resume tests.",
+   "labels": [
+    "pipes",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-ordering",
+   "title": "Optional ordered emission with bounded window",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-pipes",
+   "description": "Preserve iterator order without unbounded buffering. Acceptance: ordering tests.",
+   "labels": [
+    "pipes",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-observability",
+   "title": "Pipes metrics, health, structured logs",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pipes",
+   "description": "Status counters, queue depth, worker restarts, no content logging. Acceptance: dashboard fixtures.",
+   "labels": [
+    "pipes",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-soak",
+   "title": "24-hour pipes soak test",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pipes",
+   "description": "Leak-free, stable memory, graceful shutdown. Acceptance: CI nightly report.",
+   "labels": [
+    "pipes",
+    "p2",
+    "test",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "pipe-client-api",
+   "title": "Embedded PipesClient API",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-pipes",
+   "description": "submit/submitAll/awaitIdle/shutdown. Acceptance: API tests.",
+   "labels": [
+    "pipes",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-routing",
+   "title": "Server routing and handler exports",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "Framework-agnostic request handlers over core library. Acceptance: mount tests.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-tika",
+   "title": "/tika and handler endpoint family",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "PUT/POST, text/html/xml/md/json, multipart, handler suffix precedence, 4.x Markdown default and 3.x compat. Acceptance: conformance suite.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-rmeta-meta",
+   "title": "/rmeta, /meta, /meta/{key}",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "Recursive JSON array, metadata CSV/JSON/XML negotiation, key lookup behavior. Acceptance: golden responses.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-detect",
+   "title": "/detect and /detect/stream",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "Media type detection, PUT semantics. Acceptance: fixtures.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-unpack",
+   "title": "/unpack and preset variants",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-server",
+   "description": "Write embedded resources with path confinement and limits. Acceptance: unpack tree tests.",
+   "labels": [
+    "server",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-config-presets",
+   "title": "Per-request config and named presets",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-server",
+   "description": "allowPerRequestConfig gating, 403 default, preset registry. Acceptance: gate tests.",
+   "labels": [
+    "server",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-language-translate",
+   "title": "/language and /translate endpoints",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-server",
+   "description": "3.x-compatible routes, translator resolution, error mapping. Acceptance: fixtures.",
+   "labels": [
+    "server",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-pipes-async",
+   "title": "/pipes, /async, /status with gating",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-server",
+   "description": "allowPipes vs enableUnsecureFeatures, separate async pool, status reporting. Acceptance: gating matrix.",
+   "labels": [
+    "server",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-errors",
+   "title": "Status codes and JSON/plain-text error compatibility",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "200/204/400/403/408/413/422/429/500/503 mapping; 4.x JSON vs 3.x text. Acceptance: error fixture matrix.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-streaming",
+   "title": "Streaming request/response and multipart",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "Chunked bodies, spooling for random-access parsers, streamed output. Acceptance: large-file tests.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-limits",
+   "title": "Request size, concurrency, queue overflow, timeouts",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "429 with Retry-After, 413 caps, abort propagation. Acceptance: load tests.",
+   "labels": [
+    "server",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-tls-cors-auth",
+   "title": "TLS/CORS/auth hook policy",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-server",
+   "description": "Localhost default, no CORS default, bearer/HMAC hook. Acceptance: config tests.",
+   "labels": [
+    "server",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "srv-conformance",
+   "title": "Server protocol conformance suite",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-server",
+   "description": "Endpoint/verb/status/header parity vs 4.2 and 3.3 compat. Acceptance: published report.",
+   "labels": [
+    "server",
+    "p1",
+    "test",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-args",
+   "title": "CLI argument parsing and stdin/stdout",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-cli",
+   "description": "Flags per spec 04, binary-safe streams, usage errors. Acceptance: snapshot tests.",
+   "labels": [
+    "cli",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-outputs",
+   "title": "CLI output modes",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-cli",
+   "description": "text/html/xml/md/json, encoding, include-embedded, max-chars. Acceptance: golden CLI outputs.",
+   "labels": [
+    "cli",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-metadata-detect",
+   "title": "CLI metadata, detect, language modes",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-cli",
+   "description": "Metadata-only, media type, language detection. Acceptance: fixtures.",
+   "labels": [
+    "cli",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-recursive-config",
+   "title": "CLI recursive, config, password",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-cli",
+   "description": "rmeta output, config file, password flag, no interactive prompt. Acceptance: fixtures.",
+   "labels": [
+    "cli",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-server",
+   "title": "CLI server mode",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-cli",
+   "description": "Host/port/TLS flags delegating to @spikedpunch/ripstream-server. Acceptance: smoke tests.",
+   "labels": [
+    "cli",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "cli-exit-tests",
+   "title": "CLI exit codes and error UX",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-cli",
+   "description": "0 success, 1 parse failure, 2 usage; stable messages. Acceptance: CLI test suite.",
+   "labels": [
+    "cli",
+    "p2",
+    "test",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "grpc-proto",
+   "title": "gRPC protobuf definitions from Ripstream",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Reuse upstream .proto for wire compatibility. Acceptance: message round-trip tests.",
+   "labels": [
+    "grpc",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "grpc-server",
+   "title": "gRPC server parity",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Parse/metadata/detect RPCs. Acceptance: conformance tests.",
+   "labels": [
+    "grpc",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "grpc-client",
+   "title": "gRPC client parity",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Tika gRPC client behavior. Acceptance: interop tests.",
+   "labels": [
+    "grpc",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "grpc-conformance",
+   "title": "gRPC conformance suite",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Wire/status parity vs upstream. Acceptance: published report.",
+   "labels": [
+    "grpc",
+    "p3",
+    "test",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "eval-core",
+   "title": "Eval core parity",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Extraction comparison, profiles, scoring. Acceptance: eval algorithm parity.",
+   "labels": [
+    "eval",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "eval-reporters",
+   "title": "Eval reports and output formats",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Per-format/per-profile reports. Acceptance: golden reports.",
+   "labels": [
+    "eval",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "eval-cli",
+   "title": "Eval CLI parity",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-grpc-eval",
+   "description": "Command surface and exit codes. Acceptance: fixtures.",
+   "labels": [
+    "eval",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-modules",
+   "title": "Upstream module and plugin parity",
+   "type": "epic",
+   "priority": 1,
+   "description": "Account for every Tika 4.2 module: plugins-core, handlers, encoding-detectors, image-processing, ml, bundles, annotation processor, test-support, serialization, xmp, metadata-schema, integration tests, examples.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "epic-security",
+   "title": "Security and hardening",
+   "type": "epic",
+   "priority": 0,
+   "description": "XXE, bombs, traversal, SSRF, worker isolation, temp/secrets hygiene, regex DoS, supply chain.",
+   "labels": [
+    "epic",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "epic-testing",
+   "title": "Testing, parity evidence, performance",
+   "type": "epic",
+   "priority": 0,
+   "description": "Differential harness, corpus, fuzzing, memory/abort, platform matrix, benchmarks, published parity report.",
+   "labels": [
+    "epic",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "epic-release",
+   "title": "Packaging, docs, and 1.0 release",
+   "type": "epic",
+   "priority": 1,
+   "description": "Monorepo build, publishes, docs, migration guide, CI, provenance/SBOM, release.",
+   "labels": [
+    "epic",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-plugins-core",
+   "title": "tika-plugins-core parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "Plugin discovery and component lifecycle equivalent. Acceptance: plugin loading tests.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-handlers",
+   "title": "tika-handlers module parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "All upstream handler types and composition. Acceptance: handler inventory audit.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-encoding-detectors",
+   "title": "tika-encoding-detectors parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "Encoding detector components and confidence behavior. Acceptance: fixture matrix.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "mod-image-processing",
+   "title": "tika-image-processing parity",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-modules",
+   "description": "Image preprocessing/rendering utilities needed by OCR. Acceptance: utility parity tests.",
+   "labels": [
+    "module",
+    "p2",
+    "stage-4"
+   ]
+  },
+  {
+   "key": "mod-ml",
+   "title": "tika-ml parity assessment",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-modules",
+   "description": "Inventory upstream ML components; implement only what affects parser parity, otherwise document non-goal. Acceptance: decision recorded.",
+   "labels": [
+    "module",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-bundles",
+   "title": "tika-bundles equivalent",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-modules",
+   "description": "Parser bundle/meta-packages with tree-shaking. Acceptance: bundle import tests.",
+   "labels": [
+    "module",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-annotation-processor",
+   "title": "Annotation-processor equivalent codegen",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-modules",
+   "description": "Build-time generation for metadata/component metadata. Acceptance: generated outputs reproducible.",
+   "labels": [
+    "module",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "mod-test-support",
+   "title": "tika-test-support equivalent",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "Shared fixtures, assertions, parser conformance helpers. Acceptance: used by all parser packages.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "mod-serialization",
+   "title": "tika-serialization parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "JSON/XML metadata serializers and writer limits. Acceptance: golden output.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "mod-xmp",
+   "title": "tika-xmp parity",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "XMP parse/write across PDF/images/Office. Acceptance: round-trip fixtures.",
+   "labels": [
+    "module",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "mod-metadata-schema",
+   "title": "tika-metadata-schema parity",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-modules",
+   "description": "Full property schema, namespaces, types, case rules. Acceptance: key coverage audit.",
+   "labels": [
+    "module",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "mod-integration-tests",
+   "title": "tika-integration-tests equivalent",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-modules",
+   "description": "Cross-package integration suite mirroring upstream scenarios. Acceptance: CI green.",
+   "labels": [
+    "module",
+    "p1",
+    "test",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-examples",
+   "title": "tika-example equivalent",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-modules",
+   "description": "Runnable examples for each public API surface. Acceptance: examples build in CI.",
+   "labels": [
+    "module",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "mod-java7-batch",
+   "title": "Legacy module disposition (java7, batch, fuzzing)",
+   "type": "task",
+   "priority": 3,
+   "parent_key": "epic-modules",
+   "description": "Record why tika-java7/tika-batch/tika-fuzzing are not ported; map functionality to pipes/fuzz suite. Acceptance: parity report notes.",
+   "labels": [
+    "module",
+    "p3",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "sec-xxe",
+   "title": "XXE/DTD/entity-expansion protection",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-security",
+   "description": "No DTD, no external entities, expansion cap zero, XInclude off. Acceptance: adversarial suite.",
+   "labels": [
+    "security",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "sec-zipbomb",
+   "title": "Decompression bomb protections",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-security",
+   "description": "Ratio/per-entry/total/entry-count caps across zip, compressors, archives. Acceptance: bomb corpus.",
+   "labels": [
+    "security",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "sec-traversal",
+   "title": "Archive path traversal and symlink safety",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-security",
+   "description": "Reject absolute/.. entries, never follow links/devices, confined unpack. Acceptance: traversal corpus.",
+   "labels": [
+    "security",
+    "p0",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "sec-ssrf",
+   "title": "Fetcher SSRF protections",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-security",
+   "description": "Scheme/host allowlists, loopback/link-local/metadata IP denial, redirect caps, DNS rebinding check. Acceptance: SSRF corpus.",
+   "labels": [
+    "security",
+    "p0",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "sec-worker-isolation",
+   "title": "Worker isolation and resource caps",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-security",
+   "description": "Unsafe parsers run isolated with memory/time limits and no credentials. Acceptance: crash containment tests.",
+   "labels": [
+    "security",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "sec-temp-hygiene",
+   "title": "Temp file permissions, cleanup, no world-readable",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-security",
+   "description": "0600, unpredictable names, cleanup on abort/error/exit. Acceptance: leak tests.",
+   "labels": [
+    "security",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "sec-secrets",
+   "title": "Secret handling and redaction",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-security",
+   "description": "Passwords/credentials never logged or serialized; provider callbacks. Acceptance: log scan.",
+   "labels": [
+    "security",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "sec-regex-dos",
+   "title": "Regex DoS protections for user patterns",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-security",
+   "description": "Pattern length caps and optional RE2-compatible engine. Acceptance: ReDoS tests.",
+   "labels": [
+    "security",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "sec-supply-chain",
+   "title": "Supply chain: SBOM, license gate, no install scripts",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-security",
+   "description": "Lockfile, provenance, SBOM, dependency audit, pinned optional peers. Acceptance: CI gate.",
+   "labels": [
+    "security",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "test-differential-harness",
+   "title": "Differential harness against Tika 4.2 and 3.3",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-testing",
+   "description": "Container oracle, golden capture, comparator with normalization and thresholds, triage reports. Acceptance: runs in CI without Docker via goldens.",
+   "labels": [
+    "test",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-corpus",
+   "title": "Corpus: fixtures, public samples, fuzz inputs, adversarial set",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-testing",
+   "description": "Content-addressed manifest, licensing recorded, checksums, no blobs in git. Acceptance: corpus build reproducible.",
+   "labels": [
+    "test",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-golden",
+   "title": "Golden output storage and regeneration policy",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-testing",
+   "description": "Versioned oracle headers, reviewed regeneration, diffs for every failure. Acceptance: policy enforced.",
+   "labels": [
+    "test",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-fuzz",
+   "title": "Fuzzing: OSS-Fuzz replay and mutation",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "No crashes, unbounded allocations, unhandled rejections; cleanup verified. Acceptance: nightly fuzz job.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "test-memory",
+   "title": "Streaming memory ceiling tests",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-testing",
+   "description": "100x buffer-size documents bounded; no collect in parser paths. Acceptance: CI memory gate.",
+   "labels": [
+    "test",
+    "p0",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-abort-leak",
+   "title": "Abort, cancellation, and resource leak tests",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "Randomized cancellation points; temp files/workers cleaned. Acceptance: leak detector green.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-2"
+   ]
+  },
+  {
+   "key": "test-platform-matrix",
+   "title": "Node 20/22/24, Bun, Deno matrix",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "Runtime compatibility suite. Acceptance: CI matrix green.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-browser",
+   "title": "Browser subset suite (Chromium, WebKit)",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-testing",
+   "description": "Detection + text/HTML/XML/ZIP via Playwright; declared unsupported features error clearly. Acceptance: green.",
+   "labels": [
+    "test",
+    "p2",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "test-bundle",
+   "title": "Bundle size and tree-shaking gates",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "Per-package budgets; importing one parser must not pull others; no side effects. Acceptance: CI size report.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-3"
+   ]
+  },
+  {
+   "key": "test-api-types",
+   "title": "Type tests and API Extractor report",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "tsd/expect-type coverage; public API diff gate. Acceptance: CI green.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "test-benchmarks",
+   "title": "Benchmark suite and trend storage",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "Detection ops/s, format throughput, memory, cold start, worker overhead. Acceptance: nightly results.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "test-regression-gates",
+   "title": "Performance regression gates",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-testing",
+   "description": "Fail on >10% throughput or >15% memory regression. Acceptance: CI gate.",
+   "labels": [
+    "test",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "test-parity-report",
+   "title": "Published per-format parity report",
+   "type": "task",
+   "priority": 0,
+   "parent_key": "epic-testing",
+   "description": "Every parser and feature: parity status, thresholds, documented differences and gaps. Acceptance: generated from harness, no hand claims.",
+   "labels": [
+    "test",
+    "p0",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-monorepo",
+   "title": "Monorepo build: workspaces, TS project refs, ESM+CJS",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "Deterministic builds, declarations, source maps, export maps. Acceptance: clean build from clone.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "rel-packaging",
+   "title": "Package publishing and optional peer strategy",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "Versioning, peer deps, install hints, no lifecycle scripts. Acceptance: pack/install tests.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-docs",
+   "title": "Documentation: API reference, guides, security model",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "Generated API docs, per-parser docs, limits, security guidance. Acceptance: docs build.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-migration-guide",
+   "title": "Migration guide from Java Tika and 3.x semantics",
+   "type": "task",
+   "priority": 2,
+   "parent_key": "epic-release",
+   "description": "Concept mapping, defaults, behavioral differences, config translation. Acceptance: reviewed.",
+   "labels": [
+    "release",
+    "p2",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-parity-matrix",
+   "title": "Feature parity matrix and gap register",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "Module/parser/feature matrix with status and evidence links. Acceptance: 100% module accounting.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-ci",
+   "title": "CI: build, test, parity, security, benchmarks",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "Matrix, caching, artifact retention, nightly jobs. Acceptance: green pipeline.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-1"
+   ]
+  },
+  {
+   "key": "rel-release-1",
+   "title": "1.0 release checklist",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "API freeze, parity report, security review, SBOM, provenance, changelog. Acceptance: signed release.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-5"
+   ]
+  },
+  {
+   "key": "rel-provenance-sbom",
+   "title": "Provenance and SBOM publication",
+   "type": "task",
+   "priority": 1,
+   "parent_key": "epic-release",
+   "description": "SLSA-style provenance and SBOM per package. Acceptance: artifacts published.",
+   "labels": [
+    "release",
+    "p1",
+    "stage-5"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@spikedpunch/ripstream-parser-archive",
+  "version": "0.0.0",
+  "description": "Archive and compression parsers for ripstream",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "bplist-parser": "^0.5.0",
+    "fflate": "^0.8.2",
+    "lz4js": "0.2.0",
+    "saxes": "^6.0.0",
+    "seek-bzip": "^2.0.0",
+    "snappyjs": "0.7.0",
+    "tar-stream": "^3.1.7",
+    "xz-decompress": "0.2.3"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}

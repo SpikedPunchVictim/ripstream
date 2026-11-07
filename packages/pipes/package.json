@@ -1,0 +1,30 @@
+{
+  "name": "@spikedpunch/ripstream-pipes",
+  "version": "0.0.0",
+  "description": "Streaming pipe engine for ripstream",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "@spikedpunch/ripstream-parsers": "workspace:*"
+  },
+  "scripts": {
+    "soak": "node scripts/soak.ts"
+  }
+}

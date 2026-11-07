@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/@spikedpunch/cbd/cbd.config.schema.json",
+  "include": ["packages/*/src/**"],
+  "alwaysAll": [
+    "packages/*/data/**",
+    "packages/*/scripts/**",
+    "package.json",
+    "pnpm-lock.yaml",
+    "tsconfig*.json",
+    "packages/*/package.json",
+    "packages/*/tsconfig.json",
+    "cbd.config.json"
+  ],
+  "maxAgeCommits": 50,
+  "strict": false
+}

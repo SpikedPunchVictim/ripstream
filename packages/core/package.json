@@ -1,0 +1,29 @@
+{
+  "name": "@spikedpunch/ripstream-core",
+  "version": "0.0.0",
+  "description": "Core contracts for the TypeScript port of Apache Tika",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "generate:metadata-schema": "node scripts/generate-metadata-schema.ts",
+    "generate:upstream-registry": "node scripts/generate-upstream-registry.ts",
+    "audit:parsers": "node scripts/audit-parser-coverage.ts"
+  }
+}

@@ -1,0 +1,53 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  AbortError,
+  EncryptedDocumentError,
+  LimitExceededError,
+  MalformedDocumentError,
+  MissingDependencyError,
+  ParseTimeoutError,
+  RequestTooLargeError,
+  RipstreamError,
+  UnsupportedFormatError,
+  WriteLimitReachedError,
+  httpStatusForError,
+} from "../src/errors.ts";
+
+test("errors carry stable codes and names", () => {
+  const errors: Array<[RipstreamError, string]> = [
+    [new UnsupportedFormatError("no"), "UNSUPPORTED_FORMAT"],
+    [new EncryptedDocumentError("locked"), "ENCRYPTED_DOCUMENT"],
+    [new MalformedDocumentError("bad"), "MALFORMED_DOCUMENT"],
+    [new WriteLimitReachedError(10), "WRITE_LIMIT_REACHED"],
+    [new ParseTimeoutError(), "PARSE_TIMEOUT"],
+    [new RequestTooLargeError(), "REQUEST_TOO_LARGE"],
+    [new LimitExceededError("too much"), "LIMIT_EXCEEDED"],
+    [new MissingDependencyError("pdfjs-dist", "PDF"), "MISSING_DEPENDENCY"],
+    [new AbortError(), "ABORTED"],
+  ];
+
+  for (const [error, code] of errors) {
+    assert.equal(error.code, code);
+    assert.equal(error.name, error.constructor.name);
+  }
+});
+
+test("maps errors to server status codes", () => {
+  assert.equal(httpStatusForError(new UnsupportedFormatError("no")), 415);
+  assert.equal(httpStatusForError(new EncryptedDocumentError("locked")), 422);
+  assert.equal(httpStatusForError(new MalformedDocumentError("bad")), 422);
+  assert.equal(httpStatusForError(new LimitExceededError("big")), 422);
+  assert.equal(httpStatusForError(new WriteLimitReachedError(10)), 200);
+  assert.equal(httpStatusForError(new ParseTimeoutError()), 408);
+  assert.equal(httpStatusForError(new RequestTooLargeError()), 413);
+  assert.equal(httpStatusForError(new Error("plain")), 500);
+});
+
+test("missing dependency error names the package and capability", () => {
+  const error = new MissingDependencyError("pdfjs-dist", "PDF parsing");
+  assert.match(error.message, /pdfjs-dist/);
+  assert.match(error.message, /PDF parsing/);
+  assert.equal(error.dependency, "pdfjs-dist");
+  assert.equal(error.capability, "PDF parsing");
+});

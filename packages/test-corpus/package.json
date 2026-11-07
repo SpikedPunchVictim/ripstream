@@ -1,0 +1,25 @@
+{
+  "name": "@spikedpunch/ripstream-test-corpus",
+  "version": "0.0.0",
+  "description": "Content-addressed test corpus manifest and fixture generators",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "corpus.manifest.json"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  }
+}

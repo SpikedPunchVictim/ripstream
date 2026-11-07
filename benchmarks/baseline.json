@@ -1,0 +1,14 @@
+{
+  "text": {
+    "iterations": 50,
+    "opsPerSecond": 179.23
+  },
+  "html": {
+    "iterations": 50,
+    "opsPerSecond": 532.65
+  },
+  "xml": {
+    "iterations": 50,
+    "opsPerSecond": 396.29
+  }
+}

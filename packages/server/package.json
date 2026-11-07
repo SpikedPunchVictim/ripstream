@@ -1,0 +1,29 @@
+{
+  "name": "@spikedpunch/ripstream-server",
+  "version": "0.0.0",
+  "description": "Optional HTTP server for ripstream",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "@spikedpunch/ripstream-parsers": "workspace:*",
+    "@spikedpunch/ripstream-language": "workspace:*",
+    "@spikedpunch/ripstream-pipes": "workspace:*"
+  }
+}

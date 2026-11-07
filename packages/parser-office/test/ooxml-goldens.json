@@ -1,0 +1,28 @@
+{
+  "tikaVersion": "4.2.0",
+  "entries": [
+    {
+      "id": "docx",
+      "text": "\n\n\n\n\n\n\n\n\n\n\n\nParity Doc\n\nHello parity DOCX\nSecond paragraph\n",
+      "metadata": {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "dc:title": "Parity Doc",
+        "dc:creator": "Ada"
+      }
+    },
+    {
+      "id": "xlsx",
+      "text": "\n\n\n\n\n\n\n\n\n\n\n\nSheet1\n\tAlpha\tBeta\n\n\n",
+      "metadata": {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      }
+    },
+    {
+      "id": "pptx",
+      "text": "\n\n\n\n\n\n\n\n\n\n\n\nSlide Parity\n\n",
+      "metadata": {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      }
+    }
+  ]
+}

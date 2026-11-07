@@ -4,3 +4,16 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# CBD coverage maps and shards
+.cbd/
+
+# Generated supply-chain artifacts
+artifacts/
+sbom.cdx.json

@@ -1,0 +1,36 @@
+{
+  "name": "@spikedpunch/ripstream-mime",
+  "version": "0.0.0",
+  "description": "Tika-compatible MIME registry and detection",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "data"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate.ts"
+  },
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "saxes": "^6.0.0",
+    "chardet": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "devDependencies": {
+    "@spikedpunch/ripstream-test-corpus": "workspace:*"
+  }
+}

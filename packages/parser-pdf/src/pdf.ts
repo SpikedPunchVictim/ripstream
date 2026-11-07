@@ -1,0 +1,584 @@
+import { stat } from "node:fs/promises";
+import { Worker } from "node:worker_threads";
+import {
+  EncryptedDocumentError,
+  LimitExceededError,
+  MalformedDocumentError,
+  ParseTimeoutError,
+  MediaType,
+  Metadata,
+  CONTEXT_KEYS,
+  MissingDependencyError,
+  XHTMLContentHandler,
+  type ContentHandler,
+  type ParseContext,
+  type Parser,
+  RipstreamInputStream,
+} from "@spikedpunch/ripstream-core";
+
+const MAX_PAGES = 10_000;
+const MIB = 1024 * 1024;
+const WATCHDOG_INTERVAL_MS = 20;
+
+interface PdfAttachment {
+  readonly name: string;
+  readonly filename: string;
+  readonly data: Uint8Array;
+}
+
+interface PdfAnnotation {
+  readonly name?: string;
+  readonly subtype?: string;
+  readonly title?: string;
+  readonly subject?: string;
+  readonly contents?: string;
+  readonly url?: string;
+  readonly fieldName?: string;
+  readonly fieldValue?: unknown;
+  readonly fieldType?: string;
+}
+
+type WorkerMessage =
+  | {
+      readonly type: "ready";
+      readonly info: unknown;
+      readonly xmp: Record<string, unknown>;
+      readonly numPages: number;
+      readonly attachments: readonly PdfAttachment[];
+    }
+  | {
+      readonly type: "page";
+      readonly index: number;
+      readonly lines: string[];
+      readonly annotations: readonly PdfAnnotation[];
+    }
+  | {
+      readonly type: "page-error";
+      readonly index: number;
+      readonly name: string;
+      readonly message: string;
+    }
+  | { readonly type: "closed" }
+  | {
+      readonly type: "error";
+      readonly name: string;
+      readonly message: string;
+      readonly code?: string;
+    };
+
+/**
+ * PDF text and metadata extraction on top of pdf.js. Parsing runs in a
+ * worker thread so a malformed document cannot take down the caller, and
+ * pdfjs-dist is loaded lazily as an optional peer dependency.
+ */
+export interface PdfParserOptions {
+  /** Port of PDFParserConfig.extractAnnotationText (default true). */
+  readonly extractAnnotationText?: boolean;
+  /** Port of PDFParserConfig.sortByPosition (default true). */
+  readonly sortByPosition?: boolean;
+  /** Written between pages; empty disables it (default "\n"). */
+  readonly pageSeparator?: string;
+  /**
+   * Maximum time for the worker to load the document or extract one page.
+   * pdf.js can enter unbounded loops on malicious or malformed input, so the
+   * caller-side timeout terminates the worker instead of hanging the parse
+   * (default 30000 ms).
+   */
+  readonly pageTimeoutMs?: number;
+  /** Static password or provider; empty password is attempted by default. */
+  readonly password?: string | import("@spikedpunch/ripstream-core").PasswordProvider;
+  /** Reject PDFs larger than this before spawning the worker (default 512 MiB). */
+  readonly maxInputBytes?: number;
+  /**
+   * Memory budget for the pdf.js worker in MiB (default 256). It sets the V8
+   * heap limit and is also enforced on heap plus ArrayBuffer memory, which
+   * V8's heap limit does not cover (flate/JBIG2 bombs allocate there). The
+   * worker is terminated with a LimitExceededError when it is crossed.
+   */
+  readonly workerMemoryMb?: number;
+  /** Per-page cap on extracted text characters (default 32 Mi). */
+  readonly maxPageTextChars?: number;
+}
+
+export class PdfParser implements Parser {
+  readonly name = "PDFParser";
+  readonly capabilities = { requiresRandomAccess: true, unsafe: true };
+  readonly #extractAnnotationText: boolean;
+  readonly #sortByPosition: boolean;
+  readonly #pageSeparator: string;
+  readonly #pageTimeoutMs: number;
+  readonly #password: PdfParserOptions["password"];
+  readonly #maxInputBytes: number;
+  readonly #workerMemoryMb: number;
+  readonly #maxPageTextChars: number;
+
+  constructor(options: PdfParserOptions = {}) {
+    this.#extractAnnotationText = options.extractAnnotationText ?? true;
+    this.#sortByPosition = options.sortByPosition ?? true;
+    this.#pageSeparator = options.pageSeparator ?? "\n";
+    this.#pageTimeoutMs = options.pageTimeoutMs ?? 30_000;
+    this.#password = options.password;
+    this.#maxInputBytes = options.maxInputBytes ?? 512 * MIB;
+    this.#workerMemoryMb = options.workerMemoryMb ?? 256;
+    this.#maxPageTextChars = options.maxPageTextChars ?? 32 * MIB;
+  }
+
+  getSupportedTypes(): ReadonlySet<MediaType> {
+    return new Set([MediaType.parse("application/pdf")!]);
+  }
+
+  async parse(
+    stream: RipstreamInputStream,
+    handler: ContentHandler,
+    metadata: Metadata,
+    ctx: ParseContext,
+  ): Promise<void> {
+    ctx.throwIfAborted();
+    const path = await stream.getFile();
+    const { size } = await stat(path);
+    if (size > this.#maxInputBytes) {
+      throw new LimitExceededError(
+        `PDF is ${size} bytes, exceeding the ${this.#maxInputBytes} byte limit`,
+      );
+    }
+
+    const limits = ctx.limits;
+    const worker = new Worker(workerUrl(), {
+      workerData: {
+        path,
+        sortByPosition: this.#sortByPosition,
+        password: resolvePassword(this.#password),
+        maxPageTextChars: this.#maxPageTextChars,
+        maxAttachments: limits.maxEmbeddedResources,
+        maxAttachmentBytes: limits.maxEmbeddedResourceBytes,
+        maxTotalAttachmentBytes: limits.maxTotalEmbeddedBytes,
+      },
+      // Do not inherit the parent's flags: test instrumentation (for example
+      // CBD's node:test preload) and node:test runner flags are invalid here,
+      // and the short-lived worker has no test lifecycle.
+      execArgv: [],
+      resourceLimits: { maxOldGenerationSizeMb: this.#workerMemoryMb },
+    });
+    const channel = new WorkerChannel(worker);
+    const watchdog = watchMemory(worker, this.#workerMemoryMb * MIB, channel);
+    const onAbort = (): void => {
+      void worker.terminate();
+    };
+    ctx.signal.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      const ready = await channel.next(this.#pageTimeoutMs);
+      if (ready.type === "error") throw mapWorkerError(ready);
+      if (ready.type !== "ready") {
+        throw new MalformedDocumentError("PDF worker returned no document");
+      }
+
+      applyInfo(metadata, ready.info);
+      applyXmp(metadata, ready.xmp);
+      metadata.set("pdf:PageCount", ready.numPages);
+
+      const xhtml = new XHTMLContentHandler(handler, metadata);
+      await xhtml.startDocument();
+
+      const annotationTypes = new Set<string>();
+      const annotationSubtypes = new Set<string>();
+      let hasAcroForm = false;
+      const pages = Math.min(ready.numPages, MAX_PAGES);
+      for (let index = 1; index <= pages; index++) {
+        ctx.throwIfAborted();
+        worker.postMessage({ type: "page", index });
+        const message = await channel.next(this.#pageTimeoutMs);
+        if (message.type === "error") throw mapWorkerError(message);
+        if (message.type === "page-error") {
+          if (message.name === "LimitExceededError") throw mapWorkerError(message);
+          // Upstream PDFBox recovers individual pages; keep the pages that
+          // did parse instead of failing the whole document.
+          continue;
+        }
+        if (message.type !== "page") {
+          throw new MalformedDocumentError("Unexpected PDF worker response");
+        }
+        await xhtml.startElement("div", "class", "page");
+        let characters = 0;
+        for (const line of message.lines) {
+          characters += line.length;
+          await xhtml.startElement("p");
+          if (line.length > 0) await xhtml.characters(line);
+          await xhtml.endElement("p");
+        }
+        metadata.add("pdf:charsPerPage", String(characters));
+        if (this.#extractAnnotationText) {
+          for (const annotation of message.annotations) {
+            recordAnnotation(annotation, annotationTypes, annotationSubtypes);
+            if (annotation.fieldName !== undefined) hasAcroForm = true;
+            await renderAnnotation(annotation, xhtml);
+          }
+        }
+        await xhtml.endElement("div");
+        if (index < pages && this.#pageSeparator.length > 0) {
+          await xhtml.characters(this.#pageSeparator);
+        }
+      }
+
+      if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
+
+      for (const name of annotationTypes) {
+        metadata.add("pdf:annotation-types", name);
+      }
+      for (const subtype of annotationSubtypes) {
+        metadata.add("pdf:annotation-subtypes", subtype);
+      }
+
+      for (const attachment of ready.attachments) {
+        await xhtml.startElement("div", "class", "attachment");
+        await xhtml.element("h1", attachment.filename);
+        const embeddedMetadata = new Metadata();
+        embeddedMetadata.set("resourceName", attachment.filename);
+        embeddedMetadata.set("Content-Type", "application/octet-stream");
+        const extractor = ctx.get(
+          CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR,
+        ) as
+          | {
+              parseEmbedded(
+                stream: RipstreamInputStream,
+                handler: XHTMLContentHandler,
+                metadata: Metadata,
+                context: ParseContext,
+              ): Promise<void>;
+            }
+          | undefined;
+        if (extractor !== undefined) {
+          const attachmentStream = await RipstreamInputStream.from(attachment.data, {
+            context: ctx,
+          });
+          try {
+            await extractor.parseEmbedded(
+              attachmentStream,
+              xhtml,
+              embeddedMetadata,
+              ctx,
+            );
+          } catch {
+            // Unsupported attachments are listed by name only.
+          } finally {
+            await attachmentStream.close();
+          }
+        }
+        await xhtml.endElement("div");
+      }
+
+      worker.postMessage({ type: "close" });
+      await channel.next(this.#pageTimeoutMs);
+      await xhtml.endDocument();
+    } catch (error) {
+      ctx.throwIfAborted();
+      throw error;
+    } finally {
+      clearInterval(watchdog);
+      ctx.signal.removeEventListener("abort", onAbort);
+      await worker.terminate();
+    }
+  }
+}
+
+function resolvePassword(
+  password: PdfParserOptions["password"],
+): string | undefined {
+  if (password === undefined) return undefined;
+  if (typeof password === "string") return password;
+  return password.getPassword() ?? undefined;
+}
+
+function workerUrl(): URL {
+  const extension = import.meta.url.endsWith(".ts") ? ".ts" : ".js";
+  return new URL(`./pdf-worker${extension}`, import.meta.url);
+}
+
+class WorkerChannel {
+  private readonly messages: WorkerMessage[] = [];
+  private waiter:
+    | {
+        resolve: (message: WorkerMessage) => void;
+        reject: (error: Error) => void;
+        timer: ReturnType<typeof setTimeout> | undefined;
+      }
+    | null = null;
+  private failure: Error | null = null;
+
+  constructor(worker: Worker) {
+    worker.on("message", (message: WorkerMessage) => {
+      this.push(message);
+    });
+    worker.on("error", (error: Error) => {
+      this.fail(mapWorkerFailure(error));
+    });
+    worker.on("exit", (code) => {
+      if (code !== 0 && this.failure === null) {
+        this.fail(new MalformedDocumentError(`PDF worker exited with code ${code}`));
+      }
+    });
+  }
+
+  next(timeoutMs?: number): Promise<WorkerMessage> {
+    if (this.failure !== null) return Promise.reject(this.failure);
+    const message = this.messages.shift();
+    if (message !== undefined) return Promise.resolve(message);
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        resolve: (value: WorkerMessage): void => {
+          clearTimeout(waiter.timer);
+          resolve(value);
+        },
+        reject: (error: Error): void => {
+          clearTimeout(waiter.timer);
+          reject(error);
+        },
+        timer: undefined as ReturnType<typeof setTimeout> | undefined,
+      };
+      this.waiter = waiter;
+      if (timeoutMs !== undefined && timeoutMs > 0) {
+        waiter.timer = setTimeout(() => {
+          if (this.waiter !== waiter) return;
+          this.waiter = null;
+          reject(
+            new ParseTimeoutError(
+              `PDF extraction exceeded ${timeoutMs} ms`,
+            ),
+          );
+        }, timeoutMs);
+      }
+    });
+  }
+
+  private push(message: WorkerMessage): void {
+    if (this.waiter !== null) {
+      const waiter = this.waiter;
+      this.waiter = null;
+      waiter.resolve(message);
+    } else {
+      this.messages.push(message);
+    }
+  }
+
+  fail(error: Error): void {
+    if (this.failure !== null) return;
+    this.failure = error;
+    if (this.waiter !== null) {
+      const waiter = this.waiter;
+      this.waiter = null;
+      waiter.reject(error);
+    }
+  }
+}
+
+/**
+ * V8's heap limit ignores ArrayBuffer memory, so poll the worker's heap plus
+ * external memory and fail the parse as soon as the budget is crossed.
+ */
+function watchMemory(
+  worker: Worker,
+  budgetBytes: number,
+  channel: WorkerChannel,
+): ReturnType<typeof setInterval> {
+  let pending = false;
+  const timer = setInterval(() => {
+    if (pending) return;
+    pending = true;
+    worker.getHeapStatistics().then(
+      (stats) => {
+        pending = false;
+        const used = stats.used_heap_size + stats.external_memory;
+        if (used > budgetBytes) {
+          channel.fail(
+            new LimitExceededError(
+              `PDF worker memory ${used} bytes exceeds ${budgetBytes} byte budget`,
+            ),
+          );
+          void worker.terminate();
+        }
+      },
+      () => {
+        pending = false;
+      },
+    );
+  }, WATCHDOG_INTERVAL_MS);
+  timer.unref();
+  return timer;
+}
+
+function mapWorkerFailure(error: Error): Error {
+  if ((error as { code?: string }).code === "ERR_WORKER_OUT_OF_MEMORY") {
+    return new LimitExceededError("PDF worker exceeded its memory limit", {
+      cause: error,
+    });
+  }
+  if ((error as { code?: string }).code === "ERR_MODULE_NOT_FOUND") {
+    return new MissingDependencyError("pdfjs-dist", "PDF parsing");
+  }
+  return new MalformedDocumentError("PDF worker failed", { cause: error });
+}
+
+function mapWorkerError(message: {
+  readonly name: string;
+  readonly message: string;
+  readonly code?: string;
+}): Error {
+  if (message.code === "ERR_MODULE_NOT_FOUND") {
+    return new MissingDependencyError("pdfjs-dist", "PDF parsing");
+  }
+  if (message.name === "LimitExceededError") {
+    return new LimitExceededError(message.message);
+  }
+  if (message.name === "PasswordException") {
+    return new EncryptedDocumentError("PDF is encrypted", {
+      cause: new Error(message.message),
+    });
+  }
+  return new MalformedDocumentError("Unable to read PDF", {
+    cause: new Error(message.message),
+  });
+}
+
+function recordAnnotation(
+  annotation: PdfAnnotation,
+  types: Set<string>,
+  subtypes: Set<string>,
+): void {
+  if (types.size < 100) types.add(annotation.name ?? "");
+  if (subtypes.size < 100) subtypes.add(annotation.subtype ?? "");
+}
+
+async function renderAnnotation(
+  annotation: PdfAnnotation,
+  xhtml: XHTMLContentHandler,
+): Promise<void> {
+  if (annotation.url !== undefined && annotation.url.length > 0) {
+    await xhtml.startElement("div", "class", "annotation");
+    await xhtml.startElement("a", "href", annotation.url);
+    await xhtml.characters(annotation.url);
+    await xhtml.endElement("a");
+    await xhtml.endElement("div");
+  }
+
+  if (annotation.fieldName !== undefined) {
+    await xhtml.startElement("div", "class", "annotation");
+    await xhtml.startElement("div", "class", "annotationField");
+    await xhtml.characters(
+      `${annotation.fieldName}: ${String(annotation.fieldValue ?? "")}`.trim(),
+    );
+    await xhtml.endElement("div");
+    await xhtml.endElement("div");
+  }
+
+  if (
+    annotation.title !== undefined ||
+    annotation.subject !== undefined ||
+    annotation.contents !== undefined
+  ) {
+    await xhtml.startElement("div", "class", "annotation");
+    if (annotation.title !== undefined) {
+      await xhtml.startElement("div", "class", "annotationTitle");
+      await xhtml.characters(annotation.title);
+      await xhtml.endElement("div");
+    }
+    if (annotation.subject !== undefined) {
+      await xhtml.startElement("div", "class", "annotationSubject");
+      await xhtml.characters(annotation.subject);
+      await xhtml.endElement("div");
+    }
+    if (annotation.contents !== undefined) {
+      await xhtml.startElement("div", "class", "annotationContents");
+      await xhtml.characters(annotation.contents);
+      await xhtml.endElement("div");
+    }
+    await xhtml.endElement("div");
+  }
+}
+
+function applyInfo(metadata: Metadata, info: unknown): void {
+  if (typeof info !== "object" || info === null) return;
+  const values = info as Record<string, unknown>;
+  assign(metadata, "dc:title", values.Title);
+  assign(metadata, "dc:creator", values.Author);
+  assign(metadata, "dc:description", values.Subject);
+  assign(metadata, "pdf:Keywords", values.Keywords);
+  assign(metadata, "xmp:CreatorTool", values.Creator);
+  assign(metadata, "pdf:Producer", values.Producer);
+  assignDate(metadata, "dcterms:created", values.CreationDate);
+  assignDate(metadata, "dcterms:modified", values.ModDate);
+  assign(metadata, "pdf:PDFVersion", values.PDFFormatVersion);
+  assign(metadata, "pdf:Trapped", values.Trapped);
+  if (values.Encrypted === true) metadata.set("pdf:encrypted", "true");
+}
+
+function applyXmp(metadata: Metadata, xmp: Record<string, unknown>): void {
+  if (xmp === null || typeof xmp !== "object") return;
+  for (const [rawKey, rawValue] of Object.entries(xmp)) {
+    const key = rawKey.trim();
+    if (key.length === 0) continue;
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    for (const value of values) {
+      if (typeof value !== "string" || value.length === 0) continue;
+      const mapped = XMP_KEYS[key];
+      if (mapped === undefined) {
+        metadata.add(key, value);
+      } else if (mapped.endsWith("Date")) {
+        metadata.set(mapped, pdfDate(value) ?? value);
+      } else {
+        metadata.add(mapped, value);
+      }
+    }
+  }
+}
+
+const XMP_KEYS: Record<string, string> = {
+  "dc:title": "dc:title",
+  "dc:creator": "dc:creator",
+  "dc:description": "dc:description",
+  "dc:language": "dc:language",
+  "dc:subject": "dc:subject",
+  "pdf:Keywords": "pdf:Keywords",
+  "pdf:Producer": "pdf:Producer",
+  "xmp:CreatorTool": "xmp:CreatorTool",
+  "xmp:CreateDate": "dcterms:created",
+  "xmp:ModifyDate": "dcterms:modified",
+  "xmp:MetadataDate": "xmp:MetadataDate",
+  "xmp:Label": "xmp:Label",
+};
+
+function assignDate(metadata: Metadata, key: string, value: unknown): void {
+  if (typeof value === "string" && value.length > 0) {
+    metadata.set(key, pdfDate(value) ?? value);
+  }
+}
+
+/** Converts a PDF date string (D:YYYYMMDDHHmmSSOHH'mm') to ISO 8601. */
+export function pdfDate(value: string): string | undefined {
+  const match =
+    /^\s*D?:?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?\s*(?:([Zz+\-])(\d{2})'?(\d{2})?)?/.exec(
+      value,
+    );
+  if (match === null) return undefined;
+  const [, year, month, day, hour, minute, second, sign, offsetHours, offsetMinutes] =
+    match;
+  const utc = Date.UTC(
+    Number(year),
+    Number(month ?? "1") - 1,
+    Number(day ?? "1"),
+    Number(hour ?? "0"),
+    Number(minute ?? "0"),
+    Number(second ?? "0"),
+  );
+  if (!Number.isFinite(utc)) return undefined;
+  if (sign === "+" || sign === "-") {
+    const offset =
+      (Number(offsetHours ?? "0") * 60 + Number(offsetMinutes ?? "0")) * 60_000;
+    return new Date(utc + (sign === "+" ? -offset : offset)).toISOString();
+  }
+  if (sign === "Z" || sign === "z") return new Date(utc).toISOString();
+  return new Date(utc).toISOString();
+}
+
+function assign(metadata: Metadata, key: string, value: unknown): void {
+  if (typeof value === "string" && value.length > 0) metadata.set(key, value);
+}

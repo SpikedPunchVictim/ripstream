@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { BodyContentHandler, Metadata, ParseContext, RipstreamInputStream } from "@spikedpunch/ripstream-core";
+import { IccParser } from "../src/index.ts";
+
+test("reads ICC header and description", async () => {
+  const description = "Test Profile";
+  const data = new Uint8Array(128 + 4 + 12 + 16 + description.length + 1);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, data.length);
+  data.set([4, 3], 8);
+  data.set([0x6d, 0x6e, 0x74, 0x72], 12);
+  data.set([0x52, 0x47, 0x42, 0x20], 16);
+  data.set([0x58, 0x59, 0x5a, 0x20], 20);
+  view.setUint32(128, 1);
+  data.set([0x64, 0x65, 0x73, 0x63], 132);
+  view.setUint32(136, 144);
+  view.setUint32(140, 16 + description.length + 1);
+  data.set([0x64, 0x65, 0x73, 0x63], 144);
+  view.setUint32(152, description.length + 1);
+  data.set([...new TextEncoder().encode(description), 0], 156);
+  const stream = await RipstreamInputStream.from(data);
+  const handler = new BodyContentHandler();
+  const metadata = new Metadata();
+  await new IccParser().parse(stream, handler, metadata, new ParseContext());
+  await stream.close();
+  assert.equal(metadata.get("icc:version"), "4.3");
+  assert.equal(metadata.get("icc:class"), "mntr");
+  assert.equal(metadata.get("icc:color-space"), "RGB");
+  assert.equal(metadata.get("icc:description"), "Test Profile");
+});

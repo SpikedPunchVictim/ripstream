@@ -1,0 +1,38 @@
+{
+  "name": "@spikedpunch/ripstream-parser-pdf",
+  "license": "Apache-2.0",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*"
+  },
+  "devDependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "peerDependencies": {
+    "pdfjs-dist": "^4.10.38"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}

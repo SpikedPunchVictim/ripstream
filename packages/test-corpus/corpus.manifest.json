@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "text-plain",
+      "mediaType": "text/plain",
+      "source": {
+        "kind": "generated",
+        "generator": "text-plain"
+      },
+      "sha256": "276be614c53df9a8ec5c5ed4059bf28d4a70d29e3ebacca5dbffe32c5fd1673b",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "text-csv",
+      "mediaType": "text/csv",
+      "source": {
+        "kind": "generated",
+        "generator": "text-csv"
+      },
+      "sha256": "179e867d74e95fb1cfbf5ed9d5d657402419c58260183970fa61d6b92f4a82f6",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "application-xml",
+      "mediaType": "application/xml",
+      "source": {
+        "kind": "generated",
+        "generator": "application-xml"
+      },
+      "sha256": "f0d9d6d22dfdfd1bc8adb816e1b4ef7462e250d55f31ea9c5cb50fadcbaeee34",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "text-html",
+      "mediaType": "text/html",
+      "source": {
+        "kind": "generated",
+        "generator": "text-html"
+      },
+      "sha256": "d2e244714af5755ef6f5d16a99b7c3db586fe089837c0e92496ec7dc88b97f5c",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "application-rtf",
+      "mediaType": "application/rtf",
+      "source": {
+        "kind": "generated",
+        "generator": "application-rtf"
+      },
+      "sha256": "7ee4b2e1b7bb8ef5385927c63c147255c932cf6b67f497242216e42b03f9a486",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "message-rfc822",
+      "mediaType": "message/rfc822",
+      "source": {
+        "kind": "generated",
+        "generator": "message-rfc822"
+      },
+      "sha256": "38d107b46dbc1bc94505ad9a5b10c43837d4611faf40d6bbca704b773d483872",
+      "license": "CC0-1.0"
+    },
+    {
+      "id": "xml-truncated",
+      "mediaType": "application/xml",
+      "source": {
+        "kind": "generated",
+        "generator": "xml-truncated"
+      },
+      "sha256": "ad79c6a8c5d2f1f24cf06743693c2ec9fe416077f4120cee587e2b9dced1f3d6",
+      "license": "CC0-1.0",
+      "notes": "truncated document"
+    },
+    {
+      "id": "utf8-invalid",
+      "mediaType": "text/plain",
+      "source": {
+        "kind": "generated",
+        "generator": "utf8-invalid"
+      },
+      "sha256": "b28cee756acd8ba4ca35924451c7e32446e5d0b117c8156141bd41fc83ed30aa",
+      "license": "CC0-1.0",
+      "notes": "invalid UTF-8 bytes"
+    },
+    {
+      "id": "xml-deep",
+      "mediaType": "application/xml",
+      "source": {
+        "kind": "generated",
+        "generator": "xml-deep"
+      },
+      "sha256": "d6dd685c78fbdbac1f6e1d58050556f9f6ab03fdbf4e24490c511ac643ecd528",
+      "license": "CC0-1.0",
+      "notes": "200 levels of nesting"
+    }
+  ]
+}

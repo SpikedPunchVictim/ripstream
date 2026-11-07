@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/mime"
+    },
+    {
+      "path": "packages/parser-archive"
+    },
+    {
+      "path": "packages/parser-pdf"
+    },
+    {
+      "path": "packages/parser-media"
+    },
+    {
+      "path": "packages/parser-office"
+    },
+    {
+      "path": "packages/parsers"
+    },
+    {
+      "path": "./packages/test-corpus"
+    },
+    {
+      "path": "./packages/parity"
+    },
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/language"
+    },
+    {
+      "path": "./packages/server"
+    },
+    {
+      "path": "./packages/pipes"
+    },
+    {
+      "path": "./packages/bundle-standard"
+    },
+    {
+      "path": "./packages/parser-db"
+    }
+  ]
+}

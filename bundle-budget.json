@@ -1,0 +1,18 @@
+{
+  "core": 1200,
+  "mime": 1000,
+  "parsers": 350,
+  "parser-office": 450,
+  "parser-archive": 150,
+  "parser-pdf": 150,
+  "parser-media": 100,
+  "parity": 50,
+  "test-corpus": 50,
+  "total": 3400,
+  "cli": 80,
+  "language": 150,
+  "server": 50,
+  "pipes": 50,
+  "bundle-standard": 40,
+  "parser-db": 100
+}

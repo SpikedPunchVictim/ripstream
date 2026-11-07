@@ -1,0 +1,83 @@
+{
+  "generatedBy": "scripts/parity-report.ts",
+  "oracle": {
+    "tikaVersion": "4.2.0",
+    "detectionFixtures": 9,
+    "ooxmlFixtures": 3
+  },
+  "detection": {
+    "fixtures": [
+      {
+        "id": "text-plain",
+        "expected": "text/plain",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "text-csv",
+        "expected": "text/plain",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "application-xml",
+        "expected": "application/xml",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "text-html",
+        "expected": "text/html",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "application-rtf",
+        "expected": "application/rtf",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "message-rfc822",
+        "expected": "message/rfc822",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "xml-truncated",
+        "expected": "text/plain",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "utf8-invalid",
+        "expected": "application/octet-stream",
+        "status": "enforced-by-test"
+      },
+      {
+        "id": "xml-deep",
+        "expected": "text/plain",
+        "status": "enforced-by-test"
+      }
+    ]
+  },
+  "ooxml": {
+    "fixtures": [
+      {
+        "id": "docx",
+        "status": "text+metadata-threshold"
+      },
+      {
+        "id": "xlsx",
+        "status": "text+metadata-threshold"
+      },
+      {
+        "id": "pptx",
+        "status": "text+metadata-threshold"
+      }
+    ]
+  },
+  "parserCoverage": {
+    "modules": 24,
+    "upstreamClasses": 94,
+    "statusCounts": {
+      "aggregate": 3,
+      "planned": 8,
+      "partial": 10,
+      "implemented": 3
+    }
+  }
+}

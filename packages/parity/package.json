@@ -1,0 +1,24 @@
+{
+  "name": "@spikedpunch/ripstream-parity",
+  "version": "0.0.0",
+  "description": "Differential parity harness and golden storage for ripstream",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22.18"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "@spikedpunch/ripstream-parsers",
+  "version": "0.0.0",
+  "description": "Parser registry for the TypeScript port of Apache Tika",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@spikedpunch/ripstream-core": "workspace:*",
+    "@spikedpunch/ripstream-mime": "workspace:*",
+    "@spikedpunch/ripstream-parser-archive": "workspace:*",
+    "@spikedpunch/ripstream-parser-media": "workspace:*",
+    "@spikedpunch/ripstream-parser-office": "workspace:*",
+    "@spikedpunch/ripstream-parser-pdf": "workspace:*",
+    "htmlparser2": "^10.0.0",
+    "n3": "1.26.0",
+    "saxes": "^6.0.0",
+    "@spikedpunch/ripstream-parser-db": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@spikedpunch/ripstream-test-corpus": "workspace:*",
+    "@types/n3": "^1.26.6",
+    "fflate": "^0.8.2",
+    "tar-stream": "^3.1.7"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "benchmark": "node scripts/benchmark.ts"
+  }
+}

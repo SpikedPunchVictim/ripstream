@@ -1,0 +1,118 @@
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import {
+  LimitExceededError,
+  MalformedDocumentError,
+  MediaType,
+  XHTMLContentHandler,
+  type ContentHandler,
+  type Metadata,
+  type ParseContext,
+  type Parser,
+  type RipstreamInputStream,
+} from "@spikedpunch/ripstream-core";
+
+const MAX_CELL_CHARS = 4_096;
+const MAX_TOTAL_CHARS = 1_000_000;
+const MAX_ROWS = 100;
+
+/** SQLite parser backed by optional sql.js (WASM, no native addon). */
+export class SqliteParser implements Parser {
+  readonly name = "SQLite3Parser";
+  readonly capabilities = { requiresRandomAccess: true } as const;
+
+  getSupportedTypes(): ReadonlySet<MediaType> {
+    return new Set([
+      MediaType.parse("application/vnd.sqlite3")!,
+      MediaType.parse("application/x-sqlite3")!,
+      MediaType.parse("application/x-sqlite")!,
+    ]);
+  }
+
+  async parse(
+    stream: RipstreamInputStream,
+    handler: ContentHandler,
+    metadata: Metadata,
+    _ctx: ParseContext,
+  ): Promise<void> {
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    let total = 0;
+    for (const chunk of chunks) total += chunk.byteLength;
+    const data = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      data.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    if (new TextDecoder("latin1").decode(data.subarray(0, 16)) !== "SQLite format 3\u0000") {
+      throw new MalformedDocumentError("Not a SQLite database");
+    }
+    const require = createRequire(import.meta.url);
+    const init = (await import("sql.js")).default as (options?: Record<string, unknown>) => Promise<{
+      Database: new (data: Uint8Array) => SqlDatabase;
+    }>;
+    let database: SqlDatabase | null = null;
+    try {
+      const SQL = await init({
+        locateFile: (file: string) => join(dirname(require.resolve("sql.js")), file),
+      });
+      database = new SQL.Database(data);
+      const tables = database.exec(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      );
+      const names = (tables[0]?.values ?? []).map((row) => String(row[0]));
+      metadata.set("sqlite:table-count", String(names.length));
+      const xhtml = new XHTMLContentHandler(handler, metadata);
+      await xhtml.startDocument();
+      let totalChars = 0;
+      for (const table of names) {
+        await xhtml.element("h1", table);
+        // Truncate inside SQLite: generated columns such as hex(zeroblob(N))
+        // would otherwise materialize N-sized cells in JS before any cap runs.
+        const columns = database.exec(
+          `PRAGMA table_xinfo(${quoteIdentifier(table)})`,
+        )[0];
+        const nameIndex = columns?.columns.indexOf("name") ?? -1;
+        const hiddenIndex = columns?.columns.indexOf("hidden") ?? -1;
+        const selected = (columns?.values ?? [])
+          .filter((column) => column[hiddenIndex] !== 1)
+          .map(
+            (column) =>
+              `substr(${quoteIdentifier(String(column[nameIndex]))}, 1, ${MAX_CELL_CHARS})`,
+          );
+        if (selected.length === 0) continue;
+        const rows = database.exec(
+          `SELECT ${selected.join(", ")} FROM ${quoteIdentifier(table)} LIMIT ${MAX_ROWS}`,
+        );
+        for (const row of rows[0]?.values ?? []) {
+          const line = row.map((value) => String(value ?? "")).join("\t");
+          totalChars += line.length;
+          if (totalChars > MAX_TOTAL_CHARS) {
+            throw new LimitExceededError(
+              `SQLite content exceeds ${MAX_TOTAL_CHARS} characters`,
+            );
+          }
+          await xhtml.element("p", line);
+        }
+      }
+      await xhtml.endDocument();
+    } catch (error) {
+      if (error instanceof LimitExceededError) throw error;
+      throw new MalformedDocumentError("Unable to read SQLite database", { cause: error });
+    } finally {
+      database?.close();
+    }
+  }
+}
+
+function quoteIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
+}
+
+interface SqlDatabase {
+  exec(sql: string): Array<{ columns: string[]; values: unknown[][] }>;
+  close(): void;
+}
+export { OpenPgpParser } from "./openpgp.ts";
+export { ColumnarParser } from "./columnar.ts";

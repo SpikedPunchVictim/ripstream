@@ -1,0 +1,45 @@
+{
+  "name": "ripstream",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "build:clean": "pnpm run clean && tsc -b",
+    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo packages/*/tsconfig.tsbuildinfo",
+    "typecheck": "tsc -b --pretty false",
+    "test": "node --import @spikedpunch/cbd-node-test/register --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=@spikedpunch/cbd-node-test/reporter --test-reporter-destination=stderr \"packages/*/test/**/*.test.ts\"",
+    "test:collect": "cbd collect -- pnpm test",
+    "test:select": "cbd select",
+    "test:changed": "cbd collect -- pnpm test",
+    "test:explain": "cbd explain",
+    "test:stats": "cbd stats",
+    "test:gc": "cbd gc",
+    "generate:metadata-schema": "pnpm --filter @spikedpunch/ripstream-core run generate:metadata-schema",
+    "generate:upstream-registry": "pnpm --filter @spikedpunch/ripstream-core run generate:upstream-registry",
+    "audit:parsers": "pnpm --filter @spikedpunch/ripstream-core run audit:parsers",
+    "api:report": "node scripts/api-report.ts",
+    "api:check": "node scripts/api-report.ts --check",
+    "test:types": "tsc -p tsconfig.types.json --pretty false",
+    "license:check": "node scripts/license-check.ts",
+    "sbom": "node scripts/sbom.ts",
+    "provenance": "node scripts/provenance.ts",
+    "parity:report": "node scripts/parity-report.ts",
+    "corpus:pdf": "node scripts/corpus-pdf.ts",
+    "corpus:scan": "node scripts/corpus-scan.ts",
+    "bundle:check": "node scripts/bundle-check.ts",
+    "bench": "pnpm --filter @spikedpunch/ripstream-parsers run benchmark",
+    "bench:check": "pnpm --filter @spikedpunch/ripstream-parsers run benchmark -- --check"
+  },
+  "devDependencies": {
+    "@spikedpunch/cbd": "0.0.7",
+    "@spikedpunch/cbd-cli": "0.0.7",
+    "@spikedpunch/cbd-node-test": "0.0.7",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

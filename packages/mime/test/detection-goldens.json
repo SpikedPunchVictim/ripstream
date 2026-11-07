@@ -1,0 +1,50 @@
+{
+  "tikaVersion": "4.2.0",
+  "entries": [
+    {
+      "id": "text-plain",
+      "mediaType": "text/plain",
+      "expectedMediaType": "text/plain"
+    },
+    {
+      "id": "text-csv",
+      "mediaType": "text/plain",
+      "expectedMediaType": "text/csv"
+    },
+    {
+      "id": "application-xml",
+      "mediaType": "application/xml",
+      "expectedMediaType": "application/xml"
+    },
+    {
+      "id": "text-html",
+      "mediaType": "text/html",
+      "expectedMediaType": "text/html"
+    },
+    {
+      "id": "application-rtf",
+      "mediaType": "application/rtf",
+      "expectedMediaType": "application/rtf"
+    },
+    {
+      "id": "message-rfc822",
+      "mediaType": "message/rfc822",
+      "expectedMediaType": "message/rfc822"
+    },
+    {
+      "id": "xml-truncated",
+      "mediaType": "text/plain",
+      "expectedMediaType": "application/xml"
+    },
+    {
+      "id": "utf8-invalid",
+      "mediaType": "application/octet-stream",
+      "expectedMediaType": "text/plain"
+    },
+    {
+      "id": "xml-deep",
+      "mediaType": "text/plain",
+      "expectedMediaType": "application/xml"
+    }
+  ]
+}
