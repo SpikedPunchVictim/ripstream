@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   RipstreamError,
@@ -137,48 +138,151 @@ function exifrRoutesToHeif(data: Uint8Array): boolean {
 }
 
 /**
- * Walks the top-level ISO-BMFF boxes (no recursion) before exifr sees them.
- * exifr's HEIF parser scans top-level boxes for `meta` with
- * `offset += box.length`, so a size-0 box ahead of `meta` makes it loop
- * forever (and, being async, starve timers). A size of 0 means "to EOF" and is
- * only meaningful for a final box after `meta`; a size below the header size
- * can never advance. A box that overruns the data just ends the walk (a
- * truncated file); exifr fails on that with a bounded range error.
+ * Most boxes exifr's HEIF parser will visit in one walk. A real HEIC has about
+ * ten direct children of `meta` and one or two boxes after it (`mdat`), so
+ * 4096 is far above anything legitimate while keeping the worst case (one
+ * object per box) at a few hundred KB.
+ */
+const MAX_ISO_BMFF_BOXES = 4096;
+
+interface IsoBoxHead {
+  readonly isMeta: boolean;
+  /** Stride exifr advances by; 0 ends its walk. Mirrors exifr, so may be negative. */
+  readonly length: number;
+  /** Bytes of header: 8, or 16 with a 64-bit largesize. */
+  readonly header: number;
+  readonly offset: number;
+}
+
+/**
+ * Reads a box header exactly as exifr@7.1.3 `parseBoxHead` does, including its
+ * 64-bit quirk: `(hi << 32) | lo` is evaluated in int32 arithmetic, so the
+ * length is `hi | lo`, and wraps negative when bit 31 is set.
+ *
+ * Returns null only where exifr throws a bounded RangeError (header past the
+ * data). When the high word is >= 0xfffff exifr does NOT throw: it silently
+ * switches to BigInt (its `typeof BigInt !== undefined` check is always true)
+ * and, for a `meta` box, still walks the children to EOF. A box above 2^52
+ * bytes is never legitimate, so that is rejected here rather than left
+ * unvalidated.
+ */
+function readIsoBoxHead(view: DataView, data: Uint8Array, offset: number): IsoBoxHead | null {
+  if (offset + 8 > data.length) return null;
+  let length = view.getUint32(offset);
+  let header = 8;
+  if (length === 1) {
+    if (offset + 16 > data.length) return null;
+    const high = view.getUint32(offset + 8);
+    if (high >= 0xfffff) {
+      throw new MalformedDocumentError(
+        `ISO-BMFF box at offset ${offset} has an unrepresentable 64-bit size`,
+      );
+    }
+    length = high | view.getUint32(offset + 12);
+    header = 16;
+  }
+  // Compare the 4 type bytes in place: this runs once per box in a hot loop.
+  const isMeta =
+    data[offset + 4] === 0x6d &&
+    data[offset + 5] === 0x65 &&
+    data[offset + 6] === 0x74 &&
+    data[offset + 7] === 0x61;
+  return { isMeta, length, header, offset };
+}
+
+/** A non-zero stride below the header can never advance usefully. */
+function checkIsoBoxStride(box: IsoBoxHead): void {
+  if (box.length !== 0 && box.length < box.header) {
+    throw new MalformedDocumentError(
+      `ISO-BMFF box at offset ${box.offset} has invalid size ${box.length}`,
+    );
+  }
+}
+
+/**
+ * Mirrors exifr `parseBoxes`: walks sibling boxes from `start` to the end of
+ * the data (NOT to the end of the parent box), calling `checkIsoBoxStride`
+ * and capping the box count. Returns the boxes walked.
+ */
+function walkIsoBoxes(view: DataView, data: Uint8Array, start: number): IsoBoxHead[] {
+  const boxes: IsoBoxHead[] = [];
+  let offset = start;
+  while (offset < data.length - 4) {
+    const box = readIsoBoxHead(view, data, offset);
+    if (box === null) break;
+    checkIsoBoxStride(box);
+    boxes.push(box);
+    if (boxes.length > MAX_ISO_BMFF_BOXES) {
+      throw new LimitExceededError(
+        `ISO-BMFF walk from offset ${start} exceeds ${MAX_ISO_BMFF_BOXES} boxes`,
+      );
+    }
+    if (box.length === 0) break;
+    offset += box.length;
+  }
+  return boxes;
+}
+
+/**
+ * Validates, before exifr sees the bytes, every ISO-BMFF box walk its HEIF
+ * parser performs, so each is bounded:
+ *
+ * 1. Top-level scan for `meta` (`offset += box.length`). A size-0 box ahead of
+ *    `meta` makes exifr loop forever (and, being async, starve timers). A size
+ *    of 0 means "to EOF" and is only meaningful for a final box after `meta`;
+ *    a size below the header size can never advance. A box that overruns the
+ *    data just ends the walk (a truncated file); exifr fails on that with a
+ *    bounded range error. A 64-bit size that exifr cannot represent as a
+ *    number is rejected (see `readIsoBoxHead`). The scan is capped at
+ *    `MAX_ISO_BMFF_BOXES` boxes.
+ * 2. The children of `meta`. exifr walks them synchronously from the first
+ *    child (after the 4-byte FullBox version/flags) to EOF, allocating one
+ *    object per box, so a chain of tiny boxes is a CPU/memory DoS that
+ *    `maxParseMillis` cannot preempt. They get the same stride rules plus a
+ *    cap on the box count. This is done for the first `meta` even if its own
+ *    size overruns, because exifr walks its children regardless.
+ *
+ * Not walked: exifr only descends into `iprp`/`ipco` when ICC extraction is
+ * enabled (`icc: false` here). It also loops over `iinf` items (at most 65535,
+ * from a 16-bit count) and `iloc` items (a count of up to 2^32 on version 2,
+ * but each step consumes at least 6 bytes and allocates nothing, so it is
+ * bounded by the data size).
  */
 function validateIsoBmffTopLevel(data: Uint8Array): void {
   if (!exifrRoutesToHeif(data)) return;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   let offset = 0;
-  let sawMeta = false;
+  let scanned = 0;
   while (offset + 8 <= data.length) {
-    let size = view.getUint32(offset);
-    let header = 8;
-    if (size === 1) {
-      if (offset + 16 > data.length) return;
-      // A high word means a box larger than any buffer we can hold.
-      if (view.getUint32(offset + 8) !== 0) return;
-      size = view.getUint32(offset + 12);
-      header = 16;
+    // Real files have at most a few boxes (ftyp, free, ...) before `meta`;
+    // the shared cap keeps a crafted chain of tiny boxes from burning CPU here
+    // and in exifr's own scan.
+    if (++scanned > MAX_ISO_BMFF_BOXES) {
+      throw new LimitExceededError(
+        `ISO-BMFF top-level scan exceeds ${MAX_ISO_BMFF_BOXES} boxes before any meta box`,
+      );
     }
-    if (size === 0) {
-      if (sawMeta) return; // trailing box running to EOF
+    const box = readIsoBoxHead(view, data, offset);
+    // Every early return below ends in an exifr exception before it can reach
+    // `parseSubBoxes`: an unreadable head, a box that overruns the data (its
+    // next head is out of range), or running out of boxes without a `meta`.
+    if (box === null) return;
+    if (box.length === 0) {
       throw new MalformedDocumentError(
         `ISO-BMFF zero-size box at offset ${offset} before any meta box`,
       );
     }
-    if (size < header) {
-      throw new MalformedDocumentError(`ISO-BMFF box at offset ${offset} has invalid size ${size}`);
+    checkIsoBoxStride(box);
+    // exifr starts scanning for `meta` after the first box, whatever its kind.
+    if (offset > 0 && box.isMeta) {
+      // Walk the children before any overrun check: exifr walks them
+      // regardless of `meta`'s own size. Nothing exifr does after this point
+      // can reach unvalidated bytes (see the doc comment), so we are done.
+      walkIsoBoxes(view, data, offset + box.header + 4);
+      return;
     }
-    if (offset + size > data.length) return;
-    if (
-      data[offset + 4] === 0x6d &&
-      data[offset + 5] === 0x65 &&
-      data[offset + 6] === 0x74 &&
-      data[offset + 7] === 0x61
-    ) {
-      sawMeta = true;
-    }
-    offset += size;
+    if (offset + box.length > data.length) return;
+    offset += box.length;
   }
 }
 

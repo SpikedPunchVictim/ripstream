@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BodyContentHandler,
+  LimitExceededError,
   MalformedDocumentError,
   Metadata,
   ParseContext,
@@ -253,6 +254,157 @@ test("HEIC with meta followed by a zero-size mdat is accepted", async () => {
     ...isoBox("meta", [0, 0, 0, 0]),
     ...isoBox("mdat", [1, 2, 3, 4], 0),
   ]);
+  await assert.doesNotReject(parseBytes(data));
+});
+
+// exifr walks the children of `meta` (a FullBox: 4 version/flags bytes, then
+// boxes) from the first child to EOF, allocating one object per box.
+function metaBox(...children: number[][]): number[] {
+  return isoBox("meta", [0, 0, 0, 0, ...children.flat()]);
+}
+
+function u32be(value: number): number[] {
+  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
+}
+
+function heicWithMeta(...children: number[][]): Uint8Array {
+  return new Uint8Array([...HEIC_FTYP, ...metaBox(...children), ...isoBox("mdat", [1, 2, 3, 4])]);
+}
+
+test("HEIC meta with a chain of 4-byte sub-boxes is rejected (exifr DoS)", async () => {
+  const stride = 4;
+  const chain = new Uint8Array(100_000 * stride);
+  const view = new DataView(chain.buffer);
+  for (let o = 0; o < chain.length; o += stride) view.setUint32(o, stride);
+  const meta = new Uint8Array(8 + 4 + chain.length);
+  const metaView = new DataView(meta.buffer);
+  metaView.setUint32(0, meta.length);
+  meta.set(new TextEncoder().encode("meta"), 4);
+  meta.set(chain, 12);
+  const data = new Uint8Array([...HEIC_FTYP, ...meta]);
+  await assert.rejects(parseBytes(data), MalformedDocumentError);
+});
+
+test("HEIC meta with more sub-boxes than any real file is rejected", async () => {
+  const children = Array.from({ length: 5000 }, () => isoBox("free"));
+  await assert.rejects(parseBytes(heicWithMeta(...children)), LimitExceededError);
+});
+
+test("HEIC meta with sub-boxes whose largesize is below the 16-byte header is rejected", async () => {
+  const big = [...u32be(1), ...new TextEncoder().encode("free"), ...u32be(0), ...u32be(8)];
+  await assert.rejects(parseBytes(heicWithMeta(big)), MalformedDocumentError);
+});
+
+test("HEIC meta sub-box with a negative (int32 wrapped) largesize is rejected", async () => {
+  // exifr computes the 64-bit length as (hi << 32) | lo in int32 arithmetic, so
+  // lo >= 2^31 walks backwards and can cycle forever.
+  const back = [...u32be(1), ...new TextEncoder().encode("free"), ...u32be(0), ...u32be(0xfffffff0)];
+  await assert.rejects(parseBytes(heicWithMeta(back)), MalformedDocumentError);
+});
+
+test("HEIC top-level largesize that wraps negative in exifr is rejected", async () => {
+  const back = [...u32be(1), ...new TextEncoder().encode("free"), ...u32be(0), ...u32be(0xfffffff0)];
+  const data = new Uint8Array([...HEIC_FTYP, ...back, ...metaBox(), ...isoBox("mdat", [1])]);
+  await assert.rejects(parseBytes(data), MalformedDocumentError);
+});
+
+// exifr's 64-bit read switches to BigInt (it does not throw) once the high word
+// is >= 0xfffff, then still walks `meta`'s children to EOF.
+function bigSizeBox(type: string, high: number, low: number): number[] {
+  return [...u32be(1), ...new TextEncoder().encode(type), ...u32be(high), ...u32be(low)];
+}
+
+function fourByteChain(count: number): number[] {
+  return Array.from({ length: count }, () => u32be(4)).flat();
+}
+
+for (const high of [0xfffff, 0xffffffff]) {
+  test(`HEIC meta with unrepresentable largesize (hi=0x${high.toString(16)}) and a 4-byte chain is rejected`, async () => {
+    const meta = [...bigSizeBox("meta", high, 0), 0, 0, 0, 0, ...fourByteChain(100_000)];
+    const data = new Uint8Array([...HEIC_FTYP, ...meta]);
+    await assert.rejects(parseBytes(data), MalformedDocumentError);
+  });
+}
+
+test("HEIC meta with unrepresentable largesize is rejected even with one valid child", async () => {
+  const meta = [...bigSizeBox("meta", 0xfffff, 0), 0, 0, 0, 0, ...isoBox("hdlr", new Array(24).fill(0))];
+  const data = new Uint8Array([...HEIC_FTYP, ...meta]);
+  await assert.rejects(parseBytes(data), MalformedDocumentError);
+});
+
+test("HEIC top-level box before meta with unrepresentable largesize is rejected", async () => {
+  const data = new Uint8Array([...HEIC_FTYP, ...bigSizeBox("free", 0xfffff, 0), ...metaBox()]);
+  await assert.rejects(parseBytes(data), MalformedDocumentError);
+});
+
+test("HEIC meta sub-box with unrepresentable largesize is rejected", async () => {
+  await assert.rejects(parseBytes(heicWithMeta(bigSizeBox("free", 0xfffff, 0))), MalformedDocumentError);
+});
+
+test("HEIC with more top-level boxes before meta than any real file is rejected", async () => {
+  const frees = Array.from({ length: 5000 }, () => isoBox("free")).flat();
+  const data = new Uint8Array([...HEIC_FTYP, ...frees, ...metaBox(), ...isoBox("mdat", [1])]);
+  await assert.rejects(parseBytes(data), LimitExceededError);
+});
+
+test("HEIC with a long but allowed run of top-level boxes before meta is accepted", async () => {
+  const frees = Array.from({ length: 4000 }, () => isoBox("free")).flat();
+  const data = new Uint8Array([...HEIC_FTYP, ...frees, ...metaBox(), ...isoBox("mdat", [1])]);
+  await assert.doesNotReject(parseBytes(data));
+});
+
+test("largesize with high word 0xffffe is below the unrepresentable threshold and still walked", async () => {
+  // exifr computes 0xffffe | lo as a plain int32 here; the children are still
+  // walked to EOF, so a chain is caught by the stride rule, not the size rule.
+  const meta = [...bigSizeBox("meta", 0xffffe, 0x20), 0, 0, 0, 0, ...fourByteChain(1000)];
+  const data = new Uint8Array([...HEIC_FTYP, ...meta]);
+  await assert.rejects(parseBytes(data), (error: Error) => {
+    assert.ok(error instanceof MalformedDocumentError);
+    assert.doesNotMatch(error.message, /unrepresentable/);
+    return true;
+  });
+});
+
+test("largesize with high word 0xffffe and ordinary children is accepted", async () => {
+  const meta = [...bigSizeBox("meta", 0xffffe, 0x20), 0, 0, 0, 0, ...isoBox("hdlr", new Array(24).fill(0))];
+  await assert.doesNotReject(parseBytes(new Uint8Array([...HEIC_FTYP, ...meta, ...isoBox("mdat", [1])])));
+});
+
+test("top-level sibling with high word 0xffffe is accepted (overruns, exifr stops)", async () => {
+  const data = new Uint8Array([...HEIC_FTYP, ...bigSizeBox("free", 0xffffe, 0), ...metaBox()]);
+  await parseBytes(data).catch((error: unknown) => {
+    assert.ok(!(error instanceof MalformedDocumentError), String(error));
+  });
+});
+
+test("a decoy meta as the first box does not hide the real meta's sub-box chain", async () => {
+  // exifr scans for `meta` after the first box regardless of its kind.
+  const decoy = isoBox("meta", [0, 0, 0, 0, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0, 0x68, 0x65, 0x69, 0x63]);
+  const data = new Uint8Array([...decoy, ...metaBox(isoBox("free", [0, 0, 0, 0], 4))]);
+  await assert.rejects(parseBytes(data), MalformedDocumentError);
+});
+
+test("HEIC meta sub-box smaller than its header is rejected", async () => {
+  await assert.rejects(parseBytes(heicWithMeta(isoBox("free", [0, 0, 0, 0], 4))), MalformedDocumentError);
+});
+
+test("HEIC meta with a zero-size final sub-box is accepted", async () => {
+  await assert.doesNotReject(parseBytes(heicWithMeta(isoBox("hdlr", [0, 0, 0, 0]), isoBox("free", [], 0))));
+});
+
+test("HEIC meta sub-box that overruns the data does not hang", async () => {
+  const data = heicWithMeta(isoBox("iinf", [0, 0, 0, 0], 0x7fffffff));
+  await parseBytes(data).catch(() => undefined);
+});
+
+test("HEIC with an ordinary meta box (hdlr/pitm/iinf/iloc/iprp) is accepted", async () => {
+  const data = heicWithMeta(
+    isoBox("hdlr", new Array(24).fill(0)),
+    isoBox("pitm", [0, 0, 0, 0, 0, 1]),
+    isoBox("iinf", [0, 0, 0, 0, 0, 0]),
+    isoBox("iloc", [0, 0, 0, 0, 0x44, 0, 0, 0]),
+    isoBox("iprp", [...isoBox("ipco", [...isoBox("ispe", new Array(12).fill(0))])]),
+  );
   await assert.doesNotReject(parseBytes(data));
 });
 
