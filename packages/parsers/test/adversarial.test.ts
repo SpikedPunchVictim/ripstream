@@ -5,6 +5,7 @@ import {
   LimitExceededError,
   MalformedDocumentError,
   Metadata,
+  OutputLimitContentHandler,
   ParseContext,
   RipstreamInputStream,
   type Parser,
@@ -124,11 +125,22 @@ test("html: deeply unclosed tags fail fast with a limit error", { timeout: 30_00
 });
 
 test("csv: an unterminated comma bomb fails fast with a limit error", { timeout: 30_000 }, async () => {
-  // #23: 1,000,001 commas form one unterminated row of empty cells. Must throw
-  // LimitExceededError (-> 422) rather than buffer the whole amplified input to OOM.
-  await timed(() =>
-    assert.rejects(run(new CsvParser(), encoder.encode(",".repeat(1_000_001))), LimitExceededError),
-  );
+  // #23: 1,000,001 commas form one unterminated row of empty cells. Cells now stream to
+  // the handler, so memory is bounded structurally and the output cap (one "\t" charged
+  // per cell) stops the bomb after ~maxOutputChars cells. Run with the cap applied, as
+  // ripstream.ts does in production, rather than with an uncapped handler.
+  const stream = await RipstreamInputStream.from(encoder.encode(",".repeat(1_000_001)));
+  const handler = new OutputLimitContentHandler(new BodyContentHandler(), 100_000);
+  try {
+    await timed(() =>
+      assert.rejects(
+        new CsvParser().parse(stream, handler, new Metadata(), new ParseContext()),
+        LimitExceededError,
+      ),
+    );
+  } finally {
+    await stream.close();
+  }
 });
 
 test("html: large flat documents and stray close tags parse in linear time", { timeout: 30_000 }, async () => {

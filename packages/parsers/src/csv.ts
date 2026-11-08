@@ -11,23 +11,77 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 
-type CsvEvent = { readonly type: "row"; readonly cells: readonly string[] };
+/**
+ * Structural events the scanner streams to the XHTML handler. Rows and cells are
+ * never buffered: each event is emitted as soon as it is known, so `<tr>`/`<td>`
+ * stay balanced while a row is still being scanned.
+ */
+export type CsvEvent =
+  | { readonly kind: "startRow" }
+  | { readonly kind: "startCell" }
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "endCell" }
+  | { readonly kind: "endRow" };
 
-// Resiliency stopgap for #23: a row with no terminator otherwise buffers the whole
-// (body-capped, ~9x-amplified) input in `field`/`row` and never hits the output cap,
-// OOMing the process. Both caps bound that: MAX_CELLS_PER_ROW catches a comma bomb
-// (millions of empty cells), MAX_ROW_CHARS catches one giant unterminated cell. Values
-// are generous vs any legitimate CSV; the proper fix is the streaming-row redesign
-// tracked separately.
-const MAX_ROW_CHARS = 10_000_000;
-const MAX_CELLS_PER_ROW = 1_000_000;
+const START_ROW: CsvEvent = Object.freeze({ kind: "startRow" });
+const START_CELL: CsvEvent = Object.freeze({ kind: "startCell" });
+const END_CELL: CsvEvent = Object.freeze({ kind: "endCell" });
+const END_ROW: CsvEvent = Object.freeze({ kind: "endRow" });
+
+/** A cell's pending text is flushed to the handler once it reaches this many UTF-16 units (pieces never exceed it by more than one code point). */
+export const CSV_CELL_FLUSH_CHARS = 64 * 1024;
+
+/**
+ * Default ceiling on characters in one row. Not a memory bound: memory safety comes
+ * from streaming cells to the handler plus the output cap (maxOutputChars). This is an
+ * optional product limit on pathological rows that a service may raise or lower via
+ * {@link CsvParserOptions}.
+ */
+export const DEFAULT_MAX_CSV_ROW_CHARS = 10_000_000;
+/** Default ceiling on cells in one row; same product-limit rationale as above. */
+export const DEFAULT_MAX_CSV_CELLS_PER_ROW = 1_000_000;
+
+export interface CsvParserOptions {
+  /**
+   * Maximum characters of cell content in a single row (default
+   * {@link DEFAULT_MAX_CSV_ROW_CHARS}). Exceeding it throws LimitExceededError.
+   */
+  readonly maxRowChars?: number;
+  /**
+   * Maximum cells in a single row (default {@link DEFAULT_MAX_CSV_CELLS_PER_ROW}).
+   * Exceeding it throws LimitExceededError.
+   */
+  readonly maxCellsPerRow?: number;
+}
+
+function positiveInteger(name: string, value: number): number {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive integer, got ${value}`);
+  }
+  return value;
+}
 
 /**
  * Port of TextAndCSVParser's CSV side. Streaming state machine with delimiter
- * sniffing, quoted fields, doubled quotes, and CRLF support.
+ * sniffing, quoted fields, doubled quotes, and CRLF support. Cells are streamed to the
+ * handler as they complete (long cells in bounded pieces), so memory stays flat for
+ * newline-free bodies; the output cap bounds how much of such a body is processed.
  */
 export class CsvParser implements Parser {
   readonly name = "CsvParser";
+  readonly #maxRowChars: number;
+  readonly #maxCellsPerRow: number;
+
+  constructor(options: CsvParserOptions = {}) {
+    this.#maxRowChars = positiveInteger(
+      "maxRowChars",
+      options.maxRowChars ?? DEFAULT_MAX_CSV_ROW_CHARS,
+    );
+    this.#maxCellsPerRow = positiveInteger(
+      "maxCellsPerRow",
+      options.maxCellsPerRow ?? DEFAULT_MAX_CSV_CELLS_PER_ROW,
+    );
+  }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set([
@@ -46,27 +100,39 @@ export class CsvParser implements Parser {
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
 
-    const events: CsvEvent[] = [];
-    const scanner = new CsvScanner(events);
+    const scanner = new CsvScanner({
+      maxRowChars: this.#maxRowChars,
+      maxCellsPerRow: this.#maxCellsPerRow,
+    });
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     let tableOpen = false;
 
-    const flush = async (): Promise<void> => {
-      if (events.length === 0) return;
-      if (!tableOpen) {
-        await xhtml.startElement("table");
-        tableOpen = true;
-      }
-      while (events.length > 0) {
-        const event = events.shift()!;
-        await xhtml.startElement("tr");
-        for (const cell of event.cells) {
-          await xhtml.startElement("td");
-          if (cell.length > 0) await xhtml.characters(cell);
-          await xhtml.endElement("td");
+    // XHTMLContentHandler serializes calls and does no nesting validation, so each
+    // event is forwarded (and awaited) the moment the scanner produces it.
+    const drain = async (events: Iterable<CsvEvent>): Promise<void> => {
+      for (const event of events) {
+        switch (event.kind) {
+          case "startRow":
+            if (!tableOpen) {
+              await xhtml.startElement("table");
+              tableOpen = true;
+            }
+            await xhtml.startElement("tr");
+            break;
+          case "startCell":
+            await xhtml.startElement("td");
+            break;
+          case "text":
+            await xhtml.characters(event.text);
+            break;
+          case "endCell":
+            await xhtml.endElement("td");
+            break;
+          case "endRow":
+            await xhtml.endElement("tr");
+            break;
         }
-        await xhtml.endElement("tr");
       }
     };
 
@@ -81,9 +147,9 @@ export class CsvParser implements Parser {
         delimiter = sniffDelimiter(firstLine ?? buffered);
         scanner.setDelimiter(delimiter);
       }
-      scanner.write(buffered);
+      const text = buffered;
       buffered = "";
-      await flush();
+      await drain(scanner.write(text));
     }
 
     buffered += decoder.decode();
@@ -92,111 +158,184 @@ export class CsvParser implements Parser {
         delimiter = sniffDelimiter(findFirstLine(buffered) ?? buffered);
         scanner.setDelimiter(delimiter);
       }
-      scanner.write(buffered);
+      await drain(scanner.write(buffered));
     }
-    scanner.end();
-    await flush();
+    await drain(scanner.end());
     if (tableOpen) await xhtml.endElement("table");
     await xhtml.endDocument();
   }
 }
 
-class CsvScanner {
-  private readonly events: CsvEvent[];
+export interface CsvScannerLimits {
+  readonly maxRowChars: number;
+  readonly maxCellsPerRow: number;
+}
+
+/**
+ * Exported for the differential fuzz test only; not part of the package API.
+ *
+ * Synchronous scanner exposed as lazy generators: `write()`/`end()` must be fully
+ * drained by the caller (which awaits the handler between events). Each input
+ * character produces a bounded number of events, so nothing grows with row length.
+ * Held state is O(1 cell): at most CSV_CELL_FLUSH_CHARS of pending cell text.
+ */
+export class CsvScanner {
+  private readonly limits: CsvScannerLimits;
+  private readonly out: CsvEvent[] = [];
   private delimiter = ",";
+  /** Cell text not yet forwarded (flushed in pieces, so not the whole cell). */
   private field = "";
-  private row: string[] = [];
+  /** True once any content has been appended to the current cell, even if already flushed. */
+  private cellStarted = false;
+  /** Completed cells in the current row. */
+  private cells = 0;
+  private rowOpen = false;
+  private cellOpen = false;
   private inQuotes = false;
   private pendingQuote = false;
   private skipLf = false;
   private rowChars = 0;
 
-  constructor(events: CsvEvent[]) {
-    this.events = events;
+  constructor(limits: CsvScannerLimits) {
+    this.limits = limits;
   }
 
   setDelimiter(delimiter: string): void {
     this.delimiter = delimiter;
   }
 
-  private appendField(char: string): void {
-    this.field += char;
-    if (++this.rowChars > MAX_ROW_CHARS) {
-      throw new LimitExceededError(
-        `CSV row exceeds ${MAX_ROW_CHARS} buffered characters without a row terminator`,
-      );
-    }
-  }
-
-  write(text: string): void {
+  *write(text: string): Generator<CsvEvent> {
+    const out = this.out;
     for (const char of text) {
-      if (this.pendingQuote) {
-        this.pendingQuote = false;
-        if (char === '"') {
-          this.appendField('"');
-          continue;
-        }
-        this.inQuotes = false;
+      this.step(char);
+      if (out.length > 0) {
+        for (let index = 0; index < out.length; index++) yield out[index]!;
+        out.length = 0;
       }
-
-      if (this.inQuotes) {
-        if (char === '"') this.pendingQuote = true;
-        else this.appendField(char);
-        continue;
-      }
-
-      if (char === '"' && this.field.length === 0) {
-        this.inQuotes = true;
-        continue;
-      }
-
-      if (char === this.delimiter) {
-        this.row.push(this.field);
-        this.field = "";
-        this.skipLf = false;
-        if (this.row.length > MAX_CELLS_PER_ROW) {
-          throw new LimitExceededError(
-            `CSV row exceeds ${MAX_CELLS_PER_ROW} cells without a row terminator`,
-          );
-        }
-        continue;
-      }
-
-      if (char === "\r") {
-        this.emitRow();
-        this.skipLf = true;
-        continue;
-      }
-
-      if (char === "\n") {
-        if (this.skipLf) {
-          this.skipLf = false;
-          continue;
-        }
-        this.emitRow();
-        continue;
-      }
-
-      this.skipLf = false;
-      this.appendField(char);
     }
   }
 
-  end(): void {
+  *end(): Generator<CsvEvent> {
     if (this.pendingQuote) {
       this.pendingQuote = false;
       this.inQuotes = false;
     }
-    if (this.field.length > 0 || this.row.length > 0) this.emitRow();
+    if (this.cellStarted || this.cells > 0) this.endRow();
+    const out = this.out;
+    for (let index = 0; index < out.length; index++) yield out[index]!;
+    out.length = 0;
   }
 
-  private emitRow(): void {
-    this.row.push(this.field);
-    this.field = "";
-    if (this.row.length > 1 || this.row[0]?.length !== 0) {
-      this.events.push({ type: "row", cells: this.row });
+  private step(char: string): void {
+    if (this.pendingQuote) {
+      this.pendingQuote = false;
+      if (char === '"') {
+        this.append('"');
+        return;
+      }
+      this.inQuotes = false;
     }
-    this.row = [];
+
+    if (this.inQuotes) {
+      if (char === '"') this.pendingQuote = true;
+      else this.append(char);
+      return;
+    }
+
+    if (char === '"' && !this.cellStarted) {
+      this.inQuotes = true;
+      return;
+    }
+
+    if (char === this.delimiter) {
+      this.endCell();
+      this.skipLf = false;
+      return;
+    }
+
+    if (char === "\r") {
+      this.endRow();
+      this.skipLf = true;
+      return;
+    }
+
+    if (char === "\n") {
+      if (this.skipLf) {
+        this.skipLf = false;
+        return;
+      }
+      this.endRow();
+      return;
+    }
+
+    this.skipLf = false;
+    this.append(char);
+  }
+
+  private append(char: string): void {
+    // `char` is a whole code point (callers iterate by code point), so a flush never
+    // splits a surrogate pair.
+    this.field += char;
+    this.cellStarted = true;
+    if (++this.rowChars > this.limits.maxRowChars) {
+      throw new LimitExceededError(
+        `CSV row exceeds ${this.limits.maxRowChars} characters without a row terminator ` +
+          "(raise CsvParserOptions.maxRowChars to allow longer rows)",
+      );
+    }
+    if (this.field.length >= CSV_CELL_FLUSH_CHARS) this.flushText();
+  }
+
+  /** Opens the row and cell lazily: a row is only opened once it is known to be non-blank. */
+  private openCell(): void {
+    if (!this.rowOpen) {
+      this.rowOpen = true;
+      this.out.push(START_ROW);
+    }
+    if (!this.cellOpen) {
+      this.cellOpen = true;
+      this.out.push(START_CELL);
+    }
+  }
+
+  private flushText(): void {
+    if (this.field.length === 0) return;
+    this.openCell();
+    this.out.push({ kind: "text", text: this.field });
+    this.field = "";
+  }
+
+  private closeCell(): void {
+    this.openCell();
+    this.flushText();
+    this.out.push(END_CELL);
+    this.cellOpen = false;
+    this.cellStarted = false;
+    this.cells++;
+  }
+
+  private endCell(): void {
+    // A delimiter means this row has at least two cells, so it is never blank.
+    this.closeCell();
+    if (this.cells > this.limits.maxCellsPerRow) {
+      throw new LimitExceededError(
+        `CSV row exceeds ${this.limits.maxCellsPerRow} cells without a row terminator ` +
+          "(raise CsvParserOptions.maxCellsPerRow to allow wider rows)",
+      );
+    }
+  }
+
+  private endRow(): void {
+    // A row is blank only when it is a single empty cell: emit nothing for it.
+    if (this.cells > 0 || this.cellStarted) {
+      this.closeCell();
+      this.out.push(END_ROW);
+    }
+    this.field = "";
+    this.cellStarted = false;
+    this.cells = 0;
+    this.rowOpen = false;
+    this.cellOpen = false;
     this.rowChars = 0;
     this.skipLf = false;
   }

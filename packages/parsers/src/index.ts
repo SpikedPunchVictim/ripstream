@@ -8,7 +8,7 @@ import { DefaultDetector } from "@spikedpunch/ripstream-mime";
 import { TextParser } from "./text.ts";
 import { HtmlDocumentParser } from "./html.ts";
 import { XmlParser } from "./xml.ts";
-import { CsvParser } from "./csv.ts";
+import { CsvParser, type CsvParserOptions } from "./csv.ts";
 import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, GzipParser, Iso9660Parser, Lz4Parser, PlistParser, SnappyParser, TarParser, UnixCompressParser, XzParser, ZipParser } from "@spikedpunch/ripstream-parser-archive";
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
 import { AsfParser, AudioParser, AviParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
@@ -39,7 +39,12 @@ import { RtfParser } from "./rtf.ts";
 export { TextParser } from "./text.ts";
 export { HtmlDocumentParser, DEFAULT_MAX_HTML_DEPTH, type HtmlParserOptions } from "./html.ts";
 export { XmlParser } from "./xml.ts";
-export { CsvParser } from "./csv.ts";
+export {
+  CsvParser,
+  DEFAULT_MAX_CSV_CELLS_PER_ROW,
+  DEFAULT_MAX_CSV_ROW_CHARS,
+  type CsvParserOptions,
+} from "./csv.ts";
 export { FeedParser } from "./feed.ts";
 export { MarkdownParser } from "./markdown.ts";
 export { TmxParser, WarcParser, XliffParser } from "./web.ts";
@@ -64,6 +69,8 @@ export { RtfParser } from "./rtf.ts";
 
 export interface DefaultParserOptions {
   readonly parsers?: readonly Parser[];
+  /** Product limits for the default CsvParser (ignored when `parsers` is supplied). */
+  readonly csv?: CsvParserOptions;
   readonly pdfPassword?: string | import("@spikedpunch/ripstream-core").PasswordProvider;
 }
 
@@ -71,7 +78,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Parser 
   return new CompositeParser({
     parsers: options.parsers ?? [
       new TextParser(),
-      new CsvParser(),
+      new CsvParser(options.csv),
       new HtmlDocumentParser(),
       new XmlParser(),
       new ZipParser(),
