@@ -1,0 +1,69 @@
+{
+  "_doc": "Expected-outcome table. Keys are fixture row ids ('#n' repeat suffix is stripped). Outcome strings: signal:SIGX | code:N | spawn:ERRNO | rc:N (rc of a command run inside a shell). allow = outcome must be in this set; forbid = must not be; stderrAny = at least one substring in the (8KiB) stderr ring; ready = true/false requires the fd-3 'ready' frame to have been seen before death / not seen; killedBy = parent-side kill reason (timer|rss|frame-cap|grace|null=unsolicited). variants[<libc>-<arch>] shallow-overrides the entry; a variant (or the platform) flagged unobserved:true was never run there. limits = numeric bounds read by the fixture. emulatedSoft = FAIL downgrades to WARN when CHAOS_EMULATED=1. Platforms observed: glibc-arm64, musl-arm64 (native); glibc-amd64 (Rosetta-emulated, non-authoritative). musl-amd64: NEVER observed.",
+
+  "a-sync-hang": { "allow": ["signal:SIGKILL"], "forbid": ["code:0"], "ready": true, "killedBy": "timer" },
+
+  "b-heap-oom": { "allow": ["signal:SIGABRT"], "stderrAny": ["JavaScript heap out of memory"], "ready": true, "killedBy": null, "limits": { "maxWallMs": 10000 } },
+
+  "c-string-length": { "allow": ["code:1"], "forbid": ["signal:SIGABRT"], "stderrAny": ["Invalid string length"], "ready": true, "killedBy": null },
+
+  "d-page-touch": {
+    "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "rss", "emulatedSoft": true,
+    "limits": { "pollMs": 20, "designPollMs": 20, "reps": 10, "designStepMb": 350, "maxStepMb": 1024 }
+  },
+
+  "e-pressure-worker": {
+    "allow": ["signal:SIGTRAP", "signal:SIGABRT", "signal:SIGSEGV"],
+    "forbid": ["code:0", "code:126", "code:127"],
+    "stderrAny": ["Failed to reserve virtual memory", "out of memory"],
+    "ready": true,
+    "killedBy": null
+  },
+  "e-startup-control": {
+    "allow": ["code:127", "signal:SIGTRAP", "signal:SIGSEGV", "signal:SIGABRT"],
+    "ready": false
+  },
+
+  "f-sqljs-coarse": { "allow": ["code:0"], "ready": true },
+  "f-sqlite-coarse": { "allow": ["code:0"], "ready": true },
+  "f-sqlite-sweep": {},
+
+  "g-cgroup-oom-noadj": { "allow": ["signal:SIGKILL"] },
+  "g-cgroup-oom-adj": { "allow": ["code:0"] },
+
+  "h-orphan-hung": { "limits": { "death": "soft", "maxGoneMs": 60000 }, "emulatedSoft": true, "note": "default disposition: dies at the SOFT limit (3s CPU, last CPU time seen ~3s), before the hard limit (5s). Decided from CPU time, not wall clock; maxGoneMs only guards against never dying" },
+  "h-orphan-hung-hard": { "limits": { "death": "hard", "maxGoneMs": 60000 }, "emulatedSoft": true, "note": "ignores SIGXCPU: survives the soft limit (2s CPU), killed at the HARD limit (4s CPU, last CPU time seen ~4s)" },
+
+  "i-giant-frame-naive": { "allow": ["code:0"], "ready": true, "limits": { "minAmplification": 2 } },
+  "i-giant-frame-capped": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "frame-cap" },
+
+  "j-done-linger-group": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "grace" },
+  "j-leader-only-control": { "allow": ["signal:SIGKILL"], "ready": true },
+
+  "k-no-shell": { "allow": ["spawn:ENOENT"], "ready": false },
+  "k-no-node": { "allow": ["code:127"], "stderrAny": ["not found"], "ready": false },
+  "k-ulimit-fails": { "allow": ["code:126"], "ready": false },
+  "k-midrun-crash": { "allow": ["signal:SIGABRT"], "ready": true },
+
+  "l-soft-hard-split": { "allow": ["rc:152"] },
+  "l-hard-only": { "allow": ["rc:137"] },
+  "l-io-sleep": { "allow": ["rc:0"] },
+  "l-ulimit-bogus-arg": { "allow": ["rc:2"], "forbid": ["rc:0"], "variants": { "musl-arm64": { "allow": ["rc:1"] }, "musl-amd64": { "allow": ["rc:1"], "unobserved": true } } },
+  "l-ulimit-hard-below-soft": { "allow": ["rc:2"], "forbid": ["rc:0"], "variants": { "musl-arm64": { "allow": ["rc:1"] }, "musl-amd64": { "allow": ["rc:1"], "unobserved": true } } },
+  "l-ulimit-step-exits-126": { "allow": ["code:126"] },
+  "l-reference-xcpu": { "allow": ["signal:SIGXCPU"], "forbid": ["signal:SIGKILL"] },
+
+  "n-close-vs-exit-grace": { "allow": ["code:0"], "ready": true, "killedBy": "grace" },
+  "n-close-vs-exit-control": { "allow": ["code:0"], "ready": true, "killedBy": "timer" },
+
+  "w1-fail-closed-cpu": { "allow": ["code:126"], "ready": false },
+  "w2-fail-closed-vmem": { "allow": ["code:126"], "ready": false },
+  "w5-fail-closed-cpu-unlimited": { "allow": ["code:126"], "ready": false },
+  "w6-fail-closed-vmem-unlimited": { "allow": ["code:126"], "ready": false },
+  "w7-fail-closed-ulimit-refused": { "allow": ["code:126"], "ready": false },
+  "w8-fail-closed-vmem-20-digits": { "allow": ["code:126"], "ready": false },
+  "w3-limits-visible": { "allow": ["code:0"], "ready": true },
+  "w4-hard-backstop": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": null, "limits": { "minWallMs": 2500 } },
+
+  "m-issue-cmap12": { "skip": "TODO tikajs-zgg2.8 (P6): needs pdf fixture" }
+}
