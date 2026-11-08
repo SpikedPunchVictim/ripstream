@@ -65,15 +65,22 @@ export class TextParser implements Parser {
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
 
-    // Emit lines as they are decoded so memory stays O(chunk + longest line)
-    // and the handler's output limit can stop the read early.
-    const emitLine = async (line: string): Promise<void> => {
-      await xhtml.startElement("p");
-      if (line.length > 0) await xhtml.characters(line);
-      await xhtml.endElement("p");
-    };
-    let pending = "";
+    // Emit each decoded segment immediately inside the open <p> so memory stays
+    // O(chunk) even for a newline-free body and the handler's output limit can
+    // fire mid-line. Several characters() calls within one <p> are legal SAX.
+    let inParagraph = false;
     let heldCarriageReturn = false;
+    const emitSegment = async (segment: string): Promise<void> => {
+      if (!inParagraph) {
+        await xhtml.startElement("p");
+        inParagraph = true;
+      }
+      if (segment.length > 0) await xhtml.characters(segment);
+    };
+    const endLine = async (): Promise<void> => {
+      await xhtml.endElement("p");
+      inParagraph = false;
+    };
     const feed = async (decoded: string, final: boolean): Promise<void> => {
       let text = heldCarriageReturn ? `\r${decoded}` : decoded;
       heldCarriageReturn = false;
@@ -82,15 +89,14 @@ export class TextParser implements Parser {
         heldCarriageReturn = true;
         text = text.slice(0, -1);
       }
-      if (/[\r\n]/.test(text)) {
-        const lines = text.split(/\r\n|\r|\n/);
-        lines[0] = pending + lines[0]!;
-        pending = lines.pop()!;
-        for (const line of lines) await emitLine(line);
-      } else {
-        pending += text;
+      let position = 0;
+      for (const match of text.matchAll(/\r\n|\r|\n/g)) {
+        await emitSegment(text.slice(position, match.index));
+        await endLine();
+        position = match.index + match[0].length;
       }
-      if (final) await emitLine(pending);
+      await emitSegment(text.slice(position));
+      if (final) await endLine();
     };
     for await (const chunk of stream) {
       await feed(decoder.decode(chunk, { stream: true }), false);

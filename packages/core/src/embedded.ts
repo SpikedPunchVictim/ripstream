@@ -138,14 +138,16 @@ export class ParsingEmbeddedDocumentExtractor
     child.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
-    const text = new BodyContentHandler();
+    // Forward each chunk as it is produced so the enclosing handler's output
+    // cap fires mid-child instead of after the whole child text is buffered.
+    const text = new BodyContentHandler(async (chunk) => {
+      if (chunk.length > 0) await handler.characters?.(chunk, 0, chunk.length);
+    });
     try {
       await parser.parse(source, text, metadata, child);
     } finally {
       if (source !== stream) await source.close();
     }
-    const value = text.toString();
-    if (value.length > 0) await handler.characters?.(value, 0, value.length);
   }
 }
 
