@@ -168,6 +168,28 @@ test("CompositeParser rewinds the stream when a parser declines", async () => {
   assert.equal(seen, "abc");
 });
 
+test("CompositeParser throws UnsupportedFormatError when every candidate declines", async () => {
+  const declining: Parser = {
+    name: "decline",
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse() {
+      throw new ParserDeclinedError("no");
+    },
+  };
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.CONTENT_TYPE, MediaType.TEXT_PLAIN);
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode("abc"));
+  await assert.rejects(
+    new CompositeParser({ parsers: [declining] }).parse(
+      stream,
+      new BodyContentHandler(),
+      new Metadata(),
+      context,
+    ),
+    UnsupportedFormatError,
+  );
+});
+
 test("MimeFilteringDecorator filters async delegates", async () => {
   const delegate: Parser = {
     name: "Async",

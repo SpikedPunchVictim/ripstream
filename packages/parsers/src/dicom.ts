@@ -85,6 +85,7 @@ function readTags(data: Uint8Array): Record<string, string> {
     let length: number;
     let valueOffset: number;
     if (LONG_VR.has(vrChars)) {
+      if (offset + 12 > data.length) break;
       length = view.getUint32(offset + 8, true);
       valueOffset = offset + 12;
     } else {

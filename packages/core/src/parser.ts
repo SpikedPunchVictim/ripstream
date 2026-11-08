@@ -149,6 +149,11 @@ export class CompositeParser implements Parser {
         );
       }
     }
+    // Every candidate declined: nothing parsed the document. Resolving here would
+    // be a silent empty success, so report it as an unsupported format instead.
+    throw new UnsupportedFormatError(
+      `No parser accepted ${type.toString()}: all candidates declined`,
+    );
   }
 }
 

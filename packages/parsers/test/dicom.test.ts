@@ -102,3 +102,15 @@ test("an unterminated undefined-length sequence stops the walk without throwing"
   );
   assert.equal(metadata.get("dicom:Modality"), "MR");
 });
+
+test("a file truncated inside a long-VR header stops the walk without throwing", async () => {
+  // OB is a long VR: 2-byte VR, 2 reserved bytes, then a 4-byte length. Cut the
+  // file after the reserved bytes so the length field is missing entirely.
+  const metadata = await parseDicom(
+    withBody([
+      ...element(0x0008, 0x0060, "CS", "MR"),
+      ...u16(0x0008), ...u16(0x1111), ...[0x4f, 0x42, 0, 0],
+    ]),
+  );
+  assert.equal(metadata.get("dicom:Modality"), "MR");
+});

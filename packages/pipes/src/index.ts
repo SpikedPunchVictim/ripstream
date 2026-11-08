@@ -47,6 +47,11 @@ export interface PipesEngineOptions {
   readonly concurrency?: number;
   readonly maxQueue?: number;
   readonly ordered?: boolean;
+  /**
+   * Ordered mode only: maximum inputs in flight ahead of delivery (parsing or
+   * parsed-but-undelivered). Defaults to `concurrency * 4`.
+   */
+  readonly maxBuffered?: number;
   readonly limits?: Partial<ParseLimits>;
 }
 
@@ -78,6 +83,10 @@ export class PipesEngine {
     const concurrency = Math.max(1, this.#options.concurrency ?? 4);
     const maxQueue = Math.max(1, this.#options.maxQueue ?? 64);
     const ordered = this.#options.ordered ?? false;
+    // Ordered delivery of CONCATENATE is inherent (indexed buffer, one final emit).
+    const useSlots = ordered && mode !== "CONCATENATE";
+    const windowSize = Math.max(1, this.#options.maxBuffered ?? concurrency * 4);
+    const emitter = this.#options.emitter;
     const ripstream = createRipstream();
     const limits = this.#options.limits;
     const queue: Array<{ document: PipeDocument; index: number }> = [];
@@ -86,6 +95,17 @@ export class PipesEngine {
     let filling: Promise<void> | null = null;
     let emitted = 0;
     const concatenated: string[] = [];
+
+    const controller = new AbortController();
+    const signal = controller.signal;
+
+    // Ordered delivery: one slot per input, pushed in fetch order at dequeue time.
+    // Workers fill their slot (parse in parallel); a single drainer emits the head
+    // slot's documents, then pops it, so emit is serialized and strictly ordered.
+    const slots: Slot[] = [];
+    const wake = createNotifier(); // slot filled/pushed, producers done, or abort
+    const windowGate = createNotifier(); // a slot was popped, or abort
+    let producersDone = false;
 
     const fill = async (): Promise<void> => {
       while (!fetchedDone && queue.length < maxQueue) {
@@ -98,116 +118,132 @@ export class PipesEngine {
       }
     };
 
-    const next = async (): Promise<{ document: PipeDocument; index: number } | null> => {
-      if (queue.length > 0) return queue.shift()!;
-      if (fetchedDone) return null;
-      filling ??= fill().finally(() => {
-        filling = null;
+    const next = async (): Promise<WorkItem | null> => {
+      // No await between the final window/queue checks and the shift+push below,
+      // so the slot window cannot be overshot by racing workers.
+      for (;;) {
+        if (signal.aborted) return null;
+        if (useSlots && slots.length >= windowSize) {
+          await windowGate.wait();
+          continue;
+        }
+        if (queue.length > 0) break;
+        if (fetchedDone) return null;
+        await (filling ??= fill().finally(() => {
+          filling = null;
+        }));
+      }
+      const entry = queue.shift()!;
+      if (!useSlots) return { ...entry, slot: null };
+      const slot: Slot = { index: entry.index, docs: null };
+      slots.push(slot);
+      wake.notify();
+      return { ...entry, slot };
+    };
+
+    // Turns one input into the documents to emit (zero for an empty UNPACK).
+    const produce = async (document: PipeDocument): Promise<EmittedDocument[]> => {
+      if (mode === "NO_PARSE") return [{ id: document.id, bytes: document.data }];
+      if (mode === "RMETA" || mode === "UNPACK") {
+        const records = await ripstream.parseRecursive(document.data, {
+          filename: document.id,
+          signal,
+          ...(limits === undefined ? {} : { limits }),
+        });
+        if (mode === "UNPACK") {
+          return records.map((record) => ({
+            id: `${document.id}${record.embeddedResourcePath}`,
+            text: record.content,
+            records: [record],
+          }));
+        }
+        return [{ id: document.id, text: serializeRmeta(records), records }];
+      }
+      const result = await ripstream.parse(document.data, {
+        filename: document.id,
+        signal,
+        ...(limits === undefined ? {} : { limits }),
       });
-      await filling;
-      return queue.shift() ?? null;
+      return [{ id: document.id, text: result.text, metadata: metadataObject(result.metadata) }];
     };
-
-    let nextIndex = 0;
-    const buffered = new Map<number, EmittedDocument>();
-    const deliver = async (
-      index: number,
-      document: EmittedDocument,
-    ): Promise<void> => {
-      if (!ordered) {
-        await this.#options.emitter.emit(document);
-        return;
-      }
-      buffered.set(index, document);
-      while (buffered.has(nextIndex)) {
-        await this.#options.emitter.emit(buffered.get(nextIndex)!);
-        buffered.delete(nextIndex);
-        nextIndex++;
-      }
-    };
-
-    const controller = new AbortController();
-    const signal = controller.signal;
 
     const worker = async (): Promise<void> => {
       for (;;) {
         if (signal.aborted) return;
         const item = await next();
         if (item === null) return;
-        const document = item.document;
-        const index = item.index;
-        if (mode === "NO_PARSE") {
-          await deliver(index, { id: document.id, bytes: document.data });
-        } else if (mode === "RMETA" || mode === "UNPACK") {
-          const records = await ripstream.parseRecursive(document.data, {
-            filename: document.id,
-            signal,
-            ...(limits === undefined ? {} : { limits }),
-          });
-          if (mode === "UNPACK") {
-            for (const record of records) {
-              await deliver(index, {
-                id: `${document.id}${record.embeddedResourcePath}`,
-                text: record.content,
-                records: [record],
-              });
-            }
-          } else {
-            await deliver(index, {
-              id: document.id,
-              text: serializeRmeta(records),
-              records,
-            });
-          }
+        const docs = await produce(item.document);
+        if (item.slot !== null) {
+          item.slot.docs = docs;
+          wake.notify();
+        } else if (mode === "CONCATENATE") {
+          concatenated[item.index] = docs[0]?.text ?? "";
+          emitted++;
         } else {
-          const result = await ripstream.parse(document.data, {
-            filename: document.id,
-            signal,
-            ...(limits === undefined ? {} : { limits }),
-          });
-          const metadata = metadataObject(result.metadata);
-          if (mode === "CONCATENATE") concatenated[index] = result.text;
-          else {
-            await deliver(index, {
-              id: document.id,
-              text: result.text,
-              metadata,
-            });
-          }
+          for (const doc of docs) await emitter.emit(doc);
+          emitted++;
         }
+      }
+    };
+
+    const drain = async (): Promise<void> => {
+      for (;;) {
+        if (signal.aborted) return;
+        const head = slots[0];
+        if (head?.docs == null) {
+          // Nothing to emit yet: wait for a fill/push, unless no producer is left.
+          if (producersDone) return;
+          await wake.wait();
+          continue;
+        }
+        for (const doc of head.docs) {
+          if (signal.aborted) return;
+          await emitter.emit(doc);
+        }
+        if (slots.shift() !== head) throw new Error("ordered buffer corrupted");
         emitted++;
+        windowGate.notify();
       }
     };
 
     // On the first failure, abort so siblings stop pulling new work and
-    // in-flight parses cancel; wait for every worker to settle, then close the
-    // emitter (always) and rethrow the original error.
+    // in-flight parses cancel; wait for every worker and the drainer to settle,
+    // then close the emitter (always) and rethrow the original error.
     let failure: { readonly error: unknown } | null = null;
-    const guarded = async (): Promise<void> => {
+    const guarded = async (task: () => Promise<void>): Promise<void> => {
       try {
-        await worker();
+        await task();
       } catch (error) {
         // Keep the chronologically first error; later ones are usually abort echoes.
         failure ??= { error };
         controller.abort(error);
+        wake.notify();
+        windowGate.notify();
       }
     };
 
     try {
-      await Promise.all(Array.from({ length: concurrency }, () => guarded()));
+      const workers = Promise.all(
+        Array.from({ length: concurrency }, () => guarded(worker)),
+      ).finally(() => {
+        producersDone = true;
+        wake.notify();
+      });
+      await Promise.all([workers, ...(useSlots ? [guarded(drain)] : [])]);
       if (failure !== null) {
         failed++;
         throw (failure as { readonly error: unknown }).error;
       }
+      if (slots.length !== 0) throw new Error("ordered buffer not drained");
       if (mode === "CONCATENATE") {
-        await this.#options.emitter.emit({
+        await emitter.emit({
           id: "concatenated",
           text: concatenated.filter((value) => value !== undefined).join(""),
         });
       }
     } finally {
       try {
-        await this.#options.emitter.close?.();
+        await emitter.close?.();
       } finally {
         this.#stats = {
           fetched,
@@ -219,6 +255,39 @@ export class PipesEngine {
     }
     return emitted;
   }
+}
+
+/** One input's place in the ordered-delivery FIFO; `docs` is null until parsed. */
+interface Slot {
+  readonly index: number;
+  docs: EmittedDocument[] | null;
+}
+
+interface WorkItem {
+  readonly document: PipeDocument;
+  readonly index: number;
+  readonly slot: Slot | null;
+}
+
+interface Notifier {
+  wait(): Promise<void>;
+  notify(): void;
+}
+
+/** Broadcast wake-up: notify() resolves every promise handed out by wait() so far. */
+function createNotifier(): Notifier {
+  let resolvers: Array<() => void> = [];
+  return {
+    wait: () =>
+      new Promise<void>((resolve) => {
+        resolvers.push(resolve);
+      }),
+    notify: () => {
+      const pending = resolvers;
+      resolvers = [];
+      for (const resolve of pending) resolve();
+    },
+  };
 }
 
 export interface FileSystemFetcherOptions {

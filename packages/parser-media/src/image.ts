@@ -1,5 +1,7 @@
 import {
+  MalformedDocumentError,
   MediaType,
+  RipstreamError,
   type ContentHandler,
   type Metadata,
   type ParseContext,
@@ -67,6 +69,10 @@ export class ImageParser implements Parser {
       offset += chunk.byteLength;
     }
 
+    // exifr's HEIF box walker can spin forever on a mid-file size-0 box, so
+    // reject malformed top-level box structure before it ever sees the bytes.
+    validateIsoBmffTopLevel(data);
+
     let exif: Record<string, unknown> | null = null;
     try {
       exif = (await exifr.parse(data, {
@@ -74,10 +80,15 @@ export class ImageParser implements Parser {
         exif: true,
         gps: true,
         iptc: true,
-        xmp: true,
+        // exifr's XMP extraction runs a quadratic synchronous regex that can
+        // freeze the event loop on large or crafted payloads.
+        xmp: false,
         icc: false,
       })) as Record<string, unknown> | null;
-    } catch {
+    } catch (error) {
+      // Only swallow genuine library/parse failures; aborts and ripstream
+      // errors (timeouts, limits) must reach the caller.
+      if (isAbortError(error) || error instanceof RipstreamError) throw error;
       exif = null;
     }
 
@@ -93,6 +104,81 @@ export class ImageParser implements Parser {
 
     const comments = jpegComments(data);
     for (const comment of comments) metadata.add("comments", comment);
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
+const HEIF_BRANDS = new Set([
+  "heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs",
+  "mif1", "msf1", "avif", "avis",
+]);
+
+/**
+ * Mirrors exifr@7.1.3 `HeifFileParser.canHandle`, which does NOT require the
+ * "ftyp" literal: first two bytes zero, a 16-bit length at offset 2 of at most
+ * 50, and a known brand among the 4-byte slots from offset 16 up to that length.
+ */
+function exifrRoutesToHeif(data: Uint8Array): boolean {
+  if (data.length < 12 || data[0] !== 0 || data[1] !== 0) return false;
+  const ftypLength = (data[2]! << 8) | data[3]!;
+  if (ftypLength > 50) return false;
+  for (let offset = 16; offset < ftypLength && offset + 4 <= data.length; offset += 4) {
+    const brand = String.fromCharCode(...data.subarray(offset, offset + 4));
+    if (HEIF_BRANDS.has(brand)) return true;
+  }
+  return false;
+}
+
+/**
+ * Walks the top-level ISO-BMFF boxes (no recursion) before exifr sees them.
+ * exifr's HEIF parser scans top-level boxes for `meta` with
+ * `offset += box.length`, so a size-0 box ahead of `meta` makes it loop
+ * forever (and, being async, starve timers). A size of 0 means "to EOF" and is
+ * only meaningful for a final box after `meta`; a size below the header size
+ * can never advance. A box that overruns the data just ends the walk (a
+ * truncated file); exifr fails on that with a bounded range error.
+ */
+function validateIsoBmffTopLevel(data: Uint8Array): void {
+  if (!exifrRoutesToHeif(data)) return;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let offset = 0;
+  let sawMeta = false;
+  while (offset + 8 <= data.length) {
+    let size = view.getUint32(offset);
+    let header = 8;
+    if (size === 1) {
+      if (offset + 16 > data.length) return;
+      // A high word means a box larger than any buffer we can hold.
+      if (view.getUint32(offset + 8) !== 0) return;
+      size = view.getUint32(offset + 12);
+      header = 16;
+    }
+    if (size === 0) {
+      if (sawMeta) return; // trailing box running to EOF
+      throw new MalformedDocumentError(
+        `ISO-BMFF zero-size box at offset ${offset} before any meta box`,
+      );
+    }
+    if (size < header) {
+      throw new MalformedDocumentError(`ISO-BMFF box at offset ${offset} has invalid size ${size}`);
+    }
+    if (offset + size > data.length) return;
+    if (
+      data[offset + 4] === 0x6d &&
+      data[offset + 5] === 0x65 &&
+      data[offset + 6] === 0x74 &&
+      data[offset + 7] === 0x61
+    ) {
+      sawMeta = true;
+    }
+    offset += size;
   }
 }
 

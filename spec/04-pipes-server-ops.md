@@ -79,7 +79,7 @@ PipesIterator ──► bounded work queue ──► worker pool ──► Emitt
 - Node: `child_process` workers for crash isolation and memory caps; `worker_threads` optional for lighter startup. A worker is recycled every `maxFilesProcessedPerProcess` documents or after `OOM`/fatal error.
 - Per-document: fetch timeout, parse timeout, emit timeout. Cancellation propagates to fetcher, parser, emitter via `AbortSignal`.
 - Emit batching: `maxForEmitBatchBytes` and `maxForEmitBatchDocuments`; flush on shutdown and on failure.
-- Ordering: unordered by default (upstream parallel behavior); `ordered: true` buffers emission in iterator order with a bounded window.
+- Ordering: unordered by default (upstream parallel behavior); `ordered: true` serializes emission in iterator order via a single drainer over a per-input slot FIFO, bounded by a window (`maxBuffered`, default `concurrency * 4`). Each input's records (incl. UNPACK fan-out, and zero-record inputs) occupy one slot emitted exactly once; a slow head applies backpressure to fetching rather than growing memory.
 - Retry: per-stage retry policy (`attempts`, `backoff`, `retryOn`) for transient fetch/emit failures; parse failures are never retried by default.
 - Idempotency: optional checkpoint file of completed tuple IDs; safe to point emitters at keyed sinks.
 - Graceful shutdown: stop iterator, drain queue up to `shutdownGraceMillis`, flush emitters, report summary.
