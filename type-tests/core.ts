@@ -1,5 +1,8 @@
 import type {
   ContentHandler,
+  IsolatedParseRecord,
+  IsolatedParseRequest,
+  IsolatedParseResult,
   MediaType,
   Metadata,
   ParseContext,
@@ -49,3 +52,20 @@ void handler;
 void parser;
 void ripstream;
 void (null as unknown as ParseContext);
+
+// IsolatedParseResult narrows on `kind` (unchecked until the central type-test gate runs).
+declare const isolated: IsolatedParseResult;
+if (isolated.kind === "text") {
+  const isolatedText: string = isolated.text;
+  const isolatedMeta: Record<string, readonly string[]> = isolated.metadata;
+  // @ts-expect-error records only exist on the "records" arm
+  isolated.records;
+} else {
+  const isolatedRecords: readonly IsolatedParseRecord[] = isolated.records;
+  // @ts-expect-error text only exists on the "text" arm
+  isolated.text;
+}
+type _IsolatedKind = Expect<Equal<IsolatedParseResult["kind"], "text" | "records">>;
+type _IsolatedOutput = Expect<
+  Equal<IsolatedParseRequest["output"], "text" | "records" | undefined>
+>;

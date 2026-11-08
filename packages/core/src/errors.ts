@@ -12,7 +12,8 @@ export type RipstreamErrorCode =
   | "EMPTY_DOCUMENT"
   | "ABORTED"
   | "UNSUPPORTED_RUNTIME"
-  | "TRANSLATION_FAILED";
+  | "TRANSLATION_FAILED"
+  | "ISOLATION_FAILED";
 
 export class RipstreamError extends Error {
   readonly code: RipstreamErrorCode;
@@ -122,9 +123,41 @@ export class UnsupportedRuntimeError extends RipstreamError {
 }
 
 /**
+ * Why a parse could not run (or finish) inside an isolation child:
+ * - queue_full: the isolator's bounded queue/memory pool rejected the task;
+ *   transient, so callers may retry later.
+ * - unavailable: isolation cannot be provided (no usable child runtime).
+ * - crash: the child died or misbehaved in a way no other error explains.
+ */
+export type IsolationFailureReason = "queue_full" | "unavailable" | "crash";
+
+/**
+ * Infrastructure failure of the parse-isolation layer. Document-caused
+ * failures (timeout, memory/size limits, malformed input) are reported with
+ * their own error types, never with this one.
+ */
+export class IsolationError extends RipstreamError {
+  readonly reason: IsolationFailureReason;
+
+  constructor(
+    reason: IsolationFailureReason,
+    message: string,
+    options: { cause?: unknown } = {},
+  ) {
+    super("ISOLATION_FAILED", message, {
+      ...options,
+      recoverable: reason === "queue_full",
+    });
+    this.reason = reason;
+  }
+}
+
+/**
  * Server status mapping. Unsupported formats use 415 (upstream's media-type
  * contract); malformed, encrypted, and over-limit documents use 422; a
- * write-limit hit still produced content, so it maps to 200.
+ * write-limit hit still produced content, so it maps to 200. Isolation
+ * failures map to 503 when the service could not take the work (queue_full,
+ * unavailable) and 500 when a child crashed unexplained.
  */
 export function httpStatusForError(error: unknown): number {
   if (!(error instanceof RipstreamError)) return 500;
@@ -146,6 +179,16 @@ export function httpStatusForError(error: unknown): number {
       // Upstream translation dependency failed; this is a gateway fault, not a
       // fault in the request document, so it is neither 422 nor a bare 500.
       return 502;
+    case "ISOLATION_FAILED":
+      if (!(error instanceof IsolationError)) return 500;
+      switch (error.reason) {
+        case "queue_full":
+        case "unavailable":
+          return 503;
+        case "crash":
+        default:
+          return 500;
+      }
     case "MISSING_DEPENDENCY":
     case "RANDOM_ACCESS_UNAVAILABLE":
     case "PARSER_DECLINED":

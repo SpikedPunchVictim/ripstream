@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { IsolationError } from "@spikedpunch/ripstream-core";
 import { main, type CliIO } from "../src/main.ts";
 
 function io(input = ""): CliIO & { out: string[]; err: string[] } {
@@ -135,4 +136,17 @@ test("serve command starts an HTTP server", async () => {
       new Promise((resolve) => setTimeout(resolve, 5_000)),
     ]);
   }
+});
+
+test("maps isolation errors to environment or internal exit codes", async () => {
+  const failing = (error: Error): CliIO => ({
+    stdout: () => undefined,
+    stderr: () => undefined,
+    readStdin: async () => {
+      throw error;
+    },
+  });
+  assert.equal(await main(["-"], failing(new IsolationError("queue_full", "full"))), 4);
+  assert.equal(await main(["-"], failing(new IsolationError("unavailable", "none"))), 4);
+  assert.equal(await main(["-"], failing(new IsolationError("crash", "died"))), 1);
 });

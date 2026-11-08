@@ -1,3 +1,5 @@
+import type { IsolationConfig } from "./isolation.ts";
+
 export interface ComponentConfig {
   readonly class: string;
   readonly [key: string]: unknown;
@@ -10,6 +12,7 @@ export interface RipstreamConfigShape {
   readonly contentHandlers?: readonly ComponentConfig[];
   readonly metadataFilters?: readonly ComponentConfig[];
   readonly encodingDetector?: ComponentConfig;
+  readonly isolation?: IsolationConfig;
 }
 
 const ALLOWED_ROOT_KEYS = new Set([
@@ -19,7 +22,30 @@ const ALLOWED_ROOT_KEYS = new Set([
   "contentHandlers",
   "metadataFilters",
   "encodingDetector",
+  "isolation",
 ]);
+
+const ISOLATION_MODES: readonly string[] = ["strict", "lenient", "off"];
+const ISOLATION_KEYS = new Set([
+  "mode",
+  "requireStrictContainment",
+  "memoryPoolMb",
+  "perChildMb",
+  "maxInputBytes",
+  "maxTaskMillis",
+  "heapMb",
+  "maxQueue",
+]);
+/** Inclusive bounds. 2_147_483_647 is the largest setTimeout delay. */
+const ISOLATION_NUMBER_BOUNDS = {
+  memoryPoolMb: [1, 1_048_576],
+  perChildMb: [1, 1_048_576],
+  maxInputBytes: [1, Number.MAX_SAFE_INTEGER],
+  maxTaskMillis: [1, 2_147_483_647],
+  heapMb: [1, 1_048_576],
+  // 0 means "no waiting room": shed load as soon as every child is busy.
+  maxQueue: [0, Number.MAX_SAFE_INTEGER],
+} as const;
 
 const COMPONENT_LIST_KEYS = [
   "parsers",
@@ -52,6 +78,8 @@ export class RipstreamConfig {
   readonly contentHandlers: readonly ComponentConfig[];
   readonly metadataFilters: readonly ComponentConfig[];
   readonly encodingDetector: ComponentConfig | null;
+  /** null means unconfigured: the caller decides (library default is no isolation). */
+  readonly isolation: IsolationConfig | null;
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
@@ -61,6 +89,8 @@ export class RipstreamConfig {
     this.contentHandlers = Object.freeze([...(shape.contentHandlers ?? [])]);
     this.metadataFilters = Object.freeze([...(shape.metadataFilters ?? [])]);
     this.encodingDetector = shape.encodingDetector ?? null;
+    this.isolation =
+      shape.isolation === undefined ? null : Object.freeze({ ...shape.isolation });
   }
 
   get current(): boolean {
@@ -85,15 +115,26 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     }
   }
 
-  const issues = validateConfig(value);
+  const { issues, isolation } = inspectConfig(value);
   if (issues.length > 0) throw new RipstreamConfigError(issues);
-  return new RipstreamConfig(value as RipstreamConfigShape);
+  // Build from the validated isolation copy, never from the caller's object.
+  const { isolation: _unvalidated, ...rest } = value as RipstreamConfigShape;
+  return new RipstreamConfig(isolation === undefined ? rest : { ...rest, isolation });
 }
 
 export function validateConfig(value: unknown): string[] {
+  return inspectConfig(value).issues;
+}
+
+interface InspectedConfig {
+  readonly issues: string[];
+  readonly isolation?: IsolationConfig;
+}
+
+function inspectConfig(value: unknown): InspectedConfig {
   const issues: string[] = [];
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return ["configuration root must be a JSON object"];
+    return { issues: ["configuration root must be a JSON object"] };
   }
   const record = value as Record<string, unknown>;
 
@@ -130,7 +171,93 @@ export function validateConfig(value: unknown): string[] {
       ...validateComponent("encodingDetector", record.encodingDetector),
     );
   }
-  return issues;
+
+  let isolation: IsolationConfig | undefined;
+  const rawIsolation = record.isolation;
+  if (rawIsolation !== undefined) {
+    const result = inspectIsolation(rawIsolation);
+    issues.push(...result.issues);
+    if (result.issues.length === 0) isolation = result.isolation;
+  }
+  return isolation === undefined ? { issues } : { issues, isolation };
+}
+
+/**
+ * Reads the caller's object exactly once: own enumerable data properties are
+ * copied into a plain object, and only that copy is validated and returned
+ * (the issues list is empty exactly when the copy is valid). Inherited
+ * properties, accessors and proxy traps therefore cannot show validation one
+ * value and the loaded config another.
+ */
+function inspectIsolation(value: unknown): {
+  issues: string[];
+  isolation: IsolationConfig;
+} {
+  const issues: string[] = [];
+  const copy: Record<string, unknown> = {};
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    issues.push("isolation must be an object");
+    return { issues, isolation: copy as unknown as IsolationConfig };
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!ISOLATION_KEYS.has(key)) {
+      issues.push(`unknown key "${key}" in isolation`);
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) {
+      issues.push(`isolation.${key} must be a plain data property`);
+      continue;
+    }
+    copy[key] = descriptor.value;
+  }
+
+  const mode = copy.mode;
+  if (typeof mode !== "string" || !ISOLATION_MODES.includes(mode)) {
+    issues.push(`isolation.mode must be one of ${ISOLATION_MODES.join(", ")}`);
+  }
+  const strict = copy.requireStrictContainment;
+  if (strict !== undefined && typeof strict !== "boolean") {
+    issues.push("isolation.requireStrictContainment must be a boolean");
+  } else if (strict === true && mode !== "strict") {
+    issues.push("isolation.requireStrictContainment requires isolation.mode to be strict");
+  }
+  for (const key of Object.keys(ISOLATION_NUMBER_BOUNDS) as Array<
+    keyof typeof ISOLATION_NUMBER_BOUNDS
+  >) {
+    const number = copy[key];
+    if (number === undefined) continue;
+    const [min, max] = ISOLATION_NUMBER_BOUNDS[key];
+    if (
+      typeof number !== "number" ||
+      !Number.isSafeInteger(number) ||
+      Object.is(number, -0) ||
+      number < min ||
+      number > max
+    ) {
+      issues.push(`isolation.${key} must be an integer from ${min} to ${max}`);
+    }
+  }
+
+  const pool = copy.memoryPoolMb;
+  const child = copy.perChildMb;
+  const heap = copy.heapMb;
+  if (isValidNumber(pool, "memoryPoolMb") && isValidNumber(child, "perChildMb") && child > pool) {
+    issues.push("isolation.perChildMb must not exceed isolation.memoryPoolMb");
+  }
+  if (isValidNumber(child, "perChildMb") && isValidNumber(heap, "heapMb") && heap > child) {
+    issues.push("isolation.heapMb must not exceed isolation.perChildMb");
+  }
+  return { issues, isolation: Object.freeze(copy) as unknown as IsolationConfig };
+}
+
+function isValidNumber(
+  value: unknown,
+  key: keyof typeof ISOLATION_NUMBER_BOUNDS,
+): value is number {
+  const [min, max] = ISOLATION_NUMBER_BOUNDS[key];
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max;
 }
 
 function validateComponent(path: string, value: unknown): string[] {
@@ -149,10 +276,21 @@ export function configGeneration(): number {
   return generationCounter;
 }
 
-/** Minimal 3.x XML config loader: parser/detector/encodingDetector class entries. */
+/**
+ * Minimal 3.x XML config loader: parser/detector/encodingDetector class
+ * entries. Isolation settings are JSON-only: the loader is a regex scan of
+ * class attributes and cannot represent a settings object, so <isolation> is
+ * rejected rather than silently ignored. Like the loader's other regex checks,
+ * the <isolation> test also matches inside XML comments.
+ */
 export function loadXmlConfig(xml: string): RipstreamConfig {
   if (!/<properties[\s>]/.test(xml) && !/<ripstream-config[\s>]/.test(xml)) {
     throw new RipstreamConfigError(["XML configuration root is not <properties>"]);
+  }
+  if (/<isolation[\s/>]/i.test(xml)) {
+    throw new RipstreamConfigError([
+      "<isolation> is not supported in XML configuration; use JSON configuration",
+    ]);
   }
   const component = (tag: string): ComponentConfig[] => {
     const regex = new RegExp(

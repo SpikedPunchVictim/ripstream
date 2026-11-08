@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   EncryptedDocumentError,
+  IsolationError,
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
@@ -61,6 +62,11 @@ function exitCodeFor(error: unknown): number {
     return EXIT_DATA;
   }
   if (error instanceof MissingDependencyError) return EXIT_ENVIRONMENT;
+  if (error instanceof IsolationError) {
+    // queue_full/unavailable are infrastructure conditions; an unexplained
+    // crash is an internal error, not a verdict on the document.
+    return error.reason === "crash" ? EXIT_INTERNAL : EXIT_ENVIRONMENT;
+  }
   if (
     typeof error === "object" &&
     error !== null &&

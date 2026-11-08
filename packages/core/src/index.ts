@@ -77,6 +77,14 @@ export {
   type SafeFetchOptions,
 } from "./url-security.ts";
 export {
+  type IsolatedParseRecord,
+  type IsolatedParseRequest,
+  type IsolatedParseResult,
+  type IsolationConfig,
+  type IsolationMode,
+  type ParseIsolator,
+} from "./isolation.ts";
+export {
   WorkerTaskError,
   WorkerTimeoutError,
   runIsolatedTask,

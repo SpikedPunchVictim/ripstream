@@ -25,7 +25,11 @@ export class WorkerTimeoutError extends WorkerTaskError {
   }
 }
 
-/** Runs an exported function in a worker with memory, time and env isolation. */
+/**
+ * Runs an exported function in a worker with memory, time and env isolation.
+ *
+ * NOTE: superseded by the ParseIsolator port; scheduled for removal in P5.
+ */
 export function runIsolatedTask<T = unknown>(
   options: IsolatedTaskOptions,
 ): Promise<T> {

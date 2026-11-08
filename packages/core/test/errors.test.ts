@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   AbortError,
   EncryptedDocumentError,
+  IsolationError,
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
@@ -25,6 +26,7 @@ test("errors carry stable codes and names", () => {
     [new LimitExceededError("too much"), "LIMIT_EXCEEDED"],
     [new MissingDependencyError("pdfjs-dist", "PDF"), "MISSING_DEPENDENCY"],
     [new AbortError(), "ABORTED"],
+    [new IsolationError("crash", "child died"), "ISOLATION_FAILED"],
   ];
 
   for (const [error, code] of errors) {
@@ -50,4 +52,25 @@ test("missing dependency error names the package and capability", () => {
   assert.match(error.message, /PDF parsing/);
   assert.equal(error.dependency, "pdfjs-dist");
   assert.equal(error.capability, "PDF parsing");
+});
+
+test("isolation errors carry a reason and recoverability", () => {
+  const full = new IsolationError("queue_full", "pool saturated");
+  assert.equal(full.reason, "queue_full");
+  assert.equal(full.recoverable, true);
+  assert.equal(full.name, "IsolationError");
+  assert.ok(full instanceof RipstreamError);
+  assert.equal(new IsolationError("unavailable", "no child").recoverable, false);
+  assert.equal(new IsolationError("crash", "died").recoverable, false);
+  const cause = new Error("spawn failed");
+  assert.equal(new IsolationError("unavailable", "no child", { cause }).cause, cause);
+});
+
+test("maps isolation errors to server status codes by reason", () => {
+  assert.equal(httpStatusForError(new IsolationError("queue_full", "full")), 503);
+  assert.equal(httpStatusForError(new IsolationError("unavailable", "none")), 503);
+  assert.equal(httpStatusForError(new IsolationError("crash", "died")), 500);
+  assert.equal(httpStatusForError(new IsolationError("bogus" as never, "x")), 500);
+  // a bare error carrying the code is not an IsolationError
+  assert.equal(httpStatusForError(new RipstreamError("ISOLATION_FAILED", "x")), 500);
 });
