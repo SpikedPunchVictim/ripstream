@@ -1,0 +1,4063 @@
+{
+ "tikaVersion": "4.2.0",
+ "oracle": "apache/tika:4.2.0 /meta, field tk:content-type-parser-override",
+ "real": [
+  {
+   "file": "testWORD6.doc",
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "file": "testPPT.ppt",
+   "typical": "application/vnd.ms-powerpoint",
+   "neutral": "application/vnd.ms-powerpoint"
+  },
+  {
+   "file": "testEXCEL_5.xls",
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "file": "testEXCEL_dateFormats.xls",
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "file": "testStarOffice-5.2-writer.sdw",
+   "typical": "application/vnd.stardivision.writer",
+   "neutral": "application/vnd.stardivision.writer"
+  },
+  {
+   "file": "testStarOffice-5.2-calc.sdc",
+   "typical": "application/vnd.stardivision.calc",
+   "neutral": "application/vnd.stardivision.calc"
+  },
+  {
+   "file": "testStarOffice-5.2-draw.sda",
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "file": "testStarOffice-5.2-impress.sdd",
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "file": "testWORKSWordProcessor3.0.wps",
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "file": "testWORKSWordProcessor4.0.wps",
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "file": "testWORKS2000.wps",
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "file": "testWORKSSpreadsheet7.0.xlr",
+   "typical": "application/x-tika-msworks-spreadsheet",
+   "neutral": "application/x-tika-msworks-spreadsheet"
+  },
+  {
+   "file": "testMSG_StickyNote.msg",
+   "typical": "application/vnd.ms-outlook",
+   "neutral": "application/vnd.ms-outlook"
+  },
+  {
+   "file": "testVISIO.vsd",
+   "typical": "application/vnd.visio",
+   "neutral": "application/vnd.visio"
+  },
+  {
+   "file": "testPUBLISHER.pub",
+   "typical": "application/x-mspublisher",
+   "neutral": "application/x-mspublisher"
+  },
+  {
+   "file": "testDGN8.dgn",
+   "typical": "image/vnd.dgn; version=8",
+   "neutral": "image/vnd.dgn; version=8"
+  },
+  {
+   "file": "testHWP_5.0.hwp",
+   "typical": "application/x-hwp-v5",
+   "neutral": "application/x-hwp-v5"
+  },
+  {
+   "file": "testHWP-v5-dist.hwp",
+   "typical": "application/x-hwp-v5",
+   "neutral": "application/x-hwp-v5"
+  },
+  {
+   "file": "testQUATTRO.qpw",
+   "typical": "application/x-quattro-pro; version=9",
+   "neutral": "application/x-quattro-pro; version=9"
+  },
+  {
+   "file": "testQUATTRO.wb3",
+   "typical": "application/x-quattro-pro; version=7-8",
+   "neutral": "application/x-quattro-pro; version=7-8"
+  }
+ ],
+ "synthetic": [
+  {
+   "id": "word-lower",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "worddocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "workbook-lower",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "workbook"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "book-mixed-case",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "bOoK"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "ppt-and-word",
+   "note": "WordDocument is checked first",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "PowerPoint Document"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "publisher",
+   "filename": "a.pub",
+   "spec": {
+    "entries": [
+     {
+      "name": "Quill"
+     }
+    ]
+   },
+   "typical": "application/x-mspublisher",
+   "neutral": "application/x-mspublisher"
+  },
+  {
+   "id": "publisher-and-word",
+   "note": "WordDocument beats Quill",
+   "filename": "a.pub",
+   "spec": {
+    "entries": [
+     {
+      "name": "Quill"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "visio",
+   "filename": "a.vsd",
+   "spec": {
+    "entries": [
+     {
+      "name": "VisioDocument"
+     }
+    ]
+   },
+   "typical": "application/vnd.visio",
+   "neutral": "application/vnd.visio"
+  },
+  {
+   "id": "nested-word-only",
+   "note": "only the root's own entries count",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "x",
+      "children": [
+       {
+        "name": "WordDocument"
+       }
+      ]
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "empty-root",
+   "filename": "a.doc",
+   "spec": {
+    "entries": []
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "book-msgraph",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "Book"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "MSGraph.Chart.8",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-graph",
+   "neutral": "application/vnd.ms-graph"
+  },
+  {
+   "id": "workbook-msgraph",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "Workbook"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "MSGraph.Chart.8",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-graph",
+   "neutral": "application/vnd.ms-graph"
+  },
+  {
+   "id": "workbook-upper-msgraph",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "WORKBOOK"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "MSGraph.Chart.8",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-graph",
+   "neutral": "application/vnd.ms-graph"
+  },
+  {
+   "id": "book-other-compobj",
+   "filename": "a.xls",
+   "spec": {
+    "entries": [
+     {
+      "name": "Book"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "Foo",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "workbook-beats-works-spreadsheet",
+   "note": "the Excel check runs before the Works one",
+   "filename": "a.xlr",
+   "spec": {
+    "entries": [
+     {
+      "name": "WksSSWorkBook"
+     },
+     {
+      "name": "Workbook"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msworks-spreadsheet",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "works-spreadsheet",
+   "filename": "a.xlr",
+   "spec": {
+    "entries": [
+     {
+      "name": "WksSSWorkBook"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msworks-spreadsheet",
+   "neutral": "application/x-tika-msworks-spreadsheet"
+  },
+  {
+   "id": "works-spreadsheet-and-word",
+   "filename": "a.xlr",
+   "spec": {
+    "entries": [
+     {
+      "name": "WksSSWorkBook"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msworks-spreadsheet",
+   "neutral": "application/x-tika-msworks-spreadsheet"
+  },
+  {
+   "id": "works-spreadsheet-and-book",
+   "filename": "a.xlr",
+   "spec": {
+    "entries": [
+     {
+      "name": "WksSSWorkBook"
+     },
+     {
+      "name": "Book"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msworks-spreadsheet",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "starcalc-and-workbook",
+   "note": "Excel beats StarCalc",
+   "filename": "a.sdc",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarCalcDocument"
+     },
+     {
+      "name": "Workbook"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "starcalc",
+   "filename": "a.sdc",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarCalcDocument"
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.calc",
+   "neutral": "application/vnd.stardivision.calc"
+  },
+  {
+   "id": "starwriter",
+   "filename": "a.sdw",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarWriterDocument"
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.writer",
+   "neutral": "application/vnd.stardivision.writer"
+  },
+  {
+   "id": "stardraw3-draw",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw 5",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "stardraw3-impress",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress 5",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "stardraw3-draw-wins-over-impress",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress StarDraw",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "stardraw3-msgraph",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "MSGraph.Chart.8",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-graph",
+   "neutral": "application/vnd.ms-graph"
+  },
+  {
+   "id": "stardraw3-works",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "Quill96",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "id": "stardraw3-unknown-compobj",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "Other",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "stardraw3-no-compobj",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "stardraw3-lower-case-names",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "stardrawdocument3"
+     },
+     {
+      "name": "\u0001COMPOBJ",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "stardraw3-compobj-is-storage",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "children": []
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "stardraw3-compobj-only-nested",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "x",
+      "children": [
+       {
+        "name": "\u0001CompObj",
+        "text": "StarDraw",
+        "textAt": 8
+       }
+      ]
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "stardraw3-compobj-regular-sector",
+   "note": "a stream of 4096 bytes or more is not in the mini stream",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 5000,
+      "length": 6000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "stardraw3-compobj-last-mini-bytes",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 4000,
+      "length": 4095
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "stardraw3-compobj-across-mini-sectors",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 60,
+      "length": 200
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "works-word-processor-3",
+   "filename": "a.wps",
+   "spec": {
+    "entries": [
+     {
+      "name": "MatOST"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "id": "works-contents-spelling",
+   "filename": "a.wps",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "SPELLING"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "id": "works-compobj-quill96",
+   "filename": "a.wps",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "Quill96",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-works",
+   "neutral": "application/vnd.ms-works"
+  },
+  {
+   "id": "contents-compobj-other",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "Other",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice-embedded; format=comp_obj",
+   "neutral": "application/x-tika-msoffice-embedded; format=comp_obj"
+  },
+  {
+   "id": "contents-compobj-stardraw",
+   "note": "only Works is taken from CompObj here",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice-embedded; format=comp_obj",
+   "neutral": "application/x-tika-msoffice-embedded; format=comp_obj"
+  },
+  {
+   "id": "contents-alone",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "contents-objinfo",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0003ObjInfo"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice-embedded; format=comp_obj",
+   "neutral": "application/x-tika-msoffice-embedded; format=comp_obj"
+  },
+  {
+   "id": "ole10native",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001Ole10Native"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice-embedded; format=ole10_native",
+   "neutral": "application/x-tika-msoffice-embedded; format=ole10_native"
+  },
+  {
+   "id": "equation",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "Equation Native"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-equation",
+   "neutral": "application/vnd.ms-equation"
+  },
+  {
+   "id": "ocxname-with-contents",
+   "note": "an ActiveX control stays plain OLE",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0003OCXNAME"
+     },
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0003ObjInfo"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sldworks",
+   "filename": "a.sldprt",
+   "spec": {
+    "entries": [
+     {
+      "name": "SwDocContentMgr"
+     },
+     {
+      "name": "SwDocMgrTempStorage"
+     }
+    ]
+   },
+   "typical": "application/sldworks",
+   "neutral": "application/sldworks"
+  },
+  {
+   "id": "sldworks-one-name",
+   "filename": "a.sldprt",
+   "spec": {
+    "entries": [
+     {
+      "name": "SwDocContentMgr"
+     }
+    ]
+   },
+   "typical": "application/sldworks",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sldworks-and-word",
+   "filename": "a.sldprt",
+   "spec": {
+    "entries": [
+     {
+      "name": "SwDocContentMgr"
+     },
+     {
+      "name": "SwDocMgrTempStorage"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/sldworks",
+   "neutral": "application/sldworks"
+  },
+  {
+   "id": "outlook",
+   "filename": "a.msg",
+   "spec": {
+    "entries": [
+     {
+      "name": "__substg1.0_0037001F"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-outlook",
+   "neutral": "application/vnd.ms-outlook"
+  },
+  {
+   "id": "outlook-upper-prefix",
+   "filename": "a.msg",
+   "spec": {
+    "entries": [
+     {
+      "name": "__SUBSTG1.0_X"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-outlook",
+   "neutral": "application/vnd.ms-outlook"
+  },
+  {
+   "id": "outlook-nested-only",
+   "filename": "a.msg",
+   "spec": {
+    "entries": [
+     {
+      "name": "x",
+      "children": [
+       {
+        "name": "__substg1.0_0037001F"
+       }
+      ]
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-outlook",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "outlook-and-word",
+   "filename": "a.msg",
+   "spec": {
+    "entries": [
+     {
+      "name": "__substg1.0_1"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "esri-layer",
+   "filename": "a.lyr",
+   "spec": {
+    "entries": [
+     {
+      "name": "Layer"
+     }
+    ]
+   },
+   "typical": "application/x-esri-layer",
+   "neutral": "application/x-esri-layer"
+  },
+  {
+   "id": "dgn8",
+   "filename": "a.dgn",
+   "spec": {
+    "entries": [
+     {
+      "name": "Dgn~Mf"
+     },
+     {
+      "name": "Dgn~S"
+     },
+     {
+      "name": "Dgn~H"
+     }
+    ]
+   },
+   "typical": "image/vnd.dgn; version=8",
+   "neutral": "image/vnd.dgn; version=8"
+  },
+  {
+   "id": "dgn8-two-of-three",
+   "filename": "a.dgn",
+   "spec": {
+    "entries": [
+     {
+      "name": "Dgn~Mf"
+     },
+     {
+      "name": "Dgn~S"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "dgn8-lower-case",
+   "filename": "a.dgn",
+   "spec": {
+    "entries": [
+     {
+      "name": "dgn~mf"
+     },
+     {
+      "name": "dgn~s"
+     },
+     {
+      "name": "dgn~h"
+     }
+    ]
+   },
+   "typical": "image/vnd.dgn; version=8",
+   "neutral": "image/vnd.dgn; version=8"
+  },
+  {
+   "id": "project-props",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "   123"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/vnd.ms-project"
+  },
+  {
+   "id": "project-props9",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props9"
+     },
+     {
+      "name": "   1"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/vnd.ms-project"
+  },
+  {
+   "id": "project-props12",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props12"
+     },
+     {
+      "name": "   1"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/vnd.ms-project"
+  },
+  {
+   "id": "project-tab-whitespace",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "\t\t\t9"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/vnd.ms-project"
+  },
+  {
+   "id": "project-two-spaces",
+   "note": "no match ends the decision: not Outlook either",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "  123"
+     },
+     {
+      "name": "__substg1.0_1"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "project-no-digits",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "   "
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "project-no-break-space",
+   "note": "Java's \\s is ASCII only",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "   9"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "project-without-data-stream",
+   "filename": "a.mpp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-project",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "project-props-beats-layer",
+   "note": "Project's branch swallows the later rules",
+   "filename": "a.bin",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001CompObj"
+     },
+     {
+      "name": "Props"
+     },
+     {
+      "name": "Layer"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "hwp",
+   "filename": "a.hwp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0005HwpSummaryInformation"
+     }
+    ]
+   },
+   "typical": "application/x-hwp-v5",
+   "neutral": "application/x-hwp-v5"
+  },
+  {
+   "id": "hwp-lower-case",
+   "filename": "a.hwp",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0005hwpsummaryinformation"
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "word-beats-hwp",
+   "note": "POIFS answers first and HWP does not specialise msword",
+   "filename": "a.hwp",
+   "spec": {
+    "entries": [
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "\u0005HwpSummaryInformation"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "generic-contents-yields-to-hwp",
+   "note": "CONTENTS alone is plain OLE, which HWP specialises",
+   "filename": "a.hwp",
+   "spec": {
+    "entries": [
+     {
+      "name": "CONTENTS"
+     },
+     {
+      "name": "\u0005HwpSummaryInformation"
+     }
+    ]
+   },
+   "typical": "application/x-hwp-v5",
+   "neutral": "application/x-hwp-v5"
+  },
+  {
+   "id": "workbook-beats-quattro9",
+   "filename": "a.qpw",
+   "spec": {
+    "entries": [
+     {
+      "name": "Workbook"
+     },
+     {
+      "name": "NativeContent_MAIN"
+     }
+    ]
+   },
+   "typical": "application/vnd.ms-excel",
+   "neutral": "application/vnd.ms-excel"
+  },
+  {
+   "id": "publisher-beats-quattro",
+   "filename": "a.wb3",
+   "spec": {
+    "entries": [
+     {
+      "name": "Quill"
+     },
+     {
+      "name": "PerfectOffice_MAIN"
+     },
+     {
+      "name": "PerfectOffice_OBJECTS"
+     }
+    ]
+   },
+   "typical": "application/x-mspublisher",
+   "neutral": "application/x-mspublisher"
+  },
+  {
+   "id": "quattro-7-8",
+   "filename": "a.wb3",
+   "spec": {
+    "entries": [
+     {
+      "name": "PerfectOffice_MAIN"
+     },
+     {
+      "name": "PerfectOffice_OBJECTS"
+     }
+    ]
+   },
+   "typical": "application/x-quattro-pro; version=7-8",
+   "neutral": "application/x-quattro-pro; version=7-8"
+  },
+  {
+   "id": "quattro-9",
+   "filename": "a.qpw",
+   "spec": {
+    "entries": [
+     {
+      "name": "NativeContent_MAIN"
+     }
+    ]
+   },
+   "typical": "application/x-quattro-pro; version=9",
+   "neutral": "application/x-quattro-pro; version=9"
+  },
+  {
+   "id": "quattro-main-alone",
+   "filename": "a.wb3",
+   "spec": {
+    "entries": [
+     {
+      "name": "PerfectOffice_MAIN"
+     }
+    ]
+   },
+   "typical": "application/x-quattro-pro",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "quattro-main-then-native-ignored",
+   "note": "PerfectOffice_MAIN without a match ends the Misc decision",
+   "filename": "a.qpw",
+   "spec": {
+    "entries": [
+     {
+      "name": "PerfectOffice_MAIN"
+     },
+     {
+      "name": "NativeContent_MAIN"
+     }
+    ]
+   },
+   "typical": "application/x-quattro-pro",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "quattro-lower-case",
+   "filename": "a.wb3",
+   "spec": {
+    "entries": [
+     {
+      "name": "perfectoffice_main"
+     },
+     {
+      "name": "perfectoffice_objects"
+     }
+    ]
+   },
+   "typical": "application/x-quattro-pro",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "corel-presentations",
+   "filename": "a.shw",
+   "spec": {
+    "entries": [
+     {
+      "name": "PerfectOffice_MAIN"
+     },
+     {
+      "name": "SlideShow"
+     }
+    ]
+   },
+   "typical": "application/x-corelpresentations",
+   "neutral": "application/x-corelpresentations"
+  },
+  {
+   "id": "drm-data-space-at-depth-10",
+   "note": "DataSpaces is depth 1; the name sits at depth 10",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0006DataSpaces",
+      "children": [
+       {
+        "name": "d7",
+        "children": [
+         {
+          "name": "d6",
+          "children": [
+           {
+            "name": "d5",
+            "children": [
+             {
+              "name": "d4",
+              "children": [
+               {
+                "name": "d3",
+                "children": [
+                 {
+                  "name": "d2",
+                  "children": [
+                   {
+                    "name": "d1",
+                    "children": [
+                     {
+                      "name": "d0",
+                      "children": [
+                       {
+                        "name": "\tDRMDataSpace"
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "typical": "application/x-tika-ole-drm-encrypted",
+   "neutral": "application/x-tika-ole-drm-encrypted"
+  },
+  {
+   "id": "drm-data-space-at-depth-11",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0006DataSpaces",
+      "children": [
+       {
+        "name": "d8",
+        "children": [
+         {
+          "name": "d7",
+          "children": [
+           {
+            "name": "d6",
+            "children": [
+             {
+              "name": "d5",
+              "children": [
+               {
+                "name": "d4",
+                "children": [
+                 {
+                  "name": "d3",
+                  "children": [
+                   {
+                    "name": "d2",
+                    "children": [
+                     {
+                      "name": "d1",
+                      "children": [
+                       {
+                        "name": "d0",
+                        "children": [
+                         {
+                          "name": "\tDRMDataSpace"
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "duplicate-names",
+   "note": "a duplicate makes POI fail, so no entries are seen",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "duplicate-names-differ-in-case",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "WORDDOCUMENT"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "duplicate-names-nested",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "x",
+      "children": [
+       {
+        "name": "a"
+       },
+       {
+        "name": "a"
+       }
+      ]
+     },
+     {
+      "name": "WordDocument"
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-name-case-insensitive",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "\u0001COMPOBJ",
+      "text": "StarDraw",
+      "textAt": 8
+     },
+     {
+      "name": "StarDrawDocument3"
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "sibling-index-outside-directory-is-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 708,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "sibling-index-negative-is-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 708,
+      "width": 4,
+      "value": 2147483648
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "sibling-index-end-of-chain-is-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 708,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "sibling-index-unused-slot-is-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 708,
+      "width": 4,
+      "value": 7
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "child-of-stream-is-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 716,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "child-of-storage-outside-directory",
+   "note": "a child index outside the directory is a fault, unlike a sibling index",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 972,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "child-of-storage-end-of-chain",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 972,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "child-of-root-outside-directory",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 588,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sibling-loop",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 840,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sibling-points-at-root",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 840,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sibling-points-at-itself",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 840,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "storage-child-is-itself",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 972,
+      "width": 4,
+      "value": 3
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "first-entry-unallocated-hides-its-siblings",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 706,
+      "width": 1,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "first-entry-lock-bytes-type-hides-siblings",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 706,
+      "width": 1,
+      "value": 3
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "nested-entry-of-root-type-is-a-storage",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 706,
+      "width": 1,
+      "value": 5
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "root-entry-is-a-storage-type",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 578,
+      "width": 1,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "name-length-reaches-64-units",
+   "note": "POI reads up to 64 UTF-16 units from the entry",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 704,
+      "width": 2,
+      "value": 130
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "name-length-past-the-entry",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 704,
+      "width": 2,
+      "value": 132
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "name-length-negative",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 704,
+      "width": 2,
+      "value": 32770
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "name-length-huge-on-root",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 576,
+      "width": 2,
+      "value": 32766
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "name-length-huge-on-unallocated-entry",
+   "note": "an unallocated entry's bytes are never read",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "st",
+      "children": [
+       {
+        "name": "x"
+       },
+       {
+        "name": "y"
+       }
+      ]
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1344,
+      "width": 2,
+      "value": 32766
+     },
+     {
+      "offset": 1346,
+      "width": 1,
+      "value": 0
+     },
+     {
+      "offset": 968,
+      "width": 4,
+      "value": 6
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "sector-shift-8",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 30,
+      "width": 2,
+      "value": 8
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sector-shift-10",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 30,
+      "width": 2,
+      "value": 10
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sector-shift-13",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 30,
+      "width": 2,
+      "value": 13
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sector-shift-0",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 30,
+      "width": 2,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-count-zero",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-count-two-but-one-listed",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-count-0xffffffff",
+   "note": "huge claimed count",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-sector-id-outside-file",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 76,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-sector-is-directory-sector",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 76,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-array-names-a-sector-twice",
+   "note": "a sector may serve once among FAT, DIFAT and mini FAT",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 2
+     },
+     {
+      "offset": 80,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-start-end-of-chain",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 48,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-start-free",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 48,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-start-outside-file",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 48,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-start-is-fat-sector",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 48,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-count-one-but-no-sector",
+   "note": "every DIFAT sector the count names is read",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 72,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-count-one-outside-file",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 72,
+      "width": 4,
+      "value": 1
+     },
+     {
+      "offset": 68,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-count-0xffffffff-is-negative",
+   "note": "a signed int in POI: no DIFAT sectors",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 72,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "byte-order-zero-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 28,
+      "width": 2,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "version-zero-ignored",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 26,
+      "width": 2,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "directory-chain-self-loop",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-loops-back",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-hits-free-sector",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-hits-fat-marker",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 4294967293
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-outside-file",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-into-fat-sector",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1540,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "directory-chain-ends-early",
+   "note": "the second directory sector is not read",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     },
+     {
+      "name": "c"
+     },
+     {
+      "name": "d"
+     },
+     {
+      "name": "e"
+     },
+     {
+      "name": "f"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1536,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "truncated-to-511",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 511
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "truncated-to-512",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 512
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "truncated-to-1000",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 1000
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "truncated-to-1025",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 1025
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "truncated-to-1535",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 1535
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "truncated-to-1536",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "truncateTo": 1536
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "mini-fat-start-outside-file-unused",
+   "note": "POI loads the mini FAT at open, so even a file with no mini stream is unreadable",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 60,
+      "width": 4,
+      "value": 5000
+     },
+     {
+      "offset": 64,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/msword",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "mini-fat-start-outside-file",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 60,
+      "width": 4,
+      "value": 5000
+     },
+     {
+      "offset": 64,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "mini-fat-count-zero",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 64,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "mini-fat-count-larger-than-chain",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 64,
+      "width": 4,
+      "value": 1000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "mini-fat-sector-is-fat-sector",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 60,
+      "width": 4,
+      "value": 3
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "header-mini-cutoff-ignored",
+   "note": "POI uses the constant 4096",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 56,
+      "width": 4,
+      "value": 100
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "header-mini-sector-shift-ignored",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 32,
+      "width": 2,
+      "value": 5
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "root-stream-end-of-chain",
+   "note": "the mini stream is the root entry's stream",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 628,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "root-stream-outside-file",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 628,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "root-size-zero-ignored",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 632,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "compobj-size-high-dword-ignored",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 892,
+      "width": 4,
+      "value": 1
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "compobj-size-longer-than-chain",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 888,
+      "width": 4,
+      "value": 200
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-size-negative",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 888,
+      "width": 4,
+      "value": 2147483648
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-size-zero",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 888,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-start-outside-mini-fat",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 884,
+      "width": 4,
+      "value": 5000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-start-end-of-chain",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 884,
+      "width": 4,
+      "value": 4294967294
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-mini-chain-loop",
+   "note": "a looping mini chain is a fault, not repeated data",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 888,
+      "width": 4,
+      "value": 100
+     },
+     {
+      "offset": 1024,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-mini-chain-hits-free-sector",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "patches": [
+     {
+      "offset": 888,
+      "width": 4,
+      "value": 100
+     },
+     {
+      "offset": 1024,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "sector-size-4096",
+   "filename": "a.doc",
+   "spec": {
+    "entries": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "WordDocument"
+     }
+    ],
+    "sectorSize": 4096
+   },
+   "typical": "application/msword",
+   "neutral": "application/msword"
+  },
+  {
+   "id": "sector-size-4096-compobj",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 8
+     }
+    ],
+    "sectorSize": 4096
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "sector-size-4096-compobj-regular-sectors",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 8200,
+      "length": 9000
+     }
+    ],
+    "sectorSize": 4096
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "difat-large-file",
+   "note": "113 FAT sectors: four are listed in a DIFAT sector, and CompObj is read through them",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "difat-count-one-start-outside-file",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 68,
+      "width": 4,
+      "value": 5000000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-count-zero-hides-fat-sectors",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 72,
+      "width": 4,
+      "value": 0
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-sector-names-itself-as-next",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 72,
+      "width": 4,
+      "value": 2
+     },
+     {
+      "offset": 7364604,
+      "width": 4,
+      "value": 14382
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-entry-outside-file",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 7364096,
+      "width": 4,
+      "value": 5000000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "difat-entry-free-first",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 7364096,
+      "width": 4,
+      "value": 4294967295
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "fat-count-larger-than-listed",
+   "note": "POI does not require the listed FAT sectors to reach the declared count",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 200
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/vnd.stardivision.impress"
+  },
+  {
+   "id": "fat-count-lower-than-needed",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "patches": [
+     {
+      "offset": 44,
+      "width": 4,
+      "value": 109
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "big-file-truncated-in-last-fat-sector",
+   "filename": "a.sdd",
+   "spec": {
+    "entries": [
+     {
+      "name": "Filler",
+      "length": 7300000
+     },
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarImpress",
+      "textAt": 100,
+      "length": 5000
+     }
+    ],
+    "truncateTo": 7363496
+   },
+   "typical": "application/vnd.stardivision.impress",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "shared-stream-root-and-storage",
+   "note": "Layer is both a sibling of storage s and a child of it; POI builds it in both",
+   "filename": "a.layer",
+   "spec": {
+    "entries": [
+     {
+      "name": "s",
+      "children": [
+       {
+        "name": "x"
+       }
+      ]
+     },
+     {
+      "name": "Layer"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 716,
+      "width": 4,
+      "value": 3
+     }
+    ]
+   },
+   "typical": "application/x-esri-layer",
+   "neutral": "application/x-esri-layer"
+  },
+  {
+   "id": "shared-stream-two-storages",
+   "note": "stream x is a child of both storages",
+   "filename": "a.layer",
+   "spec": {
+    "entries": [
+     {
+      "name": "A",
+      "children": [
+       {
+        "name": "x"
+       }
+      ]
+     },
+     {
+      "name": "B",
+      "children": [
+       {
+        "name": "y"
+       }
+      ]
+     },
+     {
+      "name": "Layer"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 972,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/x-esri-layer",
+   "neutral": "application/x-esri-layer"
+  },
+  {
+   "id": "shared-empty-storage",
+   "note": "an empty storage C is a child of both A and B",
+   "filename": "a.layer",
+   "spec": {
+    "entries": [
+     {
+      "name": "A",
+      "children": [
+       {
+        "name": "C",
+        "children": []
+       }
+      ]
+     },
+     {
+      "name": "B",
+      "children": [
+       {
+        "name": "y"
+       }
+      ]
+     },
+     {
+      "name": "Layer"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 972,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/x-esri-layer",
+   "neutral": "application/x-esri-layer"
+  },
+  {
+   "id": "shared-storage-with-children-refused",
+   "note": "storage C holds x and is a child of both: POI adds x to C twice and fails on the duplicate name",
+   "filename": "a.layer",
+   "spec": {
+    "entries": [
+     {
+      "name": "A",
+      "children": [
+       {
+        "name": "C",
+        "children": [
+         {
+          "name": "x"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "name": "B",
+      "children": [
+       {
+        "name": "y"
+       }
+      ]
+     },
+     {
+      "name": "Layer"
+     }
+    ],
+    "patches": [
+     {
+      "offset": 1100,
+      "width": 4,
+      "value": 2
+     }
+    ]
+   },
+   "typical": "application/x-tika-msoffice",
+   "neutral": "application/x-tika-msoffice"
+  },
+  {
+   "id": "compobj-text-at-chunk-boundary",
+   "note": "StarDraw straddles the 64 KiB search chunk",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 65532,
+      "length": 200000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "compobj-text-past-1mib",
+   "note": "Tika reads the whole stream",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 1500000,
+      "length": 2000000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  },
+  {
+   "id": "compobj-text-at-end-of-5mib",
+   "filename": "a.sda",
+   "spec": {
+    "entries": [
+     {
+      "name": "StarDrawDocument3"
+     },
+     {
+      "name": "\u0001CompObj",
+      "text": "StarDraw",
+      "textAt": 4999992,
+      "length": 5000000
+     }
+    ]
+   },
+   "typical": "application/vnd.stardivision.draw",
+   "neutral": "application/vnd.stardivision.draw"
+  }
+ ]
+}

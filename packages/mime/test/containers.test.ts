@@ -202,9 +202,12 @@ test("OLE2 name decision table", () => {
   assert.equal(detectOle2Names(["Workbook"]).toString(), "application/vnd.ms-excel");
   assert.equal(detectOle2Names(["Book"]).toString(), "application/vnd.ms-excel");
   assert.equal(detectOle2Names(["PowerPoint Document"]).toString(), "application/vnd.ms-powerpoint");
-  assert.equal(detectOle2Names(["__properties_version1.0"]).toString(), "application/vnd.ms-outlook");
+  // Tika 4.2.0 names Outlook by a `__substg1.0_` property stream, not by `__properties_version1.0`.
+  assert.equal(detectOle2Names(["__substg1.0_001A001E"]).toString(), "application/vnd.ms-outlook");
+  assert.equal(detectOle2Names(["__properties_version1.0"]).toString(), "application/x-tika-msoffice");
   assert.equal(detectOle2Names(["VisioDocument"]).toString(), "application/vnd.visio");
-  assert.equal(detectOle2Names(["EncryptedPackage"]).toString(), "application/x-tika-ooxml");
+  // Tika 4.2.0 only treats EncryptedPackage as special together with EncryptionInfo.
+  assert.equal(detectOle2Names(["EncryptedPackage"]).toString(), "application/x-tika-msoffice");
   assert.equal(detectOle2Names(["Other"]).toString(), "application/x-tika-msoffice");
 });
 
@@ -223,14 +226,21 @@ test("OLE2 header and directory parsing", async () => {
   view.setUint32(fatOffset, 0xfffffffe, true);
   view.setUint32(fatOffset + 4, 0xfffffffe, true);
 
-  // Directory sector 0, entry 0: "Workbook".
-  const name = "Workbook";
+  // Directory sector 0: entry 0 is the root storage, whose own name is not a member; entry 1, its child, is "Workbook".
   const directoryOffset = 512;
-  for (let index = 0; index < name.length; index++) {
-    view.setUint16(directoryOffset + index * 2, name.charCodeAt(index), true);
-  }
-  view.setUint16(directoryOffset + 64, (name.length + 1) * 2, true);
-  view.setUint8(directoryOffset + 66, 5);
+  const writeEntry = (index: number, name: string, type: number, child: number): void => {
+    const offset = directoryOffset + index * 128;
+    for (let position = 0; position < name.length; position++) {
+      view.setUint16(offset + position * 2, name.charCodeAt(position), true);
+    }
+    view.setUint16(offset + 64, (name.length + 1) * 2, true);
+    view.setUint8(offset + 66, type);
+    view.setUint32(offset + 68, 0xffffffff, true);
+    view.setUint32(offset + 72, 0xffffffff, true);
+    view.setUint32(offset + 76, child, true);
+  };
+  writeEntry(0, "Root Entry", 5, 1);
+  writeEntry(1, "Workbook", 2, 0xffffffff);
 
   const stream = await RipstreamInputStream.from(bytes, { spoolThreshold: 128 });
   try {

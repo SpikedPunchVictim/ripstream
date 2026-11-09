@@ -110,11 +110,11 @@ async function readString(handle: FileHandle, offset: number): Promise<string | 
   if (marker === null || marker.count > MAX_KEY_CHARS) return null;
   if (marker.type === 0x5 || marker.type === 0x7) {
     const bytes = await readAt(handle, marker.dataOffset, marker.count);
-    return bytes === null ? null : new TextDecoder("utf-8").decode(bytes);
+    return bytes === null ? null : new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
   }
   if (marker.type === 0x6) {
     const bytes = await readAt(handle, marker.dataOffset, marker.count * 2);
-    return bytes === null ? null : new TextDecoder("utf-16be").decode(bytes);
+    return bytes === null ? null : new TextDecoder("utf-16be", { ignoreBOM: true }).decode(bytes);
   }
   return null;
 }

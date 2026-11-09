@@ -99,7 +99,7 @@ export class DefaultDetector implements Detector {
       consider(await detectBplist(stream));
     }
     // warc+gz is not a specialization of gzip, so the gzip detector must answer first.
-    consider(await detectGzipSpecialization(prefix));
+    consider(detectGzipSpecialization(prefix));
     consider(detectCompressor(prefix));
     consider(detectMatroska(prefix));
     consider(detectOgg(prefix));

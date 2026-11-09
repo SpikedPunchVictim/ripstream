@@ -1,6 +1,6 @@
 import { open, type FileHandle } from "node:fs/promises";
+import { createInflateRaw } from "node:zlib";
 import { inflateBounded } from "@spikedpunch/ripstream-core";
-import { inflateRawPrefix } from "./inflate-prefix.ts";
 
 export interface ZipEntry {
   readonly name: string;
@@ -96,7 +96,7 @@ export class ZipArchive {
     const compressed = await this.readCompressed(entry, Math.min(entry.compressedSize, maxBytes));
     if (compressed === null) return null;
     if (entry.compression === 0) return compressed;
-    if (entry.compression === 8) return inflateRawPrefix(compressed, maxBytes);
+    if (entry.compression === 8) return inflatePrefix(compressed, maxBytes);
     return null;
   }
 
@@ -260,4 +260,29 @@ async function readAt(handle: FileHandle, offset: number, length: number): Promi
   const buffer = new Uint8Array(length);
   const { bytesRead } = await handle.read(buffer, 0, length, offset);
   return buffer.subarray(0, bytesRead);
+}
+
+/** Inflates the leading bytes of a deflate stream, stopping once `maxBytes` of output exist. */
+function inflatePrefix(compressed: Uint8Array, maxBytes: number): Promise<Uint8Array> {
+  return new Promise((resolve) => {
+    const inflate = createInflateRaw();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      inflate.destroy();
+      resolve(new Uint8Array(Buffer.concat(chunks).subarray(0, maxBytes)));
+    };
+    inflate.on("data", (chunk: Buffer) => {
+      chunks.push(chunk);
+      total += chunk.length;
+      if (total >= maxBytes) finish();
+    });
+    // A truncated compressed prefix ends in an error; what inflated before it is the prefix.
+    inflate.on("error", finish);
+    inflate.on("end", finish);
+    inflate.end(compressed);
+  });
 }

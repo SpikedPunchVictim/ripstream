@@ -56,7 +56,9 @@ export function detectOgg(prefix: Uint8Array): MediaType | null {
   let total = 0;
   let position = 0;
   for (let page = 0; page < MAX_PAGES && position + PAGE_HEADER_BYTES <= prefix.length; page++) {
-    if (!startsWithOggS(prefix, position)) break;
+    // vorbis-java skips junk between pages to the next capture pattern.
+    while (position + 4 <= prefix.length && !startsWithOggS(prefix, position)) position++;
+    if (position + PAGE_HEADER_BYTES > prefix.length) break;
     const segments = prefix[position + 26]!;
     const payloadStart = position + PAGE_HEADER_BYTES + segments;
     if (payloadStart > prefix.length) break;

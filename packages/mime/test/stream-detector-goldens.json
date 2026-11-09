@@ -320,6 +320,114 @@
    "tika": "text/plain"
   },
   {
+   "id": "gzip:warc-then-junk",
+   "filename": "x.bin",
+   "bytes": "H4sIAAAAAAAAEwt3DHLWN9Qz4OWqqKgAAEIYNH4NAAAAanVua2p1bms=",
+   "tika": "application/warc+gz"
+  },
+  {
+   "id": "gzip:warc-bad-crc",
+   "filename": "x.bin",
+   "bytes": "H4sIAAAAAAAAEwt3DHLWN9Qz4OWqqKgAAP//////////",
+   "tika": "application/warc+gz"
+  },
+  {
+   "id": "gzip:empty-member-then-warc",
+   "filename": "x.bin",
+   "bytes": "H4sIAAAAAAAAEwMAAAAAAAAAAAAfiwgAAAAAAAATC3cMctY31DMAAFHZjnYIAAAA",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:marker-split-across-members",
+   "filename": "x.bin",
+   "bytes": "H4sIAAAAAAAAEwt3BABqqPi1AgAAAB+LCAAAAAAAABMLctY31DMAAIkj8R8GAAAA",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:bom-before-warc",
+   "filename": "x.bin",
+   "bytes": "H4sIAAAAAAAAE3u/e3+4Y5CzvqGeAQA3ny0tCwAAAA==",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:fhcrc-wrong",
+   "filename": "x.bin",
+   "bytes": "H4sIAgAAAAAAA96tC3cMctY31DPg5QIAAAAAAAAAAAA=",
+   "tika": "application/warc+gz"
+  },
+  {
+   "id": "gzip:fname",
+   "filename": "x.bin",
+   "bytes": "H4sICAAAAAAAA3gud2FyYwALdwxy1jfUM+DlAgAAAAAAAAAAAA==",
+   "tika": "application/warc+gz"
+  },
+  {
+   "id": "gzip:fextra-empty-subfield",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwQAQUIAAEvLzElNSS1OttLXT1QwBAAAAAAAAAAAAA==",
+   "tika": "application/arc+gz"
+  },
+  {
+   "id": "gzip:fextra-subfield-with-data",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwUAQUIBAAlLy8xJTUktTrbS109UMAQAAAAAAAAAAAA=",
+   "tika": "application/arc+gz"
+  },
+  {
+   "id": "gzip:fextra-stray-byte",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwYAQUIBAAkHS8vMSU1JLU620tdPVDAEAAAAAAAAAAAA",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:fextra-subfield-overflows",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwQAQUIJAEvLzElNSS1OttLXT1QwBAAAAAAAAAAAAA==",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:fextra-3-bytes",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwMAAQIDS8vMSU1JLU620tdPVDAEAAAAAAAAAAAA",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "gzip:fextra-zero-length",
+   "filename": "x.bin",
+   "bytes": "H4sIBAAAAAAAAwAAS8vMSU1JLU620tdPVDAEAAAAAAAAAAAA",
+   "tika": "application/arc+gz"
+  },
+  {
+   "id": "gzip:reserved-flag",
+   "filename": "x.bin",
+   "bytes": "H4sIIAAAAAAAAwt3DHLWN9Qz4OUCAAAAAAAAAAAA",
+   "tika": "application/gzip"
+  },
+  {
+   "id": "compressor:zstd-skippable",
+   "filename": "x.bin",
+   "bytes": "UCpNGAAAAAA=",
+   "tika": "application/zstd"
+  },
+  {
+   "id": "compressor:zstd-skippable-5f-named-lz4",
+   "filename": "x.lz4",
+   "bytes": "XypNGAAAAAA=",
+   "tika": "application/zstd"
+  },
+  {
+   "id": "ogg:resync-past-junk",
+   "filename": "x.bin",
+   "bytes": "T2dnUwACAAAAAAAAAAAKAAAAAAAAABYpQXYBHgF2b3JiaXMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAxMjM0NTY3ODlPZ2dTAAIAAAAAAAAAAE0AAAAAAAAAHXjX5gEqgHRoZW9yYQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "tika": "video/theora"
+  },
+  {
+   "id": "bplist:bom-key",
+   "filename": "x.bin",
+   "bytes": "YnBsaXN0MDDRAQJfEBLvu79XZWJNYWluUmVzb3VyY2UIAAgACwAgAAAAAAAAAgEAAAAAAAAAAwAAAAAAAAAAAAAAAAAAACE=",
+   "tika": "application/x-bplist"
+  },
+  {
    "id": "bplist:memgraph",
    "filename": "x.bin",
    "bytes": "YnBsaXN0MDDTAQIDBAUGVW5vZGVzVWVkZ2VzXxAUZ3JhcGhFbmNvZGluZ1ZlcnNpb24ICAgACAAPABUAGwAyADMANAAAAAAAAAIBAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAA1",

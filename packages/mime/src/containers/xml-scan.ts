@@ -1,4 +1,4 @@
-import { SaxesParser } from "saxes";
+import { parseXml } from "./xml-parse.ts";
 
 export interface XmlAttribute {
   readonly local: string;
@@ -9,8 +9,6 @@ export interface XmlElement {
   readonly local: string;
   readonly attributes: readonly XmlAttribute[];
 }
-
-const STOP = Symbol("xml-scan-stop");
 
 /**
  * Walks start tags in document order, as the SAX handlers in Tika's container detectors do: namespace-aware, local
@@ -23,20 +21,10 @@ export function scanXmlElements(
   data: Uint8Array,
   visit: (element: XmlElement) => boolean,
 ): boolean {
-  const parser = new SaxesParser({ xmlns: true });
-  parser.on("opentag", (tag) => {
-    const named = tag as unknown as {
-      local: string;
-      attributes: Record<string, { local: string; value: string }>;
-    };
-    const attributes = Object.values(named.attributes).map(({ local, value }) => ({ local, value }));
-    if (visit({ local: named.local, attributes })) throw STOP;
-  });
-
-  try {
-    parser.write(new TextDecoder("utf-8").decode(data)).close();
-    return true;
-  } catch {
-    return false;
-  }
+  return parseXml(data, (element) =>
+    visit({
+      local: element.local,
+      attributes: element.attributes.map(({ local, value }) => ({ local, value })),
+    }),
+  );
 }

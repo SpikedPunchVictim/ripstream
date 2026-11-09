@@ -1,12 +1,33 @@
 import { MediaType } from "@spikedpunch/ripstream-core";
 import type { ZipArchive } from "./zip-archive.ts";
+import {
+  hasValidDecodedName,
+  isValidContentType,
+  isValidPartName,
+  partNameKey,
+  partNameOfEntry,
+  targetPartName,
+} from "./opc-syntax.ts";
+import { readPackageXml } from "./opc-xml.ts";
 import { scanXmlElements } from "./xml-scan.ts";
 
 /** Port of Tika 4.2.0 `OPCPackageDetector.detect(ZipFile, ...)`, with POI's package parsing done by hand. */
 
-const MAX_XML_BYTES = 1024 * 1024;
+/**
+ * The most inflated bytes read from one package XML part. POI reads a part whole, and Tika 4.2.0 measured accepts a
+ * 40 MiB `[Content_Types].xml`; a real package has tens of kilobytes. Detection runs before any parser limit, so a
+ * part is read only up to this, and a larger one is treated as unreadable (a deliberate deviation).
+ */
+const MAX_XML_BYTES = 16 * 1024 * 1024;
+/**
+ * POI parses the relationships of every part when it opens a package. Detection runs before any parser limit, so the
+ * inflated size of those parts is budgeted; a package past it is taken as readable rather than read to the end.
+ */
+const MAX_PART_RELATIONSHIPS_BYTES = 16 * 1024 * 1024;
 const CONTENT_TYPES_PART = "[Content_Types].xml";
-const ROOT_RELS_PART = "_rels/.rels";
+const ROOT_RELS_PART_NAME = "/_rels/.rels";
+const CONTENT_TYPES_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/content-types";
+const RELATIONSHIPS_NAMESPACE = "http://schemas.openxmlformats.org/package/2006/relationships";
 
 const REL_CORE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 const REL_STRICT_CORE = "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument";
@@ -54,17 +75,24 @@ interface Relationship {
 interface ContentTypes {
   /** Lower-cased extension to content type. */
   readonly defaults: ReadonlyMap<string, string>;
-  /** Lower-cased part name (leading slash) to content type. */
+  /** Part name key (see `partNameKey`) to content type. */
   readonly overrides: ReadonlyMap<string, string>;
+}
+
+interface Part {
+  /** The ZIP entry that holds the part. */
+  readonly entry: string;
+  readonly partName: string;
 }
 
 /** POI could not open the package; Tika falls back to the content-type scan. */
 class PackageUnreadable extends Error {}
 
 export async function detectOpc(zip: ZipArchive): Promise<MediaType | null> {
-  if (!zip.has(CONTENT_TYPES_PART)) return null;
+  const contentTypesEntry = findEntry(zip, CONTENT_TYPES_PART);
+  if (contentTypesEntry === null) return null;
 
-  const contentTypesXml = await zip.read(CONTENT_TYPES_PART, MAX_XML_BYTES);
+  const contentTypesXml = await zip.read(contentTypesEntry, MAX_XML_BYTES);
   if (contentTypesXml === null) return null;
 
   let type: MediaType | null = null;
@@ -76,20 +104,32 @@ export async function detectOpc(zip: ZipArchive): Promise<MediaType | null> {
   return type ?? firstKnownContentType(contentTypesXml);
 }
 
+/** POI's `ZipFileZipEntrySource.getEntry`: the exact name, else the first entry that matches ignoring case. */
+function findEntry(zip: ZipArchive, name: string): string | null {
+  if (zip.has(name)) return name;
+  const lowerName = name.toLowerCase();
+  return zip.entries.find((entry) => entry.name.toLowerCase() === lowerName)?.name ?? null;
+}
+
 async function detectViaPackage(
   zip: ZipArchive,
   contentTypesXml: Uint8Array,
 ): Promise<MediaType | null> {
   const contentTypes = parseContentTypes(contentTypesXml);
-  const parts = zip.entries
-    .map((entry) => entry.name)
-    .filter((name) => !name.endsWith("/") && name.toLowerCase() !== CONTENT_TYPES_PART.toLowerCase());
-  // POI refuses a package holding a part it has no content type for.
-  for (const part of parts) {
-    if (contentTypeOf(contentTypes, part) === null) throw new PackageUnreadable(part);
+  const parts = indexParts(zip.entries);
+  // POI refuses a package holding a part whose content type is missing or malformed. Each distinct content type is
+  // checked once: they all come from one bounded document, while the parts may be many.
+  const checked = new Set<string>();
+  for (const { entry, partName } of parts.values()) {
+    const contentType = contentTypeOf(contentTypes, partName);
+    if (contentType === null) throw new PackageUnreadable(entry);
+    if (checked.has(contentType)) continue;
+    if (!isValidContentType(contentType)) throw new PackageUnreadable(entry);
+    checked.add(contentType);
   }
 
-  const rels = await parseRootRelationships(zip);
+  await checkPartRelationships(zip, parts);
+  const rels = await parseRootRelationships(zip, parts);
   const ofType = (type: string): Relationship[] => rels.filter((rel) => rel.type === type);
 
   let core = ofType(REL_CORE);
@@ -112,15 +152,63 @@ async function detectViaPackage(
     }
   }
   const [only] = core;
-  if (core.length !== 1 || only === undefined || only.external) return null;
+  if (core.length !== 1 || only === undefined) return null;
 
-  const partName = only.target.startsWith("/") ? only.target.slice(1) : only.target;
-  const corePart = parts.find((name) => name.toLowerCase() === partName.toLowerCase());
-  if (corePart === undefined) return null;
+  const partName = targetPartName(only.target, only.external);
+  if (partName === null) return null;
+  if (!parts.has(partNameKey(partName))) return null;
 
-  const coreType = contentTypeOf(contentTypes, corePart);
+  const coreType = contentTypeOf(contentTypes, partName);
   if (coreType === null) return null;
   return mediaTypeOfCoreContentType(coreType);
+}
+
+/**
+ * The parts POI builds from the ZIP entries, by lower-cased part name. An entry whose name is not a valid part name is
+ * skipped; two entries with the same part name, ignoring case, make the package unreadable.
+ */
+function indexParts(entries: readonly { readonly name: string }[]): Map<string, Part> {
+  const parts = new Map<string, Part>();
+  for (const { name } of entries) {
+    if (name.toLowerCase() === CONTENT_TYPES_PART.toLowerCase()) continue;
+    const partName = partNameOfEntry(name);
+    if (partName === null) continue;
+    if (!hasValidDecodedName(partName)) throw new PackageUnreadable(name);
+    const key = partNameKey(partName);
+    if (parts.has(key)) throw new PackageUnreadable(name);
+    parts.set(key, { entry: name, partName });
+  }
+  return parts;
+}
+
+/**
+ * POI loads the relationships of every part that has a `_rels/NAME.rels` next to it, so one that is not well formed
+ * makes the package unreadable. Its contents are not examined: a duplicate Id or a bad TargetMode there is accepted.
+ */
+async function checkPartRelationships(zip: ZipArchive, parts: ReadonlyMap<string, Part>): Promise<void> {
+  let remaining = MAX_PART_RELATIONSHIPS_BYTES;
+  for (const { partName } of parts.values()) {
+    if (isRelationshipsPart(partName)) continue;
+    const relationships = parts.get(partNameKey(relationshipsPartNameOf(partName)));
+    if (relationships === undefined) continue;
+    if (remaining <= 0) return;
+
+    const bytes = await zip.read(relationships.entry, MAX_XML_BYTES);
+    if (bytes === null) throw new PackageUnreadable(relationships.entry);
+    remaining -= bytes.length;
+    if (!readPackageXml(bytes)) throw new PackageUnreadable(relationships.entry);
+  }
+}
+
+/** POI's `isRelationshipPartURI`, which is case-sensitive. */
+function isRelationshipsPart(partName: string): boolean {
+  return /\/_rels\/.*\.rels$/.test(partName);
+}
+
+/** `/word/document.xml` to `/word/_rels/document.xml.rels`. */
+function relationshipsPartNameOf(partName: string): string {
+  const slash = partName.lastIndexOf("/");
+  return `${partName.slice(0, slash)}/_rels/${partName.slice(slash + 1)}.rels`;
 }
 
 function mediaTypeOfCoreContentType(coreType: string): MediaType | null {
@@ -157,54 +245,60 @@ function firstKnownContentType(contentTypesXml: Uint8Array): MediaType | null {
 function parseContentTypes(contentTypesXml: Uint8Array): ContentTypes {
   const defaults = new Map<string, string>();
   const overrides = new Map<string, string>();
-  const wellFormed = scanXmlElements(contentTypesXml, (element) => {
-    const attribute = (name: string): string | undefined =>
-      element.attributes.find((candidate) => candidate.local === name)?.value;
-    const contentType = attribute("ContentType");
+  let invalidOverride = false;
+  // POI finds Default and Override by namespace anywhere in the document, and reads a missing attribute as empty.
+  const wellFormed = readPackageXml(contentTypesXml, (element) => {
+    if (element.uri !== CONTENT_TYPES_NAMESPACE) return;
+    const contentType = element.attributes.get("ContentType") ?? "";
     if (element.local === "Default") {
-      const extension = attribute("Extension");
-      if (extension !== undefined && contentType !== undefined) {
-        defaults.set(extension.toLowerCase(), contentType);
-      }
+      defaults.set((element.attributes.get("Extension") ?? "").toLowerCase(), contentType);
     } else if (element.local === "Override") {
-      const partName = attribute("PartName");
-      if (partName !== undefined && contentType !== undefined) {
-        overrides.set(partName.toLowerCase(), contentType);
-      }
+      const partName = element.attributes.get("PartName") ?? "";
+      if (isValidPartName(partName)) overrides.set(partNameKey(partName), contentType);
+      else invalidOverride = true;
     }
-    return false;
   });
-  if (!wellFormed) throw new PackageUnreadable(CONTENT_TYPES_PART);
+  if (!wellFormed || invalidOverride) throw new PackageUnreadable(CONTENT_TYPES_PART);
   return { defaults, overrides };
 }
 
-async function parseRootRelationships(zip: ZipArchive): Promise<Relationship[]> {
-  if (!zip.has(ROOT_RELS_PART)) return [];
-  const bytes = await zip.read(ROOT_RELS_PART, MAX_XML_BYTES);
-  if (bytes === null) throw new PackageUnreadable(ROOT_RELS_PART);
+async function parseRootRelationships(
+  zip: ZipArchive,
+  parts: ReadonlyMap<string, Part>,
+): Promise<Relationship[]> {
+  const rootRels = parts.get(ROOT_RELS_PART_NAME);
+  if (rootRels === undefined) return [];
+  const bytes = await zip.read(rootRels.entry, MAX_XML_BYTES);
+  if (bytes === null) throw new PackageUnreadable(rootRels.entry);
 
-  const rels: Relationship[] = [];
-  const wellFormed = scanXmlElements(bytes, (element) => {
-    if (element.local !== "Relationship") return false;
-    const attribute = (name: string): string | undefined =>
-      element.attributes.find((candidate) => candidate.local === name)?.value;
-    const type = attribute("Type");
-    const target = attribute("Target");
-    if (type !== undefined && target !== undefined) {
-      rels.push({ type, target, external: attribute("TargetMode") === "External" });
+  // POI keys relationships by Id: a later one replaces an earlier one, and one without an Id is given "rIdN".
+  const byId = new Map<string, Relationship>();
+  let generated = 1;
+  const wellFormed = readPackageXml(bytes, (element) => {
+    if (element.local !== "Relationship" || element.uri !== RELATIONSHIPS_NAMESPACE) return;
+    let id = element.attributes.get("Id") ?? "";
+    if (id === "") {
+      while (byId.has(`rId${generated}`)) generated++;
+      id = `rId${generated}`;
     }
-    return false;
+    const mode = element.attributes.get("TargetMode");
+    byId.set(id, {
+      type: element.attributes.get("Type") ?? "",
+      target: element.attributes.get("Target") ?? "",
+      external: mode !== undefined && mode.toLowerCase() !== "internal",
+    });
   });
-  if (!wellFormed) throw new PackageUnreadable(ROOT_RELS_PART);
-  return rels;
+  if (!wellFormed) throw new PackageUnreadable(rootRels.entry);
+  return [...byId.values()];
 }
 
-function contentTypeOf(contentTypes: ContentTypes, part: string): string | null {
-  const override = contentTypes.overrides.get(`/${part}`.toLowerCase());
+/** The part's override, else the default for its extension (empty when it has none); null when it has neither. */
+function contentTypeOf(contentTypes: ContentTypes, partName: string): string | null {
+  const override = contentTypes.overrides.get(partNameKey(partName));
   if (override !== undefined) return override;
-  const dot = part.lastIndexOf(".");
-  if (dot === -1) return null;
-  return contentTypes.defaults.get(part.slice(dot + 1).toLowerCase()) ?? null;
+  const lower = partName.toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return contentTypes.defaults.get(dot === -1 ? "" : lower.slice(dot + 1)) ?? null;
 }
 
 function mediaType(value: string): MediaType {
