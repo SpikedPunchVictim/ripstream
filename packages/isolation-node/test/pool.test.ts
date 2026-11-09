@@ -92,17 +92,29 @@ function makePool(poolMb: number, maxQueue: number, overshootMb = 0) {
   return { pool, clock };
 }
 
-function initialStats(poolMb: number): PoolStats {
+type Accounting = Omit<PoolStats, "maxQueue">;
+
+/** The reservation accounting of a pool; `maxQueue` is configuration and has its own test. */
+function accounting(pool: MemoryPool): Accounting {
+  const { maxQueue: _maxQueue, ...rest } = pool.stats();
+  return rest;
+}
+
+function initialStats(poolMb: number): Accounting {
   return { poolMb, freeMb: poolMb, reservedMb: 0, queued: 0, running: 0 };
 }
+
+test("stats report the configured queue limit", () => {
+  assert.equal(makePool(1000, 7).pool.stats().maxQueue, 7);
+});
 
 test("fast path: grants immediately and accounts the reservation", async () => {
   const { pool } = makePool(1000, 2);
   const lease = await pool.acquire(300);
   assert.equal(lease.reservedMb, 300);
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 700, reservedMb: 300, queued: 0, running: 1 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 700, reservedMb: 300, queued: 0, running: 1 });
   lease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("reservation is perChildMb plus overshootMb (default overshoot 1024)", async () => {
@@ -130,7 +142,7 @@ test("waits when the pool is full and is granted on release", async () => {
   first.release();
   await tick();
   assert.equal(granted(second).reservedMb, 400);
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 600, reservedMb: 400, queued: 0, running: 1 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 600, reservedMb: 400, queued: 0, running: 1 });
 });
 
 test("strict FIFO: waiters are served in arrival order", async () => {
@@ -149,7 +161,7 @@ test("strict FIFO: waiters are served in arrival order", async () => {
   await tick();
   assert.deepEqual(order, ["a", "b", "c"]);
   assert.ok(waiters.every((w) => w.state().status === "fulfilled"));
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("head-of-line: a small request does not jump a larger waiting request", async () => {
@@ -170,7 +182,7 @@ test("head-of-line: a small request does not jump a larger waiting request", asy
   assert.equal(pool.stats().freeMb, 0);
   bigLease.release();
   smallLease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("head-of-line: small request stays blocked while the head cannot fit", async () => {
@@ -185,7 +197,7 @@ test("head-of-line: small request stays blocked while the head cannot fit", asyn
   await tick();
   granted(big).release();
   granted(small).release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("wake-up cascade: one release admits several small waiters in order", async () => {
@@ -202,11 +214,11 @@ test("wake-up cascade: one release admits several small waiters in order", async
   // 100 + 200 + 300 = 600 fit; 700 does not (400 free) and stays queued.
   assert.deepEqual(order, [0, 1, 2]);
   assert.equal(waiters[3]?.state().status, "pending");
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 400, reservedMb: 600, queued: 1, running: 3 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 400, reservedMb: 600, queued: 1, running: 3 });
   for (const w of waiters.slice(0, 3)) granted(w).release();
   await tick();
   granted(waiters[3]!).release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("queue_full: rejects immediately when the queue holds maxQueue waiters", async () => {
@@ -224,7 +236,7 @@ test("queue_full: rejects immediately when the queue holds maxQueue waiters", as
   await tick();
   granted(w1).release();
   granted(w2).release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("queue_full: maxQueue 0 means no waiting room", async () => {
@@ -238,7 +250,7 @@ test("queue_full: maxQueue 0 means no waiting room", async () => {
   const fits = await pool.acquire(400);
   fits.release();
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("a small request is queued (not granted) behind existing waiters even if it fits", async () => {
@@ -261,7 +273,7 @@ test("oversize request: rejected immediately as unavailable, naming the numbers"
   assert.equal(isolationReason(error), "unavailable");
   const message = (error as Error).message;
   assert.ok(message.includes("1001") && message.includes("1000") && message.includes("100"), message);
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
   // 900 + 100 overshoot == pool is the largest that can ever be satisfied.
   const largest = await pool.acquire(900);
   assert.equal(largest.reservedMb, 1000);
@@ -291,7 +303,7 @@ test("deadline: expires while queued -> ParseTimeoutError, dequeued", async () =
   assert.equal(pool.stats().queued, 0);
   assert.equal(clock.pendingTimers, 0);
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("deadline: expiry of a blocking head lets the waiter behind it in", async () => {
@@ -307,7 +319,7 @@ test("deadline: expiry of a blocking head lets the waiter behind it in", async (
   assert.equal(granted(small).reservedMb, 300);
   granted(small).release();
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("deadline 0 with no free memory rejects immediately without queueing", async () => {
@@ -368,7 +380,7 @@ test("abort while queued: generic reason -> AbortError, dequeued", async () => {
   assert.ok(rejection(t) instanceof AbortError);
   assert.equal(pool.stats().queued, 0);
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("abort while queued: default abort reason (AbortError DOMException) -> AbortError", async () => {
@@ -417,7 +429,7 @@ test("abort of a blocking head lets the waiter behind it in", async () => {
   assert.ok(rejection(big) instanceof AbortError);
   granted(small).release();
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("pre-aborted signal rejects without enqueueing or reserving", async () => {
@@ -426,7 +438,7 @@ test("pre-aborted signal rejects without enqueueing or reserving", async () => {
   await assert.rejects(pool.acquire(100, { signal: generic }), AbortError);
   const timeout = AbortSignal.abort(new DOMException("t", "TimeoutError"));
   await assert.rejects(pool.acquire(100, { signal: timeout }), ParseTimeoutError);
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("abort after the grant has no effect and leaves no listener behind", async () => {
@@ -436,7 +448,7 @@ test("abort after the grant has no effect and leaves no listener behind", async 
   controller.abort();
   assert.equal(pool.stats().running, 1);
   lease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("release is idempotent and does not over-credit the pool", async () => {
@@ -446,9 +458,9 @@ test("release is idempotent and does not over-credit the pool", async () => {
   a.release();
   a.release();
   a.release();
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 600, reservedMb: 400, queued: 0, running: 1 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 600, reservedMb: 400, queued: 0, running: 1 });
   b.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("dispose: rejects all waiters, refuses new acquires, live leases can still release", async () => {
@@ -468,7 +480,7 @@ test("dispose: rejects all waiters, refuses new acquires, live leases can still 
   assert.equal(isolationReason(rejection(after)), "unavailable");
   controller.abort(); // listener was removed; must be harmless
   holder.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
   pool.dispose(); // idempotent
 });
 
@@ -477,11 +489,11 @@ test("charge: accounts extra memory on the lease and release returns all of it",
   const lease = await pool.acquire(300);
   pool.charge(lease, 200);
   assert.equal(lease.reservedMb, 500);
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 500, reservedMb: 500, queued: 0, running: 1 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 500, reservedMb: 500, queued: 0, running: 1 });
   pool.charge(lease, 0);
   assert.equal(lease.reservedMb, 500);
   lease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("charge: beyond the free pool is rejected with LimitExceededError and changes nothing", async () => {
@@ -493,7 +505,7 @@ test("charge: beyond the free pool is rejected with LimitExceededError and chang
   pool.charge(lease, 700); // exactly the free memory is allowed
   assert.equal(pool.stats().freeMb, 0);
   lease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("charge: released lease, foreign lease and bad amounts are programming errors", async () => {
@@ -506,7 +518,7 @@ test("charge: released lease, foreign lease and bad amounts are programming erro
   assert.throws(() => other.charge(lease, 1), TypeError);
   lease.release();
   assert.throws(() => pool.charge(lease, 1), /already released/);
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("charge then release wakes a waiter that needed that memory", async () => {
@@ -519,7 +531,7 @@ test("charge then release wakes a waiter that needed that memory", async () => {
   lease.release();
   await tick();
   granted(waiter).release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("argument validation: constructor", () => {
@@ -543,9 +555,9 @@ test("parentMb is reserved on top of the cap and the overshoot, and returned on 
   const { pool } = makePool(1000, 0, 100);
   const lease = await pool.acquire(300, { parentMb: 50 });
   assert.equal(lease.reservedMb, 450);
-  assert.deepEqual(pool.stats(), { poolMb: 1000, freeMb: 550, reservedMb: 450, queued: 0, running: 1 });
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 550, reservedMb: 450, queued: 0, running: 1 });
   lease.release();
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 test("parentMb defaults to 0 (existing callers are unchanged)", async () => {
@@ -616,7 +628,7 @@ test("argument validation: acquire rejects bad sizes and deadlines without side 
   for (const deadlineMs of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
     await assert.rejects(pool.acquire(10, { deadlineMs }), RangeError, `deadline ${deadlineMs}`);
   }
-  assert.deepEqual(pool.stats(), initialStats(1000));
+  assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
 // mulberry32: tiny seeded PRNG so the randomised run is reproducible.
@@ -706,7 +718,7 @@ for (const seed of [1, 2, 3, 42, 1234, 99999]) {
       await tick();
     }
     await Promise.allSettled(pending.map((t) => t.promise));
-    assert.deepEqual(pool.stats(), initialStats(POOL));
+    assert.deepEqual(accounting(pool), initialStats(POOL));
     assert.equal(clock.pendingTimers, 0, "no timers left behind");
     assert.ok(pending.every((t) => t.state().status !== "pending"));
   });

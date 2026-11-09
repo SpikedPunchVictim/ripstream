@@ -55,6 +55,8 @@ export interface PoolStats {
   readonly reservedMb: number;
   readonly queued: number;
   readonly running: number;
+  /** Waiters the pool will hold; the next acquire beyond this is refused with `queue_full`. */
+  readonly maxQueue: number;
 }
 
 /** Time source and timers, injectable so tests need no real sleeping. */
@@ -278,6 +280,7 @@ export class MemoryPool {
       reservedMb: this.#reservedMb,
       queued: this.#queue.length,
       running: this.#running,
+      maxQueue: this.#maxQueue,
     };
   }
 

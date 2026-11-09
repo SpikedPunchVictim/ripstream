@@ -585,6 +585,113 @@ test("a cap that would never fit the memory pool is a limit error, not an outage
   assert.equal((await isolator.isolate({ input: bytes("fits") })).kind, "text", "the default cap fits");
 });
 
+test("defaultMaxOutputChars: status, the reservation and a request without a cap are all sized for it", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"], defaultMaxOutputChars: 4_000_000 });
+  const isolator = await h.create();
+  const plain = await setup().create();
+  const status = isolator.status();
+  assert.equal(status.limits?.maxOutputChars, 4_000_000);
+  assert.equal(plain.status().limits?.maxOutputChars, DEFAULT_LIMITS.maxOutputChars);
+  assert.ok((status.defaultReservationMb?.text ?? 0) > (plain.status().defaultReservationMb?.text ?? 0), JSON.stringify(status.defaultReservationMb));
+
+  const result = await isolator.isolate({ input: bytes("x") });
+  assert.equal(result.kind, "text");
+  const report = JSON.parse((result as { text: string }).text) as { header: { maxOutputChars: number } };
+  assert.equal(report.header.maxOutputChars, 4_000_000);
+  // A request that names its own cap keeps it.
+  const own = await isolator.isolate({ input: bytes("x"), maxOutputChars: 1000 });
+  assert.equal((JSON.parse((own as { text: string }).text) as { header: { maxOutputChars: number } }).header.maxOutputChars, 1000);
+});
+
+test("defaultMaxOutputChars: a request without a cap that parses in-process gets it too", async () => {
+  const h = setup({ ripstream: fakeRipstream({ type: "text/plain" }), defaultMaxOutputChars: 4_000_000 });
+  const isolator = await h.create();
+  await isolator.isolate({ input: bytes("x") });
+  assert.equal(h.ripstream.parseCalls[0]?.options.limits?.maxOutputChars, 4_000_000);
+});
+
+test("defaultMaxOutputChars: an output cap the pool cannot hold fails at construction, not on every request", async () => {
+  // 3000 MiB holds the default request (2708) but not one sized for 50 million characters.
+  const small: IsolationConfig = { mode: "strict", memoryPoolMb: 3000 };
+  const strict = setup({ config: small, defaultMaxOutputChars: 50_000_000 });
+  delete (strict.options as { pool?: MemoryPool }).pool;
+  await assert.rejects(createNodeIsolator(strict.options), (error: unknown) => {
+    assert.ok(error instanceof IsolationError && error.reason === "unavailable", String(error));
+    assert.match(error.message, /cannot hold one child/);
+    return true;
+  });
+
+  const lenient = setup({ config: { ...small, mode: "lenient" }, defaultMaxOutputChars: 50_000_000 });
+  delete (lenient.options as { pool?: MemoryPool }).pool;
+  const isolator = await createNodeIsolator(lenient.options);
+  created.push(isolator);
+  assert.equal(isolator.status().degraded, true);
+
+  const wired = setup({ pool: new MemoryPool({ poolMb: 3000, overshootMb: 1024, maxQueue: 0 }), defaultMaxOutputChars: 50_000_000 });
+  await assert.rejects(createNodeIsolator(wired.options), /cannot hold one child/);
+});
+
+test("defaultMaxOutputChars must be a finite non-negative integer", async () => {
+  for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(setup({ defaultMaxOutputChars: value }).create(), RangeError, String(value));
+  }
+});
+
+test("defaultMaxOutputChars above what a result may carry is a RangeError at construction, not a limit error", async () => {
+  // A configuration mistake of whoever builds the isolator, not a document that exceeded a limit.
+  await assert.rejects(setup({ defaultMaxOutputChars: 100_000_000 }).create(), (error: unknown) => {
+    assert.ok(error instanceof RangeError, String(error));
+    assert.match(error.message, /defaultMaxOutputChars 100000000.*above the isolation ceiling/);
+    return true;
+  });
+});
+
+test("defaultMaxOutputChars that fits a text result but not a records result is rejected at construction too", async () => {
+  // Between roughly 86.7 and 88.1 million characters a text result fits under the ceiling and a records result does
+  // not. status() derives both, so this used to build fine and then throw from every status() call.
+  await assert.rejects(setup({ defaultMaxOutputChars: 87_000_000 }).create(), (error: unknown) => {
+    assert.ok(error instanceof RangeError, String(error));
+    assert.match(error.message, /defaultMaxOutputChars 87000000/);
+    return true;
+  });
+});
+
+test("defaultMaxOutputChars is validated and applied when nothing is isolated, too", async () => {
+  for (const value of [-1, 1.5, Number.NaN]) {
+    await assert.rejects(setup({ config: { mode: "off" }, defaultMaxOutputChars: value }).create(), RangeError, String(value));
+  }
+  const off = setup({ config: { mode: "off" }, ripstream: fakeRipstream({ type: "text/plain" }), defaultMaxOutputChars: 4_000_000 });
+  await (await off.create()).isolate({ input: bytes("x") });
+  assert.equal(off.ripstream.parseCalls[0]?.options.limits?.maxOutputChars, 4_000_000);
+
+  const lenient = setup({
+    config: { mode: "lenient", memoryPoolMb: 100 },
+    ripstream: fakeRipstream({ type: "text/plain" }),
+    defaultMaxOutputChars: 4_000_000,
+  });
+  delete (lenient.options as { pool?: MemoryPool }).pool;
+  const degraded = await lenient.create();
+  assert.equal(degraded.status().degraded, true);
+  await degraded.isolate({ input: bytes("x") });
+  assert.equal(lenient.ripstream.parseCalls[0]?.options.limits?.maxOutputChars, 4_000_000);
+});
+
+test("a pool that holds a text child but not a records child warns at construction", async () => {
+  // text 2708 MiB, records 3056 MiB: 2900 runs /tika but would refuse every recursive request sent to a child.
+  const between = setup({ config: { mode: "strict" }, pool: new MemoryPool({ poolMb: 2900, maxQueue: 0 }) });
+  const isolator = await between.create();
+  const warnings = between.logs.filter((entry) => entry.level === "warn");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]?.message ?? "", /2900 MiB/);
+  assert.match(warnings[0]?.message ?? "", /3056 MiB/);
+  assert.match(warnings[0]?.message ?? "", /recursive/i);
+  assert.equal(isolator.status().degraded, false); // still isolating; only recursive requests are affected
+
+  const roomy = setup({ config: { mode: "strict" }, pool: new MemoryPool({ poolMb: 8000, maxQueue: 0 }) });
+  await roomy.create();
+  assert.deepEqual(roomy.logs.filter((entry) => entry.level === "warn"), []);
+});
+
 test("the child gets the derived heap, the effective caps and a parse timer below the kill deadline", async () => {
   const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"], config: { mode: "strict", maxTaskMillis: 20_000 } });
   const isolator = await h.create();

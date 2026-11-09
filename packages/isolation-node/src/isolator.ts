@@ -96,6 +96,13 @@ export interface NodeIsolatorOptions {
   readonly inProcessMaxBytes?: number;
   /** Per-request detection budget in ms. Default DEFAULT_DETECT_TIMEOUT_MS. */
   readonly detectTimeoutMs?: number;
+  /**
+   * The output cap of a default request, and of any request that names none. `status().limits`,
+   * `defaultReservationMb` and the check that the pool can hold one child all derive from it, so a caller that
+   * enforces a larger ceiling (a server's `maxLimits.maxOutputChars`) passes it here and finds out at construction,
+   * not on every request, that the pool is too small for it. Default: core's `DEFAULT_LIMITS.maxOutputChars`.
+   */
+  readonly defaultMaxOutputChars?: number;
   /** Default: warnings go to console.warn, the rest is dropped. */
   readonly log?: (level: IsolatorLogLevel, message: string) => void;
   /** @internal Test seam: replaces the availability probe. */
@@ -255,6 +262,7 @@ interface Plan {
   readonly inProcessTypes: ReadonlySet<string>;
   readonly inProcessMaxBytes: number;
   readonly detectTimeoutMs: number | undefined;
+  readonly defaultMaxOutputChars: number | undefined;
   /** null: nothing is ever spawned (off, or degraded). */
   readonly isolating: Isolating | null;
   readonly degradedReason: string | null;
@@ -280,10 +288,10 @@ class NodeIsolatorImpl implements NodeIsolator {
 
     const size = await this.#measure(request);
     const plan = this.#plan;
-    if (plan.isolating === null) return this.#parseInProcess(request, signal);
+    if (plan.isolating === null) return this.#parseInProcess(withDefaultCap(request, plan.defaultMaxOutputChars), signal);
 
     // Rejects maxOutputChars -1 and absurd caps for every route, so the answer does not depend on the file type.
-    const limits = deriveLimits(plan.config, request);
+    const limits = deriveLimits(plan.config, withDefaultCap(request, plan.defaultMaxOutputChars));
     const route = await routeRequest({
       ripstream: plan.ripstream,
       input: request.input,
@@ -295,7 +303,9 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(signal === undefined ? {} : { signal }),
     });
     throwIfAborted(signal);
-    return route === "in-process" ? this.#parseInProcess(request, signal) : this.#runIsolated(plan.isolating, request, limits, signal);
+    return route === "in-process"
+      ? this.#parseInProcess(withDefaultCap(request, plan.defaultMaxOutputChars), signal)
+      : this.#runIsolated(plan.isolating, request, limits, signal);
   }
 
   async dispose(): Promise<void> {
@@ -317,7 +327,8 @@ class NodeIsolatorImpl implements NodeIsolator {
       pool: isolating === null ? null : isolating.pool.stats(),
       unreapedChildren: isolating === null ? 0 : isolating.runner.unreapedChildren,
       limits: isolating === null ? null : { ...isolating.defaultLimits },
-      defaultReservationMb: isolating === null ? null : defaultReservations(plan.config, isolating.pool.overshootMb),
+      defaultReservationMb:
+        isolating === null ? null : defaultReservations(plan.config, isolating.pool.overshootMb, plan.defaultMaxOutputChars),
       maxInputBytes: this.#maxInputBytes,
       inProcessTypes: [...plan.inProcessTypes].sort(),
       inProcessMaxBytes: plan.inProcessMaxBytes,
@@ -406,9 +417,48 @@ class NodeIsolatorImpl implements NodeIsolator {
   }
 }
 
-function defaultReservations(config: IsolationConfig, overshootMb: number): { text: number; records: number } {
+/**
+ * The limits of a default request. A bad `defaultMaxOutputChars` is the caller's configuration mistake, so it is a
+ * RangeError here; the same number on a single request is a document-level LimitExceededError (422 at the server).
+ */
+function deriveDefaultLimits(config: IsolationConfig, defaultMaxOutputChars: number | undefined): DerivedLimits {
+  if (defaultMaxOutputChars === undefined) return deriveLimits(config);
+  try {
+    const text = deriveLimits(config, { maxOutputChars: defaultMaxOutputChars });
+    // A records result carries more metadata than a text one, so a cap can fit the first and not the second.
+    deriveLimits(config, { output: "records", maxOutputChars: defaultMaxOutputChars });
+    return text;
+  } catch (error) {
+    if (error instanceof LimitExceededError) {
+      throw new RangeError(`defaultMaxOutputChars ${defaultMaxOutputChars} is rejected: ${error.message}`);
+    }
+    throw error;
+  }
+}
+
+function requireValidOutputCap(value: number | undefined): void {
+  if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+    throw new RangeError(`defaultMaxOutputChars must be a non-negative integer, got ${String(value)}`);
+  }
+}
+
+/** The request with the isolator's default output cap filled in when it names none. */
+function withDefaultCap(request: IsolatedParseRequest, defaultMaxOutputChars: number | undefined): IsolatedParseRequest {
+  return request.maxOutputChars === undefined && defaultMaxOutputChars !== undefined
+    ? { ...request, maxOutputChars: defaultMaxOutputChars }
+    : request;
+}
+
+function defaultReservations(
+  config: IsolationConfig,
+  overshootMb: number,
+  defaultMaxOutputChars: number | undefined,
+): { text: number; records: number } {
   const reserve = (output: "text" | "records"): number => {
-    const limits = deriveLimits(config, { output });
+    const limits = deriveLimits(config, {
+      output,
+      ...(defaultMaxOutputChars === undefined ? {} : { maxOutputChars: defaultMaxOutputChars }),
+    });
     return limits.perChildMb + overshootMb + parentResultMb(limits.maxResultBytes, output);
   };
   return { text: reserve("text"), records: reserve("records") };
@@ -478,6 +528,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   const log = options.log ?? defaultLog;
   const config = snapshotConfig(options.config);
   const platform = options.platform ?? process.platform;
+  requireValidOutputCap(options.defaultMaxOutputChars);
   const inProcessMaxBytes = options.inProcessMaxBytes ?? DEFAULT_IN_PROCESS_MAX_BYTES;
   const base = {
     config,
@@ -486,11 +537,12 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     inProcessTypes: new Set(options.inProcessTypes ?? DEFAULT_IN_PROCESS_TYPES),
     inProcessMaxBytes,
     detectTimeoutMs: options.detectTimeoutMs,
+    defaultMaxOutputChars: options.defaultMaxOutputChars,
   };
   if (config.mode === "off") return new NodeIsolatorImpl({ ...base, isolating: null, degradedReason: null });
 
   requireChildModule(options.childModule);
-  const defaults = deriveLimits(config);
+  const defaults = deriveDefaultLimits(config, options.defaultMaxOutputChars);
 
   // Isolation cannot be provided: strict refuses, lenient carries on without it, loudly, and says so in status().
   const unavailable = (reason: string): NodeIsolator => {
@@ -509,6 +561,19 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
   });
   if (!probed.available) return unavailable(probed.reason);
+
+  // choosePool sized the pool for a text request. A pool between the two reservations runs those and refuses every
+  // recursive request that reaches a child, so say so now rather than on the first /rmeta.
+  const reservations = defaultReservations(config, chosen.pool.overshootMb, options.defaultMaxOutputChars);
+  const { poolMb } = chosen.pool.stats();
+  if (reservations.records > poolMb) {
+    log(
+      "warn",
+      `The memory pool of ${poolMb} MiB holds a text request (${reservations.text} MiB) but not a recursive one ` +
+        `(${reservations.records} MiB): recursive parses that reach a child will be refused. Raise the pool to at ` +
+        `least ${reservations.records} MiB to run them.`,
+    );
+  }
 
   if (config.requireStrictContainment === true) {
     const missing = missingStrictContainment(probed.containment, platform);
