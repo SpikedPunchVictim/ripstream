@@ -525,7 +525,10 @@ function readAnsi(
 
 function encodingFor(codepage: number): string {
   if (codepage === 65001) return "utf-8";
-  if (codepage === 1200) return "utf-16le";
+  // CODEPAGE 1200 (UTF-16) is what every Excel 97+ file declares. It describes the
+  // uncompressed strings, which carry their own flag; an 8-bit ("compressed") string
+  // is Latin-1, never UTF-16 (POI: StringUtil.getFromCompressedUnicode).
+  if (codepage === 1200) return "windows-1252";
   if (codepage === 932) return "shift_jis";
   if (codepage === 936) return "gbk";
   if (codepage === 949) return "euc-kr";

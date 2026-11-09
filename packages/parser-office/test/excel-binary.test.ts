@@ -33,7 +33,7 @@ function biff8String(value: string): number[] {
   return [...u16(value.length), 0, ...new TextEncoder().encode(value)];
 }
 
-function buildWorkbook(extraColumn?: number, extraRows = 1): Uint8Array {
+function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): Uint8Array {
   const sstStrings = ["Alpha", "Beta", "Gamma"];
   const sst = [
     ...u32(sstStrings.length),
@@ -45,6 +45,7 @@ function buildWorkbook(extraColumn?: number, extraRows = 1): Uint8Array {
   const xf0 = record(0x00e0, [...u16(0), ...u16(0), ...new Array(18).fill(0)]);
   const xf1 = record(0x00e0, [...u16(0), ...u16(164), ...new Array(18).fill(0)]);
   const bof = record(0x0809, [...u16(0x0600), ...u16(0x0005), ...new Array(12).fill(0)]);
+  const cp = codepage === undefined ? [] : record(0x0042, u16(codepage));
   const sstRecord = record(0x00fc, sst);
 
   const sheetName = new TextEncoder().encode("Sheet1");
@@ -60,7 +61,7 @@ function buildWorkbook(extraColumn?: number, extraRows = 1): Uint8Array {
   void boundsheetLength;
 
   const globalLength =
-    bof.length + format.length + xf0.length + xf1.length + sstRecord.length + boundsheetPlaceholder.length;
+    bof.length + cp.length + format.length + xf0.length + xf1.length + sstRecord.length + boundsheetPlaceholder.length;
   const boundsheet = record(0x0085, [
     ...u32(globalLength),
     0,
@@ -85,6 +86,7 @@ function buildWorkbook(extraColumn?: number, extraRows = 1): Uint8Array {
 
   const workbook = new Uint8Array([
     ...bof,
+    ...cp,
     ...format,
     ...xf0,
     ...xf1,
@@ -155,6 +157,13 @@ test("extracts BIFF8 shared strings, dates and labels", async () => {
   assert.match(text, /Sheet1/);
   assert.match(text, /Alpha/);
   assert.match(text, /2024-01-01/);
+  assert.match(text, /Text/);
+});
+
+test("reads 8-bit strings when the CODEPAGE record says UTF-16 (every Excel 97+ file)", async () => {
+  const text = await parse(buildWorkbook(undefined, 1, 1200));
+  assert.match(text, /Sheet1/);
+  assert.match(text, /Alpha/);
   assert.match(text, /Text/);
 });
 
