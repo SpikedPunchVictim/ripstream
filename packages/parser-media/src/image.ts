@@ -17,7 +17,7 @@ import exifr from "exifr";
  */
 export class ImageParser implements Parser {
   readonly name = "ImageParser";
-  readonly capabilities = { metadataOnly: true } as const;
+  readonly capabilities = { metadataOnly: true, unsafe: true } as const;
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(

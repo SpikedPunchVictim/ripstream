@@ -13,6 +13,7 @@ import { parquetMetadata, parquetReadObjects, parquetSchema } from "hyparquet";
 /** Parquet reader plus ORC/Avro signature metadata. */
 export class ColumnarParser implements Parser {
   readonly name = "ColumnarParser";
+  readonly capabilities = { unsafe: true } as const;
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(

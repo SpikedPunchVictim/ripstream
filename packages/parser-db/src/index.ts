@@ -19,7 +19,7 @@ const MAX_ROWS = 100;
 /** SQLite parser backed by optional sql.js (WASM, no native addon). */
 export class SqliteParser implements Parser {
   readonly name = "SQLite3Parser";
-  readonly capabilities = { requiresRandomAccess: true } as const;
+  readonly capabilities = { requiresRandomAccess: true, unsafe: true } as const;
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set([
