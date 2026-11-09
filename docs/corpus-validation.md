@@ -87,6 +87,10 @@ applies the default 100,000-character output limit, so long documents report
 - 3 `EncryptedDocumentError` and 1 `MalformedDocumentError`.
 - Zero crashes, zero hangs, and zero unbounded allocations.
 
+> **Historical.** The PDF worker thread and its memory watchdog described in this run were removed
+> (`tikajs-zgg2.7`). Untrusted PDFs are now contained by process isolation (see
+> [isolation.md](isolation.md)), and the figures below describe the run that preceded the removal.
+
 ## Fixes made from this run
 
 1. **Removed per-page `getOperatorList()` image counting.** It was not an

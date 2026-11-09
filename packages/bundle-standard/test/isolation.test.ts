@@ -26,7 +26,7 @@ import { isolationChildPath } from "../src/isolation.ts";
 
 /**
  * End to end: the real ChildRunner spawns the real standard child (src/isolation-child.ts: runChildMain around
- * createRipstream({ pdfInline: true })), and every answer is compared with what the same pipeline gives in-process.
+ * createRipstream()), and every answer is compared with what the same pipeline gives in-process.
  */
 
 const MIB = 1024 * 1024;

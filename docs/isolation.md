@@ -14,7 +14,8 @@ pool can hold a child for it, so a flood of hostile documents queues or gets a 5
 | `ripstream serve` (the server product) | **strict** | A long-lived service that takes documents from strangers. |
 | `ripstream <file>` / `metadata` (one-shot CLI) | off; opt in with `--isolation` | One user parsing their own file; the process exits afterwards. |
 | `createRipstreamServer()` (library) | **no default engine**: it throws without `ripstream` | The server never builds an in-process engine behind your back. Pass `createRipstream()` to accept the risk, or an isolated engine. |
-| `createRipstream()` (library) | in-process | A library call is yours to contain. |
+| `PipesClient` (library) | in-process unless given a `ripstream` | Same as `createRipstream()`; pass an isolated engine to contain a run. |
+| `createRipstream()` (library) | in-process | A library call is yours to contain. This includes PDFs: the PDF parser runs pdf.js on the calling thread and has no containment of its own. |
 
 `strict` refuses to start when isolation cannot be provided. `lenient` logs a WARN and parses everything in the
 server process. `off` parses in-process and says so at startup and on `/status`.

@@ -72,12 +72,6 @@ export interface DefaultParserOptions {
   /** Product limits for the default CsvParser (ignored when `parsers` is supplied). */
   readonly csv?: CsvParserOptions;
   readonly pdfPassword?: string | import("@spikedpunch/ripstream-core").PasswordProvider;
-  /**
-   * Run the default PdfParser's pdf.js on the calling thread instead of in a
-   * worker thread (see PdfParserOptions.inline). Meant for callers that already
-   * contain the whole parse in a child process; ignored when `parsers` is supplied.
-   */
-  readonly pdfInline?: boolean;
 }
 
 export function createDefaultParser(options: DefaultParserOptions = {}): Parser {
@@ -104,7 +98,6 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Parser 
       new TarParser(),
       new PdfParser({
         ...(options.pdfPassword === undefined ? {} : { password: options.pdfPassword }),
-        ...(options.pdfInline === undefined ? {} : { inline: options.pdfInline }),
       }),
       new ImageParser(),
       new Mp4Parser(),

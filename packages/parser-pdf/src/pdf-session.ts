@@ -7,11 +7,11 @@ import { isMissingCatalogError, recoverDocument } from "./pdf-recover.ts";
 
 /**
  * One pdf.js document load plus the page requests made against it. It owns no
- * thread or port: the worker entry (pdf-worker.ts) and the in-thread channel
- * (pdf-channel.ts) both drive it with the same request/response protocol.
+ * thread or port: the in-thread channel (pdf-channel.ts) drives it with a
+ * request/response protocol.
  */
 
-/** What the parser hands to the session (the worker's `workerData`). */
+/** What the parser hands to the session. */
 export interface PdfSessionInput {
   readonly data?: Uint8Array;
   readonly path?: string;
@@ -166,7 +166,7 @@ export class PdfSession {
       } catch {
         attachments = [];
       }
-      // Check sizes here: a worker's postMessage would structured-clone every attachment.
+      // Check sizes here, before the response hands every attachment to the parser.
       this.#checkAttachments(attachments);
       this.#document = document;
       return {

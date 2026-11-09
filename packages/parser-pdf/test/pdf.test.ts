@@ -3,24 +3,23 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { deflateSync } from "node:zlib";
 import {
   AbortError,
   BodyContentHandler,
   CONTEXT_KEYS,
+  EncryptedDocumentError,
   LimitExceededError,
   EmbeddedDocumentBytesHandler,
   MalformedDocumentError,
   Metadata,
   ParseContext,
-  ParseTimeoutError,
   RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { PdfParser } from "../src/index.ts";
 import { pdfDate } from "../src/pdf.ts";
 import { recoverDocument } from "../src/pdf-recover.ts";
-import { helloPdf, rawPdf, samplePdf } from "./fixtures.ts";
+import { encryptedPdf, helloPdf, rawPdf, samplePdf } from "./fixtures.ts";
 
 test("extracts PDF text and metadata", async () => {
   const bytes = await samplePdf();
@@ -60,7 +59,7 @@ test("reports malformed input without crashing the caller", async () => {
   await stream.close();
 });
 
-test("honours cancellation before spawning work", async () => {
+test("honours cancellation before reading the input", async () => {
   const stream = await RipstreamInputStream.from(new Uint8Array([1, 2, 3]));
   const controller = new AbortController();
   controller.abort();
@@ -72,20 +71,6 @@ test("honours cancellation before spawning work", async () => {
       new ParseContext({ signal: controller.signal }),
     ),
     AbortError,
-  );
-  await stream.close();
-});
-
-test("times out a stuck worker instead of hanging the caller", async () => {
-  const stream = await RipstreamInputStream.from(await samplePdf());
-  await assert.rejects(
-    new PdfParser({ pageTimeoutMs: 1 }).parse(
-      stream,
-      new BodyContentHandler(),
-      new Metadata(),
-      new ParseContext(),
-    ),
-    ParseTimeoutError,
   );
   await stream.close();
 });
@@ -208,6 +193,29 @@ test("accepts password providers for encrypted inputs", async () => {
   assert.match(handler.toString(), /Hello PDF/);
 });
 
+test("rejects an encrypted PDF when no password is supplied", async () => {
+  await assert.rejects(
+    parseWith(encryptedPdf("user-pw"), new PdfParser()),
+    EncryptedDocumentError,
+  );
+});
+
+test("rejects an encrypted PDF when the password is wrong", async () => {
+  await assert.rejects(
+    parseWith(encryptedPdf("user-pw"), new PdfParser({ password: "wrong" })),
+    EncryptedDocumentError,
+  );
+});
+
+test("opens an encrypted PDF with the right password", async () => {
+  const text = await parseWith(encryptedPdf("user-pw"), new PdfParser({ password: "user-pw" }));
+  assert.match(text, /Secret text/);
+});
+
+test("opens an encrypted PDF with a password provider", async () => {
+  const parser = new PdfParser({ password: { getPassword: () => "user-pw" } });
+  assert.match(await parseWith(encryptedPdf("user-pw"), parser), /Secret text/);
+});
 
 test("recovers a PDF with a broken xref table", async () => {
   const objects = [
@@ -365,20 +373,6 @@ test("rejects an attachment larger than the embedded byte limit", async () => {
   );
 });
 
-test("stops a flate bomb at the worker memory budget", async () => {
-  const bomb = deflateSync(new Uint8Array(96 * 1024 * 1024).fill(0x20), { level: 9 });
-  const bytes = rawPdf([
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 9 9] /Contents 4 0 R >>",
-    `<< /Length ${bomb.length} /Filter /FlateDecode >>\nstream\n${Buffer.from(bomb).toString("latin1")}\nendstream`,
-  ]);
-  await assert.rejects(
-    parseWith(bytes, new PdfParser({ workerMemoryMb: 96 })),
-    LimitExceededError,
-  );
-});
-
 test("recovers a PDF whose xref and trailer are missing", async () => {
   const bytes = await helloPdf(false);
   const truncated = bytes.subarray(0, bytes.indexOf("xref\n"));
@@ -452,6 +446,6 @@ for (const fixture of corpusFixtures) {
   const present =
     bytes !== undefined && createHash("sha256").update(bytes).digest("hex") === fixture.sha256;
   test(`recovers pdf.js corpus file ${fixture.name}`, { skip: !present }, async () => {
-    assert.match(await parseWith(bytes!, new PdfParser({ workerMemoryMb: 512 })), fixture.text);
+    assert.match(await parseWith(bytes!, new PdfParser()), fixture.text);
   });
 }

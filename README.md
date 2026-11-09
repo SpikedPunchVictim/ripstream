@@ -23,7 +23,7 @@ console.log(result.metadata.get("Content-Type"), result.text);
 | `@spikedpunch/ripstream-parsers` | Default parser registry and text/web/mail parsers |
 | `@spikedpunch/ripstream-parser-office` | OOXML, ODF, EPUB, RTF, OLE2, legacy DOC/XLS/PPT/MSG |
 | `@spikedpunch/ripstream-parser-archive` | ZIP, TAR, GZIP, BZIP2, Brotli, XZ, LZ4, Snappy, .Z, plist |
-| `@spikedpunch/ripstream-parser-pdf` | pdf.js parser in an isolated worker |
+| `@spikedpunch/ripstream-parser-pdf` | pdf.js parser (runs on the calling thread; isolate untrusted PDFs, see [docs/isolation.md](docs/isolation.md)) |
 | `@spikedpunch/ripstream-parser-media` | Images, audio, MP4 metadata |
 | `@spikedpunch/ripstream-language` | franc language detection |
 | `@spikedpunch/ripstream-cli` | `ripstream` command |
@@ -32,7 +32,7 @@ console.log(result.metadata.get("Content-Type"), result.text);
 ## Safety defaults
 
 SSRF-blocking URL fetch, archive traversal/symlink rejection, compression ratio and size caps,
-output/time/embedded limits, 0600 temp files, worker isolation, secret redaction. See
+output/time/embedded limits, 0600 temp files, per-document parse isolation in a child process (`ripstream serve` isolates by default), secret redaction. See
 [docs/security.md](docs/security.md).
 
 ## Development

@@ -10,8 +10,10 @@
   node depth, parse time. Violations throw typed errors; archive entry limits propagate.
 - **Temp files.** Spool files are created 0600 inside a 0700 temp directory and removed on close
   or context cleanup.
-- **Workers.** Optional parsers (PDF) run in a worker with isolated flags; generic
-  `runIsolatedTask` supports env isolation, memory caps, timeout and abort.
+- **Parse isolation.** `ripstream serve` parses each document in a short-lived child process with
+  heap, RSS, address-space (Linux), CPU and wall-clock bounds, and refuses to start when it cannot
+  (see [isolation.md](isolation.md)). A plain `createRipstream()` parses in the calling process, and
+  so does the PDF parser: pdf.js runs on the calling thread with no containment of its own.
 - **Secrets.** `redactMetadata` replaces credential-like keys before logging/serialization.
 - **Regex.** `compileSafeRegex`/`safeRegexTest` reject oversized and catastrophic-backtracking
   patterns and cap input length.
@@ -33,7 +35,7 @@ throw `LimitExceededError` (or `ParseTimeoutError` for time).
 | `maxZipEntries` | 10,000 | Entries in a ZIP/OPC container (checked before extraction) |
 | `maxNodeDepth` | 100 | Embedded-document recursion depth |
 | `maxParseMillis` | 60,000 | Wall-clock parse time (aborts via `ctx.signal`) |
-| `maxTaskMillis` | 60,000 | Isolated worker tasks (`runIsolatedTask`) |
+| `maxTaskMillis` | 60,000 | Wall-clock budget of one isolated request (default of `isolation.maxTaskMillis`) |
 | `maxMetadataValueChars` | 1,000,000 | Metadata values are truncated at this length |
 | `maxXmlEntityExpansions` | 0 | Moot: DTDs are rejected outright and saxes expands only the predefined entities |
 
@@ -42,7 +44,7 @@ Parser-specific caps outside `ParseLimits`:
 - **HTML/XHTML open-element depth**: 2000 by default (`DEFAULT_MAX_HTML_DEPTH`), configurable with
   `new HtmlDocumentParser({ maxDepth })`. It is independent of `maxNodeDepth`, which bounds
   embedded-document nesting (default 100) and would reject ordinary deeply nested markup.
-- **PDF**: `maxInputBytes`, `workerMemoryMb`, `maxPageTextChars` (see "PDF worker budget").
+- **PDF**: `maxInputBytes`, `maxPageTextChars`, `pageTimeoutMs` (see "PDF limits").
 - **Time**: the DBF and HTML/XHTML parsers check `ctx.signal` periodically, so `maxParseMillis` and
   caller aborts interrupt long inputs.
 
@@ -111,15 +113,21 @@ paths only relative to server-configured roots; absolute paths, `..` and symlink
 Breaking change: earlier versions exposed `/pipes` without these options; it now returns 404 until
 configured.
 
-## PDF worker budget
+## PDF limits
 
-`PdfParser` options bound pdf.js resource use:
+`PdfParser` runs pdf.js on the calling thread. Its options bound what it can bound from there:
 
-- `maxInputBytes` (default 512 MiB): larger files are rejected with `LimitExceededError` before the
-  worker starts.
-- `workerMemoryMb` (default 256): V8 old-generation limit for the worker, also enforced by a
-  watchdog on heap plus ArrayBuffer memory; the worker is terminated when exceeded.
+- `maxInputBytes` (default 512 MiB): larger files are rejected with `LimitExceededError` before
+  pdf.js is loaded.
 - `maxPageTextChars` (default 32 Mi): per-page cap on extracted text characters.
+- `pageTimeoutMs` (default 30 s): ends a load or page extraction that stalls asynchronously with
+  `ParseTimeoutError`. It cannot interrupt a synchronous pdf.js loop, because the timer cannot fire
+  while the thread is busy.
+
+The parser has no memory cap and cannot survive a crash of pdf.js. Earlier versions ran pdf.js in a
+worker thread with a memory watchdog; that path was removed in favour of process isolation. Parse
+untrusted PDFs through the isolation layer ([isolation.md](isolation.md)), which bounds heap, RSS,
+CPU and wall-clock time of the whole parse.
 
 Attachment extraction follows `maxEmbeddedResources`, `maxEmbeddedResourceBytes` and
 `maxTotalEmbeddedBytes`.

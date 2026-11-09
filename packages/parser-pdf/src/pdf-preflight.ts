@@ -2,7 +2,8 @@
  * Cheap structural checks on in-memory PDF bytes that reject inputs known to
  * make pdf.js spin or exhaust memory, before pdf.js parses them. They only
  * look at uncompressed object dictionaries; anything hidden in object streams
- * falls through to the worker timeout and memory budget.
+ * falls through to pdf.js itself (the page timeout, and the process-isolation
+ * layer's limits).
  */
 
 /** Largest indirect object number the PDF specification allows (Annex C). */

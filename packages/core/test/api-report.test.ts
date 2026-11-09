@@ -30,7 +30,7 @@ test("core API includes the stable facade contracts", () => {
     "Parser",
     "Detector",
     "XHTMLContentHandler",
-    "runIsolatedTask",
+    "createIsolatedRipstream",
     "safeFetch",
   ]) {
     assert.ok(core.includes(name), name);

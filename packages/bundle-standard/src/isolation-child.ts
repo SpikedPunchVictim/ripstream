@@ -6,8 +6,8 @@ import { createRipstream } from "@spikedpunch/ripstream-parsers";
  * "@spikedpunch/ripstream-bundle-standard/isolation"). It parses ONE document with the standard pipeline in this
  * process and answers over fd 3. Importing it runs it, so nothing else imports it.
  *
- * `pdfInline`: the child already is the isolation boundary (heap cap, RSS kill, process-group kill, ulimit), so
- * the PDF parser runs on the main thread here instead of in a worker_thread. A worker would also add a second
- * address space that the parent's per-child memory accounting does not see.
+ * The PDF parser always runs pdf.js on the calling thread, which here is this child's main thread. The child
+ * process is the containment (heap cap, RSS kill, process-group kill, ulimit); there is no nested worker_thread
+ * whose memory the parent's per-child accounting would not see.
  */
-await runChildMain({ ripstream: createRipstream({ pdfInline: true }) });
+await runChildMain({ ripstream: createRipstream() });

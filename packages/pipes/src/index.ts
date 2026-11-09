@@ -480,6 +480,5 @@ function metadataObject(metadata: Metadata): Record<string, readonly string[]> {
   for (const name of metadata.names()) result[name] = metadata.getAll(name);
   return result;
 }
-export { WorkerPool } from "./pool.ts";
 export { CheckpointStore, withRetry } from "./resilience.ts";
 export { CompositeEmitter, CompositeReporter, CsvFetcher, HttpEmitter, JsonFetcher, JsonlEmitter, JsonlReporter, LoggingReporter, ModuleEmitter, ModuleFetcher, StdoutEmitter, type Reporter } from "./adapters.ts";

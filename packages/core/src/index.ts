@@ -90,12 +90,6 @@ export {
   type IsolatedRipstreamOptions,
 } from "./isolated-ripstream.ts";
 export {
-  WorkerTaskError,
-  WorkerTimeoutError,
-  runIsolatedTask,
-  type IsolatedTaskOptions,
-} from "./worker-runner.ts";
-export {
   UnsafePatternError,
   compileSafeRegex,
   redactMetadata,

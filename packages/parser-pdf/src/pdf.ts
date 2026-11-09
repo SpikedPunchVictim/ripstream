@@ -13,7 +13,7 @@ import {
   type Parser,
   RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { InlineChannel, WorkerChannel, type PdfChannel } from "./pdf-channel.ts";
+import { InlineChannel } from "./pdf-channel.ts";
 import {
   PdfSession,
   type PdfAnnotation,
@@ -24,10 +24,13 @@ const MAX_PAGES = 10_000;
 const MIB = 1024 * 1024;
 
 /**
- * PDF text and metadata extraction on top of pdf.js. Parsing runs in a
- * worker thread so a malformed document cannot take down the caller (or, with
- * `inline`, on the calling thread inside a process that is already
- * contained), and pdfjs-dist is loaded lazily as an optional peer dependency.
+ * PDF text and metadata extraction on top of pdf.js, loaded lazily as an
+ * optional peer dependency.
+ *
+ * pdf.js runs on the calling thread. This parser does not contain a hostile
+ * document: there is no memory cap, and a synchronous pdf.js loop cannot be
+ * interrupted (see `pageTimeoutMs`). Callers that parse untrusted PDFs must run
+ * the parser inside the process-isolation layer (see docs/isolation.md).
  */
 export interface PdfParserOptions {
   /** Port of PDFParserConfig.extractAnnotationText (default true). */
@@ -37,40 +40,20 @@ export interface PdfParserOptions {
   /** Written between pages; empty disables it (default "\n"). */
   readonly pageSeparator?: string;
   /**
-   * Maximum time for the worker to load the document or extract one page.
-   * pdf.js can enter unbounded loops on malicious or malformed input, so the
-   * caller-side timeout terminates the worker instead of hanging the parse
-   * (default 30000 ms). With `inline` it still ends async stalls, but cannot
-   * interrupt a synchronous loop inside pdf.js (the timer cannot fire while
-   * the thread is busy); the enclosing process's wall-clock kill covers that.
+   * Maximum time to load the document or extract one page (default 30000 ms).
+   * It ends an asynchronous stall with a ParseTimeoutError, but it cannot
+   * interrupt a synchronous loop inside pdf.js: pdf.js runs on the calling
+   * thread, so the timer cannot fire while the thread is busy. Bounding a
+   * runaway parse is the job of the process-isolation layer
+   * (see docs/isolation.md).
    */
   readonly pageTimeoutMs?: number;
   /** Static password or provider; empty password is attempted by default. */
   readonly password?: string | import("@spikedpunch/ripstream-core").PasswordProvider;
-  /** Reject PDFs larger than this before spawning the worker (default 512 MiB). */
+  /** Reject PDFs larger than this before pdf.js sees them (default 512 MiB). */
   readonly maxInputBytes?: number;
-  /**
-   * Memory budget for the pdf.js worker in MiB (default 256). It sets the V8
-   * heap limit and is also enforced on heap plus ArrayBuffer memory, which
-   * V8's heap limit does not cover (flate/JBIG2 bombs allocate there). The
-   * worker is terminated with a LimitExceededError when it is crossed.
-   * Ignored when `inline` is true: there is no worker to bound, so the
-   * process heap cap (for example `--max-old-space-size`) governs instead.
-   */
-  readonly workerMemoryMb?: number;
   /** Per-page cap on extracted text characters (default 32 Mi). */
   readonly maxPageTextChars?: number;
-  /**
-   * Run pdf.js on the calling thread instead of in a worker thread (default
-   * false). For callers that already run the whole parse in a contained child
-   * process, where a nested worker is unnecessary and can fail to start under
-   * an address-space cap. Limits, password handling, results and error
-   * classes are the same as in worker mode; what changes is containment:
-   * `workerMemoryMb` is not enforced, a synchronous pdf.js loop cannot be
-   * interrupted, and a crash inside pdf.js is no longer isolated from the
-   * caller. Only enable it when the surrounding process is itself expendable.
-   */
-  readonly inline?: boolean;
 }
 
 export class PdfParser implements Parser {
@@ -82,9 +65,7 @@ export class PdfParser implements Parser {
   readonly #pageTimeoutMs: number;
   readonly #password: PdfParserOptions["password"];
   readonly #maxInputBytes: number;
-  readonly #workerMemoryMb: number;
   readonly #maxPageTextChars: number;
-  readonly #inline: boolean;
 
   constructor(options: PdfParserOptions = {}) {
     this.#extractAnnotationText = options.extractAnnotationText ?? true;
@@ -93,9 +74,7 @@ export class PdfParser implements Parser {
     this.#pageTimeoutMs = options.pageTimeoutMs ?? 30_000;
     this.#password = options.password;
     this.#maxInputBytes = options.maxInputBytes ?? 512 * MIB;
-    this.#workerMemoryMb = options.workerMemoryMb ?? 256;
     this.#maxPageTextChars = options.maxPageTextChars ?? 32 * MIB;
-    this.#inline = options.inline ?? false;
   }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
@@ -129,9 +108,7 @@ export class PdfParser implements Parser {
       maxAttachmentBytes: limits.maxEmbeddedResourceBytes,
       maxTotalAttachmentBytes: limits.maxTotalEmbeddedBytes,
     };
-    const channel: PdfChannel = this.#inline
-      ? new InlineChannel(new PdfSession(input))
-      : new WorkerChannel(input, this.#workerMemoryMb);
+    const channel = new InlineChannel(new PdfSession(input));
     const onAbort = (): void => {
       void channel.stop();
     };
@@ -139,9 +116,9 @@ export class PdfParser implements Parser {
 
     try {
       const ready = await channel.next(this.#pageTimeoutMs);
-      if (ready.type === "error") throw mapWorkerError(ready);
+      if (ready.type === "error") throw mapSessionError(ready);
       if (ready.type !== "ready") {
-        throw new MalformedDocumentError("PDF worker returned no document");
+        throw new MalformedDocumentError("PDF session returned no document");
       }
 
       applyInfo(metadata, ready.info);
@@ -159,15 +136,15 @@ export class PdfParser implements Parser {
         ctx.throwIfAborted();
         channel.post({ type: "page", index });
         const message = await channel.next(this.#pageTimeoutMs);
-        if (message.type === "error") throw mapWorkerError(message);
+        if (message.type === "error") throw mapSessionError(message);
         if (message.type === "page-error") {
-          if (message.name === "LimitExceededError") throw mapWorkerError(message);
+          if (message.name === "LimitExceededError") throw mapSessionError(message);
           // Upstream PDFBox recovers individual pages; keep the pages that
           // did parse instead of failing the whole document.
           continue;
         }
         if (message.type !== "page") {
-          throw new MalformedDocumentError("Unexpected PDF worker response");
+          throw new MalformedDocumentError("Unexpected PDF session response");
         }
         await xhtml.startElement("div", "class", "page");
         let characters = 0;
@@ -259,7 +236,7 @@ function resolvePassword(
   return password.getPassword() ?? undefined;
 }
 
-function mapWorkerError(message: {
+function mapSessionError(message: {
   readonly name: string;
   readonly message: string;
   readonly code?: string;

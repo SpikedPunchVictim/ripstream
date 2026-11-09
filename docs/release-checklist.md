@@ -4,7 +4,7 @@
 - [x] MIME registry generated from Ripstream; detection goldens
 - [x] P0/P1 format slice: text/web/mail, archives, PDF, OOXML/ODF/EPUB, legacy Office, media metadata
 - [x] Recursive/rmeta JSON, metadata serialization, CLI, HTTP server, pipes core
-- [x] Archive/SSRF/limits/worker/temp-file security controls
+- [x] Archive/SSRF/limits/parse-isolation/temp-file security controls
 - [x] API report, type tests, license/SBOM/provenance gates, CI
 - [x] Parity report + feature matrix
 - [ ] Full corpus differential run with Tika 4.2 for all P0/P1
