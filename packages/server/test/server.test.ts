@@ -330,6 +330,29 @@ test("array corsOrigin echoes only a listed request origin", async () => {
   }, { corsOrigin: ["https://a.example", "https://b.example"] });
 });
 
+test("multipart parts keep every byte value", async () => {
+  const received: number[] = [];
+  const { Ripstream, MediaType } = await import("@spikedpunch/ripstream-core");
+  const spy = new Ripstream({
+    detector: { async detect() { return MediaType.TEXT_PLAIN; } } as never,
+    parser: {
+      getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+      async parse(stream: AsyncIterable<Uint8Array>) {
+        for await (const chunk of stream) received.push(...chunk);
+      },
+    },
+  });
+  // TextDecoder("latin1") is windows-1252: it maps 0x80-0x9F to other code points, so those bytes were corrupted.
+  const bytes = Uint8Array.from({ length: 256 }, (_, index) => index);
+  await withServer(async (base) => {
+    const form = new FormData();
+    form.append("file", new Blob([bytes]), "all-bytes.bin");
+    const response = await fetch(`${base}/tika`, { method: "PUT", body: form });
+    assert.equal(response.status, 200);
+  }, { ripstream: spy });
+  assert.deepEqual(received, [...bytes]);
+});
+
 test("multipart filename is used for type detection", async () => {
   let seen: string | undefined;
   const { Ripstream, MediaType } = await import("@spikedpunch/ripstream-core");

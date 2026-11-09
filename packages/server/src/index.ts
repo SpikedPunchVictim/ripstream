@@ -740,7 +740,8 @@ function extractMultipart(
 ): { bytes: Uint8Array; filename?: string } | null {
   const boundary = /boundary="?([^";]+)"?/i.exec(contentType)?.[1];
   if (boundary === undefined) return null;
-  const text = new TextDecoder("latin1").decode(body);
+  // Buffer's "latin1" is ISO-8859-1 and round-trips all 256 byte values; TextDecoder("latin1") is windows-1252.
+  const text = Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString("latin1");
   const parts = text.split(`--${boundary}`);
   for (const part of parts) {
     if (part.startsWith("--")) continue;
