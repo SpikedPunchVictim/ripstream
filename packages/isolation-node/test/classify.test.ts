@@ -53,7 +53,7 @@ runMatrix("terminal done", [
   ["done then OOM abort text", { terminal: "done", signal: "SIGABRT", stderrTail: "out of memory" }, "success"],
 ]);
 
-runMatrix("terminal error maps by kind only", [
+runMatrix("terminal error without a code maps by kind only", [
   ["limit", { terminal: "error", errorFrame: errorFrame("limit"), code: 0 }, LIMIT],
   ["timeout", { terminal: "error", errorFrame: errorFrame("timeout"), code: 0 }, TIMEOUT],
   ["malformed", { terminal: "error", errorFrame: errorFrame("malformed"), code: 0 }, MALFORMED],
@@ -99,7 +99,7 @@ runMatrix("killReason timeout/abort", [
   ["abort pre-ready with TimeoutError", { phase: "pre-ready", killReason: "abort", abortReason: timeoutError }, TIMEOUT],
 ]);
 
-for (const reason of ["rss", "result_cap", "frame_cap", "disk"] as const) {
+for (const reason of ["rss", "result_cap", "frame_cap", "metadata_cap", "disk"] as const) {
   runMatrix(`killReason ${reason}`, [
     ["post-ready SIGKILL", { killReason: reason, signal: "SIGKILL" }, LIMIT],
     ["post-ready with unrelated crash signature", { killReason: reason, signal: "SIGSEGV" }, LIMIT],
@@ -132,6 +132,10 @@ runMatrix("post-ready memory abort", [
   ["SIGTRAP + Failed to reserve virtual memory", { signal: "SIGTRAP", stderrTail: "Fatal process out of memory: Failed to reserve virtual memory" }, LIMIT],
   ["SIGTRAP + out of memory", { signal: "SIGTRAP", stderrTail: "out of memory" }, LIMIT],
   ["SIGSEGV + out of memory (fixture e accepts SIGSEGV)", { signal: "SIGSEGV", stderrTail: "Fatal process out of memory" }, LIMIT],
+  ["marker seen earlier in stderr, tail empty of it", { signal: "SIGABRT", stderrTail: "native frame 40", stderrMarkers: { memory: true, stringLength: false } }, LIMIT],
+  ["string-length marker seen earlier, tail empty of it", { signal: "SIGABRT", stderrTail: "native frame 40", stderrMarkers: { memory: false, stringLength: true } }, LIMIT],
+  ["no marker anywhere", { signal: "SIGABRT", stderrTail: "native frame 40", stderrMarkers: { memory: false, stringLength: false } }, CRASH],
+  ["earlier marker with a non-abort signal stays a crash", { signal: "SIGTERM", stderrTail: "", stderrMarkers: { memory: true, stringLength: false } }, CRASH],
   ["SIGSEGV without marker", { signal: "SIGSEGV", stderrTail: "" }, CRASH],
   ["SIGABRT without marker", { signal: "SIGABRT", stderrTail: "assertion failed" }, CRASH],
   ["SIGABRT with empty stderr", { signal: "SIGABRT" }, CRASH],
@@ -204,7 +208,7 @@ test("no exit shape without a terminal frame ever yields MalformedDocumentError"
   for (const phase of ["pre-ready", "post-ready"] as const)
     for (const signal of signals)
       for (const code of codes)
-        for (const killReason of [null, "timeout", "abort", "rss", "result_cap", "frame_cap", "disk", "protocol"] as const)
+        for (const killReason of [null, "timeout", "abort", "rss", "result_cap", "frame_cap", "metadata_cap", "disk", "protocol"] as const)
           outcomes.add(describeOutcome(classifyExit(facts({ phase, signal, code, killReason, stderrTail: "out of memory" }))));
   assert.equal(outcomes.has(MALFORMED), false);
 });
@@ -279,9 +283,27 @@ test("error frame message is length-bounded", () => {
   assert.ok((error?.message.length ?? 0) < 400);
 });
 
-test("error frame code is shown as display text", () => {
+// INTENTIONAL CHANGE (error-codec.ts): `code` used to be display text next to the `kind`-selected class. It is now the
+// RipstreamErrorCode that selects the class, from a closed table; a code that is not in it is an IsolationError crash
+// whatever the kind says. The code is still shown in the message, as text.
+test("error frame with a code that is not in the table is a crash, and the code is shown as display text", () => {
   const frame: ErrorFrame = { t: "error", kind: "limit", message: "m", code: "ERR_X" };
-  assert.match(classifyExit(facts({ terminal: "error", errorFrame: frame }))?.message ?? "", /\[ERR_X\]/);
+  const error = classifyExit(facts({ terminal: "error", errorFrame: frame }));
+  assert.equal(describeOutcome(error), CRASH);
+  assert.match(error?.message ?? "", /\[ERR_X\]/);
+});
+
+test("error frame with a known code selects the class by the code, not the kind", () => {
+  const frame: ErrorFrame = { t: "error", kind: "crash", message: "needs a password", code: "ENCRYPTED_DOCUMENT" };
+  assert.equal(describeOutcome(classifyExit(facts({ terminal: "error", errorFrame: frame }))), "EncryptedDocumentError");
+});
+
+test("a typed error frame beats a later SIGKILL and a recorded kill, like any terminal frame", () => {
+  const frame: ErrorFrame = { t: "error", kind: "crash", message: "x", code: "UNSUPPORTED_FORMAT" };
+  assert.equal(
+    describeOutcome(classifyExit(facts({ terminal: "error", errorFrame: frame, killReason: "timeout", signal: "SIGKILL" }))),
+    "UnsupportedFormatError",
+  );
 });
 
 test("abort with a TimeoutError reason keeps it as the cause", () => {

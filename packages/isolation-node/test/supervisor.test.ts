@@ -175,12 +175,13 @@ test("a protocol violation kills the child and is an IsolationError crash, never
   assert.equal(diag.killReason, "protocol");
 });
 
-test("a meta frame with too many keys kills the child at once: IsolationError crash, protocol", async () => {
-  const { outcome, diag } = await supervised("meta-flood");
+test("a meta frame with too many keys kills the child at once: LimitExceededError, metadata_cap", async () => {
+  // 250,000 empty-valued keys is ~3 MB of JSON: raise the byte caps so the key bound is what trips, not the frame cap.
+  const { outcome, diag } = await supervised("meta-flood", { maxFrameBytes: 8 * 1024 * 1024, maxResultBytes: 8 * 1024 * 1024 });
   const error = failure(outcome);
-  assert.ok(error instanceof IsolationError && error.reason === "crash");
-  assert.match((error as Error).message, /more than 10000 keys/);
-  assert.equal(diag.killReason, "protocol");
+  assert.ok(error instanceof LimitExceededError, String(error));
+  assert.match((error as Error).message, /metadata/i);
+  assert.equal(diag.killReason, "metadata_cap");
 });
 
 test("sequence errors are caught at the offending frame, and the child is killed then (not after it finishes)", async () => {
@@ -220,6 +221,13 @@ test("exit without a terminal frame is a crash and carries the stderr tail", asy
   const error = failure(outcome) as IsolationError;
   assert.ok(error instanceof IsolationError && error.reason === "crash");
   assert.match(String((error.cause as Error).message), /boom-marker/);
+});
+
+test("a heap OOM whose fatal line scrolled out of the stderr tail is still a LimitExceededError", async () => {
+  const { outcome, diag } = await supervised("oom-long-dump");
+  assert.ok(failure(outcome) instanceof LimitExceededError, String(failure(outcome)));
+  assert.equal(diag.signal, "SIGABRT");
+  assert.doesNotMatch(diag.stderrTail, /heap out of memory/, "the marker must be outside the 8 KiB tail for this test to mean anything");
 });
 
 test("error frame kind malformed => MalformedDocumentError", async () => {
@@ -598,6 +606,23 @@ test("stderr: the pipe is destroyed once the budget is read (fake child, determi
   assert.equal(diag().stderrClosed, true);
   assert.ok(diag().stderrBytes >= 50 * 1024 && diag().stderrBytes <= 80 * 1024, `read ${diag().stderrBytes} bytes`);
   assert.equal(children[0]?.stderrDestroyed(), true);
+});
+
+test("stderr: an OOM marker split across two reads is still seen (fake child, deterministic)", async () => {
+  const { spawnFn } = fakeSpawn({
+    onInput: (child) => {
+      child.writeStderr("FATAL ERROR: JavaScript heap out of me");
+      setTimeout(() => {
+        child.writeStderr("mory\n" + "x".repeat(20 * 1024));
+        setTimeout(() => {
+          child.exit(null, "SIGABRT");
+          child.close();
+        }, 30);
+      }, 30);
+    },
+  });
+  const { options } = withDiagnostics({ ...runOptions("unused"), spawnFn });
+  await assert.rejects(runChild(options), LimitExceededError);
 });
 
 test("stderr: under the budget the pipe stays open", async () => {

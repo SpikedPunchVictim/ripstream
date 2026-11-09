@@ -2,13 +2,27 @@ import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process"
 import type { Readable } from "node:stream";
 import { IsolationError, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { encodeInputPrefix, type InputHeader } from "./child-io.ts";
-import { classifyExit, type ExitFacts, type KillReason } from "./classify.ts";
-import { FrameReader, type FrameEvent } from "./frames.ts";
+import {
+  classifyExit,
+  MARKER_CARRY_CHARS,
+  scanStderrMarkers,
+  type ExitFacts,
+  type KillReason,
+} from "./classify.ts";
+import { FrameReader, type FrameEvent, type FrameViolationKind } from "./frames.ts";
 import { DEFAULT_POLL_MS, RssPoller, type RssPollerOptions, type RssStats } from "./rss.ts";
 import { rssPollKind } from "./containment.ts";
 import { StderrRing } from "./ring.ts";
 import { clampTimerMs } from "./timers.ts";
 import { buildWrapperCommand } from "./wrapper.ts";
+
+/** How a frame-reader objection is recorded as the reason the child was killed. */
+const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>> = {
+  total_too_large: "result_cap",
+  frame_too_large: "frame_cap",
+  metadata_cap: "metadata_cap",
+  protocol: "protocol",
+};
 
 /**
  * Spawns ONE child through the ulimit wrapper and supervises it until it has
@@ -111,6 +125,8 @@ export interface RunChildOptions {
   readonly maxResultBytes: number;
   /** Longest single frame in bytes. Default 1 MiB. */
   readonly maxFrameBytes?: number;
+  /** The child's own parse timer, sent in the input header (InputHeader.maxParseMillis). Omitted: the child's default. */
+  readonly maxParseMillis?: number;
   /** Most frames accepted over fd 3. Default 1,000,000 (see DEFAULT_MAX_FRAMES). */
   readonly maxFrames?: number;
   /** Bytes of stderr read before its pipe is closed. Default 1 MiB. */
@@ -252,6 +268,9 @@ class Supervision {
   #stdinError: string | null = null;
   #fd3Bytes = 0;
   #stderrBytes = 0;
+  // Markers seen in ANY stderr chunk (see ExitFacts.stderrMarkers); the carry is the end of the previous chunk.
+  #stderrMarkers = { memory: false, stringLength: false };
+  #stderrCarry = "";
   #stderrClosed = false;
   #readyMs: number | null = null;
   #terminalMs: number | null = null;
@@ -359,6 +378,7 @@ class Supervision {
       ...(request.filename === undefined ? {} : { filename: request.filename }),
       ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
       ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
+      ...(this.#options.maxParseMillis === undefined ? {} : { maxParseMillis: this.#options.maxParseMillis }),
     };
   }
 
@@ -381,6 +401,14 @@ class Supervision {
   #onStderr(chunk: Uint8Array): void {
     this.#stderrBytes += chunk.length;
     this.#ring.push(chunk);
+    // latin1 keeps every byte one character, so the ASCII markers survive and the carry stays a fixed byte count.
+    const text = this.#stderrCarry + Buffer.from(chunk.buffer, chunk.byteOffset, chunk.length).toString("latin1");
+    const seen = scanStderrMarkers(text);
+    this.#stderrMarkers = {
+      memory: this.#stderrMarkers.memory || seen.memory,
+      stringLength: this.#stderrMarkers.stringLength || seen.stringLength,
+    };
+    this.#stderrCarry = text.slice(-MARKER_CARRY_CHARS);
     if (this.#stderrBytes >= this.#stderrBudget && !this.#stderrClosed) {
       this.#stderrClosed = true;
       (this.#child?.stderr as Readable | null | undefined)?.destroy();
@@ -394,7 +422,7 @@ class Supervision {
     for (const event of events) {
       if (event.type === "violation") {
         this.#protocolDetail = event.message;
-        this.#kill(event.kind === "total_too_large" ? "result_cap" : event.kind === "frame_too_large" ? "frame_cap" : "protocol");
+        this.#kill(KILL_REASON_BY_VIOLATION[event.kind]);
         return;
       }
       if (event.frame.t === "ready") this.#onReady();
@@ -560,6 +588,7 @@ class Supervision {
       code: this.#code,
       signal: this.#signal,
       stderrTail: this.#ring.text(),
+      stderrMarkers: this.#stderrMarkers,
       ...(this.#killReason === "abort" ? { abortReason: this.#abortReason } : {}),
       ...(this.#protocolDetail === undefined ? {} : { protocolDetail: this.#protocolDetail }),
     };

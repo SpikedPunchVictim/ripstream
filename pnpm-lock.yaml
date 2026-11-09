@@ -29,6 +29,9 @@ importers:
       '@spikedpunch/ripstream-core':
         specifier: workspace:*
         version: link:../core
+      '@spikedpunch/ripstream-isolation-node':
+        specifier: workspace:*
+        version: link:../isolation-node
       '@spikedpunch/ripstream-mime':
         specifier: workspace:*
         version: link:../mime

@@ -21,7 +21,9 @@ import {
 } from "../src/index.ts";
 
 const encoder = new TextEncoder();
-const MAX_MILLIS = 5_000;
+// The csv comma bomb takes 1.2 s alone, but 6.3 s in one full-suite run beside hundreds of process-spawning tests.
+// A quadratic blow-up takes minutes, so the budget only has to separate "linear" from "runaway".
+const MAX_MILLIS = 15_000;
 
 async function run(
   parser: Parser,

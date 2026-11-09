@@ -2,10 +2,10 @@ import {
   AbortError,
   IsolationError,
   LimitExceededError,
-  MalformedDocumentError,
   ParseTimeoutError,
   type RipstreamError,
 } from "@spikedpunch/ripstream-core";
+import { decodeErrorFrame, oneLineText, sanitizeText } from "./error-codec.ts";
 import type { ErrorFrame } from "./frames.ts";
 
 /** Why the PARENT killed the child; recorded before the kill is sent. */
@@ -15,6 +15,7 @@ export type KillReason =
   | "rss"
   | "result_cap"
   | "frame_cap"
+  | "metadata_cap"
   // Nothing records this yet: the per-call disk budget is tracked by bead tikajs-zgg2.11. Kept so the classifier
   // and its tests already know what a disk-budget kill means when that lands.
   | "disk"
@@ -32,6 +33,11 @@ export interface ExitFacts {
   readonly signal: string | null;
   /** Bounded tail of the child's stderr (untrusted text). */
   readonly stderrTail: string;
+  /**
+   * Markers seen anywhere in the stderr the parent read, not only in the tail: V8 prints its fatal-error line FIRST
+   * and a native stack dump after it, and a long dump pushes that line out of the tail. Omitted: the tail decides.
+   */
+  readonly stderrMarkers?: StderrMarkers;
   /** `signal.reason` when killReason is "abort". */
   readonly abortReason?: unknown;
   /** What the frame reader objected to when killReason is "protocol" (untrusted-influenced text). */
@@ -43,17 +49,23 @@ export interface ExitFacts {
 const MEMORY_MARKER = /out of memory|failed to reserve|allocation failed/i;
 const STRING_LENGTH_MARKER = /invalid string length/i;
 
+export interface StderrMarkers {
+  readonly memory: boolean;
+  readonly stringLength: boolean;
+}
+
+/** The longest marker is 21 characters, so a carry of this many characters catches one split across two chunks. */
+export const MARKER_CARRY_CHARS = 32;
+
+export function scanStderrMarkers(text: string): StderrMarkers {
+  return { memory: MEMORY_MARKER.test(text), stringLength: STRING_LENGTH_MARKER.test(text) };
+}
+
 const MAX_DETAIL_CHARS = 200;
 const MAX_TAIL_CHARS = 8192;
 
-/** Replaces control characters (keeping \n and \t) and bounds the length. */
-function sanitize(text: string, maxChars: number): string {
-  const clean = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
-  return clean.length > maxChars ? `${clean.slice(0, maxChars)}...` : clean;
-}
-
 function oneLine(text: string): string {
-  return sanitize(text, MAX_DETAIL_CHARS).replace(/\s+/g, " ").trim();
+  return oneLineText(text, MAX_DETAIL_CHARS);
 }
 
 function describeExit(facts: ExitFacts): string {
@@ -63,7 +75,7 @@ function describeExit(facts: ExitFacts): string {
 
 /** The stderr tail as a `cause`, or nothing when the child wrote none. */
 function stderrCause(facts: ExitFacts): { cause?: Error } {
-  const tail = sanitize(facts.stderrTail, MAX_TAIL_CHARS);
+  const tail = sanitizeText(facts.stderrTail, MAX_TAIL_CHARS);
   return tail.length === 0 ? {} : { cause: new Error(`child stderr (tail): ${tail}`) };
 }
 
@@ -85,6 +97,8 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
       return new LimitExceededError("Isolated parser result exceeded the maximum result size", stderrCause(facts));
     case "frame_cap":
       return new LimitExceededError("Isolated parser result frame exceeded the maximum frame size", stderrCause(facts));
+    case "metadata_cap":
+      return new LimitExceededError("Isolated parser result metadata exceeded the maximum size", stderrCause(facts));
     case "disk":
       return new LimitExceededError("Isolated parser exceeded its disk budget", stderrCause(facts));
     case "protocol": {
@@ -96,28 +110,18 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
 }
 
 function fromErrorFrame(frame: ErrorFrame, facts: ExitFacts): RipstreamError {
-  // Only the fixed `kind` enum selects the class; message and code are untrusted display text.
-  const detail = oneLine(frame.code === undefined ? frame.message : `${frame.message} [${frame.code}]`);
-  switch (frame.kind) {
-    case "limit":
-      return new LimitExceededError(`Isolated parser reported a limit: ${detail}`, stderrCause(facts));
-    case "timeout":
-      return new ParseTimeoutError(`Isolated parser reported a timeout: ${detail}`, stderrCause(facts));
-    case "malformed":
-      return new MalformedDocumentError(`Malformed document: ${detail}`);
-    case "abort":
-      return new AbortError(`Isolated parser reported an abort: ${detail}`);
-    case "crash":
-      return new IsolationError("crash", `Isolated parser reported an internal failure: ${detail}`, stderrCause(facts));
-  }
+  // The code (when present) is looked up in a closed table of core classes, otherwise the fixed `kind` enum
+  // selects the class. Message and code are untrusted display text and never select anything. See error-codec.ts.
+  return decodeErrorFrame(frame, stderrCause(facts));
 }
 
 /**
  * Maps how a child ended to the error to throw, or null when it succeeded.
  * Rules, in priority order:
  *  1. terminal "done" frame: success, whatever happened afterwards.
- *  2. terminal "error" frame: class chosen by its `kind` enum.
- *  3. a kill we recorded: timeout/abort always; rss/result_cap/frame_cap/disk/
+ *  2. terminal "error" frame: class chosen by its `code` from a closed table (unknown code: crash), else by its
+ *     `kind` enum (error-codec.ts).
+ *  3. a kill we recorded: timeout/abort always; rss/result_cap/frame_cap/metadata_cap/disk/
  *     protocol only after "ready" (before it, the child is infrastructure, see 4).
  *  4. before "ready": IsolationError "unavailable" (the exit shape varies by
  *     libc/emulation, so only the missing ready frame is reliable).
@@ -147,13 +151,15 @@ export function classifyExit(facts: ExitFacts): RipstreamError | null {
 
   if (killReason !== null) return fromKillReason(killReason, facts);
 
+  const tailMarkers = scanStderrMarkers(facts.stderrTail);
+  const sawMemory = tailMarkers.memory || facts.stderrMarkers?.memory === true;
+  const sawStringLength = tailMarkers.stringLength || facts.stderrMarkers?.stringLength === true;
   const memoryAbort =
-    (facts.signal === "SIGABRT" || facts.signal === "SIGTRAP" || facts.signal === "SIGSEGV") &&
-    MEMORY_MARKER.test(facts.stderrTail);
+    (facts.signal === "SIGABRT" || facts.signal === "SIGTRAP" || facts.signal === "SIGSEGV") && sawMemory;
   if (memoryAbort) {
     return new LimitExceededError("Isolated parser ran out of memory", stderrCause(facts));
   }
-  if (STRING_LENGTH_MARKER.test(facts.stderrTail)) {
+  if (sawStringLength) {
     return new LimitExceededError("Isolated parser exceeded the maximum string length", stderrCause(facts));
   }
   // Only the signal: 152 is what a shell reports (128 + SIGXCPU), the parent sees SIGXCPU through exec, and a

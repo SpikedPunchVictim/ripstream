@@ -10,6 +10,12 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./isolation": {
+      "types": "./dist/isolation.d.ts",
+      "import": "./dist/isolation.js",
+      "require": "./dist/isolation.js",
+      "default": "./dist/isolation.js"
     }
   },
   "files": [
@@ -27,6 +33,7 @@
     "@spikedpunch/ripstream-parser-office": "workspace:*",
     "@spikedpunch/ripstream-parser-archive": "workspace:*",
     "@spikedpunch/ripstream-parser-pdf": "workspace:*",
-    "@spikedpunch/ripstream-parser-media": "workspace:*"
+    "@spikedpunch/ripstream-parser-media": "workspace:*",
+    "@spikedpunch/ripstream-isolation-node": "workspace:*"
   }
 }

@@ -20,17 +20,7 @@ import { PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { PdfParser } from "../src/index.ts";
 import { pdfDate } from "../src/pdf.ts";
 import { recoverDocument } from "../src/pdf-recover.ts";
-
-async function samplePdf(): Promise<Uint8Array> {
-  const document = await PDFDocument.create();
-  const page = document.addPage();
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  page.drawText("Hello PDF", { x: 72, y: 700, size: 24, font });
-  document.setTitle("Sample");
-  document.setAuthor("Ada");
-  document.setCreationDate(new Date("2024-01-01T00:00:00Z"));
-  return document.save();
-}
+import { helloPdf, rawPdf, samplePdf } from "./fixtures.ts";
 
 test("extracts PDF text and metadata", async () => {
   const bytes = await samplePdf();
@@ -254,14 +244,6 @@ async function parseWith(
   }
 }
 
-function rawPdf(objects: string[]): Uint8Array {
-  const body = objects.map((object, index) => `${index + 1} 0 obj\n${object}\nendobj\n`);
-  return Buffer.from(
-    `%PDF-1.4\n${body.join("")}trailer\n<< /Root 1 0 R >>\n%%EOF\n`,
-    "latin1",
-  );
-}
-
 test("rejects an object number beyond the PDF limit instead of spinning", async () => {
   const bytes = new TextEncoder().encode(
     "%PDF-1.7\n1 0 obj <</Type /Catalog /Pages 2 0 R>>\nendobj\n" +
@@ -396,13 +378,6 @@ test("stops a flate bomb at the worker memory budget", async () => {
     LimitExceededError,
   );
 });
-
-async function helloPdf(useObjectStreams: boolean): Promise<Buffer> {
-  const document = await PDFDocument.create();
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  document.addPage().drawText("Recovered text", { x: 72, y: 700, size: 24, font });
-  return Buffer.from(await document.save({ useObjectStreams }));
-}
 
 test("recovers a PDF whose xref and trailer are missing", async () => {
   const bytes = await helloPdf(false);

@@ -767,7 +767,7 @@ test("exactly maxFrames frames is fine", () => {
 });
 
 test("the defaults are the documented values", () => {
-  assert.deepEqual([DEFAULT_MAX_FRAMES, DEFAULT_MAX_METADATA_KEYS, DEFAULT_MAX_METADATA_VALUES], [1_000_000, 10_000, 100_000]);
+  assert.deepEqual([DEFAULT_MAX_FRAMES, DEFAULT_MAX_METADATA_KEYS, DEFAULT_MAX_METADATA_VALUES], [1_000_000, 200_000, 1_000_000]);
 });
 
 function metadataWith(keys: number, valuesPerKey: number): Record<string, string[]> {
@@ -776,10 +776,10 @@ function metadataWith(keys: number, valuesPerKey: number): Record<string, string
   return metadata;
 }
 
-test("a meta frame with more keys than maxMetadataKeys is a protocol violation", () => {
+test("a meta frame with more keys than maxMetadataKeys is a metadata_cap violation", () => {
   const r = reader({ maxMetadataKeys: 10 });
   r.push(bytes(line(READY)));
-  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(11, 1) })))), ["protocol"]);
+  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(11, 1) })))), ["metadata_cap"]);
   assert.match(r.violation?.message ?? "", /more than 10 keys/);
 });
 
@@ -789,10 +789,10 @@ test("a meta frame with exactly maxMetadataKeys keys is accepted", () => {
   assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(10, 1) })))), []);
 });
 
-test("a meta frame with more values than maxMetadataValues is a protocol violation", () => {
+test("a meta frame with more values than maxMetadataValues is a metadata_cap violation", () => {
   const r = reader({ maxMetadataValues: 20 });
   r.push(bytes(line(READY)));
-  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(3, 7) })))), ["protocol"]);
+  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(3, 7) })))), ["metadata_cap"]);
   assert.match(r.violation?.message ?? "", /more than 20 values/);
 });
 
@@ -806,12 +806,24 @@ test("record metadata is bounded the same way", () => {
   const r = recordsReader({ maxMetadataKeys: 3 });
   r.push(bytes(line(READY)));
   const events = r.push(bytes(line({ t: "record", record: { ...RECORD, metadata: metadataWith(4, 1) } })));
-  assert.deepEqual(violationKinds(events), ["protocol"]);
+  assert.deepEqual(violationKinds(events), ["metadata_cap"]);
 });
 
 test("empty values do not slip past the value bound", () => {
   const r = reader({ maxMetadataValues: 5 });
   r.push(bytes(line(READY)));
   const metadata = { a: ["", "", "", "", "", ""] };
-  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata })))), ["protocol"]);
+  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata })))), ["metadata_cap"]);
+});
+
+test("a structurally wrong metadata object stays a protocol violation, not a cap", () => {
+  const r = reader({ maxMetadataKeys: 3 });
+  r.push(bytes(line(READY)));
+  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: { a: "not-an-array" } })))), ["protocol"]);
+});
+
+test("a document with 80,000 metadata keys is accepted by the defaults (at the 8 MiB text frame cap the facade uses)", () => {
+  const r = reader({ maxFrameBytes: 8 * 1024 * 1024 });
+  r.push(bytes(line(READY)));
+  assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(80_000, 1) })))), []);
 });

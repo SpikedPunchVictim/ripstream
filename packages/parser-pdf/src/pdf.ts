@@ -1,10 +1,8 @@
 import { stat } from "node:fs/promises";
-import { Worker } from "node:worker_threads";
 import {
   EncryptedDocumentError,
   LimitExceededError,
   MalformedDocumentError,
-  ParseTimeoutError,
   MediaType,
   Metadata,
   CONTEXT_KEYS,
@@ -15,61 +13,21 @@ import {
   type Parser,
   RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { InlineChannel, WorkerChannel, type PdfChannel } from "./pdf-channel.ts";
+import {
+  PdfSession,
+  type PdfAnnotation,
+  type PdfSessionInput,
+} from "./pdf-session.ts";
 
 const MAX_PAGES = 10_000;
 const MIB = 1024 * 1024;
-const WATCHDOG_INTERVAL_MS = 20;
-
-interface PdfAttachment {
-  readonly name: string;
-  readonly filename: string;
-  readonly data: Uint8Array;
-}
-
-interface PdfAnnotation {
-  readonly name?: string;
-  readonly subtype?: string;
-  readonly title?: string;
-  readonly subject?: string;
-  readonly contents?: string;
-  readonly url?: string;
-  readonly fieldName?: string;
-  readonly fieldValue?: unknown;
-  readonly fieldType?: string;
-}
-
-type WorkerMessage =
-  | {
-      readonly type: "ready";
-      readonly info: unknown;
-      readonly xmp: Record<string, unknown>;
-      readonly numPages: number;
-      readonly attachments: readonly PdfAttachment[];
-    }
-  | {
-      readonly type: "page";
-      readonly index: number;
-      readonly lines: string[];
-      readonly annotations: readonly PdfAnnotation[];
-    }
-  | {
-      readonly type: "page-error";
-      readonly index: number;
-      readonly name: string;
-      readonly message: string;
-    }
-  | { readonly type: "closed" }
-  | {
-      readonly type: "error";
-      readonly name: string;
-      readonly message: string;
-      readonly code?: string;
-    };
 
 /**
  * PDF text and metadata extraction on top of pdf.js. Parsing runs in a
- * worker thread so a malformed document cannot take down the caller, and
- * pdfjs-dist is loaded lazily as an optional peer dependency.
+ * worker thread so a malformed document cannot take down the caller (or, with
+ * `inline`, on the calling thread inside a process that is already
+ * contained), and pdfjs-dist is loaded lazily as an optional peer dependency.
  */
 export interface PdfParserOptions {
   /** Port of PDFParserConfig.extractAnnotationText (default true). */
@@ -82,7 +40,9 @@ export interface PdfParserOptions {
    * Maximum time for the worker to load the document or extract one page.
    * pdf.js can enter unbounded loops on malicious or malformed input, so the
    * caller-side timeout terminates the worker instead of hanging the parse
-   * (default 30000 ms).
+   * (default 30000 ms). With `inline` it still ends async stalls, but cannot
+   * interrupt a synchronous loop inside pdf.js (the timer cannot fire while
+   * the thread is busy); the enclosing process's wall-clock kill covers that.
    */
   readonly pageTimeoutMs?: number;
   /** Static password or provider; empty password is attempted by default. */
@@ -94,10 +54,23 @@ export interface PdfParserOptions {
    * heap limit and is also enforced on heap plus ArrayBuffer memory, which
    * V8's heap limit does not cover (flate/JBIG2 bombs allocate there). The
    * worker is terminated with a LimitExceededError when it is crossed.
+   * Ignored when `inline` is true: there is no worker to bound, so the
+   * process heap cap (for example `--max-old-space-size`) governs instead.
    */
   readonly workerMemoryMb?: number;
   /** Per-page cap on extracted text characters (default 32 Mi). */
   readonly maxPageTextChars?: number;
+  /**
+   * Run pdf.js on the calling thread instead of in a worker thread (default
+   * false). For callers that already run the whole parse in a contained child
+   * process, where a nested worker is unnecessary and can fail to start under
+   * an address-space cap. Limits, password handling, results and error
+   * classes are the same as in worker mode; what changes is containment:
+   * `workerMemoryMb` is not enforced, a synchronous pdf.js loop cannot be
+   * interrupted, and a crash inside pdf.js is no longer isolated from the
+   * caller. Only enable it when the surrounding process is itself expendable.
+   */
+  readonly inline?: boolean;
 }
 
 export class PdfParser implements Parser {
@@ -111,6 +84,7 @@ export class PdfParser implements Parser {
   readonly #maxInputBytes: number;
   readonly #workerMemoryMb: number;
   readonly #maxPageTextChars: number;
+  readonly #inline: boolean;
 
   constructor(options: PdfParserOptions = {}) {
     this.#extractAnnotationText = options.extractAnnotationText ?? true;
@@ -121,6 +95,7 @@ export class PdfParser implements Parser {
     this.#maxInputBytes = options.maxInputBytes ?? 512 * MIB;
     this.#workerMemoryMb = options.workerMemoryMb ?? 256;
     this.#maxPageTextChars = options.maxPageTextChars ?? 32 * MIB;
+    this.#inline = options.inline ?? false;
   }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
@@ -145,26 +120,20 @@ export class PdfParser implements Parser {
     }
 
     const limits = ctx.limits;
-    const worker = new Worker(workerUrl(), {
-      workerData: {
-        path,
-        sortByPosition: this.#sortByPosition,
-        password: resolvePassword(this.#password),
-        maxPageTextChars: this.#maxPageTextChars,
-        maxAttachments: limits.maxEmbeddedResources,
-        maxAttachmentBytes: limits.maxEmbeddedResourceBytes,
-        maxTotalAttachmentBytes: limits.maxTotalEmbeddedBytes,
-      },
-      // Do not inherit the parent's flags: test instrumentation (for example
-      // CBD's node:test preload) and node:test runner flags are invalid here,
-      // and the short-lived worker has no test lifecycle.
-      execArgv: [],
-      resourceLimits: { maxOldGenerationSizeMb: this.#workerMemoryMb },
-    });
-    const channel = new WorkerChannel(worker);
-    const watchdog = watchMemory(worker, this.#workerMemoryMb * MIB, channel);
+    const input: PdfSessionInput = {
+      path,
+      sortByPosition: this.#sortByPosition,
+      password: resolvePassword(this.#password),
+      maxPageTextChars: this.#maxPageTextChars,
+      maxAttachments: limits.maxEmbeddedResources,
+      maxAttachmentBytes: limits.maxEmbeddedResourceBytes,
+      maxTotalAttachmentBytes: limits.maxTotalEmbeddedBytes,
+    };
+    const channel: PdfChannel = this.#inline
+      ? new InlineChannel(new PdfSession(input))
+      : new WorkerChannel(input, this.#workerMemoryMb);
     const onAbort = (): void => {
-      void worker.terminate();
+      void channel.stop();
     };
     ctx.signal.addEventListener("abort", onAbort, { once: true });
 
@@ -188,7 +157,7 @@ export class PdfParser implements Parser {
       const pages = Math.min(ready.numPages, MAX_PAGES);
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
-        worker.postMessage({ type: "page", index });
+        channel.post({ type: "page", index });
         const message = await channel.next(this.#pageTimeoutMs);
         if (message.type === "error") throw mapWorkerError(message);
         if (message.type === "page-error") {
@@ -269,16 +238,15 @@ export class PdfParser implements Parser {
         await xhtml.endElement("div");
       }
 
-      worker.postMessage({ type: "close" });
+      channel.post({ type: "close" });
       await channel.next(this.#pageTimeoutMs);
       await xhtml.endDocument();
     } catch (error) {
       ctx.throwIfAborted();
       throw error;
     } finally {
-      clearInterval(watchdog);
       ctx.signal.removeEventListener("abort", onAbort);
-      await worker.terminate();
+      await channel.stop();
     }
   }
 }
@@ -289,135 +257,6 @@ function resolvePassword(
   if (password === undefined) return undefined;
   if (typeof password === "string") return password;
   return password.getPassword() ?? undefined;
-}
-
-function workerUrl(): URL {
-  const extension = import.meta.url.endsWith(".ts") ? ".ts" : ".js";
-  return new URL(`./pdf-worker${extension}`, import.meta.url);
-}
-
-class WorkerChannel {
-  private readonly messages: WorkerMessage[] = [];
-  private waiter:
-    | {
-        resolve: (message: WorkerMessage) => void;
-        reject: (error: Error) => void;
-        timer: ReturnType<typeof setTimeout> | undefined;
-      }
-    | null = null;
-  private failure: Error | null = null;
-
-  constructor(worker: Worker) {
-    worker.on("message", (message: WorkerMessage) => {
-      this.push(message);
-    });
-    worker.on("error", (error: Error) => {
-      this.fail(mapWorkerFailure(error));
-    });
-    worker.on("exit", (code) => {
-      if (code !== 0 && this.failure === null) {
-        this.fail(new MalformedDocumentError(`PDF worker exited with code ${code}`));
-      }
-    });
-  }
-
-  next(timeoutMs?: number): Promise<WorkerMessage> {
-    if (this.failure !== null) return Promise.reject(this.failure);
-    const message = this.messages.shift();
-    if (message !== undefined) return Promise.resolve(message);
-    return new Promise((resolve, reject) => {
-      const waiter = {
-        resolve: (value: WorkerMessage): void => {
-          clearTimeout(waiter.timer);
-          resolve(value);
-        },
-        reject: (error: Error): void => {
-          clearTimeout(waiter.timer);
-          reject(error);
-        },
-        timer: undefined as ReturnType<typeof setTimeout> | undefined,
-      };
-      this.waiter = waiter;
-      if (timeoutMs !== undefined && timeoutMs > 0) {
-        waiter.timer = setTimeout(() => {
-          if (this.waiter !== waiter) return;
-          this.waiter = null;
-          reject(
-            new ParseTimeoutError(
-              `PDF extraction exceeded ${timeoutMs} ms`,
-            ),
-          );
-        }, timeoutMs);
-      }
-    });
-  }
-
-  private push(message: WorkerMessage): void {
-    if (this.waiter !== null) {
-      const waiter = this.waiter;
-      this.waiter = null;
-      waiter.resolve(message);
-    } else {
-      this.messages.push(message);
-    }
-  }
-
-  fail(error: Error): void {
-    if (this.failure !== null) return;
-    this.failure = error;
-    if (this.waiter !== null) {
-      const waiter = this.waiter;
-      this.waiter = null;
-      waiter.reject(error);
-    }
-  }
-}
-
-/**
- * V8's heap limit ignores ArrayBuffer memory, so poll the worker's heap plus
- * external memory and fail the parse as soon as the budget is crossed.
- */
-function watchMemory(
-  worker: Worker,
-  budgetBytes: number,
-  channel: WorkerChannel,
-): ReturnType<typeof setInterval> {
-  let pending = false;
-  const timer = setInterval(() => {
-    if (pending) return;
-    pending = true;
-    worker.getHeapStatistics().then(
-      (stats) => {
-        pending = false;
-        const used = stats.used_heap_size + stats.external_memory;
-        if (used > budgetBytes) {
-          channel.fail(
-            new LimitExceededError(
-              `PDF worker memory ${used} bytes exceeds ${budgetBytes} byte budget`,
-            ),
-          );
-          void worker.terminate();
-        }
-      },
-      () => {
-        pending = false;
-      },
-    );
-  }, WATCHDOG_INTERVAL_MS);
-  timer.unref();
-  return timer;
-}
-
-function mapWorkerFailure(error: Error): Error {
-  if ((error as { code?: string }).code === "ERR_WORKER_OUT_OF_MEMORY") {
-    return new LimitExceededError("PDF worker exceeded its memory limit", {
-      cause: error,
-    });
-  }
-  if ((error as { code?: string }).code === "ERR_MODULE_NOT_FOUND") {
-    return new MissingDependencyError("pdfjs-dist", "PDF parsing");
-  }
-  return new MalformedDocumentError("PDF worker failed", { cause: error });
 }
 
 function mapWorkerError(message: {

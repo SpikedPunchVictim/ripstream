@@ -88,6 +88,18 @@ switch (mode) {
     process.stderr.write("boom-marker: something broke\n");
     process.exit(0);
     break;
+  case "oom-long-dump": {
+    // V8's fatal-error line comes first, then a native stack dump far longer than the parent's stderr tail
+    // window (macOS dumps ~50 frames of long lines): the marker is no longer in the tail when the child dies.
+    ready();
+    await readInput();
+    const frames = Array.from({ length: 200 }, (_, i) => `      ${i}: 0x1066ac998 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace) [/lib/libnode.dylib]\n`);
+    process.stderr.write(`FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n----- Native stack trace -----\n${frames.join("")}`, () => {
+      process.kill(process.pid, "SIGABRT");
+    });
+    await new Promise(() => {});
+    break;
+  }
   case "error-frame-malformed":
   case "error-frame-limit": {
     ready();
@@ -124,11 +136,11 @@ switch (mode) {
     break;
   }
   case "meta-flood": {
-    // One meta frame (~200 KB, well under the frame cap) with far more keys than the metadata bound allows.
+    // One meta frame (~2 MB, under the text frame cap) with more keys than the metadata bound allows.
     ready();
     await readInput();
     const metadata: Record<string, string[]> = {};
-    for (let i = 0; i < 20_000; i++) metadata[`k${i}`] = [];
+    for (let i = 0; i < 250_000; i++) metadata[`k${i}`] = [];
     sendFrame({ t: "meta", metadata });
     hangForever();
     break;

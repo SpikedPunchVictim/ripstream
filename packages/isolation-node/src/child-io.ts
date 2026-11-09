@@ -34,6 +34,12 @@ export interface InputHeader {
   readonly filename?: string;
   readonly maxOutputChars?: number;
   readonly maxEmbeddedResources?: number;
+  /**
+   * The child's own parse timer, in ms (0 = none). The parent sets it a little below its kill deadline, so a parse
+   * that is merely slow ends with a typed ParseTimeoutError frame instead of a SIGKILL. Omitted: core's default.
+   * A parser stuck in a synchronous loop never sees it; the parent's timer is the real bound.
+   */
+  readonly maxParseMillis?: number;
 }
 
 export interface ChildInput {
@@ -92,6 +98,7 @@ function parseHeader(json: string): InputHeader {
   }
   optionalNonNegativeInteger(header, "maxOutputChars");
   optionalNonNegativeInteger(header, "maxEmbeddedResources");
+  optionalNonNegativeInteger(header, "maxParseMillis");
   return header as unknown as InputHeader;
 }
 

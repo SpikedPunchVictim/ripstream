@@ -29,21 +29,35 @@ export const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
  * (one JSON.parse per frame), not memory: retained memory is O(payload).
  */
 export const DEFAULT_MAX_FRAMES = 1_000_000;
-/** Most keys in one metadata object (a meta frame or one record). Real documents have tens to low thousands. */
-export const DEFAULT_MAX_METADATA_KEYS = 10_000;
+/**
+ * Most keys in one metadata object (a meta frame or one record). Real documents have tens to low thousands, but a
+ * legitimate spreadsheet or mail archive can reach tens of thousands, so the bound is generous: it exists to stop a
+ * hostile child, and exceeding it is a LimitExceededError like any other size cap.
+ */
+export const DEFAULT_MAX_METADATA_KEYS = 200_000;
 /** Most strings, over all keys, in one metadata object. */
-export const DEFAULT_MAX_METADATA_VALUES = 100_000;
+export const DEFAULT_MAX_METADATA_VALUES = 1_000_000;
 
 export type ChildErrorKind = "limit" | "timeout" | "malformed" | "abort" | "crash";
 
 const ERROR_KINDS: ReadonlySet<string> = new Set(["limit", "timeout", "malformed", "abort", "crash"]);
 
+/**
+ * Terminal failure. `code` is the stable RipstreamErrorCode of the error the child caught; the parent rebuilds
+ * the class from its own table (error-codec.ts) and treats anything it does not know as a crash. Without a
+ * `code`, `kind` alone selects the class; with one, `kind` is only the fallback for a reader that does not know
+ * the code. Every string here is untrusted text.
+ */
 export interface ErrorFrame {
   readonly t: "error";
   readonly kind: ChildErrorKind;
   /** Untrusted text. */
   readonly message: string;
   readonly code?: string;
+  /** Only for code MISSING_DEPENDENCY (the arguments of MissingDependencyError). Untrusted text. */
+  readonly dependency?: string;
+  /** Only for code MISSING_DEPENDENCY. Untrusted text. */
+  readonly capability?: string;
 }
 
 export type Frame =
@@ -54,7 +68,11 @@ export type Frame =
   | { readonly t: "done" }
   | ErrorFrame;
 
-export type FrameViolationKind = "frame_too_large" | "total_too_large" | "protocol";
+/**
+ * "frame_too_large", "total_too_large" and "metadata_cap" are size limits (the parent reports a LimitExceededError);
+ * "protocol" is a malformed or out-of-order stream (an IsolationError crash).
+ */
+export type FrameViolationKind = "frame_too_large" | "total_too_large" | "metadata_cap" | "protocol";
 
 export type FrameEvent =
   | { readonly type: "frame"; readonly frame: Frame }
@@ -281,7 +299,14 @@ export class FrameReader {
       this.#fail(events, "protocol", `frame is not valid UTF-8 JSON: ${reason}`);
       return false;
     }
-    const parsed = validateFrame(value, this.#limits);
+    let parsed: Frame | string;
+    try {
+      parsed = validateFrame(value, this.#limits);
+    } catch (error) {
+      if (!(error instanceof MetadataCapError)) throw error;
+      this.#fail(events, "metadata_cap", error.message);
+      return false;
+    }
     if (typeof parsed === "string") {
       this.#fail(events, "protocol", parsed);
       return false;
@@ -375,17 +400,24 @@ function onlyKeys(value: Obj, allowed: readonly string[]): string | null {
  * otherwise be an OWN property here, and a later `Object.assign(target, metadata)` would run the setter and
  * swap `target`'s prototype. `constructor` and the rest are harmless own properties and stay.
  */
+/**
+ * Thrown by validateMetadata when a metadata object is over its key or value bound, so the cap reaches the reader
+ * as a size limit and not as the string every other validation failure travels as (a protocol violation).
+ * Caught only in FrameReader.#acceptLine.
+ */
+class MetadataCapError extends Error {}
+
 function validateMetadata(value: unknown, limits: MetadataLimits): Record<string, string[]> | string {
   if (!isObject(value)) return "metadata must be an object";
   const keys = Object.keys(value);
-  if (keys.length > limits.maxKeys) return `metadata has more than ${limits.maxKeys} keys`;
+  if (keys.length > limits.maxKeys) throw new MetadataCapError(`metadata has more than ${limits.maxKeys} keys`);
   let values = 0;
   const entries: [string, string[]][] = [];
   for (const key of keys) {
     const list = value[key];
     if (!Array.isArray(list)) return `metadata["${key}"] must be an array of strings`;
     values += list.length;
-    if (values > limits.maxValues) return `metadata has more than ${limits.maxValues} values`;
+    if (values > limits.maxValues) throw new MetadataCapError(`metadata has more than ${limits.maxValues} values`);
     if (!list.every((item) => typeof item === "string")) return `metadata["${key}"] must be an array of strings`;
     if (key !== "__proto__") entries.push([key, list as string[]]);
   }
@@ -478,17 +510,24 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return extra !== null ? `done: ${extra}` : { t: "done" };
     }
     case "error": {
-      const extra = onlyKeys(value, ["t", "kind", "message", "code"]);
+      const extra = onlyKeys(value, ["t", "kind", "message", "code", "dependency", "capability"]);
       if (extra !== null) return `error: ${extra}`;
       if (typeof value.kind !== "string" || !ERROR_KINDS.has(value.kind)) {
         return "error.kind is not a known kind";
       }
       if (typeof value.message !== "string") return "error.message must be a string";
-      if (value.code !== undefined && typeof value.code !== "string") return "error.code must be a string";
+      for (const name of ["code", "dependency", "capability"] as const) {
+        if (value[name] !== undefined && typeof value[name] !== "string") return `error.${name} must be a string`;
+      }
       const kind = value.kind as ChildErrorKind;
-      return value.code === undefined
-        ? { t: "error", kind, message: value.message }
-        : { t: "error", kind, message: value.message, code: value.code };
+      return {
+        t: "error",
+        kind,
+        message: value.message,
+        ...(value.code === undefined ? {} : { code: value.code as string }),
+        ...(value.dependency === undefined ? {} : { dependency: value.dependency as string }),
+        ...(value.capability === undefined ? {} : { capability: value.capability as string }),
+      };
     }
     default:
       return "unknown frame type";

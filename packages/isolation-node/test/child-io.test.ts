@@ -22,6 +22,14 @@ test("round trip: header fields and bytes survive", async () => {
   assert.deepEqual(Buffer.from(got.bytes), body);
 });
 
+test("maxParseMillis round trips, including 0 (no in-child parse timer)", async () => {
+  for (const maxParseMillis of [0, 1, 59_000]) {
+    const got = await readInput(stream(wire(header({ maxParseMillis }))));
+    assert.equal(got.header.maxParseMillis, maxParseMillis);
+  }
+  assert.equal((await readInput(stream(wire(header())))).header.maxParseMillis, undefined);
+});
+
 test("round trip across arbitrary chunk boundaries (1 byte at a time)", async () => {
   const body = Buffer.from("0123456789");
   const all = wire(header({ byteLength: body.length }), body);
@@ -63,6 +71,10 @@ for (const [label, json] of [
   ["path with bytes", '{"v":1,"output":"text","byteLength":3,"path":"/x"}'],
   ["empty path", '{"v":1,"output":"text","byteLength":0,"path":""}'],
   ["non-integer maxOutputChars", '{"v":1,"output":"text","byteLength":0,"maxOutputChars":1.5}'],
+  ["non-integer maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":1.5}'],
+  ["negative maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":-1}'],
+  ["string maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":"50"}'],
+  ["null maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":null}'],
 ] as const) {
   test(`malformed header rejects: ${label}`, async () => {
     const body = Buffer.from(json);

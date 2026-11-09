@@ -52,8 +52,11 @@ export async function expectGroupGone(pgid: number | undefined, timeoutMs = 3000
     try {
       process.kill(-pgid, 0);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
-      throw error;
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ESRCH") return;
+      // macOS answers EPERM while the group still holds a killed-but-unreaped zombie (as processExists below
+      // already assumes); it clears within milliseconds, so keep polling until the deadline.
+      if (code !== "EPERM") throw error;
     }
     if (Date.now() > end) throw new Error(`process group ${pgid} still has live members after ${timeoutMs} ms`);
     await sleep(20);

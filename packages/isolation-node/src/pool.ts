@@ -266,6 +266,11 @@ export class MemoryPool {
     this.#reservedMb += extraMb;
   }
 
+  /** MiB added to every reservation on top of the child's cap (see MemoryPoolOptions.overshootMb). */
+  get overshootMb(): number {
+    return this.#overshootMb;
+  }
+
   stats(): PoolStats {
     return {
       poolMb: this.#poolMb,

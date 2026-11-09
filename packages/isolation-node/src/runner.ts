@@ -124,9 +124,33 @@ export interface ChildRunnerOptions {
   readonly reapWaitMs?: number;
 }
 
+/**
+ * Per-run replacements for the runner's defaults, for callers whose limits depend on the request (the facade
+ * derives them from the request's output cap). Every field is optional; an omitted field keeps the runner's value.
+ * The heap is checked against the same `heapMb < rssLimitMb <= perChildMb` rule as the constructor's.
+ */
+export interface RunLimits {
+  readonly heapMb?: number;
+  readonly maxResultBytes?: number;
+  readonly maxFrameBytes?: number;
+  /** The child's own parse timer in ms (InputHeader.maxParseMillis). Omitted: none is sent. */
+  readonly maxParseMillis?: number;
+}
+
 function requirePositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new RangeError(`${name} must be a positive safe integer, got ${String(value)}`);
+  }
+}
+
+// The RSS limit must leave room for the heap (else every child trips it) and fit inside the pool reservation
+// (else a child can be admitted for less memory than it is allowed to use).
+function requireMemoryOrder(heapMb: number, rssLimitMb: number, perChildMb: number): void {
+  if (!(heapMb < rssLimitMb && rssLimitMb <= perChildMb)) {
+    throw new RangeError(
+      `heapMb < rssLimitMb <= perChildMb is required, got heapMb=${heapMb}, ` +
+        `rssLimitMb=${rssLimitMb}, perChildMb=${perChildMb}`,
+    );
   }
 }
 
@@ -145,14 +169,7 @@ export class ChildRunner {
       requirePositiveInteger(name, options[name]);
     }
     if (options.childScript.length === 0) throw new TypeError("childScript must be a non-empty path");
-    // The RSS limit must leave room for the heap (else every child trips it) and fit inside the pool reservation
-    // (else a child can be admitted for less memory than it is allowed to use).
-    if (!(options.heapMb < options.rssLimitMb && options.rssLimitMb <= options.perChildMb)) {
-      throw new RangeError(
-        `heapMb < rssLimitMb <= perChildMb is required, got heapMb=${options.heapMb}, ` +
-          `rssLimitMb=${options.rssLimitMb}, perChildMb=${options.perChildMb}`,
-      );
-    }
+    requireMemoryOrder(options.heapMb, options.rssLimitMb, options.perChildMb);
     this.#disposeWaitMs = options.disposeWaitMs ?? DEFAULT_DISPOSE_WAIT_MS;
     if (!Number.isFinite(this.#disposeWaitMs) || this.#disposeWaitMs < 0) {
       throw new RangeError(`disposeWaitMs must be a non-negative number, got ${String(this.#disposeWaitMs)}`);
@@ -172,12 +189,15 @@ export class ChildRunner {
    * the one-time capability probe (`probeIsolation`) decides, at startup,
    * whether isolation is offered at all.
    */
-  async run(request: IsolatedParseRequest, options: { readonly signal?: AbortSignal } = {}): Promise<IsolatedParseResult> {
+  async run(
+    request: IsolatedParseRequest,
+    options: { readonly signal?: AbortSignal; readonly limits?: RunLimits } = {},
+  ): Promise<IsolatedParseResult> {
     if (this.#disposed) throw disposedError();
     const controller = new AbortController();
     const signal = options.signal === undefined ? controller.signal : AbortSignal.any([options.signal, controller.signal]);
     this.#controllers.add(controller);
-    const work = this.#run(request, signal);
+    const work = this.#run(request, signal, options.limits ?? {});
     this.#inflight.add(work);
     try {
       return await work;
@@ -214,13 +234,20 @@ export class ChildRunner {
     }
   }
 
-  async #run(request: IsolatedParseRequest, signal: AbortSignal): Promise<IsolatedParseResult> {
+  async #run(request: IsolatedParseRequest, signal: AbortSignal, limits: RunLimits): Promise<IsolatedParseResult> {
     const o = this.#options;
+    const heapMb = limits.heapMb ?? o.heapMb;
+    const maxResultBytes = limits.maxResultBytes ?? o.maxResultBytes;
+    const maxFrameBytes = limits.maxFrameBytes ?? o.maxFrameBytes;
+    for (const [name, value] of [["heapMb", limits.heapMb], ["maxResultBytes", limits.maxResultBytes], ["maxFrameBytes", limits.maxFrameBytes], ["maxParseMillis", limits.maxParseMillis]] as const) {
+      if (value !== undefined) requirePositiveInteger(name, value);
+    }
+    requireMemoryOrder(heapMb, o.rssLimitMb, o.perChildMb);
     await this.#checkInputSize(request);
     const lease = await o.pool.acquire(o.perChildMb, {
       signal,
       deadlineMs: o.maxTaskMillis,
-      parentMb: parentResultMb(o.maxResultBytes, request.output),
+      parentMb: parentResultMb(maxResultBytes, request.output),
     });
     let run;
     try {
@@ -233,7 +260,8 @@ export class ChildRunner {
         ...(o.pollMs === undefined ? {} : { pollMs: o.pollMs }),
         ...(o.readyTimeoutMs === undefined ? {} : { readyTimeoutMs: o.readyTimeoutMs }),
         ...(o.graceMs === undefined ? {} : { graceMs: o.graceMs }),
-        ...(o.maxFrameBytes === undefined ? {} : { maxFrameBytes: o.maxFrameBytes }),
+        ...(maxFrameBytes === undefined ? {} : { maxFrameBytes }),
+        ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
         ...(o.maxFrames === undefined ? {} : { maxFrames: o.maxFrames }),
         ...(o.stderrBudgetBytes === undefined ? {} : { stderrBudgetBytes: o.stderrBudgetBytes }),
         ...(o.platform === undefined ? {} : { platform: o.platform }),
@@ -242,9 +270,9 @@ export class ChildRunner {
         ...(o.spawnFn === undefined ? {} : { spawnFn: o.spawnFn }),
         ...(o.reapWaitMs === undefined ? {} : { reapWaitMs: o.reapWaitMs }),
         cpuSecs: o.cpuSecs,
-        heapMb: o.heapMb,
+        heapMb,
         rssLimitMb: o.rssLimitMb,
-        maxResultBytes: o.maxResultBytes,
+        maxResultBytes,
         request,
         deadlineMs: lease.remainingMs(),
         signal,
