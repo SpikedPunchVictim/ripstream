@@ -1,0 +1,83 @@
+name: isolation-benchmark
+
+# Corpus gate for parse isolation (bead tikajs-zgg2.8, P6). Every file of two pinned public corpora goes through the
+# real isolator, one child per file; the job fails when peak child RSS exceeds the bound, a file takes too long, or a
+# file's outcome differs from packages/isolation-node/test/bench/expected-*.json (a regression, or a fix that needs
+# the expected file updated on purpose). Corpus files are untrusted input: they are only read.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/isolation-node/**"
+      - "packages/bundle-standard/**"
+      - "packages/core/**"
+      - "packages/mime/**"
+      - "packages/parser-*/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/isolation-benchmark.yml"
+  push:
+    branches: [initial-port, main]
+    paths:
+      - "packages/isolation-node/**"
+      - "packages/bundle-standard/**"
+      - "packages/core/**"
+      - "packages/mime/**"
+      - "packages/parser-*/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/isolation-benchmark.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: ${{ matrix.corpus }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+        corpus: [poi-ooxml, pdfjs-pdf]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Fetch corpus (pinned revision, sparse)
+        run: |
+          set -eu
+          if [ "${{ matrix.corpus }}" = poi-ooxml ]; then
+            URL=https://github.com/apache/poi.git; REV=545dca7379b224554ca49cd1e1fae173a83b74c0; DIRS="test-data/document test-data/spreadsheet test-data/slideshow"
+          else
+            URL=https://github.com/mozilla/pdf.js.git; REV=6619bf0c6fa6f7797e6b109cb6d431b0ab1ed00d; DIRS="test/pdfs"
+          fi
+          mkdir "$RUNNER_TEMP/corpus"; cd "$RUNNER_TEMP/corpus"
+          git init -q .
+          git remote add origin "$URL"
+          git sparse-checkout set $DIRS
+          git fetch -q --depth 1 --filter=blob:none origin "$REV"
+          git checkout -q FETCH_HEAD
+          git rev-parse HEAD
+      - name: Profile and check
+        run: |
+          set -eu
+          B=packages/isolation-node/test/bench
+          C="$RUNNER_TEMP/corpus"
+          if [ "${{ matrix.corpus }}" = poi-ooxml ]; then
+            node $B/profile.mjs --corpus "$C/test-data/document" --corpus "$C/test-data/spreadsheet" --corpus "$C/test-data/slideshow" \
+              --ext docx,docm,xlsx,xlsm,pptx,pptm --summary "$RUNNER_TEMP/summary.json" --check $B/expected-poi.json
+          else
+            node $B/profile.mjs --corpus "$C/test/pdfs" --ext pdf --max-task-ms 20000 \
+              --summary "$RUNNER_TEMP/summary.json" --check $B/expected-pdfjs.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: summary-${{ matrix.corpus }}-${{ matrix.runner }}
+          path: ${{ runner.temp }}/summary.json

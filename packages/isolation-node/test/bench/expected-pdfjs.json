@@ -1,0 +1,45 @@
+{
+  "_comment": "Regression bounds for profile.mjs --check. issue_cmap12.pdf is a 2 KB file whose cmap makes pdf.js allocate without bound: contained as a heap OOM at 384, 512 and 768 MiB and at the CPU limit at 1024 MiB (measured), so it stays in allowedNotOk. Every other PDF fits in a 128 MiB heap.",
+  "corpus": {
+    "repo": "https://github.com/mozilla/pdf.js (test/pdfs)",
+    "revision": "6619bf0"
+  },
+  "measuredOn": {
+    "platform": "linux/arm64",
+    "node": "v24.22.2",
+    "files": 1089,
+    "peakRssMbMax": 519,
+    "msMax": 3204,
+    "peakRssMbP99": 208
+  },
+  "minFiles": 1089,
+  "maxPeakRssMb": 750,
+  "maxMs": 15000,
+  "allowedNotOk": {
+    "Brotli-Prototype-FileA.pdf": "MALFORMED_DOCUMENT",
+    "REDHAT-1531897-0.pdf": "MALFORMED_DOCUMENT",
+    "auth-event-ef-open.pdf": "ENCRYPTED_DOCUMENT",
+    "bug1020226.pdf": "MALFORMED_DOCUMENT",
+    "bug1782186.pdf": "ENCRYPTED_DOCUMENT",
+    "bug1978317.pdf": "LIMIT_EXCEEDED",
+    "bug1980958.pdf": "MALFORMED_DOCUMENT",
+    "encrypted-attachment.pdf": "ENCRYPTED_DOCUMENT",
+    "freeculture.pdf": "LIMIT_EXCEEDED",
+    "issue15893_reduced.pdf": "ENCRYPTED_DOCUMENT",
+    "issue19484_1.pdf": "ENCRYPTED_DOCUMENT",
+    "issue19484_2.pdf": "ENCRYPTED_DOCUMENT",
+    "issue19800.pdf": "MALFORMED_DOCUMENT",
+    "issue21579.pdf": "ENCRYPTED_DOCUMENT",
+    "issue3371.pdf": "ENCRYPTED_DOCUMENT",
+    "issue3928.pdf": "MALFORMED_DOCUMENT",
+    "issue6010_1.pdf": "ENCRYPTED_DOCUMENT",
+    "issue6010_2.pdf": "ENCRYPTED_DOCUMENT",
+    "issue_cmap12.pdf": "LIMIT_EXCEEDED",
+    "pdkids.pdf": "LIMIT_EXCEEDED",
+    "poppler-395-0-fuzzed.pdf": "MALFORMED_DOCUMENT",
+    "pr6531_1.pdf": "ENCRYPTED_DOCUMENT",
+    "pr6531_2.pdf": "ENCRYPTED_DOCUMENT",
+    "print_protection.pdf": "ENCRYPTED_DOCUMENT",
+    "saslprep-r6.pdf": "ENCRYPTED_DOCUMENT"
+  }
+}

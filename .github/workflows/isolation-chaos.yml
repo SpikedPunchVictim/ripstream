@@ -1,0 +1,57 @@
+name: isolation-chaos
+
+# Linux chaos fixtures for parse isolation (packages/isolation-node/test/chaos), run on NATIVE runners:
+# x86_64 and arm64, glibc (node:24-slim) and musl (node:24-alpine). Native means run-docker.sh does not label the
+# run "emulated", so fixtures d and h keep their FAIL verdicts and the result is authoritative.
+# Local runs on a Mac are arm64-native or Rosetta-emulated and are not.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/isolation-node/**"
+      - "packages/bundle-standard/**"
+      - "packages/core/**"
+      - "packages/mime/**"
+      - "packages/parser-*/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/isolation-chaos.yml"
+  push:
+    branches: [initial-port, main]
+    paths:
+      - "packages/isolation-node/**"
+      - "packages/bundle-standard/**"
+      - "packages/core/**"
+      - "packages/mime/**"
+      - "packages/parser-*/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/isolation-chaos.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    name: chaos (${{ matrix.platform }}, ${{ matrix.image }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-slim" }
+          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-alpine" }
+          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-slim" }
+          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-alpine" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Fixture f needs packages/bundle-standard/dist; the fixtures mount the built repo read-only.
+      - run: pnpm run build
+      - name: Chaos fixtures
+        run: packages/isolation-node/test/chaos/run-docker.sh "${{ matrix.platform }}" "${{ matrix.image }}"

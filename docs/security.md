@@ -9,9 +9,10 @@
 - **Limits.** `ParseContext.limits`: output chars, embedded count/bytes, compression ratio,
   node depth, parse time. Violations throw typed errors; archive entry limits propagate.
 - **Temp files.** Spool files are created 0600 inside a 0700 temp directory and removed on close
-  or context cleanup.
+  or context cleanup. In an isolated child that directory is private to the call (the child's `TMPDIR`),
+  is held to `isolation.maxDiskMb` and is removed once the child is gone (see [isolation.md](isolation.md)).
 - **Parse isolation.** `ripstream serve` parses each document in a short-lived child process with
-  heap, RSS, address-space (Linux), CPU and wall-clock bounds, and refuses to start when it cannot
+  heap, RSS, address-space (Linux), CPU, wall-clock and temporary-disk bounds, and refuses to start when it cannot
   (see [isolation.md](isolation.md)). A plain `createRipstream()` parses in the calling process, and
   so does the PDF parser: pdf.js runs on the calling thread with no containment of its own.
 - **Secrets.** `redactMetadata` replaces credential-like keys before logging/serialization.
@@ -127,7 +128,7 @@ configured.
 The parser has no memory cap and cannot survive a crash of pdf.js. Earlier versions ran pdf.js in a
 worker thread with a memory watchdog; that path was removed in favour of process isolation. Parse
 untrusted PDFs through the isolation layer ([isolation.md](isolation.md)), which bounds heap, RSS,
-CPU and wall-clock time of the whole parse.
+CPU, wall-clock time and temporary disk of the whole parse.
 
 Attachment extraction follows `maxEmbeddedResources`, `maxEmbeddedResourceBytes` and
 `maxTotalEmbeddedBytes`.

@@ -36,6 +36,7 @@ fixed when the process starts, and a client cannot name a mode, a limit or a poo
 | Wall-clock budget of one request, ms (default 60,000) | | `RIPSTREAM_ISOLATION_MAX_TASK_MILLIS` | `maxTaskMillis` |
 | V8 heap of one child, MiB (default derived, 384 to 512) | | `RIPSTREAM_ISOLATION_HEAP_MB` | `heapMb` |
 | Requests allowed to wait for memory (default 16) | | `RIPSTREAM_ISOLATION_MAX_QUEUE` | `maxQueue` |
+| Temporary disk budget of one child, MiB (default 1024) | | `RIPSTREAM_ISOLATION_MAX_DISK_MB` | `maxDiskMb` |
 | Server ceiling on extracted characters per request (default 100,000; `serve` only) | `--max-output-chars` | `RIPSTREAM_MAX_OUTPUT_CHARS` | |
 
 A bad value is a usage error (exit 2) that names the flag or variable. The merged settings are validated with the
@@ -78,6 +79,7 @@ cost 20 s of CPU, now 138 ms). Detection cost on other adversarial inputs has no
 | L3 RSS poll | Memory outside the heap | `/proc`, 20 ms | `ps`, 250 ms or slower |
 | L4 `ulimit -v` | Address space | yes | **no** (RLIMIT_AS is unsupported) |
 | L5 `ulimit -t` | CPU seconds, also after the parent is gone | yes | yes |
+| L6 disk budget poll | Bytes the child writes to its private temp directory | yes | yes |
 
 `requireStrictContainment` makes the mode refuse a platform that lacks L3 or, on Linux, L4 and L5. macOS passes
 `strict` with the weaker memory containment shown above; set the option to refuse it. `/status` shows what the
@@ -88,6 +90,83 @@ If the server is killed with `SIGKILL`, its children do not outlive it for long.
 5.1 s later (its own parse timer), and a child spinning the CPU in a loop was gone 10.6 s later (the L5 CPU limit,
 `maxTaskMillis` plus 5 s). With the default `maxTaskMillis` of 60 s the bound is about a minute. Linux behaviour
 under a killed parent is covered by the chaos fixtures (case h in `packages/isolation-node/test/chaos`).
+
+**Disk.** A parser can write to disk: a stream above 1 MiB is spooled to the temp directory, and the OCR parser
+writes its image there too. A 90 MiB stored ZIP entry that looks like a PDF made one child write 270 MiB (three
+copies of it), and a wall-clock kill used to leave them behind. So each call gets a private directory
+(`ripstream-call-*`, mode 0700, under `os.tmpdir()`) that the child receives as `TMPDIR`; its working directory is
+unchanged. While the child runs, the parent measures the directory's allocated bytes every 100 ms (a sparse file
+counts what it occupies, not its length) and kills the process group when they pass `maxDiskMb`, default 1024 MiB.
+The request is then a 422 like a heap or RSS kill, and its message names the budget ("temporary disk budget of N MiB
+exceeded"). The default leaves room for the measured 3x amplification of an input at the 100 MiB cap and for the OCR
+image. The walk is bounded: more than 10,000 files and directories, or directories nested deeper than 8 levels,
+counts as over budget however small they are.
+
+The directory is removed after the child's process group has been reaped, whatever the outcome: a result, an error
+frame, a crash, a timeout, an abort, a memory or disk kill, `dispose()`. The caller is answered after the removal, and
+a removal that fails is logged as a warning and does not change the answer. Library callers can place the
+directories with the `tempDir` option of `createNodeIsolator` (an absolute path to an existing directory); the CLI and
+the server have no flag or variable for it. Limits of this layer:
+
+- The poll is the only enforcement, so a child can write about the poll interval times its write rate beyond the
+  budget before it is stopped (there is no `RLIMIT_FSIZE`), and one that finishes within a single interval is never
+  measured. The overshoot is documented, not prevented.
+- Only `TMPDIR` is measured. Parser code is trusted, and a path it names elsewhere is not covered.
+- If the **parent** is killed with `SIGKILL`, the directories of the calls in flight at that moment stay behind:
+  nothing sweeps them. This is documented, not fixed.
+
+## Measured defaults
+
+The defaults were checked against two public corpora, one child per file, sequentially, on Linux (arm64, glibc,
+Node 24.22, `MALLOC_ARENA_MAX=1`): the Apache POI test-data OOXML files (599 docx/xlsx/pptx, revision `545dca7`) and
+the pdf.js test PDFs (1,089 files, revision `6619bf0`). `packages/isolation-node/test/bench/profile.mjs` reruns it;
+CI does so on every relevant change (`isolation-benchmark`).
+
+| | OOXML (599) | PDF (1,089) | Default budget |
+| --- | --- | --- | --- |
+| Peak child RSS, p50 / p99 / max | 112 / 285 / 595 MiB | 135 / 208 / 519 MiB | `perChildMb` 1536 |
+| Wall time, p50 / p99 / max | 0.35 / 1.1 / 2.5 s | 0.62 / 1.8 / 3.2 s | `maxTaskMillis` 60 s |
+| Killed for memory or time | 0 | 1 (`issue_cmap12.pdf`, below) | |
+| Not parsed (malformed, encrypted, output cap; OOXML: includes 2 internal failures below; PDF: includes the kill above) | 53 | 25 | |
+
+The RSS maxima are below half of `perChildMb`, and the slowest file takes 5% of `maxTaskMillis`. The default heap
+(`heapMb` derived, 385 MiB at the default output cap) is never the limit: every PDF but one parses in a 128 MiB heap.
+The exception, `issue_cmap12.pdf` (2 KB), makes pdf.js allocate without bound: it runs out of heap at 384, 512 and
+768 MiB and at the CPU limit at 1024 MiB. It is refused with a 422 in every configuration, which is the containment
+working, not a sizing problem. Larger `perChildMb` and `heapMb` buy nothing on these corpora.
+
+A PDF flate bomb is stopped by the RSS poll (L3), not by the heap cap: the inflated bytes live outside the V8 heap.
+At the default sizing a 2 GiB inflated bomb (2 MB on the wire) parsed to empty text in 13 s at 1.4 GiB RSS, under
+`perChildMb`; larger ones end at the RSS limit or the wall clock.
+
+### Hazard probes: music-metadata, hyparquet, large archives
+
+Hostile inputs built in memory (`packages/bundle-standard/test/hazard-probes.test.ts`, about 30 s) go through the real
+isolator on macOS and Linux (arm64). Each is a typed failure or a clean success, in one child that is reaped before the
+caller is answered, with the pool whole and the next request served.
+
+- **music-metadata** caps its own allocations (64 MiB) and metadata entries (100,000), so lying length fields are cheap
+  `MALFORMED_DOCUMENT`s. The cost is the MPEG sync scan on 0xFF-heavy data: about 3 s of CPU and 70 bytes of heap per
+  input byte, linear. 8 MiB of 0xFF holds a child for the whole `maxTaskMillis`.
+- **hyparquet** has no limits. A 118-byte file (delta page, bit width 0) pins a child for the whole budget; a 757 KB
+  file with 20,000 columns costs more than 10 s of CPU (schema lookup is quadratic). Dictionary, RLE and delta pages
+  that claim 2^31-1 values allocate GiBs from about 120 bytes. All end at the heap cap, the RSS poll, the CPU limit or
+  the clock.
+- **Archives.** A ZIP of 10,000 entries parses in 2-3 s (0.2 ms per flat entry, 1.4 ms per nested archive), not the
+  minute that extrapolating from the central-directory walk suggested. Within the caps the worst case measured is
+  13-14 s (4,990 nested archives). With default limits the 100,000-character output cap ends text-entry archives first
+  (0.6-1.5 s), so `maxEmbeddedResources` binds only for archives of non-text entries.
+
+Not contained, macOS only: the 119-byte dictionary page above (bit width 0, 2^31-1 values) parses "ok" under default
+limits after 5 s. macOS has no `RLIMIT_AS`, and the compressor hides the 8 GiB array from the `ps` RSS the poll reads
+(RSS 895 MiB, `phys_footprint` 9.6 GiB). Linux refuses the allocation (`RangeError`, answered `MALFORMED_DOCUMENT`).
+Production isolation targets Linux; on a macOS host treat `perChildMb` as advisory for typed-array bombs. Tracked in
+tikajs-ubpo (poll `phys_footprint`) and tikajs-5bg6 (bound the Parquet footer and page sizes).
+
+Ogg Vorbis and Opus files answer `UNSUPPORTED_FORMAT` because no parser claims the detected types (tikajs-joxh).
+
+Two files of the OOXML corpus fail with an internal failure (a `RangeError` on a fuzzed docx); they are tracked as a
+parser bug, not an isolation defect.
 
 ## Sizing and the deployment cliff
 
@@ -127,7 +206,7 @@ with `queue_full` after its body was read, and `/pipes` spends one slot on a run
 | Condition | Status | `Retry-After` |
 | --- | --- | --- |
 | Document over a limit, malformed, encrypted | 422 | |
-| Child ran out of memory or output budget | 422 | |
+| Child ran out of memory, output budget or temporary disk budget | 422 | |
 | Parse timed out | 408 | |
 | Server or memory-pool queue full (`queue_full`) | 503 | 1 |
 | Isolation unavailable (`unavailable`) | 503 | 5 |
@@ -150,9 +229,11 @@ it is handed to a child, so a large file costs parent memory that the pool does 
 
 ## Limits of the design
 
-- **Parser code is trusted.** The child talks to the parent over file descriptor 3. Code running inside the child can
+- **Parser code is trusted.** The disk budget assumes it too: code in the child can hide its files from the poll
+  (a `chmod 000` directory is counted as over budget after three failed samples, a renamed call directory is not seen).
+  The child talks to the parent over file descriptor 3. Code running inside the child can
   write to it and forge well-formed result frames. A forged result is accepted; one that breaks the protocol is
-  reported as a crash. The child is contained by L1 to L5 and is the first target of the kernel's OOM killer, but a
+  reported as a crash. The child is contained by L1 to L6 and is the first target of the kernel's OOM killer, but a
   compromised parser can lie about its own document.
 - **A document password does not cross the boundary.** `--password` with `--isolation` is a usage error.
 - **Exception text from a child is data.** Per-document exceptions in recursive results become plain `Error`s with
