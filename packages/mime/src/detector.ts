@@ -16,6 +16,11 @@ import { detectEncoding } from "./text-encoding.ts";
 import { extractXmlRoot } from "./xml-root.ts";
 import { detectZipContainer } from "./containers/zip.ts";
 import { detectOle2Container } from "./containers/ole2.ts";
+import { detectBplist } from "./containers/bplist.ts";
+import { detectCompressor } from "./containers/compressor.ts";
+import { detectGzipSpecialization } from "./containers/gzip.ts";
+import { detectMatroska } from "./containers/matroska.ts";
+import { detectOgg } from "./containers/ogg.ts";
 
 export interface DefaultDetectorOptions extends MimeTypesOptions {
   readonly magic?: MagicDetector;
@@ -23,9 +28,11 @@ export interface DefaultDetectorOptions extends MimeTypesOptions {
   readonly prefixLength?: number;
 }
 
+const TEXT_BASED_MESSAGE = MediaType.parse("text/x-tika-text-based-message") as MediaType;
 const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const ZIP_EMPTY_SIGNATURE = [0x50, 0x4b, 0x05, 0x06];
 const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+const BPLIST_SIGNATURE = [0x62, 0x70, 0x6c, 0x69, 0x73, 0x74];
 
 /**
  * Port of Ripstream's DefaultDetector ordering: name hint, container sniffing,
@@ -88,6 +95,14 @@ export class DefaultDetector implements Detector {
     if (stream !== null && startsWith(prefix, OLE2_SIGNATURE)) {
       consider(await detectOle2Container(stream));
     }
+    if (stream !== null && startsWith(prefix, BPLIST_SIGNATURE)) {
+      consider(await detectBplist(stream));
+    }
+    // warc+gz is not a specialization of gzip, so the gzip detector must answer first.
+    consider(await detectGzipSpecialization(prefix));
+    consider(detectCompressor(prefix));
+    consider(detectMatroska(prefix));
+    consider(detectOgg(prefix));
     consider(this.detectByMagicAndName(prefix, byName));
     return detected;
   }
@@ -122,7 +137,8 @@ export class DefaultDetector implements Detector {
 
 /**
  * Tika's `MimeTypes.applyHint`: the name hint wins when it is one of the magic types or a specialization of any of
- * them (a zip named `.docx` is a docx); otherwise the magic types stand.
+ * them (a zip named `.docx` is a docx); otherwise the magic types stand. The exception is a message type: prose named
+ * `.emlx` is not mail, so `text/plain` is not specialised into a text-based message (prose named `.java` still is java).
  */
 function applyHint(
   registry: MediaTypeRegistry,
@@ -131,7 +147,13 @@ function applyHint(
 ): readonly MediaType[] {
   if (hint === null) return possible;
   for (const type of possible) {
-    if (hint.equals(type) || registry.isSpecializationOf(hint, type)) return [hint];
+    if (hint.equals(type)) return [hint];
+    if (
+      registry.isSpecializationOf(hint, type) &&
+      !(type.equals(MediaType.TEXT_PLAIN) && registry.isSpecializationOf(hint, TEXT_BASED_MESSAGE))
+    ) {
+      return [hint];
+    }
   }
   return possible;
 }

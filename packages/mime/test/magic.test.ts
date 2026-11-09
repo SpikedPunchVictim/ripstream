@@ -41,7 +41,10 @@ test("searches within an offset range", () => {
     ]),
   ]);
   assert.equal(detector.detect(bytes("xxCDR")).length, 1);
-  assert.equal(detector.detect(bytes("xxxxxxCDR")).length, 0);
+  // The end of the range is inclusive: Tika 4.2.0 matches `BOOKMOBI` at 60 but not 61 for `0:60`.
+  assert.equal(detector.detect(bytes("xxxxxxCDR")).length, 1);
+  assert.equal(detector.detect(bytes("xxxxxxxCDR")).length, 0);
+  assert.equal(detector.detect(bytes("xCDR")).length, 0);
 });
 
 test("evaluates nested matches and group thresholds", () => {
@@ -138,4 +141,124 @@ test("full registry detects common container signatures", () => {
     detector.detect(new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))[0]?.toString(),
     "application/x-tika-msoffice",
   );
+});
+
+function types(detector: MagicDetector, data: Uint8Array): string[] {
+  return detector.detect(data).map((type) => type.toString());
+}
+
+test("orders equal-priority rules by clause size, then by type name, both descending", () => {
+  const detector = new MagicDetector([
+    entry("application/x-short", [{ priority: 50, matches: [{ type: "string", value: "AB", offset: "0" }] }]),
+    entry("application/x-long", [{ priority: 50, matches: [{ type: "string", value: "ABC", offset: "0" }] }]),
+    entry("application/x-a", [{ priority: 50, matches: [{ type: "string", value: "XY", offset: "0" }] }]),
+    entry("application/x-b", [{ priority: 50, matches: [{ type: "string", value: "XY", offset: "0" }] }]),
+  ]);
+  assert.deepEqual(types(detector, bytes("ABC")), ["application/x-long", "application/x-short"]);
+  assert.deepEqual(types(detector, bytes("XY")), ["application/x-b", "application/x-a"]);
+});
+
+test("a match with sub-matches is sized as its own pattern plus its largest sub-match", () => {
+  const detector = new MagicDetector([
+    entry("application/x-plain", [{ priority: 50, matches: [{ type: "string", value: "RIFF", offset: "0" }] }]),
+    entry("application/x-nested", [
+      {
+        priority: 50,
+        matches: [
+          {
+            type: "string",
+            value: "RIFF",
+            offset: "0",
+            children: [
+              { type: "string", value: "WA", offset: "8" },
+              { type: "string", value: "WAVE", offset: "8" },
+            ],
+          },
+        ],
+      },
+    ]),
+  ]);
+  // Both match; nested is sized 4 + 4 = 8 against 4, though "x-plain" would win a name tie.
+  assert.deepEqual(types(detector, bytes("RIFF....WAVE")), ["application/x-nested", "application/x-plain"]);
+});
+
+test("a numeric value without 0x is octal, as Tika reads it", () => {
+  const detector = new MagicDetector([
+    entry("application/x-octal", [{ priority: 50, matches: [{ type: "little16", value: "23", offset: "0" }] }]),
+    entry("application/x-hex", [{ priority: 50, matches: [{ type: "big16", value: "0x2301", offset: "2" }] }]),
+  ]);
+  assert.deepEqual(types(detector, new Uint8Array([0x13, 0x00])), ["application/x-octal"]);
+  assert.deepEqual(types(detector, new Uint8Array([0x17, 0x00])), []);
+  assert.deepEqual(types(detector, new Uint8Array([0, 0, 0x23, 0x01])), ["application/x-hex"]);
+});
+
+test("a mask shorter than its value is padded with 0xFF", () => {
+  const detector = new MagicDetector([
+    entry("application/x-masked", [{ priority: 50, matches: [{ type: "string", value: "0x0102", offset: "0", mask: "0xFF" }] }]),
+  ]);
+  assert.equal(detector.detect(new Uint8Array([1, 2])).length, 1);
+  assert.equal(detector.detect(new Uint8Array([1, 3])).length, 0);
+});
+
+test("regex rules decode the registry's escapes and match at the offset, or anywhere in a range", () => {
+  const detector = new MagicDetector([
+    entry("application/x-digits", [{ priority: 50, matches: [{ type: "regex", value: "\\\\d+x", offset: "0" }] }]),
+    entry("application/x-lines", [{ priority: 50, matches: [{ type: "regex", value: "L\\r?\\nM", offset: "0" }] }]),
+    entry("application/x-ranged", [{ priority: 50, matches: [{ type: "regex", value: "Z+Q", offset: "0:2" }] }]),
+  ]);
+  assert.deepEqual(types(detector, bytes("123x")), ["application/x-digits"]);
+  assert.deepEqual(types(detector, bytes("a123x")), []);
+  assert.deepEqual(types(detector, bytes("L\r\nM")), ["application/x-lines"]);
+  assert.deepEqual(types(detector, bytes("L\nM")), ["application/x-lines"]);
+  assert.deepEqual(types(detector, bytes("aaZQ")), ["application/x-ranged"]);
+  assert.deepEqual(types(detector, bytes("aaaZQ")), []);
+});
+
+test("a regex that cannot be compiled is reported and never matches", () => {
+  const detector = new MagicDetector([
+    entry("application/x-broken", [{ priority: 50, matches: [{ type: "regex", value: "(unclosed", offset: "0" }] }]),
+  ]);
+  assert.deepEqual(detector.uncompilableRegexes, ["application/x-broken: (unclosed"]);
+  assert.deepEqual(types(detector, bytes("(unclosed")), []);
+});
+
+test("an atomic group is emulated, so a failing match cannot be made exponential", () => {
+  // The registry's PDF rule: `(?>(?:%%[^\r\n]{0,148})?(?:\r\n|[\r\n])){1,50}%PDF-[12]\.`. Read as a plain group,
+  // 24 CRLF pairs take ~1.5 s to fail (Tika's atomic group takes microseconds), and each pair doubles that.
+  const detector = new MagicDetector();
+  const hostile = new Uint8Array(64 * 1024).fill(0x58);
+  hostile.set(bytes("\r\n".repeat(24) + "Z"));
+  const started = performance.now();
+  detector.detect(hostile);
+  assert.ok(performance.now() - started < 1000);
+
+});
+
+test("an emulated atomic group does not backtrack into itself, as in Java", () => {
+  const detector = new MagicDetector([
+    entry("application/x-atomic", [{ priority: 50, matches: [{ type: "regex", value: "(?>a|ab)c", offset: "0" }] }]),
+    entry("application/x-repeated", [{ priority: 50, matches: [{ type: "regex", value: "(?>x|xy){2}z", offset: "0" }] }]),
+  ]);
+  assert.deepEqual(types(detector, bytes("ac")), ["application/x-atomic"]);
+  // A plain group would retry `ab` after `a` and match.
+  assert.deepEqual(types(detector, bytes("abc")), []);
+  // A quantifier on the group applies to the group, not to the lookahead's backreference.
+  assert.deepEqual(types(detector, bytes("xxz")), ["application/x-repeated"]);
+  assert.deepEqual(types(detector, bytes("xz")), []);
+});
+
+test("an atomic group with a numeric backreference is refused rather than renumbered", () => {
+  const detector = new MagicDetector([
+    entry("application/x-mixed", [{ priority: 50, matches: [{ type: "regex", value: "(?>a)(b)\\\\1", offset: "0" }] }]),
+  ]);
+  assert.equal(detector.uncompilableRegexes.length, 1);
+});
+
+test("\\s in a regex is ASCII whitespace only, as in Java", () => {
+  const detector = new MagicDetector([
+    entry("application/x-space", [{ priority: 50, matches: [{ type: "regex", value: "a\\\\s+b", offset: "0" }] }]),
+  ]);
+  assert.deepEqual(types(detector, bytes("a \t\nb")), ["application/x-space"]);
+  // U+00A0 is the Latin-1 byte 0xA0; JS `\s` would accept it, Java's does not.
+  assert.deepEqual(types(detector, new Uint8Array([0x61, 0xa0, 0x62])), []);
 });
