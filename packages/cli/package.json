@@ -25,9 +25,13 @@
     "node": ">=22.18"
   },
   "dependencies": {
+    "@spikedpunch/ripstream-bundle-standard": "workspace:*",
     "@spikedpunch/ripstream-core": "workspace:*",
     "@spikedpunch/ripstream-parsers": "workspace:*",
     "@spikedpunch/ripstream-language": "workspace:*",
     "@spikedpunch/ripstream-server": "workspace:*"
+  },
+  "devDependencies": {
+    "@spikedpunch/ripstream-isolation-node": "workspace:*"
   }
 }

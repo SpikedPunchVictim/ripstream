@@ -53,6 +53,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@spikedpunch/ripstream-bundle-standard':
+        specifier: workspace:*
+        version: link:../bundle-standard
       '@spikedpunch/ripstream-core':
         specifier: workspace:*
         version: link:../core
@@ -65,6 +68,10 @@ importers:
       '@spikedpunch/ripstream-server':
         specifier: workspace:*
         version: link:../server
+    devDependencies:
+      '@spikedpunch/ripstream-isolation-node':
+        specifier: workspace:*
+        version: link:../isolation-node
 
   packages/core: {}
 
@@ -257,12 +264,16 @@ importers:
       '@spikedpunch/ripstream-language':
         specifier: workspace:*
         version: link:../language
-      '@spikedpunch/ripstream-parsers':
-        specifier: workspace:*
-        version: link:../parsers
       '@spikedpunch/ripstream-pipes':
         specifier: workspace:*
         version: link:../pipes
+    devDependencies:
+      '@spikedpunch/ripstream-isolation-node':
+        specifier: workspace:*
+        version: link:../isolation-node
+      '@spikedpunch/ripstream-parsers':
+        specifier: workspace:*
+        version: link:../parsers
 
   packages/test-corpus: {}
 

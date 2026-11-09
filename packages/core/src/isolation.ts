@@ -87,8 +87,8 @@ export type IsolatedParseResult =
   | { readonly kind: "records"; readonly records: readonly IsolatedParseRecord[] };
 
 /**
- * Runs a whole parse inside a resource-budgeted boundary. UNSTABLE until P4:
- * the shape may change while the server integration lands.
+ * Runs a whole parse inside a resource-budgeted boundary. The server, the pipes
+ * engine and the CLI reach it through `createIsolatedRipstream`.
  *
  * This is a facade. The implementation owns routing (media-type detection and
  * the in-process safe allowlist), the init-time availability probe and any

@@ -2,25 +2,76 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import {
   httpStatusForError,
   serializeRmeta,
+  IsolationError,
   RipstreamError,
   type Metadata,
 } from "@spikedpunch/ripstream-core";
-import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
 import { PipesClient, PipesPathError, resolveWithinRoot, type PipesConfig } from "@spikedpunch/ripstream-pipes";
 import { randomUUID } from "node:crypto";
-import type { Ripstream, Translator } from "@spikedpunch/ripstream-core";
+import type { ParseOptions, Ripstream, Translator } from "@spikedpunch/ripstream-core";
+
+/** What the server calls to detect and parse. A core Ripstream satisfies it, and so does an isolated one. */
+export type ServerRipstream = Pick<Ripstream, "detect" | "parse" | "parseRecursive">;
+
+/**
+ * What the server shows and reads of the isolation behind its `ripstream`. Structural, so a `NodeIsolator`'s status
+ * satisfies it without this package depending on any isolation implementation.
+ */
+export interface ServerIsolationStatus {
+  /** The mode in force: "strict", "lenient" or "off". */
+  readonly mode: string;
+  /** Isolation was requested but could not be provided, so documents are parsed in this process. */
+  readonly degraded: boolean;
+  /** The memory gate; null when nothing is actually isolated (mode "off", or degraded). */
+  readonly pool: { readonly poolMb: number; readonly maxQueue: number } | null;
+  /** Pool MiB one default request reserves, per output kind; null when nothing is isolated. */
+  readonly defaultReservationMb: { readonly text: number; readonly records: number } | null;
+  /**
+   * The output cap the isolation was built for. When present and below `maxLimits.maxOutputChars`, the server warns:
+   * a request at the ceiling needs more memory than the pool was sized to reserve. A NodeIsolatorStatus carries it.
+   */
+  readonly limits?: { readonly maxOutputChars: number } | null;
+}
+
+export interface ServerIsolation {
+  status(): ServerIsolationStatus;
+}
 
 export interface RipstreamServerOptions {
-  readonly ripstream?: Ripstream;
+  /**
+   * Parses every document. Required: the server has no default engine, so it cannot parse hostile documents in
+   * its own process by accident. Pass an isolated engine (build one with `createStandardIsolation` from
+   * `@spikedpunch/ripstream-bundle-standard/isolation` and give its handle as `isolation`), or an in-process
+   * `createRipstream()` to accept that risk.
+   */
+  readonly ripstream?: ServerRipstream;
+  /**
+   * The isolation behind `ripstream`, when it has one. The server only reads it: for the startup warnings, the
+   * default concurrency gate and `/status`. The caller owns its lifecycle; `close()` does not dispose it.
+   */
+  readonly isolation?: ServerIsolation;
+  /** Receives the startup warnings (default: `console.warn` for "warn", "info" is dropped). */
+  readonly log?: (level: "info" | "warn", message: string) => void;
   readonly maxBodyBytes?: number;
+  /**
+   * Requests parsed at once. Default 100; with an active `isolation`, what its memory pool can run plus what the
+   * pool will queue (`max(1, floor(poolMb / defaultReservationMb.text)) + pool.maxQueue`).
+   */
   readonly maxConcurrent?: number;
+  /**
+   * Requests held waiting for a slot before the body is read. Default 100; 0 with an active `isolation`, whose
+   * memory pool queues the excess itself.
+   */
   readonly maxQueue?: number;
   readonly requestTimeoutMs?: number;
   readonly corsOrigin?: string | readonly string[];
   readonly authenticate?: (request: IncomingMessage) => boolean | Promise<boolean>;
   readonly translator?: Translator;
-  /** Server-side maxima for client-supplied `maxOutputChars` / `maxEmbeddedResources` query params. */
+  /**
+   * Server-side maxima for client-supplied `maxOutputChars` / `maxEmbeddedResources` query params.
+   * `maxOutputChars` is required with an active `isolation`: its result cap and child memory derive from it.
+   */
   readonly maxLimits?: { readonly maxOutputChars?: number; readonly maxEmbeddedResources?: number };
   /** Maximum retained /async jobs (default 1000); new jobs get 503 when all are still running. */
   readonly maxJobs?: number;
@@ -31,6 +82,7 @@ export interface RipstreamServerOptions {
    * name paths relative to these roots; absolute paths, `..` and symlinks are rejected.
    */
   readonly pipes?: RipstreamServerPipesOptions;
+  /** With an active `isolation`, a preset's `limits` may only name `maxOutputChars` and `maxEmbeddedResources`. */
   readonly presets?: Readonly<Record<string, { readonly handler?: string; readonly limits?: Record<string, number> }>>;
 }
 
@@ -56,11 +108,38 @@ interface Job {
 
 class HttpError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly headers: Readonly<Record<string, string>>;
+  constructor(status: number, message: string, headers: Readonly<Record<string, string>> = {}) {
     super(message);
     this.status = status;
+    this.headers = headers;
     this.name = "HttpError";
   }
+}
+
+/** Seconds a client should wait before retrying a request refused because the server is full. */
+const RETRY_AFTER_FULL = "1";
+/** Seconds a client should wait before retrying when isolation itself is unavailable. */
+const RETRY_AFTER_UNAVAILABLE = "5";
+
+/** The one place an error becomes an HTTP answer. */
+function errorResponse(error: unknown): {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly code: string;
+  readonly message: string;
+} {
+  const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof HttpError) return { status: error.status, headers: error.headers, code: "ERROR", message };
+  if (error instanceof RipstreamError) {
+    const headers: Record<string, string> = {};
+    if (error instanceof IsolationError) {
+      if (error.reason === "queue_full") headers["Retry-After"] = RETRY_AFTER_FULL;
+      else if (error.reason === "unavailable") headers["Retry-After"] = RETRY_AFTER_UNAVAILABLE;
+    }
+    return { status: httpStatusForError(error), headers, code: error.code, message };
+  }
+  return { status: 500, headers: {}, code: "ERROR", message };
 }
 
 export interface RipstreamServer {
@@ -70,12 +149,31 @@ export interface RipstreamServer {
   close(): Promise<void>;
 }
 
-/** Minimal synchronous Tika endpoint family: /detect, /tika, /meta, /rmeta. */
+/**
+ * Minimal synchronous Tika endpoint family: /detect, /tika, /meta, /rmeta.
+ *
+ * Throws unless `options.ripstream` is given (see the option), and, with an active `isolation`, unless
+ * `maxLimits.maxOutputChars` is set and every preset limit can cross the isolation boundary.
+ */
 export function createRipstreamServer(options: RipstreamServerOptions = {}): RipstreamServer {
-  const ripstream = options.ripstream ?? createRipstream();
+  if (options.pipes !== undefined && options.authenticate === undefined) {
+    throw new Error("createRipstreamServer: the `pipes` option requires `authenticate`");
+  }
+  requireValidGateOptions(options);
+  const ripstream: ServerRipstream = options.ripstream ?? refuseToStartWithoutRipstream();
+  const log = options.log ?? defaultLog;
+  const isolation = options.isolation;
+  const startupStatus = isolation?.status();
+  const isolating = startupStatus !== undefined && startupStatus.pool !== null;
+  if (isolation !== undefined) requireIsolatedOptions(options, isolating);
+  warnAboutIsolation(startupStatus, options.maxLimits?.maxOutputChars, log);
+  const derivedGate = startupStatus === undefined ? undefined : deriveGate(startupStatus);
+  // /async and /pipes take no limit parameters: they parse under the server's ceilings, like a request without any.
+  const ceilinged = withCeilings(ripstream, options.maxLimits);
   const maxBodyBytes = options.maxBodyBytes ?? 100 * 1024 * 1024;
-  const maxConcurrent = options.maxConcurrent ?? 100;
-  const maxQueue = options.maxQueue ?? 100;
+  const maxConcurrent = options.maxConcurrent ?? derivedGate?.maxConcurrent ?? 100;
+  const maxQueue = options.maxQueue ?? derivedGate?.maxQueue ?? 100;
+  log("info", `Concurrency gate: maxConcurrent ${maxConcurrent}, maxQueue ${maxQueue}`);
   const requestTimeoutMs = options.requestTimeoutMs ?? 60_000;
   const corsOrigin = options.corsOrigin;
   const languageDetector = new FrancLanguageDetector();
@@ -84,9 +182,6 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const maxJobs = options.maxJobs ?? 1000;
   const jobTtlMs = options.jobTtlMs ?? 10 * 60_000;
   const jobs = new Map<string, Job>();
-  if (options.pipes !== undefined && options.authenticate === undefined) {
-    throw new Error("createRipstreamServer: the `pipes` option requires `authenticate`");
-  }
 
   /** Drops expired finished jobs, then the oldest finished jobs while at capacity. */
   const pruneJobs = (): void => {
@@ -111,7 +206,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       return Promise.resolve(release);
     }
     if (waiters.length >= maxQueue) {
-      return Promise.reject(new HttpError(503, "Server queue is full"));
+      return Promise.reject(new HttpError(503, "Server queue is full", { "Retry-After": RETRY_AFTER_FULL }));
     }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -177,20 +272,12 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           return held ?? (() => undefined);
         });
       } catch (error) {
-        const status =
-          error instanceof HttpError
-            ? error.status
-            : error instanceof RipstreamError
-              ? httpStatusForError(error)
-              : 500;
-        const message = error instanceof Error ? error.message : String(error);
+        const { status, headers, code, message } = errorResponse(error);
         if (!response.headersSent && !response.writableEnded) {
+          for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
           const wantsJson = (request.headers.accept ?? "").includes("application/json");
           if (wantsJson) {
-            sendJson(response, status, {
-              error: message,
-              code: error instanceof RipstreamError ? error.code : "ERROR",
-            });
+            sendJson(response, status, { error: message, code });
           } else {
             send(response, status, "text/plain", message);
           }
@@ -243,7 +330,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         parseJsonBody(await readBody(request, maxBodyBytes)),
         options.pipes,
       );
-      const result = await new PipesClient(config).run();
+      const result = await new PipesClient(config, { ripstream: ceilinged }).run();
       sendJson(response, 200, result);
       return;
     }
@@ -252,7 +339,13 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       return;
     }
     if (method === "GET" && url.pathname === "/status") {
-      sendJson(response, 200, { status: "ok", active });
+      sendJson(response, 200, {
+        status: "ok",
+        active,
+        queued: waiters.length,
+        gate: { maxConcurrent, maxQueue },
+        isolation: isolation === undefined ? { mode: "off", degraded: false } : isolation.status(),
+      });
       return;
     }
     if (method === "POST" && url.pathname === "/async") {
@@ -265,7 +358,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       // The concurrency slot stays held until the background parse settles.
       const releaseSlot = detachSlot();
       const signal = AbortSignal.timeout(requestTimeoutMs);
-      void ripstream
+      void ceilinged
         .parse(body, name === undefined ? { signal } : { filename: name, signal })
         .then((result) => {
           jobs.set(id, { status: "done", result: { text: result.text }, updatedAt: Date.now() });
@@ -413,6 +506,142 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       });
     },
   };
+}
+
+/** The engine with the server's ceilings as the limits of any parse that does not name its own (or names more). */
+function withCeilings(engine: ServerRipstream, ceilings: RipstreamServerOptions["maxLimits"]): ServerRipstream {
+  const entries = Object.entries(ceilings ?? {}).filter(([, value]) => value !== undefined);
+  if (entries.length === 0) return engine;
+  const bound = (parseOptions?: ParseOptions): ParseOptions => {
+    const limits: Record<string, number> = { ...parseOptions?.limits };
+    for (const [key, ceiling] of entries) limits[key] = Math.min(limits[key] ?? ceiling, ceiling);
+    return { ...parseOptions, limits };
+  };
+  return {
+    detect: (source, detectOptions) => engine.detect(source, detectOptions),
+    parse: (source, parseOptions) => engine.parse(source, bound(parseOptions)),
+    parseRecursive: (source, parseOptions) => engine.parseRecursive(source, bound(parseOptions)),
+  };
+}
+
+/** Fail closed: the server never builds an in-process engine of its own. */
+function refuseToStartWithoutRipstream(): never {
+  throw new Error(
+    "createRipstreamServer: no `ripstream` was given, and the server does not build one itself: it would parse " +
+      "hostile documents in the server process. Either build an isolated engine (createStandardIsolation from " +
+      "@spikedpunch/ripstream-bundle-standard/isolation, see the parse-isolation docs) and pass it as `ripstream` " +
+      "with its handle as `isolation`, or pass an in-process createRipstream() as `ripstream` to accept the risk.",
+  );
+}
+
+function defaultLog(level: "info" | "warn", message: string): void {
+  if (level === "warn") console.warn(`[ripstream-server] ${message}`);
+}
+
+/** The only limits an isolated request can carry; see createIsolatedRipstream in core. */
+const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbeddedResources"]);
+
+/** A server-side count: an integer, and at least `min`. Throws naming the option. */
+function requireCount(name: string, value: number | undefined, min: number): void {
+  if (value === undefined) return;
+  if (!Number.isSafeInteger(value) || value < min) {
+    throw new Error(`createRipstreamServer: \`${name}\` must be an integer of at least ${min}, got ${String(value)}`);
+  }
+}
+
+function requireValidGateOptions(options: RipstreamServerOptions): void {
+  requireCount("maxConcurrent", options.maxConcurrent, 1);
+  requireCount("maxQueue", options.maxQueue, 0);
+}
+
+/**
+ * What a server with an isolation handle must be given. The preset rules hold for any handle, even one that isolates
+ * nothing today; the output ceiling is only needed when something is actually isolated. Throws, naming the option.
+ */
+function requireIsolatedOptions(options: RipstreamServerOptions, isolating: boolean): void {
+  if (isolating && options.maxLimits?.maxOutputChars === undefined) {
+    throw new Error(
+      "createRipstreamServer: `maxLimits.maxOutputChars` is required with an active `isolation`: the child's result " +
+        "cap and memory are derived from it, so every request needs a finite output ceiling",
+    );
+  }
+  for (const [presetName, preset] of Object.entries(options.presets ?? {})) {
+    for (const [key, value] of Object.entries(preset.limits ?? {})) {
+      if (!CROSSING_LIMITS.has(key)) {
+        throw new Error(
+          `createRipstreamServer: preset "${presetName}" sets limit "${key}", which cannot cross the isolation ` +
+            "boundary; with an `isolation` a preset may only set maxOutputChars and maxEmbeddedResources",
+        );
+      }
+      if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(
+          `createRipstreamServer: preset "${presetName}" sets ${key} to ${String(value)}; ` +
+            "with an `isolation` it must be a non-negative integer",
+        );
+      }
+    }
+  }
+}
+
+/** One warning per condition, at construction. */
+function warnAboutIsolation(
+  status: ServerIsolationStatus | undefined,
+  ceiling: number | undefined,
+  log: (level: "info" | "warn", message: string) => void,
+): void {
+  if (status === undefined) {
+    log(
+      "warn",
+      "Parse isolation is off for this server: hostile documents are parsed in the server process. " +
+        "Pass an isolated `ripstream` and its `isolation` handle to contain them.",
+    );
+    return;
+  }
+  if (status.mode !== "strict") {
+    log(
+      "warn",
+      `Parse isolation mode is "${status.mode}", not "strict": ` +
+        (status.mode === "lenient"
+          ? "if isolation cannot be provided, documents are parsed in the server process."
+          : "documents are parsed in the server process."),
+    );
+  }
+  const built = status.limits?.maxOutputChars;
+  if (ceiling !== undefined && built !== undefined && ceiling > built) {
+    log(
+      "warn",
+      `maxLimits.maxOutputChars is ${ceiling}, above the ${built} this isolation was built to cap: a request at the ` +
+        "ceiling needs more memory than the pool reserves for it. Build the isolation with " +
+        "`defaultMaxOutputChars` set to the ceiling.",
+    );
+  }
+  if (status.degraded) {
+    // degradedReason is not part of the structural type; a NodeIsolatorStatus carries it.
+    const reason: unknown = (status as { readonly degradedReason?: unknown }).degradedReason;
+    log(
+      "warn",
+      "Parse isolation is degraded: documents are parsed in the server process" +
+        (typeof reason === "string" ? ` (${reason}).` : "."),
+    );
+  }
+}
+
+/**
+ * The gate for an active isolation: the requests its memory pool can run at once plus the ones it will queue, with
+ * no queue of our own. It is sized by the dearer of the text and records reservations, so a run of /rmeta requests
+ * does not read more bodies than the pool can place. Requests beyond the gate are refused with 503 before their body
+ * is read. It does not bound memory exactly: /pipes spends one slot on a run that parses several documents at once.
+ * Undefined when nothing is isolated or the status cannot size it, which leaves the caller's options and the old
+ * defaults in charge.
+ */
+function deriveGate(status: ServerIsolationStatus): { maxConcurrent: number; maxQueue: number } | undefined {
+  const { pool, defaultReservationMb } = status;
+  if (pool === null || defaultReservationMb === null) return undefined;
+  const reservation = Math.max(defaultReservationMb.text, defaultReservationMb.records);
+  if (!Number.isFinite(reservation) || reservation <= 0 || !Number.isFinite(pool.poolMb)) return undefined;
+  // A status from an older or third-party isolation may not report the pool's queue: an unknown one counts as none.
+  const poolQueue = Number.isSafeInteger(pool.maxQueue) && pool.maxQueue > 0 ? pool.maxQueue : 0;
+  return { maxConcurrent: Math.max(1, Math.floor(pool.poolMb / reservation)) + poolQueue, maxQueue: 0 };
 }
 
 /** Parses a client limit: absent -> undefined; otherwise a finite integer >= 0 or HTTP 400. */

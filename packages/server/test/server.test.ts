@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { createRipstreamServer } from "../src/index.ts";
 
 async function withServer<T>(
   run: (base: string) => Promise<T>,
   options: Parameters<typeof createRipstreamServer>[0] = {},
 ): Promise<T> {
-  const instance = createRipstreamServer(options);
+  // The server has no default engine; these tests exercise the HTTP layer over the in-process pipeline.
+  const instance = createRipstreamServer({ ripstream: createRipstream(), log: () => undefined, ...options });
   const port = await instance.listen();
   try {
     return await run(`http://127.0.0.1:${port}`);
@@ -198,7 +200,10 @@ test("/pipes is disabled without server-side pipes config", async () => {
 });
 
 test("pipes option requires authenticate", () => {
-  assert.throws(() => createRipstreamServer({ pipes: { sourceRoot: "." } }), /authenticate/);
+  assert.throws(
+    () => createRipstreamServer({ ripstream: createRipstream(), log: () => undefined, pipes: { sourceRoot: "." } }),
+    /authenticate/,
+  );
 });
 
 test("/pipes rejects non-JSON content types and unauthenticated callers", async () => {

@@ -85,6 +85,11 @@ export {
   type ParseIsolator,
 } from "./isolation.ts";
 export {
+  createIsolatedRipstream,
+  type IsolatedRipstream,
+  type IsolatedRipstreamOptions,
+} from "./isolated-ripstream.ts";
+export {
   WorkerTaskError,
   WorkerTimeoutError,
   runIsolatedTask,

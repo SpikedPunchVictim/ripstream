@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { LimitExceededError } from "@spikedpunch/ripstream-core";
+import { LimitExceededError, Metadata } from "@spikedpunch/ripstream-core";
 import {
   FileSystemEmitter,
   FileSystemFetcher,
@@ -11,6 +11,7 @@ import {
   PipesClient,
   PipesEngine,
   createEngine,
+  type PipesRipstream,
 } from "../src/index.ts";
 
 test("runs filesystem pipes in content and rmeta modes", async () => {
@@ -247,5 +248,35 @@ test("FileSystemEmitter keeps distinct unsafe ids in distinct files", async () =
     assert.equal(readdirSync(output).length, 4);
   } finally {
     rmSync(output, { recursive: true, force: true });
+  }
+});
+
+test("a ripstream given to the engine does every parse; the default pipeline is never built", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-pipes-inject-"));
+  try {
+    writeFileSync(join(directory, "a.txt"), "alpha");
+    const calls: string[] = [];
+    const ripstream: PipesRipstream = {
+      parse: async (_source, options) => {
+        calls.push(`parse:${options?.filename}`);
+        return { metadata: new Metadata(), text: "from the injected parser" };
+      },
+      parseRecursive: async (_source, options) => {
+        calls.push(`parseRecursive:${options?.filename}`);
+        return [];
+      },
+    };
+    const content = new MemoryEmitter();
+    await new PipesEngine({ fetcher: new FileSystemFetcher(directory), emitter: content, mode: "CONTENT_ONLY", ripstream }).run();
+    assert.deepEqual(content.documents.map((document) => document.text), ["from the injected parser"]);
+    const rmeta = new MemoryEmitter();
+    await new PipesEngine({ fetcher: new FileSystemFetcher(directory), emitter: rmeta, mode: "RMETA", ripstream }).run();
+    assert.deepEqual(calls, ["parse:a.txt", "parseRecursive:a.txt"]);
+
+    const client = new PipesClient({ source: { type: "filesystem", path: directory }, mode: "CONTENT_ONLY" }, { ripstream });
+    await client.run();
+    assert.equal(calls.at(-1), "parse:a.txt");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

@@ -7,6 +7,7 @@ import {
   type Metadata,
   type ParseLimits,
   type ParseRecord,
+  type Ripstream,
 } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 
@@ -33,6 +34,9 @@ export interface Emitter {
   close?(): Promise<void> | void;
 }
 
+/** What the engine calls to parse. A core Ripstream satisfies it, and so does an isolated one. */
+export type PipesRipstream = Pick<Ripstream, "parse" | "parseRecursive">;
+
 export type PipeMode =
   | "CONTENT_ONLY"
   | "CONCATENATE"
@@ -53,6 +57,11 @@ export interface PipesEngineOptions {
    */
   readonly maxBuffered?: number;
   readonly limits?: Partial<ParseLimits>;
+  /**
+   * Parses every document. Default: the standard in-process pipeline. A service that isolates parsing must pass
+   * its isolated ripstream here, or the pipe bypasses the isolation boundary.
+   */
+  readonly ripstream?: PipesRipstream;
 }
 
 /** Bounded-concurrency pipe runner over a fetcher/emitter pair. */
@@ -87,7 +96,7 @@ export class PipesEngine {
     const useSlots = ordered && mode !== "CONCATENATE";
     const windowSize = Math.max(1, this.#options.maxBuffered ?? concurrency * 4);
     const emitter = this.#options.emitter;
-    const ripstream = createRipstream();
+    const ripstream = this.#options.ripstream ?? createRipstream();
     const limits = this.#options.limits;
     const queue: Array<{ document: PipeDocument; index: number }> = [];
     const iterator = this.#options.fetcher.fetch()[Symbol.asyncIterator]();
@@ -427,7 +436,7 @@ export interface PipesConfig {
   readonly followSymlinks?: boolean;
 }
 
-export function createEngine(config: PipesConfig): PipesEngine {
+export function createEngine(config: PipesConfig, options: { readonly ripstream?: PipesRipstream } = {}): PipesEngine {
   const fetcher =
     config.source.type === "http"
       ? new HttpFetcher(config.source.urls ?? [])
@@ -445,19 +454,22 @@ export function createEngine(config: PipesConfig): PipesEngine {
     concurrency: config.concurrency ?? 4,
     maxQueue: config.maxQueue ?? 64,
     ordered: config.ordered ?? false,
+    ...(options.ripstream === undefined ? {} : { ripstream: options.ripstream }),
   });
 }
 
 /** Embedded API wrapper around the pipe engine. */
 export class PipesClient {
   readonly #config: PipesConfig;
+  readonly #ripstream: PipesRipstream | undefined;
 
-  constructor(config: PipesConfig) {
+  constructor(config: PipesConfig, options: { readonly ripstream?: PipesRipstream } = {}) {
     this.#config = config;
+    this.#ripstream = options.ripstream;
   }
 
   async run(): Promise<{ count: number; stats: PipesStats }> {
-    const engine = createEngine(this.#config);
+    const engine = createEngine(this.#config, this.#ripstream === undefined ? {} : { ripstream: this.#ripstream });
     const count = await engine.run();
     return { count, stats: engine.stats };
   }

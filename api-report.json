@@ -85,6 +85,8 @@
       "IsolatedParseRecord",
       "IsolatedParseRequest",
       "IsolatedParseResult",
+      "IsolatedRipstream",
+      "IsolatedRipstreamOptions",
       "IsolatedTaskOptions",
       "IsolationConfig",
       "IsolationError",
@@ -245,6 +247,7 @@
       "compileSafeRegex",
       "configGeneration",
       "createDefaultParser",
+      "createIsolatedRipstream",
       "createRipstream",
       "createTempDirectory",
       "decodeText",
@@ -297,6 +300,7 @@
       "writeXmpPacket"
     ],
     "cli": [
+      "CliDeps",
       "CliIO",
       "main"
     ],
@@ -344,6 +348,8 @@
       "IsolatedParseRecord",
       "IsolatedParseRequest",
       "IsolatedParseResult",
+      "IsolatedRipstream",
+      "IsolatedRipstreamOptions",
       "IsolatedTaskOptions",
       "IsolationConfig",
       "IsolationError",
@@ -452,6 +458,7 @@
       "collect",
       "compileSafeRegex",
       "configGeneration",
+      "createIsolatedRipstream",
       "createTempDirectory",
       "detectRuntime",
       "effectiveOutputLimit",
@@ -725,6 +732,7 @@
       "PipesEngine",
       "PipesEngineOptions",
       "PipesPathError",
+      "PipesRipstream",
       "PipesStats",
       "Reporter",
       "StdoutEmitter",
@@ -737,6 +745,9 @@
       "RipstreamServer",
       "RipstreamServerOptions",
       "RipstreamServerPipesOptions",
+      "ServerIsolation",
+      "ServerIsolationStatus",
+      "ServerRipstream",
       "createRipstreamServer"
     ],
     "test-corpus": [

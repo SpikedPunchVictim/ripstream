@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import {
   EncryptedDocumentError,
+  DEFAULT_LIMITS,
   IsolationError,
   LimitExceededError,
   MalformedDocumentError,
@@ -13,9 +14,16 @@ import {
   type Metadata,
   type ParseRecord,
 } from "@spikedpunch/ripstream-core";
+import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
 import { createRipstreamServer } from "@spikedpunch/ripstream-server";
+import {
+  IsolationSettingsError,
+  resolveIsolationConfig,
+  resolveMaxOutputChars,
+  type ResolvedIsolation,
+} from "./isolation-config.ts";
 
 export interface CliIO {
   readonly stdout: (value: string) => void;
@@ -44,6 +52,10 @@ interface Options {
   readonly password: string | null;
   readonly port: number;
   readonly host: string;
+  /** `--isolation` as typed; validated by resolveIsolationConfig. */
+  readonly isolation: string | null;
+  /** `--max-output-chars` as typed; validated by resolveMaxOutputChars. */
+  readonly maxOutputChars: string | null;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -61,6 +73,7 @@ function exitCodeFor(error: unknown): number {
   ) {
     return EXIT_DATA;
   }
+  if (error instanceof IsolationSettingsError) return EXIT_USAGE;
   if (error instanceof MissingDependencyError) return EXIT_ENVIRONMENT;
   if (error instanceof IsolationError) {
     // queue_full/unavailable are infrastructure conditions; an unexplained
@@ -77,9 +90,16 @@ function exitCodeFor(error: unknown): number {
   return EXIT_INTERNAL;
 }
 
+/** What a test (or an embedder) can replace: the process environment and how isolation is built. */
+export interface CliDeps {
+  readonly env?: Readonly<Record<string, string | undefined>>;
+  readonly createIsolation?: typeof createStandardIsolation;
+}
+
 export async function main(
   argv: readonly string[],
   io: CliIO = defaultIO,
+  deps: CliDeps = {},
 ): Promise<number> {
   let options: Options;
   try {
@@ -96,35 +116,26 @@ export async function main(
     io.stdout("ripstream 0.0.0\n");
     return 0;
   }
+  let settings: CliSettings;
+  try {
+    settings = await resolveSettings(options, deps.env ?? process.env);
+  } catch (error) {
+    io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return EXIT_USAGE;
+  }
   if (options.command === "serve") {
     if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
       io.stderr("ripstream: --port expects an integer between 0 and 65535\n");
       return EXIT_USAGE;
     }
-    const instance = createRipstreamServer({ ripstream: createRipstream() });
-    const port = await instance.listen(options.port, options.host);
-    io.stdout(`ripstream server listening on http://${options.host}:${port}\n`);
-    await new Promise<void>((resolve) => {
-      const stop = (): void => {
-        process.off("SIGINT", stop);
-        process.off("SIGTERM", stop);
-        resolve();
-      };
-      process.on("SIGINT", stop);
-      process.on("SIGTERM", stop);
-    });
-    await instance.close();
-    return 0;
+    return serve(options, settings, deps, io);
   }
-  if (options.config !== null) {
-    try {
-      loadConfig(await readFile(options.config, "utf8"));
-    } catch (error) {
-      io.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 2;
-    }
+  if (settings.isolation.config.mode !== "off" && options.password !== null && ["parse", "metadata"].includes(options.command)) {
+    io.stderr("ripstream: --password cannot be used with isolation: the password cannot cross the isolation boundary\n");
+    return EXIT_USAGE;
   }
 
+  let isolation: StandardIsolation | null = null;
   try {
     const bytes =
       options.file === null || options.file === "-"
@@ -132,9 +143,15 @@ export async function main(
         : new Uint8Array(await readFile(options.file));
     const filename =
       options.file === null || options.file === "-" ? undefined : options.file;
-    const ripstream = createRipstream(
+    const inProcess = createRipstream(
       options.password === null ? {} : { pdfPassword: options.password },
     );
+    // Only the commands that run a parser are isolated; detection and language stay in this process.
+    isolation =
+      settings.isolation.config.mode !== "off" && (options.command === "parse" || options.command === "metadata")
+        ? await openIsolation(settings, deps, io)
+        : null;
+    const ripstream = isolation === null ? inProcess : isolation.ripstream;
 
     if (options.command === "detect") {
       const result = await ripstream.detect(bytes, filename === undefined ? {} : { filename });
@@ -209,6 +226,138 @@ export async function main(
       io.stderr(`ripstream: ${error instanceof Error ? error.message : String(error)}\n`);
     }
     return exitCodeFor(error);
+  } finally {
+    await isolation?.isolator.dispose();
+  }
+}
+
+/**
+ * The server product. Isolation is on unless the operator turned it off, and a strict server that cannot isolate does
+ * not start (exit 4): it never falls back to parsing hostile documents in its own process.
+ */
+async function serve(options: Options, settings: CliSettings, deps: CliDeps, io: CliIO): Promise<number> {
+  let isolation: StandardIsolation | null = null;
+  try {
+    // The ceiling is also the default: a request that names no cap gets it. With isolation it is required, because the
+    // child's result cap and memory derive from it, so the isolation is built for exactly that cap.
+    const isolating = settings.isolation.config.mode !== "off";
+    const maxOutputChars = settings.maxOutputChars ?? (isolating ? DEFAULT_LIMITS.maxOutputChars : null);
+    if (isolating) isolation = await openIsolation(settings, deps, io, maxOutputChars ?? undefined);
+    const instance = createRipstreamServer({
+      ripstream: isolation === null ? createRipstream() : isolation.ripstream,
+      ...(isolation === null ? {} : { isolation: isolation.isolator }),
+      ...(maxOutputChars === null ? {} : { maxLimits: { maxOutputChars } }),
+      log: (level, message) => {
+        if (level === "warn") io.stderr(`ripstream: WARN: ${message}\n`);
+      },
+    });
+    try {
+      let port: number;
+      try {
+        port = await instance.listen(options.port, options.host);
+      } catch (error) {
+        io.stderr(`ripstream: cannot listen on ${options.host}:${options.port}: ${error instanceof Error ? error.message : String(error)}\n`);
+        return EXIT_ENVIRONMENT;
+      }
+      io.stdout(`ripstream server listening on http://${options.host}:${port}\n`);
+      io.stdout(`${describeIsolation(settings, isolation)}\n`);
+      await new Promise<void>((resolve) => {
+        const stop = (): void => {
+          process.off("SIGINT", stop);
+          process.off("SIGTERM", stop);
+          resolve();
+        };
+        process.on("SIGINT", stop);
+        process.on("SIGTERM", stop);
+      });
+    } finally {
+      await instance.close();
+    }
+    return 0;
+  } catch (error) {
+    if (error instanceof IsolationError || error instanceof IsolationSettingsError) {
+      io.stderr(`ripstream: ${error.message}\n`);
+      return exitCodeFor(error);
+    }
+    throw error;
+  } finally {
+    await isolation?.isolator.dispose();
+  }
+}
+
+/** One line for the operator: the mode, where it came from and, when isolating, what the pool allows. */
+function describeIsolation(settings: CliSettings, isolation: StandardIsolation | null): string {
+  const configured = `${settings.isolation.config.mode} (${settings.isolation.modeSource})`;
+  if (isolation === null) return `ripstream: isolation ${configured}: documents are parsed in this process`;
+  const status = isolation.isolator.status();
+  if (status.pool === null || status.defaultReservationMb === null) {
+    return `ripstream: isolation ${configured}, in force: ${status.mode}${status.degraded ? " (degraded)" : ""}`;
+  }
+  return (
+    `ripstream: isolation ${configured}; memory pool ${status.pool.poolMb} MiB, ` +
+    `${status.defaultReservationMb.text} MiB reserved per request, containment ${JSON.stringify(status.containment)}`
+  );
+}
+
+/**
+ * Builds the isolation for this invocation; its warnings go to stderr. Strict refusal is an IsolationError. A setting
+ * the isolation rejects (a RangeError, e.g. an output ceiling no child could hold) is the operator's mistake, so it
+ * becomes a usage error.
+ */
+async function openIsolation(
+  settings: CliSettings,
+  deps: CliDeps,
+  io: CliIO,
+  defaultMaxOutputChars?: number,
+): Promise<StandardIsolation> {
+  const create = deps.createIsolation ?? createStandardIsolation;
+  try {
+    return await create({
+      config: settings.isolation.config,
+      ...(defaultMaxOutputChars === undefined ? {} : { defaultMaxOutputChars }),
+      log: (level, message) => {
+        if (level === "warn") io.stderr(`ripstream: WARN: ${message}\n`);
+      },
+    });
+  } catch (error) {
+    if (error instanceof RangeError) throw new IsolationSettingsError(error.message);
+    throw error;
+  }
+}
+
+interface CliSettings {
+  readonly isolation: ResolvedIsolation;
+  /** The server-side output ceiling from `--max-output-chars` / RIPSTREAM_MAX_OUTPUT_CHARS, or null. */
+  readonly maxOutputChars: number | null;
+}
+
+/**
+ * Reads the configuration file (any command may pass `--config`), then merges flag, environment and file into the
+ * isolation settings. `serve` is the server product and isolates by default; the one-shot commands do not.
+ */
+async function resolveSettings(
+  options: Options,
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<CliSettings> {
+  const fileIsolation = options.config === null ? null : loadConfig(await readFile(options.config, "utf8")).isolation;
+  // detect and language run in this process whatever is set, so what is set cannot make them fail.
+  if (options.command === "detect" || options.command === "language") {
+    return { isolation: { config: { mode: "off" }, modeSource: "default" }, maxOutputChars: null };
+  }
+  try {
+    return {
+      isolation: resolveIsolationConfig({
+        defaultMode: options.command === "serve" ? "strict" : "off",
+        flagMode: options.isolation,
+        env,
+        fileIsolation,
+      }),
+      // Only the server has an output ceiling; a one-shot command ignores it.
+      maxOutputChars: options.command === "serve" ? resolveMaxOutputChars({ flag: options.maxOutputChars, env }) : null,
+    };
+  } catch (error) {
+    if (error instanceof IsolationSettingsError) throw new Error(`ripstream: ${error.message}`);
+    throw error;
   }
 }
 
@@ -225,6 +374,8 @@ function parseArgs(argv: readonly string[]): Options {
   let file: string | null = null;
   let port = 9998;
   let host = "127.0.0.1";
+  let isolation: string | null = null;
+  let maxOutputChars: string | null = null;
 
   for (let index = 0; index < rest.length; index++) {
     const argument = rest[index]!;
@@ -243,6 +394,8 @@ function parseArgs(argv: readonly string[]): Options {
     else if (argument === "--password" || argument === "-p") password = rest[++index] ?? null;
     else if (argument === "--port") port = Number(rest[++index] ?? "9998");
     else if (argument === "--host") host = rest[++index] ?? "127.0.0.1";
+    else if (argument === "--isolation") isolation = requireValue(rest[++index], "--isolation");
+    else if (argument === "--max-output-chars") maxOutputChars = requireValue(rest[++index], "--max-output-chars");
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
@@ -251,7 +404,12 @@ function parseArgs(argv: readonly string[]): Options {
   if (!["parse", "detect", "metadata", "language", "serve", "help", "version"].includes(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
-  return { command, file, json, metadataOnly, recursive, output, config, password, port, host };
+  return { command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars };
+}
+
+function requireValue(value: string | undefined, flag: string): string {
+  if (value === undefined) throw new Error(`${flag} expects a value`);
+  return value;
 }
 
 function defaultOptions(): Options {
@@ -266,6 +424,8 @@ function defaultOptions(): Options {
     password: null,
     port: 9998,
     host: "127.0.0.1",
+    isolation: null,
+    maxOutputChars: null,
   };
 }
 
@@ -292,9 +452,15 @@ function usage(): string {
     "  -r, --recursive      Recursive metadata JSON",
     "  -o, --output <mode>  text, json or jsonl",
     "  -c, --config <file>  Validate JSON configuration",
-    "  -p, --password <pw>  Document password",
+    "  -p, --password <pw>  Document password (not available with --isolation)",
+    "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
+    "                          (serve: strict unless set; other commands: off unless set)",
+    "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
     "  -h, --help           Show help",
     "  -V, --version        Show version",
+    "",
+    "Environment (flags win): RIPSTREAM_ISOLATION, RIPSTREAM_ISOLATION_MEMORY_POOL_MB, _PER_CHILD_MB,",
+    "  _MAX_INPUT_BYTES, _MAX_TASK_MILLIS, _HEAP_MB, _MAX_QUEUE, _REQUIRE_STRICT_CONTAINMENT, RIPSTREAM_MAX_OUTPUT_CHARS",
     "",
     "Exit codes:",
     "  0  success",
