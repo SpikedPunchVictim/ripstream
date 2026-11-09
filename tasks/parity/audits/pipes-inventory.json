@@ -1,0 +1,2993 @@
+[
+ {
+  "id": "emitter/az-blob-emitter",
+  "kind": "emitter",
+  "upstream": "az-blob-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterFactory.java:49",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"az-blob-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitter.java:70; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Azure Blob put (SAS); moderate value.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitter.java:70",
+  "vendorSdks": [
+   "com.azure.core",
+   "com.azure.storage"
+  ],
+  "configFields": [
+   {
+    "name": "sasToken",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:25"
+   },
+   {
+    "name": "endpoint",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:26"
+   },
+   {
+    "name": "container",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:27"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:28"
+   },
+   {
+    "name": "fileExtension",
+    "type": "String",
+    "default": "json",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:29"
+   },
+   {
+    "name": "overwriteExisting",
+    "type": "boolean",
+    "default": "false",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:30"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/es-emitter",
+  "kind": "emitter",
+  "upstream": "es-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterFactory.java:50",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"es-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterFactory.java:50; implementation tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitter.java:50; config tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java (9 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Tika's own ESEmitter is plain HTTP to _bulk (no ES client), so a fetch port is direct; OVERWRITE/UPSERT, attachment strategies, ApiKey/basic auth.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitter.java:50",
+  "vendorSdks": [
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "esUrl",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:38"
+   },
+   {
+    "name": "idField",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:38"
+   },
+   {
+    "name": "attachmentStrategy",
+    "type": "AttachmentStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:39"
+   },
+   {
+    "name": "updateStrategy",
+    "type": "UpdateStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:40"
+   },
+   {
+    "name": "commitWithin",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:40"
+   },
+   {
+    "name": "embeddedFileFieldName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:41"
+   },
+   {
+    "name": "apiKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:41"
+   },
+   {
+    "name": "httpClientConfig",
+    "type": "HttpClientConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:42"
+   },
+   {
+    "name": "chunkStrategy",
+    "type": "ChunkStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/emitter/es/ESEmitterConfig.java:43"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/file-system-emitter",
+  "kind": "emitter",
+  "upstream": "file-system-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterFactory.java:48",
+  "ripstream": "packages/pipes/src/index.ts:402",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"file-system-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitter.java:61; config tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java (7 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: FileSystemEmitter (packages/pipes/src/index.ts:402-425) writes <sanitized-id>[-sha1(id)[:8]].txt or .bin into ONE flat directory (nested ids flattened, packages/pipes/src/index.ts:414-422), overwrites silently, no atomic write, no gzip, no .json. run: a.txt -> a.txt.txt, nested/e.txt -> nested_e.txt-a5d1bdbd.txt; second run 'silently overwrote existing file' (parity/pipes/out-run-ripstream-pipes.txt, run2.txt)",
+  "note": "Tika FileSystemEmitter: emitKey -> relative path under basePath (confinement FileSystemEmitter.java:128), default onExists=EXCEPTION via CREATE_NEW (FileSystemEmitterConfig.java:39; FileSystemEmitter.java:165-166, error text :332), atomicWrites default TRUE (Config:42), GZIP option (.gz suffix :66,:122), fileExtension, prettyPrint, allowAbsolutePaths. None of the 7 options exist; output tree layout differs (flat vs mirrored).",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitter.java:61",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "basePath",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:22"
+   },
+   {
+    "name": "fileExtension",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:22"
+   },
+   {
+    "name": "onExists",
+    "type": "ON_EXISTS",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:22"
+   },
+   {
+    "name": "prettyPrint",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:22"
+   },
+   {
+    "name": "allowAbsolutePaths",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:22"
+   },
+   {
+    "name": "atomicWrites",
+    "type": "Boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:23"
+   },
+   {
+    "name": "compression",
+    "type": "COMPRESSION",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:23"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/gcs-emitter",
+  "kind": "emitter",
+  "upstream": "gcs-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterFactory.java:48",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"gcs-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitter.java:64; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: GCS object write; moderate value.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitter.java:64",
+  "vendorSdks": [
+   "com.google.api",
+   "com.google.cloud"
+  ],
+  "configFields": [
+   {
+    "name": "projectId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java:25"
+   },
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java:26"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java:27"
+   },
+   {
+    "name": "fileExtension",
+    "type": "String",
+    "default": "json",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java:28"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/jdbc-emitter",
+  "kind": "emitter",
+  "upstream": "jdbc-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterFactory.java:47",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"jdbc-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitter.java:82; config tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java (11 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: No generic JDBC in Node; needs pg/mysql2/sqlite per-driver adapters; createTable/insert/keys/attachmentStrategy/multivaluedFieldStrategy.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitter.java:82",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "connection",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:26"
+   },
+   {
+    "name": "insert",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:27"
+   },
+   {
+    "name": "createTable",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:28"
+   },
+   {
+    "name": "alterTable",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:29"
+   },
+   {
+    "name": "postConnection",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:30"
+   },
+   {
+    "name": "maxRetries",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:31"
+   },
+   {
+    "name": "maxStringLength",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:32"
+   },
+   {
+    "name": "keys",
+    "type": "LinkedHashMap<String, String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:33"
+   },
+   {
+    "name": "attachmentStrategy",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:34"
+   },
+   {
+    "name": "multivaluedFieldStrategy",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:35"
+   },
+   {
+    "name": "multivaluedFieldDelimiter",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/emitter/jdbc/JDBCEmitterConfig.java:36"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/kafka-emitter",
+  "kind": "emitter",
+  "upstream": "kafka-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterFactory.java:48",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: factory NAME \"kafka-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitter.java:59; config tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java (23 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Proposed non-goal: broker client (23 producer config fields incl. acks/lingerMs) pulls a heavy native-ish dependency (kafkajs/librdkafka); streaming sink does not fit the batch pipes model. Owner decides; kafkajs exists, so this is cost not impossibility.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitter.java:59",
+  "vendorSdks": [
+   "org.apache.kafka"
+  ],
+  "configFields": [
+   {
+    "name": "topic",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:24"
+   },
+   {
+    "name": "bootstrapServers",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:25"
+   },
+   {
+    "name": "acks",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:26"
+   },
+   {
+    "name": "lingerMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:27"
+   },
+   {
+    "name": "batchSize",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:28"
+   },
+   {
+    "name": "bufferMemory",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:29"
+   },
+   {
+    "name": "compressionType",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:30"
+   },
+   {
+    "name": "connectionsMaxIdleMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:31"
+   },
+   {
+    "name": "deliveryTimeoutMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:32"
+   },
+   {
+    "name": "enableIdempotence",
+    "type": "Boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:33"
+   },
+   {
+    "name": "interceptorClasses",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:34"
+   },
+   {
+    "name": "maxBlockMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:35"
+   },
+   {
+    "name": "maxInFlightRequestsPerConnection",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:36"
+   },
+   {
+    "name": "maxRequestSize",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:37"
+   },
+   {
+    "name": "metadataMaxAgeMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:38"
+   },
+   {
+    "name": "requestTimeoutMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:39"
+   },
+   {
+    "name": "retries",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:40"
+   },
+   {
+    "name": "retryBackoffMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:41"
+   },
+   {
+    "name": "transactionTimeoutMs",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:42"
+   },
+   {
+    "name": "transactionalId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:43"
+   },
+   {
+    "name": "clientId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:44"
+   },
+   {
+    "name": "keySerializer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:45"
+   },
+   {
+    "name": "valueSerializer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/emitter/kafka/KafkaEmitterConfig.java:46"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/opensearch-emitter",
+  "kind": "emitter",
+  "upstream": "opensearch-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterFactory.java:49",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"opensearch-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitter.java:36; config tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java (8 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Same shape as es-emitter, plain HTTP _bulk.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitter.java:36",
+  "vendorSdks": [
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "openSearchUrl",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:22"
+   },
+   {
+    "name": "idField",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:22"
+   },
+   {
+    "name": "attachmentStrategy",
+    "type": "AttachmentStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:22"
+   },
+   {
+    "name": "updateStrategy",
+    "type": "UpdateStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:23"
+   },
+   {
+    "name": "commitWithin",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:23"
+   },
+   {
+    "name": "embeddedFileFieldName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:24"
+   },
+   {
+    "name": "httpClientConfig",
+    "type": "HttpClientConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:24"
+   },
+   {
+    "name": "chunkStrategy",
+    "type": "ChunkStrategy",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/emitter/opensearch/OpenSearchEmitterConfig.java:25"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/s3-emitter",
+  "kind": "emitter",
+  "upstream": "s3-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterFactory.java:50",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"s3-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterFactory.java:50; implementation tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3Emitter.java:86; config tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java (12 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: S3 put with prefix/fileExtension/spoolToTemp; high value.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3Emitter.java:86",
+  "vendorSdks": [
+   "software.amazon.awssdk"
+  ],
+  "configFields": [
+   {
+    "name": "region",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:23"
+   },
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:24"
+   },
+   {
+    "name": "credentialsProvider",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:25"
+   },
+   {
+    "name": "profile",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:26"
+   },
+   {
+    "name": "accessKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:27"
+   },
+   {
+    "name": "secretKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:28"
+   },
+   {
+    "name": "endpointConfigurationService",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:29"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:30"
+   },
+   {
+    "name": "fileExtension",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:31"
+   },
+   {
+    "name": "spoolToTemp",
+    "type": "Boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:32"
+   },
+   {
+    "name": "maxConnections",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:33"
+   },
+   {
+    "name": "pathStyleAccessEnabled",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/emitter/s3/S3EmitterConfig.java:34"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "emitter/solr-emitter",
+  "kind": "emitter",
+  "upstream": "solr-emitter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterFactory.java:49",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"solr-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitter.java:66; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java (17 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Solr /update over HTTP is plain fetch in Node, no SolrJ needed (17 config fields incl. attachmentStrategy PARENT_CHILD, updateStrategy).",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitter.java:66",
+  "vendorSdks": [
+   "org.apache.solr",
+   "org.eclipse.jetty"
+  ],
+  "configFields": [
+   {
+    "name": "solrCollection",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:28"
+   },
+   {
+    "name": "solrUrls",
+    "type": "List<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:29"
+   },
+   {
+    "name": "solrZkHosts",
+    "type": "List<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:30"
+   },
+   {
+    "name": "solrZkChroot",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:31"
+   },
+   {
+    "name": "idField",
+    "type": "String",
+    "default": "id",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:32"
+   },
+   {
+    "name": "commitWithin",
+    "type": "int",
+    "default": "1000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:33"
+   },
+   {
+    "name": "connectionTimeoutMillis",
+    "type": "int",
+    "default": "10000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:34"
+   },
+   {
+    "name": "socketTimeoutMillis",
+    "type": "int",
+    "default": "60000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:35"
+   },
+   {
+    "name": "attachmentStrategy",
+    "type": "String",
+    "default": "PARENT_CHILD",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:36"
+   },
+   {
+    "name": "updateStrategy",
+    "type": "String",
+    "default": "ADD",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:37"
+   },
+   {
+    "name": "embeddedFileFieldName",
+    "type": "String",
+    "default": "embedded",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:38"
+   },
+   {
+    "name": "userName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:39"
+   },
+   {
+    "name": "password",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:40"
+   },
+   {
+    "name": "authScheme",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:41"
+   },
+   {
+    "name": "proxyHost",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:42"
+   },
+   {
+    "name": "proxyPort",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:43"
+   },
+   {
+    "name": "verifySsl",
+    "type": "Boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:44"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/atlassian-jwt-fetcher",
+  "kind": "fetcher",
+  "upstream": "atlassian-jwt-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/AtlassianJwtFetcherFactory.java:48",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: factory NAME \"atlassian-jwt-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/AtlassianJwtFetcherFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/AtlassianJwtFetcher.java:72; config tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java (17 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Proposed non-goal: Atlassian Connect JWT signing (nimbus-jose), 17 config fields; narrow audience. Owner decides; ModuleFetcher is the escape hatch.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/AtlassianJwtFetcher.java:72",
+  "vendorSdks": [
+   "com.nimbusds.jose",
+   "com.nimbusds.jwt",
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "maxConnectionsPerRoute",
+    "type": "Integer",
+    "default": "1000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:34"
+   },
+   {
+    "name": "maxConnections",
+    "type": "Integer",
+    "default": "2000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:35"
+   },
+   {
+    "name": "requestTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:36"
+   },
+   {
+    "name": "connectTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:37"
+   },
+   {
+    "name": "socketTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:38"
+   },
+   {
+    "name": "maxSpoolSize",
+    "type": "Long",
+    "default": "-1L",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:39"
+   },
+   {
+    "name": "maxRedirects",
+    "type": "Integer",
+    "default": "0",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:40"
+   },
+   {
+    "name": "verifySsl",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:45"
+   },
+   {
+    "name": "httpHeaders",
+    "type": "List<String>",
+    "default": "new ArrayList<>()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:46"
+   },
+   {
+    "name": "httpRequestHeaders",
+    "type": "Map<String, List<String>>",
+    "default": "new LinkedHashMap<>()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:47"
+   },
+   {
+    "name": "overallTimeoutMillis",
+    "type": "Long",
+    "default": "120000L",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:48"
+   },
+   {
+    "name": "maxErrMsgSize",
+    "type": "Integer",
+    "default": "10000000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:49"
+   },
+   {
+    "name": "userAgent",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:50"
+   },
+   {
+    "name": "sharedSecret",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:52"
+   },
+   {
+    "name": "issuer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:53"
+   },
+   {
+    "name": "subject",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:54"
+   },
+   {
+    "name": "jwtExpiresInSeconds",
+    "type": "Integer",
+    "default": "3600",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-atlassian-jwt/src/main/java/org/apache/tika/pipes/fetcher/atlassianjwt/config/AtlassianJwtFetcherConfig.java:55"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/az-blob-fetcher",
+  "kind": "fetcher",
+  "upstream": "az-blob-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcherFactory.java:49",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"az-blob-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcher.java:55; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node. Tika mode 2 (fetchKey is a full SAS URL) is already approximable with HttpFetcher; mode 1 (endpoint+sasToken+container) needs the Blob REST API.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcher.java:55",
+  "vendorSdks": [
+   "com.azure.core",
+   "com.azure.storage"
+  ],
+  "configFields": [
+   {
+    "name": "spoolToTemp",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:29"
+   },
+   {
+    "name": "sasToken",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:30"
+   },
+   {
+    "name": "endpoint",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:31"
+   },
+   {
+    "name": "container",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:32"
+   },
+   {
+    "name": "extractUserMetadata",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:33"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/file-system-fetcher",
+  "kind": "fetcher",
+  "upstream": "file-system-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherFactory.java:46",
+  "ripstream": "packages/pipes/src/index.ts:308",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"file-system-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcher.java:56; config tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherConfig.java (3 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: FileSystemFetcher (packages/pipes/src/index.ts:308-336) walks a root and yields every file as {id: relative path, data}; the Fetcher SPI is fetch() with no key (packages/pipes/src/index.ts:20-22); no extractFileSystemMetadata (Tika sets SOURCE_PATH, FileSystemFetcher.java:100), no allowAbsolutePaths; traversal/symlink confinement exists separately as resolveWithinRoot (packages/pipes/src/index.ts:350) used only by the server. run: fs->fs over 7 fixtures emitted 6 files, parity/pipes/out-run-ripstream-pipes.txt",
+  "note": "Tika fetches ONE object by fetchKey under basePath (confinement FileSystemFetcher.java:89-94, rejects http/ftp/s3 basePath :142-150). Ripstream conflates iterator and fetcher: it enumerates and fetches in one step. No keyed fetch means no FetchEmitTuple model.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcher.java:56",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "basePath",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherConfig.java:29"
+   },
+   {
+    "name": "extractFileSystemMetadata",
+    "type": "boolean",
+    "default": "false",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherConfig.java:30"
+   },
+   {
+    "name": "allowAbsolutePaths",
+    "type": "boolean",
+    "default": "false",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/fetcher/fs/FileSystemFetcherConfig.java:31"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/gcs-fetcher",
+  "kind": "fetcher",
+  "upstream": "gcs-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcherFactory.java:49",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"gcs-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcher.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node. GCS JSON API over fetch with a service-account token.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcher.java:45",
+  "vendorSdks": [
+   "com.google.api",
+   "com.google.cloud"
+  ],
+  "configFields": [
+   {
+    "name": "spoolToTemp",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java:29"
+   },
+   {
+    "name": "projectId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java:30"
+   },
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java:31"
+   },
+   {
+    "name": "extractUserMetadata",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java:32"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/google-drive-fetcher",
+  "kind": "fetcher",
+  "upstream": "google-drive-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/GoogleDriveFetcherFactory.java:46",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: factory NAME \"google-drive-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/GoogleDriveFetcherFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/GoogleDriveFetcher.java:49; config tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Proposed non-goal: Google API client plus service-account/OAuth flow; narrow audience; user can plug in via ModuleFetcher. Owner decides; ModuleFetcher is the escape hatch.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/GoogleDriveFetcher.java:49",
+  "vendorSdks": [
+   "com.google.api",
+   "com.google.auth"
+  ],
+  "configFields": [
+   {
+    "name": "throttleSeconds",
+    "type": "List<Long>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:32"
+   },
+   {
+    "name": "spoolToTemp",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:33"
+   },
+   {
+    "name": "serviceAccountKeyBase64",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:34"
+   },
+   {
+    "name": "subjectUser",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:35"
+   },
+   {
+    "name": "applicationName",
+    "type": "String",
+    "default": "\"tika-pipes\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:36"
+   },
+   {
+    "name": "scopes",
+    "type": "List<String>",
+    "default": "new ArrayList<>()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-google-drive/src/main/java/org/apache/tika/pipes/fetcher/googledrive/config/GoogleDriveFetcherConfig.java:37"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/http-fetcher",
+  "kind": "fetcher",
+  "upstream": "http-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/HttpFetcherFactory.java:49",
+  "ripstream": "packages/pipes/src/index.ts:377",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"http-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/HttpFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/HttpFetcher.java:87; config tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java (24 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: HttpFetcher (packages/pipes/src/index.ts:377-391) GETs a fixed URL list via safeFetch, throws 'Fetch failed: <status>' on non-2xx; none of the 24 Tika config fields (auth, proxy, JWT, headers, timeouts, redirects, verifySsl, spool, userAgent) exist. run: source.type=http to 127.0.0.1 threw UrlSecurityError 'Address 127.0.0.1 is blocked' (parity/pipes/out-run2.txt, scenario http_loopback)",
+  "note": "SSRF guard is deliberate (blocks loopback/private). Missing: basic/NTLM auth, proxy, JWT (jwtIssuer/jwtSecret/jwtPrivateKeyBase64), custom headers, per-request/connect/socket/overall timeouts, maxRedirects, maxSpoolSize, RangeFetcher. NTLM/JWT-private-key sub-features are candidates to descope, the rest is plain fetch options.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/HttpFetcher.java:87",
+  "vendorSdks": [
+   "com.google.common",
+   "com.nimbusds.jose",
+   "com.nimbusds.jwt",
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "userName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:32"
+   },
+   {
+    "name": "password",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:33"
+   },
+   {
+    "name": "ntDomain",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:34"
+   },
+   {
+    "name": "authScheme",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:35"
+   },
+   {
+    "name": "proxyHost",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:36"
+   },
+   {
+    "name": "proxyPort",
+    "type": "Integer",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:37"
+   },
+   {
+    "name": "maxConnectionsPerRoute",
+    "type": "Integer",
+    "default": "1000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:38"
+   },
+   {
+    "name": "maxConnections",
+    "type": "Integer",
+    "default": "2000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:39"
+   },
+   {
+    "name": "requestTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:40"
+   },
+   {
+    "name": "connectTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:41"
+   },
+   {
+    "name": "socketTimeoutMillis",
+    "type": "Integer",
+    "default": "120000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:42"
+   },
+   {
+    "name": "maxSpoolSize",
+    "type": "Long",
+    "default": "-1L",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:43"
+   },
+   {
+    "name": "maxRedirects",
+    "type": "Integer",
+    "default": "0",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:44"
+   },
+   {
+    "name": "verifySsl",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:49"
+   },
+   {
+    "name": "httpHeaders",
+    "type": "List<String>",
+    "default": "new ArrayList<>()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:50"
+   },
+   {
+    "name": "httpRequestHeaders",
+    "type": "HttpHeaders",
+    "default": "new HttpHeaders()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:51"
+   },
+   {
+    "name": "overallTimeoutMillis",
+    "type": "Long",
+    "default": "120000L",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:52"
+   },
+   {
+    "name": "maxErrMsgSize",
+    "type": "Integer",
+    "default": "10000000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:53"
+   },
+   {
+    "name": "userAgent",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:54"
+   },
+   {
+    "name": "jwtIssuer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:55"
+   },
+   {
+    "name": "jwtSubject",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:56"
+   },
+   {
+    "name": "jwtExpiresInSeconds",
+    "type": "int",
+    "default": "3600",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:58"
+   },
+   {
+    "name": "jwtSecret",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:59"
+   },
+   {
+    "name": "jwtPrivateKeyBase64",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-http/src/main/java/org/apache/tika/pipes/fetcher/http/config/HttpFetcherConfig.java:60"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/microsoft-graph-fetcher",
+  "kind": "fetcher",
+  "upstream": "microsoft-graph-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/MicrosoftGraphFetcherFactory.java:52",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: factory NAME \"microsoft-graph-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/MicrosoftGraphFetcherFactory.java:52; implementation tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/MicrosoftGraphFetcher.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Proposed non-goal: Azure identity + Graph SDK (OAuth client credentials); fetch keys are siteDriveId,driveItemId; narrow audience. Owner decides; ModuleFetcher is the escape hatch.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/MicrosoftGraphFetcher.java:45",
+  "vendorSdks": [
+   "com.azure.identity",
+   "com.microsoft.graph"
+  ],
+  "configFields": [
+   {
+    "name": "throttleSeconds",
+    "type": "long[]",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java:32"
+   },
+   {
+    "name": "spoolToTemp",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java:33"
+   },
+   {
+    "name": "clientSecretCredentialsConfig",
+    "type": "ClientSecretCredentialsConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java:34"
+   },
+   {
+    "name": "clientCertificateCredentialsConfig",
+    "type": "ClientCertificateCredentialsConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java:35"
+   },
+   {
+    "name": "scopes",
+    "type": "List<String>",
+    "default": "new ArrayList<>()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-microsoft-graph/src/main/java/org/apache/tika/pipes/fetchers/microsoftgraph/config/MicrosoftGraphFetcherConfig.java:36"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/s3-fetcher",
+  "kind": "fetcher",
+  "upstream": "s3-fetcher",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/S3FetcherFactory.java:50",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"s3-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/S3FetcherFactory.java:50; implementation tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/S3Fetcher.java:72; config tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java (14 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node. S3 is the highest-value cloud fetcher; SigV4 over fetch or @aws-sdk/client-s3 as optional peer.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/S3Fetcher.java:72",
+  "vendorSdks": [
+   "software.amazon.awssdk"
+  ],
+  "configFields": [
+   {
+    "name": "spoolToTemp",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:29"
+   },
+   {
+    "name": "region",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:30"
+   },
+   {
+    "name": "profile",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:31"
+   },
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:32"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:33"
+   },
+   {
+    "name": "extractUserMetadata",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:34"
+   },
+   {
+    "name": "maxConnections",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:35"
+   },
+   {
+    "name": "credentialsProvider",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:36"
+   },
+   {
+    "name": "maxLength",
+    "type": "long",
+    "default": "-1",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:37"
+   },
+   {
+    "name": "accessKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:38"
+   },
+   {
+    "name": "secretKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:39"
+   },
+   {
+    "name": "endpointConfigurationService",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:40"
+   },
+   {
+    "name": "pathStyleAccessEnabled",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:41"
+   },
+   {
+    "name": "throttleSeconds",
+    "type": "long[]",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/fetcher/s3/config/S3FetcherConfig.java:42"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/az-blob-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "az-blob-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorFactory.java:47",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"az-blob-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIterator.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Azure Blob listing.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIterator.java:45",
+  "vendorSdks": [
+   "com.azure.core",
+   "com.azure.storage"
+  ],
+  "configFields": [
+   {
+    "name": "sasToken",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:32"
+   },
+   {
+    "name": "endpoint",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "container",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:34"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": "\"\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:35"
+   },
+   {
+    "name": "timeoutMillis",
+    "type": "long",
+    "default": "360000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:36"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/csv-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "csv-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorFactory.java:46",
+  "ripstream": "packages/pipes/src/adapters.ts:5",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"csv-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIterator.java:71; config tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: CsvFetcher (packages/pipes/src/adapters.ts:5-14) splits the file on newlines (no quoting/escape handling, header row skipped) and yields each DATA ROW as the document BYTES with id = row index; there is no fetchKeyColumn/emitKeyColumn/idColumn and columns never become metadata.",
+  "note": "Different semantics: Tika's CSV iterator treats rows as work-item descriptors (fetchKey from fetchKeyColumn, other columns into Metadata, CSVPipesIterator.java:71 doc comment); ripstream treats rows as documents. Naive split breaks on quoted newlines. Same name, not interchangeable.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIterator.java:71",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "csvPath",
+    "type": "Path",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "fetchKeyColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorConfig.java:34"
+   },
+   {
+    "name": "emitKeyColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorConfig.java:35"
+   },
+   {
+    "name": "idColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-csv/src/main/java/org/apache/tika/pipes/iterator/csv/CSVPipesIteratorConfig.java:36"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "iterator/file-system-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "file-system-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIteratorFactory.java:45",
+  "ripstream": "packages/pipes/src/index.ts:308",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"file-system-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIteratorFactory.java:45; implementation tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIterator.java:44; config tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIteratorConfig.java (2 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no separate iterator; FileSystemFetcher (packages/pipes/src/index.ts:308-336) sorts entries (readdir().sort(), packages/pipes/src/index.ts:321) and walks recursively, skipping symlinks (packages/pipes/src/index.ts:324); no countTotal/TotalCounter, no tuple (fetcherId/emitterId) output, no includes/excludes or hidden-file policy. run: walk of fx/in yielded 6 documents (parity/pipes/out-run-ripstream-pipes.txt)",
+  "note": "Tika iterator emits FetchEmitTuples (id, fetchKey, emitKey, onParseException EMIT: FileSystemPipesIterator.java:146) via Files.walkFileTree (:81) and supports TotalCounter (:44,:185). Spec 1.4 promised globs/sort/hidden policy.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIterator.java:44",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "basePath",
+    "type": "Path",
+    "default": "null",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "countTotal",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/iterator/fs/FileSystemPipesIteratorConfig.java:34"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/gcs-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "gcs-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorFactory.java:46",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"gcs-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIterator.java:39; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java (3 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: GCS listing.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIterator.java:39",
+  "vendorSdks": [
+   "com.google.api",
+   "com.google.cloud"
+  ],
+  "configFields": [
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java:32"
+   },
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": "\"\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "projectId",
+    "type": "String",
+    "default": "\"\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java:34"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/jdbc-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "jdbc-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorFactory.java:47",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"jdbc-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIterator.java:61; config tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java (9 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: SQL-driven work list (fetchKeyColumn/emitKeyColumn, 9 fields); needs per-driver adapters.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIterator.java:61",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "idColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:32"
+   },
+   {
+    "name": "fetchKeyColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "fetchKeyRangeStartColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:34"
+   },
+   {
+    "name": "fetchKeyRangeEndColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:35"
+   },
+   {
+    "name": "emitKeyColumn",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:36"
+   },
+   {
+    "name": "connection",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:37"
+   },
+   {
+    "name": "select",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:38"
+   },
+   {
+    "name": "fetchSize",
+    "type": "int",
+    "default": "-1",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:39"
+   },
+   {
+    "name": "queryTimeoutSeconds",
+    "type": "int",
+    "default": "-1",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/iterator/jdbc/JDBCPipesIteratorConfig.java:40"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/json-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "json-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIteratorFactory.java:44",
+  "ripstream": "packages/pipes/src/adapters.ts:17",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"json-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIteratorFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIterator.java:40; config tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIteratorConfig.java (1 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: JsonFetcher (packages/pipes/src/adapters.ts:17-26) JSON.parse()s a whole array file and yields each ELEMENT re-serialized as document bytes (id = index).",
+  "note": "Different semantics: Tika's JsonPipesIterator reads a UTF-8 file with ONE FetchEmitTuple JSON object per line (JsonPipesIterator.java:40 doc comment). Ripstream's reads an array and treats elements as content; whole file is held in memory.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIterator.java:40",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "jsonPath",
+    "type": "Path",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-json/src/main/java/org/apache/tika/pipes/pipesiterator/json/JsonPipesIteratorConfig.java:33"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "iterator/kafka-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "kafka-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorFactory.java:47",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: factory NAME \"kafka-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIterator.java:43; config tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java (11 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Proposed non-goal: long-lived Kafka consumer (11 fields: group, offsets, poll timeouts) does not fit a finite run-to-completion pipes engine and needs a broker client dependency. Owner decides.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIterator.java:43",
+  "vendorSdks": [
+   "org.apache.kafka"
+  ],
+  "configFields": [
+   {
+    "name": "topic",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:32"
+   },
+   {
+    "name": "bootstrapServers",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:33"
+   },
+   {
+    "name": "keySerializer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:34"
+   },
+   {
+    "name": "valueSerializer",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:35"
+   },
+   {
+    "name": "groupId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:36"
+   },
+   {
+    "name": "autoOffsetReset",
+    "type": "String",
+    "default": "\"earliest\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:37"
+   },
+   {
+    "name": "pollDelayMs",
+    "type": "int",
+    "default": "100",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:38"
+   },
+   {
+    "name": "emitMax",
+    "type": "int",
+    "default": "-1",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:39"
+   },
+   {
+    "name": "groupInitialRebalanceDelayMs",
+    "type": "int",
+    "default": "3000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:46"
+   },
+   {
+    "name": "assignmentTimeoutMs",
+    "type": "int",
+    "default": "30000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:47"
+   },
+   {
+    "name": "drainIdleMs",
+    "type": "int",
+    "default": "1000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-kafka/src/main/java/org/apache/tika/pipes/iterator/kafka/KafkaPipesIteratorConfig.java:48"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/s3-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "s3-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorFactory.java:48",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"s3-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIterator.java:55; config tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java (11 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: S3 listing with prefix/regex/ and key filters (11 config fields); pairs with the S3 fetcher.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIterator.java:55",
+  "vendorSdks": [
+   "software.amazon.awssdk"
+  ],
+  "configFields": [
+   {
+    "name": "prefix",
+    "type": "String",
+    "default": "\"\"",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:32"
+   },
+   {
+    "name": "region",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:33"
+   },
+   {
+    "name": "accessKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:34"
+   },
+   {
+    "name": "secretKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:35"
+   },
+   {
+    "name": "endpointConfigurationService",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:36"
+   },
+   {
+    "name": "credentialsProvider",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:37"
+   },
+   {
+    "name": "profile",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:38"
+   },
+   {
+    "name": "bucket",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:39"
+   },
+   {
+    "name": "fileNamePattern",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:40"
+   },
+   {
+    "name": "maxConnections",
+    "type": "int",
+    "default": "50",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:41"
+   },
+   {
+    "name": "pathStyleAccessEnabled",
+    "type": "boolean",
+    "default": "false",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-s3/src/main/java/org/apache/tika/pipes/iterator/s3/S3PipesIteratorConfig.java:42"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "iterator/solr-pipes-iterator",
+  "kind": "iterator",
+  "upstream": "solr-pipes-iterator",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorFactory.java:47",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"solr-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIterator.java:54; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java (19 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Plausibly valuable in Node: Solr query-driven work list over HTTP (19 fields); no SolrJ needed in Node.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIterator.java:54",
+  "vendorSdks": [
+   "org.apache.solr",
+   "org.eclipse.jetty"
+  ],
+  "configFields": [
+   {
+    "name": "solrCollection",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:34"
+   },
+   {
+    "name": "solrUrls",
+    "type": "List<String>",
+    "default": "Collections.emptyList()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:35"
+   },
+   {
+    "name": "solrZkHosts",
+    "type": "List<String>",
+    "default": "Collections.emptyList()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:36"
+   },
+   {
+    "name": "solrZkChroot",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:37"
+   },
+   {
+    "name": "filters",
+    "type": "List<String>",
+    "default": "Collections.emptyList()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:38"
+   },
+   {
+    "name": "idField",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:39"
+   },
+   {
+    "name": "parsingIdField",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:40"
+   },
+   {
+    "name": "failCountField",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:41"
+   },
+   {
+    "name": "sizeFieldName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:42"
+   },
+   {
+    "name": "additionalFields",
+    "type": "List<String>",
+    "default": "Collections.emptyList()",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:43"
+   },
+   {
+    "name": "rows",
+    "type": "int",
+    "default": "5000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:44"
+   },
+   {
+    "name": "connectionTimeoutMillis",
+    "type": "int",
+    "default": "10000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:45"
+   },
+   {
+    "name": "socketTimeoutMillis",
+    "type": "int",
+    "default": "60000",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:46"
+   },
+   {
+    "name": "userName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:47"
+   },
+   {
+    "name": "password",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:48"
+   },
+   {
+    "name": "authScheme",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:49"
+   },
+   {
+    "name": "proxyHost",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:50"
+   },
+   {
+    "name": "proxyPort",
+    "type": "int",
+    "default": "0",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:51"
+   },
+   {
+    "name": "verifySsl",
+    "type": "boolean",
+    "default": "true",
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:52"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "reporter/es-pipes-reporter",
+  "kind": "reporter",
+  "upstream": "es-pipes-reporter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterFactory.java:44",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"es-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESPipesReporter.java:53; config tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java (7 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Gap, lower value than file reporters: status docs into Elasticsearch via plain HTTP (ESPipesReporter.java:53, 7 fields). Blocked behind a per-tuple result model (see result-status items).",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESPipesReporter.java:53",
+  "vendorSdks": [
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "esUrl",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:27"
+   },
+   {
+    "name": "includes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:27"
+   },
+   {
+    "name": "excludes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:27"
+   },
+   {
+    "name": "keyPrefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:28"
+   },
+   {
+    "name": "includeRouting",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:28"
+   },
+   {
+    "name": "apiKey",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:29"
+   },
+   {
+    "name": "httpClientConfig",
+    "type": "HttpClientConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:29"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "reporter/file-system-jsonl-reporter",
+  "kind": "reporter",
+  "upstream": "file-system-jsonl-reporter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterFactory.java:30",
+  "ripstream": "packages/pipes/src/adapters.ts:113",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"file-system-jsonl-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterFactory.java:30; implementation tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporter.java:56; config tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: JsonlReporter (packages/pipes/src/adapters.ts:113-123) appends ONE aggregate line {fetched,emitted,failed,durationMs} per report(stats) call; Reporter.report takes PipesStats (packages/pipes/src/adapters.ts:103-105), not a per-document result. Nothing in packages/ other than tests and re-exports references Reporter/.report (engine never calls it). run: parity/pipes/out-run-ripstream-pipes.txt (manual report line '{\"fetched\":6,\"emitted\":6,\"failed\":0,...}')",
+  "note": "Tika's reporter is an append-only per-tuple audit log: line id = FetchEmitTuple id, includes/excludes status filter (PipesReporterBase.java:36-60, one of the two only), onExists EXCEPTION/APPEND/REPLACE (FileSystemJsonlReporter.java:95-97), maxMessageLength. Ripstream's is a different artifact and is unwired.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporter.java:56",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "path",
+    "type": "Path",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java:25"
+   },
+   {
+    "name": "includes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java:25"
+   },
+   {
+    "name": "excludes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java:25"
+   },
+   {
+    "name": "onExists",
+    "type": "ON_EXISTS",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java:25"
+   },
+   {
+    "name": "maxMessageLength",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemJsonlReporterConfig.java:25"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "reporter/file-system-reporter",
+  "kind": "reporter",
+  "upstream": "file-system-reporter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemReporterFactory.java:43",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"file-system-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemReporterFactory.java:43; implementation tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemStatusReporter.java:57; config tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemReporterConfig.java (2 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no periodic status writer. Closest: LoggingReporter (packages/pipes/src/adapters.ts:107) prints one stats JSON line to stderr; unwired to the engine.",
+  "note": "Tika FileSystemStatusReporter writes AsyncStatus summary to statusFile every reportUpdateMs (alpha since 2.5.0, class doc FileSystemStatusReporter.java:57). No progress/status model in ripstream engine.",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemStatusReporter.java:57",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "statusFile",
+    "type": "Path",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemReporterConfig.java:25"
+   },
+   {
+    "name": "reportUpdateMs",
+    "type": "long",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/reporter/fs/FileSystemReporterConfig.java:25"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "reporter/jdbc-reporter",
+  "kind": "reporter",
+  "upstream": "jdbc-reporter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterFactory.java:44",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"jdbc-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporter.java:51; config tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java (10 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Gap, lower value than file reporters: SQL status table (tika_status, dropped per run per class doc); 10 fields; needs driver adapters. Blocked behind a per-tuple result model (see result-status items).",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporter.java:51",
+  "vendorSdks": [],
+  "configFields": [
+   {
+    "name": "connectionString",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "includes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "excludes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "reportSql",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "tableName",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "createTable",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:48"
+   },
+   {
+    "name": "postConnectionSql",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:49"
+   },
+   {
+    "name": "reportVariables",
+    "type": "List<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:50"
+   },
+   {
+    "name": "reportWithinMs",
+    "type": "long",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:50"
+   },
+   {
+    "name": "cacheSize",
+    "type": "int",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-jdbc/src/main/java/org/apache/tika/pipes/reporter/jdbc/JDBCPipesReporterConfig.java:50"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "reporter/opensearch-pipes-reporter",
+  "kind": "reporter",
+  "upstream": "opensearch-pipes-reporter",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterFactory.java:44",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: factory NAME \"opensearch-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchPipesReporter.java:40; config tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned)",
+  "note": "Gap, lower value than file reporters: status docs into OpenSearch via plain HTTP (alpha, 6 fields). Blocked behind a per-tuple result model (see result-status items).",
+  "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchPipesReporter.java:40",
+  "vendorSdks": [
+   "org.apache.http"
+  ],
+  "configFields": [
+   {
+    "name": "openSearchUrl",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:24"
+   },
+   {
+    "name": "includes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:24"
+   },
+   {
+    "name": "excludes",
+    "type": "Set<String>",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:24"
+   },
+   {
+    "name": "keyPrefix",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:24"
+   },
+   {
+    "name": "includeRouting",
+    "type": "boolean",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:25"
+   },
+   {
+    "name": "httpClientConfig",
+    "type": "HttpClientConfig",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:25"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/spi-Fetcher-RangeFetcher",
+  "kind": "fetcher",
+  "upstream": "Fetcher / RangeFetcher SPI (fetch(fetchKey, metadata, parseContext); range fetch)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/fetcher/Fetcher.java:36; tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/fetcher/RangeFetcher.java:29",
+  "ripstream": "packages/pipes/src/index.ts:20",
+  "status": "partial",
+  "evidence": "Tika: Fetcher.java:36 (fetch at :54), RangeFetcher.java:29,:37 (startOffset/endOffset), FetchKey.java:26. ripstream: Fetcher.fetch() takes no key and returns AsyncIterable<PipeDocument> (packages/pipes/src/index.ts:20-22); no fetchRangeStart/End anywhere (searched packages/pipes/src).",
+  "note": "Ripstream SPI is an iterator, not a keyed fetch. A keyed fetch is the precondition for tuple-driven pipes, retry per document and /pipes tuple parity. Ranges are used by HttpFetcher and S3Fetcher in Tika.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "emitter/spi-Emitter-StreamEmitter",
+  "kind": "emitter",
+  "upstream": "Emitter / StreamEmitter SPI (emit(emitKey, metadataList, parseContext); emit(List<EmitData>); emit(key, InputStream, metadata))",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/emitter/Emitter.java:26,28,30; tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/emitter/StreamEmitter.java:25",
+  "ripstream": "packages/pipes/src/index.ts:32",
+  "status": "partial",
+  "evidence": "Tika: Emitter.java:26-30 (single + batch), StreamEmitter.java:25, EmitKey.java:22, EmitData.java:24. ripstream: Emitter.emit(EmittedDocument)/close (packages/pipes/src/index.ts:24-35); no batch emit, no emitKey (id doubles as key), no InputStream emit.",
+  "note": "Batch emit is what AsyncEmitter drives (emitWithinMillis/emitMaxEstimatedBytes). Ripstream emits one document per call, so the batching contract and per-key routing are absent.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "iterator/spi-PipesIterator-TotalCounter",
+  "kind": "iterator",
+  "upstream": "PipesIterator (Callable<Integer>, Iterable<FetchEmitTuple>) + TotalCounter (startTotalCount/getTotalCount)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/pipesiterator/PipesIterator.java:24; tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/pipesiterator/TotalCounter.java:33,35,43",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: PipesIterator.java:24, TotalCounter.java:33-43, TotalCountResult.java. ripstream: no iterator SPI; the Fetcher is the iterator (packages/pipes/src/index.ts:20-22); no total count (stats are fetched/emitted/failed/durationMs only, packages/pipes/src/index.ts:68-73).",
+  "note": "Total count enables progress reporting (reporter.report(TotalCountResult)). Ripstream cannot report 'N of M'.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "reporter/spi-PipesReporter",
+  "kind": "reporter",
+  "upstream": "PipesReporter SPI (report(tuple, result, elapsed); report(TotalCountResult); supportsTotalCount; error(Throwable|String); Closeable)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/reporter/PipesReporter.java:36,40,48,54,61,67",
+  "ripstream": "packages/pipes/src/adapters.ts:103",
+  "status": "partial",
+  "evidence": "Tika: PipesReporter.java:40 per-tuple report. ripstream: Reporter.report(PipesStats) (packages/pipes/src/adapters.ts:103-105) aggregate only; never invoked by PipesEngine (searched packages/*: only tests and index.ts re-export reference it).",
+  "note": "Shape mismatch and unwired. Spec 1.1 already specifies a per-result report(result) which the code does not implement.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "reporter/core-CompositePipesReporter",
+  "kind": "reporter",
+  "upstream": "CompositePipesReporter",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/CompositePipesReporter.java:28",
+  "ripstream": "packages/pipes/src/adapters.ts:125",
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/CompositePipesReporter.java:28 wrapped by ReporterManager (tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36). ripstream: CompositeReporter (packages/pipes/src/adapters.ts:125-131) calls reporters sequentially; no failure isolation, stats-only.",
+  "note": "Tika's pipes-reporters section: 0 entries = NoOp, 1 = itself, N = Composite (ReporterManager). Ripstream has no config section for it.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "reporter/core-NoOpReporter",
+  "kind": "reporter",
+  "upstream": "NoOpReporter (default when no reporter configured)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/NoOpReporter.java:27",
+  "ripstream": "packages/pipes/src/index.ts",
+  "status": "implemented",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/NoOpReporter.java:27. ripstream: PipesEngine has no reporter hook at all, so 'no reporter' is the only behavior (packages/pipes/src/index.ts:75-266).",
+  "note": "Equivalent by absence.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "reporter/core-ReporterManager",
+  "kind": "reporter",
+  "upstream": "ReporterManager (pipes-reporters section -> 0/1/N reporters)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36. ripstream: no config-driven reporter wiring; createEngine (packages/pipes/src/index.ts:439-459) takes no reporter option; PipesConfig (packages/pipes/src/index.ts:428-437) has no reporters key.",
+  "note": "Reporters are library objects a caller must call themselves.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "reporter/commons-PipesReporterBase",
+  "kind": "reporter",
+  "upstream": "PipesReporterBase includes/excludes status filter (only one may be non-empty)",
+  "upstreamSource": "tika-pipes/tika-pipes-reporter-commons/src/main/java/org/apache/tika/pipes/reporters/PipesReporterBase.java:31",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-reporter-commons/src/main/java/org/apache/tika/pipes/reporters/PipesReporterBase.java:31 (filter build :42-60, rule :53-56). ripstream: no statuses to filter on (see result-status items).",
+  "note": "Depends on a PipesResult status model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "iterator/commons-PipesIteratorBase",
+  "kind": "iterator",
+  "upstream": "PipesIteratorBase / PipesIteratorConfig (fetcherId, emitterId, shared across all iterators)",
+  "upstreamSource": "tika-pipes/tika-pipes-iterator-commons/src/main/java/org/apache/tika/pipes/pipesiterator/PipesIteratorBase.java:43",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-iterator-commons/src/main/java/org/apache/tika/pipes/pipesiterator/PipesIteratorBase.java:43, tika-pipes/tika-pipes-iterator-commons/src/main/java/org/apache/tika/pipes/pipesiterator/PipesIteratorConfig.java:28 (fetcherId :30, emitterId :31). ripstream: no iterator base, no fetcherId/emitterId binding.",
+  "note": "Binding tuples to named fetchers/emitters is the core of Tika pipes configuration.",
+  "configFields": [
+   {
+    "name": "fetcherId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-iterator-commons/src/main/java/org/apache/tika/pipes/pipesiterator/PipesIteratorConfig.java:30"
+   },
+   {
+    "name": "emitterId",
+    "type": "String",
+    "default": null,
+    "line": "tika-pipes/tika-pipes-iterator-commons/src/main/java/org/apache/tika/pipes/pipesiterator/PipesIteratorConfig.java:31"
+   }
+  ],
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "iterator/core-CallablePipesIterator",
+  "kind": "iterator",
+  "upstream": "CallablePipesIterator + PipesIteratorManager (single iterator under pipes-iterator)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/pipesiterator/CallablePipesIterator.java:34",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/pipesiterator/CallablePipesIterator.java:34, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/pipesiterator/PipesIteratorManager.java:36. ripstream: single fetcher per engine (packages/pipes/src/index.ts:47-49).",
+  "note": "No manager; one source per run.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "iterator/async-cli-FileListPipesIterator",
+  "kind": "iterator",
+  "upstream": "FileListPipesIterator (tika-async-cli: newline file of paths)",
+  "upstreamSource": "tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/FileListPipesIterator.java:41",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/FileListPipesIterator.java:41. ripstream: none; closest is CsvFetcher/JsonFetcher (packages/pipes/src/adapters.ts:5,:17) which treat rows as documents.",
+  "note": "Small; used by tika-async-cli -i/--input list mode.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "fetcher/core-BytesFetcher-InlineBytes-PayloadRouter",
+  "kind": "fetcher",
+  "upstream": "BytesFetcher / InlineBytes / PayloadRouter (inline-bytes tuple payloads, maxInlineBytes default 10 MiB)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/PayloadRouter.java:40",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/PayloadRouter.java:40, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/InlineBytes.java:35, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/BytesFetcher.java:44; PipesConfig.DEFAULT_MAX_INLINE_BYTES=10*1024*1024 at tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:71. ripstream: none (server /pipes cannot receive bytes in a tuple; /async takes the body as the document, packages/server/src/index.ts:351-373).",
+  "note": "Unverified behavior (class declarations only, not read in depth).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "fetcher/core-EmptyFetcher-EmptyEmitter",
+  "kind": "fetcher",
+  "upstream": "EmptyFetcher / EmptyEmitter (system-prefixed ids, ComponentIds.SYSTEM_PREFIX \"__\")",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/EmptyFetcher.java:28",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/EmptyFetcher.java:28, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/emitter/EmptyEmitter.java:27, ComponentIds.java:36. ripstream: none.",
+  "note": "Internal plumbing for no-fetch / no-emit runs; low value.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "fetcher/core-FetcherManager-EmitterManager",
+  "kind": "fetcher",
+  "upstream": "FetcherManager / EmitterManager / AbstractComponentManager (id -> instance registry, strict lookup errors)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/AbstractComponentManager.java:53",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/AbstractComponentManager.java:53 (load loop :115-190), tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/fetcher/FetcherManager.java:40, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/emitter/EmitterManager.java:41. ripstream: no registry; core PluginRegistry (packages/core/src/plugins.ts) is for parser/handler plugins, not pipes components.",
+  "note": "Needed for FETCHER_NOT_FOUND / EMITTER_NOT_FOUND statuses and id-keyed config.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "emitter/core-AsyncEmitter-batching",
+  "kind": "emitter",
+  "upstream": "AsyncEmitter (batches EmitData by emitWithinMillis=10000 / emitMaxEstimatedBytes=100000, numEmitters=1, queue size 10000)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/async/AsyncEmitter.java:43",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/async/AsyncEmitter.java:43, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/async/AsyncProcessor.java:68, PipesConfig defaults DEFAULT_EMIT_WITHIN_MILLIS/DEFAULT_EMIT_MAX_ESTIMATED_BYTES/DEFAULT_QUEUE_SIZE/DEFAULT_NUM_EMITTERS at PipesConfig.java:139-142. ripstream: emits per document inline in the worker (packages/pipes/src/index.ts:192); maxQueue bounds the input queue only (packages/pipes/src/index.ts:93,:120).",
+  "note": "No emit batching, no time-based flush, no emitter pool. Backpressure is input-queue bounded plus an awaited emit.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/core-EmitStrategy",
+  "kind": "config",
+  "upstream": "EmitStrategy EMIT_ALL / PASSBACK_ALL / DYNAMIC (dynamic threshold 100000 bytes) + PassbackFilter",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/EmitStrategy.java:27",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/EmitStrategy.java:27, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/EmitStrategyConfig.java:56, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PassbackFilter.java:33; PipesConfig.java:107. ripstream: none; the engine always emits and never returns parse output to the caller.",
+  "note": "PASSBACK_ALL would map to returning records from run(); today run() returns only {count, stats} (packages/pipes/src/index.ts:471-475).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/core-UnpackConfig-extractors",
+  "kind": "config",
+  "upstream": "UnpackConfig / UnpackExtractor / EmittingUnpackHandler / TempFileUnpackHandler / FrictionlessUnpackHandler / StandardUnpackSelector / ThumbnailUnpackSelector / UnpackedByteCount / frictionless DataPackage",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/UnpackConfig.java:32",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/UnpackConfig.java:32, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/UnpackExtractor.java:62, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/EmittingUnpackHandler.java:34, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/FrictionlessUnpackHandler.java:57, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/StandardUnpackSelector.java:49, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/extractor/ThumbnailUnpackSelector.java:45. ripstream: UNPACK mode (packages/pipes/src/index.ts:162-168) emits each embedded record's TEXT as <id><embeddedResourcePath>.txt, not the embedded BYTES. run: z.zip -> z.zip_z.zip_inner1.txt-e781712a.txt = 'inner text one' (parity/pipes/out-run2.txt).",
+  "note": "Largest functional divergence in UNPACK: Tika writes embedded bytes (+ optional frictionless datapackage, thumbnails, byte-count limits); ripstream writes text. Unverified: Tika's actual output for z.zip (no live pipes on the oracle).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "fetcher/pipes-http-client-commons",
+  "kind": "fetcher",
+  "upstream": "tika-httpclient-commons (HttpClientFactory/HttpClientUtil/TikaClientException) shared by http/es/opensearch/solr components",
+  "upstreamSource": "tika-pipes/tika-httpclient-commons/src/main/java/org/apache/tika/client/HttpClientFactory.java:87",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: tika-pipes/tika-httpclient-commons/src/main/java/org/apache/tika/client/HttpClientFactory.java:87, tika-pipes/tika-httpclient-commons/src/main/java/org/apache/tika/client/HttpClientUtil.java:29. ripstream: Node fetch + safeFetch replace Apache HttpClient.",
+  "note": "Library plumbing; the Node equivalent is fetch. Descoped by construction, not a behavior gap. Its option surface is tracked under http-fetcher.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/sections",
+  "kind": "config",
+  "upstream": "Pipes JSON config sections: fetchers, emitters, pipes-iterator, pipes-reporters, pipes, parse-context, plugin-roots",
+  "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:165-179; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/AbstractComponentManager.java:115-190; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36",
+  "ripstream": "packages/core/src/config.ts:18",
+  "status": "gap",
+  "evidence": "Tika: component sections are objects keyed by instance id -> {type-name: {config}} (AbstractComponentManager.java:115-190); pipes-iterator is {type-name: {..., fetcherId, emitterId}}. ripstream run: core.validateConfig on that exact shape returned [\"unknown top-level key \\\"fetchers\\\"\", ... \"emitters\", \"pipes-iterator\", \"pipes-reporters\", \"pipes\"] (parity/pipes/out-cfg_probe.txt; ALLOWED_ROOT_KEYS packages/core/src/config.ts:18, check :144).",
+  "note": "Ripstream rejects every Tika pipes section. Its own PipesConfig is {mode, concurrency, maxQueue, ordered, source:{type,path|urls}, sink:{type,path}, followSymlinks} (packages/pipes/src/index.ts:428-437). Bead tikajs-i3ef ('Pipes JSON config parity and schema') is closed, but the delivered config is this bespoke shape, not Tika's.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "config/pipes-section-PipesConfig",
+  "kind": "config",
+  "upstream": "PipesConfig (the `pipes` section): numClients, forkedJvmArgs, javaPath, maxFilesProcessedPerProcess=100000, maxWaitForClientMillis=60000, socketTimeoutMillis=60000, startupTimeoutMillis=60000, heartbeatIntervalMillis=1000, maxTotalTaskTimeoutMillis=3600000, emitStrategy, emitWithinMillis=10000, emitMaxEstimatedBytes=100000, queueSize=10000, numEmitters=1, emitIntermediateResults=false, stopOnlyOnFatal=false, parseMode=RMETA, onParseException=EMIT, useSharedServer=false, maxIpcPayloadBytes, maxInlineBytes=10MiB, trustedRequests=false, tempDirectory, configStoreType/Params",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:47,61-172",
+  "ripstream": "packages/pipes/src/index.ts:428",
+  "status": "partial",
+  "evidence": "Tika field lines: PipesConfig.java:107-172 (defaults :91-101,:123,:139-142). ripstream PipesConfig (packages/pipes/src/index.ts:428-437) overlaps only on: parseMode (as `mode`; default CONTENT_ONLY vs Tika RMETA, packages/pipes/src/index.ts:453), queue (`maxQueue` default 64 vs queueSize 10000, packages/pipes/src/index.ts:455), parallelism (`concurrency` default 4 vs numClients, packages/pipes/src/index.ts:454). Everything else (timeouts, restarts, emit batching, strategies, onParseException, stopOnlyOnFatal, IPC/inline limits) has no counterpart; isolation limits live separately in isolation-node (docs/isolation.md).",
+  "note": "Default parseMode differs (CONTENT_ONLY vs RMETA): a Tika-shaped request with no mode would behave differently. numClients/forkedJvmArgs/javaPath/useSharedServer/maxIpcPayloadBytes/heartbeat are JVM-process tunables (see semantics/forked-server).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "config/env-interpolation-strict-mapper",
+  "kind": "config",
+  "upstream": "${env:NAME} interpolation in config JSON; strict Jackson mapper (unknown and duplicate keys fail)",
+  "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:179-190; tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:165-179",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: TikaObjectMapperFactory.java:179-190, TikaJsonConfig.java:165-179. ripstream: validateConfig is the only strictness (packages/core/src/config.ts:127,:144, unknown ROOT keys only); no ${env:} handling for pipes (none in packages/pipes/src).",
+  "note": "Unverified against a live Tika (oracle has no pipes). The CLI has RIPSTREAM_* env vars for isolation (packages/cli/src/isolation-config.ts) but not for pipes.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/ComponentIds",
+  "kind": "config",
+  "upstream": "ComponentIds: ids match [A-Za-z0-9._-]+, \"__\" prefix reserved for system components",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/ComponentIds.java:33",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: ComponentIds.java:36 (SYSTEM_PREFIX), :45 (LEGAL_ID), requireUserId :74. ripstream: no component ids (single fetcher/emitter per engine).",
+  "note": "Falls out of adding an id-keyed registry.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/FetchEmitTuple-json",
+  "kind": "config",
+  "upstream": "FetchEmitTuple JSON: id, fetcher, fetchKey, fetchRangeStart, fetchRangeEnd, emitter, emitKey, metadata, onParseException (SKIP|EMIT), preset, parseContext",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/FetchEmitTuple.java:27,35-42; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/serialization/JsonFetchEmitTuple.java:30, FetchEmitTupleDeserializer/Serializer",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: FetchEmitTuple.java:35-42 fields, ON_PARSE_EXCEPTION enum :31, default EMIT :29. ripstream: no tuple type anywhere in packages/pipes/src; server /pipes treats BOTH `{id,fetcher,fetchKey,emitter,emitKey}` and the flat variant as 'Missing source' -> 400 (parity/pipes/out-run3.txt lines 4-5; handler packages/server/src/index.ts:673-682).",
+  "note": "Core data model gap: ripstream never names a document by (fetcher id, fetchKey), so there is nothing to retry, report on, or route.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "config/ParseMode",
+  "kind": "config",
+  "upstream": "ParseMode: RMETA, CONCATENATE, CONTENT_ONLY, NO_PARSE, UNPACK (case-insensitive parse, ParseMode.parse)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/ParseMode.java:30-89,98-108",
+  "ripstream": "packages/pipes/src/index.ts:40",
+  "status": "partial",
+  "evidence": "Tika: ParseMode.java:30-89 (parse :98-108). ripstream: PipeMode has the same five names (packages/pipes/src/index.ts:40-45). Observed (parity/pipes/out-run-ripstream-pipes.txt, run2.txt): CONTENT_ONLY writes text per file; RMETA writes a JSON array per file; NO_PARSE copies raw bytes (z.zip.bin = 'PK..'); CONCATENATE emits one 'concatenated.txt' for the WHOLE RUN; UNPACK writes text not bytes.",
+  "note": "Names match; semantics differ: CONCATENATE in Tika is per document (embedded docs concatenated into one doc), ripstream joins all documents of the run into one output (packages/pipes/src/index.ts:247-251); NO_PARSE copies instead of fetch+emit without parse + digest/detect; UNPACK emits text (see config/core-UnpackConfig-extractors). Mode names are case-sensitive in ripstream. RMETA output uses array-valued fields and 'X-TIKA:content' while oracle /rmeta returned scalars and 'tk:content' (parity/pipes/out-rmeta_cmp.txt) - shared core serialization, not pipes-specific.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "config/presets-ConfigMerger-ConfigOverrides",
+  "kind": "config",
+  "upstream": "Presets (named config bundles), ConfigMerger, ConfigOverrides, PresetNotFoundException; tuple.preset",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/ConfigMerger.java:78",
+  "ripstream": "packages/server/src/index.ts",
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/ConfigMerger.java:78, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/ConfigOverrides.java:47, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/PresetNotFoundException.java:27, FetchEmitTuple.presetName :42. ripstream: server `presets` option (packages/server/src/index.ts:86) feeds /tika/preset, not /pipes; buildPipesConfig (packages/server/src/index.ts:673-718) ignores presets.",
+  "note": "Presets exist for the parse endpoints only. Unverified: Tika merge precedence (source-only).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "config/ConfigStore",
+  "kind": "config",
+  "upstream": "ConfigStore: in-memory, file-based, Ignite (configStoreType/configStoreParams)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/InMemoryConfigStore.java:28",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/InMemoryConfigStore.java:28, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/FileBasedConfigStore.java:40, tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/IgniteConfigStore.java:43, tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/server/IgniteStoreServer.java:36; PipesConfig.java:getConfigStoreType :543. ripstream: none.",
+  "note": "Used to share per-request component configs with forked servers; in-process Node needs none. In-memory/file variants are descoped by architecture; Ignite is JVM-only (see next item).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/ConfigStore-ignite",
+  "kind": "config",
+  "upstream": "tika-pipes-config-store-ignite (Apache Ignite-backed ConfigStore + IgniteStoreServer)",
+  "upstreamSource": "tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/IgniteConfigStore.java:43",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/IgniteConfigStore.java:43, tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/server/IgniteStoreServer.java:36, tika-pipes/tika-pipes-config-store-ignite/src/main/java/org/apache/tika/pipes/ignite/IgniteConfigStoreFactory.java:29. ripstream: none.",
+  "note": "Proposed non-goal: JVM-only distributed cache for sharing configs across forked JVMs; no Node analogue and no consumer in an in-process engine. Owner decides.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "config/pf4j-plugin-loading",
+  "kind": "config",
+  "upstream": "pf4j plugin system: TikaPluginManager, PluginComponentLoader, ExtensionConfig(id,name,json), plugin-roots, DefaultPluginsDir, ThreadSafeUnzipper",
+  "upstreamSource": "tika-plugins-core/src/main/java/org/apache/tika/plugins/TikaPluginManager.java:55",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: tika-plugins-core/src/main/java/org/apache/tika/plugins/TikaPluginManager.java:55, tika-plugins-core/src/main/java/org/apache/tika/plugins/PluginComponentLoader.java:36, tika-plugins-core/src/main/java/org/apache/tika/plugins/ExtensionConfig.java:29, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/config/DefaultPluginsDir.java:44. ripstream: ModuleFetcher/ModuleEmitter (packages/pipes/src/adapters.ts:29,:46) import() a module and call createFetcher/createEmitter.",
+  "note": "Proposed non-goal: pf4j zip/jar plugin discovery is JVM-specific. Node equivalent is dynamic import(); ripstream's Module* adapters are the stand-in (note ModuleEmitter constructs a new plugin emitter per emit and never closes it: run built 6 emitters for 6 docs, close() calls 0, parity/pipes/out-module_probe.txt).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/FAILED_TO_INITIALIZE",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.FAILED_TO_INITIALIZE (CATEGORY.FATAL)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:57",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:57 category FATAL. ripstream: a bad config/source throws out of run(): missing source dir -> 'Error: ENOENT: no such file or directory, scandir ...' (parity/pipes/out-run2.txt scenario missing_source); no status.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "result-status/FETCHER_INITIALIZATION_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.FETCHER_INITIALIZATION_EXCEPTION (CATEGORY.INITIALIZATION_FAILURE)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:60",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:60 category INITIALIZATION_FAILURE. ripstream: same as above: the throw aborts run(), no status.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMITTER_INITIALIZATION_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMITTER_INITIALIZATION_EXCEPTION (CATEGORY.INITIALIZATION_FAILURE)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:61",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:61 category INITIALIZATION_FAILURE. ripstream: emitter errors surface as thrown errors from emit/close.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/CLIENT_UNAVAILABLE_WITHIN_MS",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.CLIENT_UNAVAILABLE_WITHIN_MS (CATEGORY.INITIALIZATION_FAILURE)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:62",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:62 category INITIALIZATION_FAILURE. ripstream: closest: isolation IsolationError reason 'queue_full'/'unavailable' -> HTTP 503 (packages/core/src/errors.ts:132-153,:185-187), but it aborts the whole pipes run (open bead tikajs-2az5).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/FETCH_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.FETCH_EXCEPTION (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:65",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:65 category TASK_EXCEPTION. ripstream: a fetch failure (ENOENT, HttpFetcher 'Fetch failed: <status>', packages/pipes/src/index.ts:387) aborts the entire run; Tika records the status for that tuple and continues.",
+  "note": "Ripstream's pipes engine has no per-tuple PipesResult; success is an aggregate counter and the first failure is a thrown error (fail-fast, packages/pipes/src/index.ts:218-245).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMIT_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMIT_EXCEPTION (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:66",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:66 category TASK_EXCEPTION. ripstream: an emitter error aborts the run (packages/pipes/src/index.ts:221-245).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/FETCHER_NOT_FOUND",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.FETCHER_NOT_FOUND (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:67",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:67 category TASK_EXCEPTION. ripstream: no fetcher ids.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMITTER_NOT_FOUND",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMITTER_NOT_FOUND (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:68",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:68 category TASK_EXCEPTION. ripstream: no emitter ids.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/PRESET_NOT_FOUND",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PRESET_NOT_FOUND (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:69",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:69 category TASK_EXCEPTION. ripstream: presets not wired to pipes (packages/server/src/index.ts:86).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/PAYLOAD_LIMIT_EXCEEDED",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PAYLOAD_LIMIT_EXCEEDED (CATEGORY.TASK_EXCEPTION)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:70",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:70 category TASK_EXCEPTION. ripstream: no IPC payload; closest: LimitExceededError/RequestTooLargeError (packages/core/src/errors.ts:69-80) which are not pipes statuses.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/OOM",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.OOM (CATEGORY.PROCESS_CRASH)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:73",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:73 category PROCESS_CRASH. ripstream: isolation-node kills over-memory children; maps to existing error types, not a pipes status; the engine has no restart-and-continue.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/TIMEOUT",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.TIMEOUT (CATEGORY.PROCESS_CRASH)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:74",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:74 category PROCESS_CRASH. ripstream: closest: ParseTimeoutError code PARSE_TIMEOUT -> 408 (packages/core/src/errors.ts:63,:174-175) via maxTaskMillis (packages/core/src/parse-context.ts:52, 60 s default); it aborts the run, no per-tuple status.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/UNSPECIFIED_CRASH",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.UNSPECIFIED_CRASH (CATEGORY.PROCESS_CRASH)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:75",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:75 category PROCESS_CRASH. ripstream: closest: IsolationError reason 'crash' -> 500 (packages/core/src/errors.ts:130,:188-190).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMPTY_OUTPUT",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMPTY_OUTPUT (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:78",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:78 category SUCCESS. ripstream: EmptyDocumentError exists (packages/core/src/errors.ts:107) but pipes do not surface it as a status.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/PARSE_SUCCESS",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PARSE_SUCCESS (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:79",
+  "ripstream": null,
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:79 category SUCCESS. ripstream: success is counted as stats.emitted (packages/pipes/src/index.ts:105,:193) without a per-tuple status.",
+  "note": "Ripstream's pipes engine has no per-tuple PipesResult; success is an aggregate counter and the first failure is a thrown error (fail-fast, packages/pipes/src/index.ts:218-245).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/PARSE_SUCCESS_WITH_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PARSE_SUCCESS_WITH_EXCEPTION (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:80",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:80 category SUCCESS. ripstream: no onParseException handling; any parse error aborts the run (observed: bad.pdf -> 'MalformedDocumentError: Unable to read PDF', parity/pipes/out-run-ripstream-pipes.txt; via /pipes -> 422 with earlier files already written, parity/pipes/out-badpdf_probe.txt).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "result-status/PARSE_EXCEPTION_NO_EMIT",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PARSE_EXCEPTION_NO_EMIT (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:81",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:81 category SUCCESS. ripstream: no SKIP behavior; failure is fatal for the run.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMIT_SUCCESS",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMIT_SUCCESS (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:82",
+  "ripstream": null,
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:82 category SUCCESS. ripstream: stats.emitted counter only.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMIT_SUCCESS_PARSE_EXCEPTION",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMIT_SUCCESS_PARSE_EXCEPTION (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:83",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:83 category SUCCESS. ripstream: no partial-parse emit path in the engine.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/EMIT_SUCCESS_PASSBACK",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.EMIT_SUCCESS_PASSBACK (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:84",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:84 category SUCCESS. ripstream: no passback (run() returns {count, stats} only, packages/pipes/src/index.ts:471-475).",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/PARTIAL_TIMEOUT",
+  "kind": "result-status",
+  "upstream": "PipesResult.RESULT_STATUS.PARTIAL_TIMEOUT (CATEGORY.SUCCESS)",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:95",
+  "ripstream": null,
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:95 category SUCCESS. ripstream: no per-document deadline-reached marker; TikaCoreProperties.TASK_DEADLINE_REACHED (tika-core TikaCoreProperties.java:232) has no ripstream emit path.",
+  "note": "See result-status/model.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "result-status/model",
+  "kind": "result-status",
+  "upstream": "PipesResult model: 21 RESULT_STATUS values in 5 CATEGORYs (FATAL, INITIALIZATION_FAILURE, TASK_EXCEPTION, PROCESS_CRASH, SUCCESS) with isFatal/isInitializationFailure/isTaskException/isProcessCrash/isSuccess; tk:pipes-result metadata",
+  "upstreamSource": "tika-pipes/tika-pipes-api/src/main/java/org/apache/tika/pipes/api/PipesResult.java:23,38-52,55-95,109-171; tika-core/src/main/java/org/apache/tika/metadata/TikaCoreProperties.java:541 (PIPES_RESULT)",
+  "ripstream": "packages/pipes/src/index.ts:68",
+  "status": "gap",
+  "evidence": "Tika: PipesResult.java:38-52 (5 categories), :55-95 (21 statuses, counted by parsing the enum), predicates :121-171. ripstream: PipesStats {fetched, emitted, failed, durationMs} (packages/pipes/src/index.ts:68-73); a failed run throws and stats.failed becomes 1 (packages/pipes/src/index.ts:242-245). Spec 1.1 lists only 8 statuses (spec/04-pipes-server-ops.md PipesStatus) which does not match 4.2.0 either.",
+  "note": "The status taxonomy drives every other behavior (stopOnlyOnFatal, reporters, HTTP codes). Count is computed from the source enum by gen_inventory.py.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/task-exception-handling",
+  "kind": "semantics",
+  "upstream": "Per-tuple failure does not stop the batch; stopOnlyOnFatal (default false) controls whether init failures / not-found stop the run; onParseException SKIP|EMIT",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:158,169; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/async/AsyncProcessor.java:412-582",
+  "ripstream": "packages/pipes/src/index.ts:218",
+  "status": "gap",
+  "evidence": "Tika: PipesConfig.java:158 stopOnlyOnFatal=false, :169 onParseException=EMIT; AsyncProcessor.java:412-582 consumes results and decides. ripstream: PipesEngine aborts siblings on the FIRST error via AbortController and rethrows it (packages/pipes/src/index.ts:218-245). run: fx/in with one malformed pdf: content_only THREW 'MalformedDocumentError: Unable to read PDF' after 328 ms with 6 of 7 outputs written; rmeta THREW after 9 ms with 5 of 7 written (parity/pipes/out-run-ripstream-pipes.txt). via /pipes: 422 'Unable to read PDF', sink holds the 6 good files (parity/pipes/out-badpdf_probe.txt).",
+  "note": "One poison document kills a whole corpus run, and which files get written before the abort is timing-dependent. This is the single most important behavioral divergence for batch use.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/retry-and-restart",
+  "kind": "semantics",
+  "upstream": "Retry / restart: forked server restarted on OOM/TIMEOUT/CRASH/MAX_FILES/CONNECTION_ABANDONED/IDLE/SHUTDOWN; client reconnect 5 attempts, backoff 100ms*2^min(n,6); init failure not retried",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesClient.java:166,274,283,322,389-409,520-615; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/RestartReason.java; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/RestartCounter.java; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PerClientServerManager.java",
+  "ripstream": "packages/pipes/src/resilience.ts:11",
+  "status": "partial",
+  "evidence": "Tika: PipesClient.java:398-399,:408-409 backoff `baseDelayMs * (1L << Math.min(restartAttempts, 6))`, :389 init failure rethrown without retry, markServerForRestart(RestartReason.*) at :166,:274,:520,:542,:612; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/RestartReason.java:23. ripstream: withRetry(packages/pipes/src/resilience.ts:11-30, attempts 3, base 50 ms, cap 2 s) and CheckpointStore (packages/pipes/src/resilience.ts:33) exist and are tested (packages/pipes/test/checkpoint.test.ts) but NOTHING in PipesEngine/createEngine/PipesClient calls them (searched packages/*: only tests and the index.ts re-export, packages/pipes/src/index.ts:483).",
+  "note": "Primitives exist, wiring does not. Isolation-node handles child death per document (docs/isolation.md) but the pipes engine neither retries nor restarts-and-continues.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/timeouts",
+  "kind": "semantics",
+  "upstream": "Timeouts: TimeoutLimits totalTaskTimeoutMillis=3600000, progressTimeoutMillis=120000; client backstop = total + 2*progress; startup/socket timeouts 60 s; heartbeat 1 s; PARTIAL_TIMEOUT on deadline",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/TimeoutLimits.java:73-78; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesClient.java:626-628; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:93-123",
+  "ripstream": "packages/server/src/index.ts:360",
+  "status": "partial",
+  "evidence": "Tika: TimeoutLimits.java:73-78, PipesClient.java:626-628 (backstop), PipesConfig.java:93-99,:121,:123. ripstream: per-document wall deadline maxTaskMillis default 60000 (packages/core/src/parse-context.ts:52; packages/isolation-node/src/limits.ts:206-224, child's own parse timer below it) and server requestTimeoutMs 60000 (packages/server/src/index.ts:177) applied to /async via AbortSignal.timeout (packages/server/src/index.ts:360); no progress-vs-total split, no run-level timeout in PipesEngine, no per-stage (fetch/emit) timeouts.",
+  "note": "Closest analogue is maxTaskMillis per parse. Tika's total/progress model (heartbeat-based) has no equivalent; timeouts are not turned into a per-tuple TIMEOUT status.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/forked-server",
+  "kind": "semantics",
+  "upstream": "Forked JVM PipesServer per client (socket protocol PING/ACK/NEW_REQUEST/SHUT_DOWN/READY/STARTUP_FAILED/INTERMEDIATE_RESULT/WORKING/FINISHED; exit codes OOM 18, TIMEOUT 17, UNSPECIFIED_CRASH 19); numClients; useSharedServer; ForkBootstrap",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/PipesServer.java:99; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesClient.java:70,255-694; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/protocol/PipesMessageType.java; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/protocol/ForkBootstrap.java:41; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/SharedServerManager.java; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PerClientServerManager.java",
+  "ripstream": "packages/isolation-node/src/isolator.ts",
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/PipesServer.java:99, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesClient.java:70, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/protocol/PipesMessageType.java:29, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/SharedServerManager.java:64, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PerClientServerManager.java:56. ripstream: isolation-node runs a short-lived child per document with a memory pool and deadline (docs/isolation.md:205-237; packages/isolation-node/src/isolator.ts:285-291), passed to pipes via the `ripstream` option (packages/pipes/src/index.ts:54-64); createIsolatedRipstream (packages/core/src/isolated-ripstream.ts:34). Not run end-to-end by this audit (docs only).",
+  "note": "Functionally the same crash-containment goal, different architecture (child per doc vs long-lived server with maxFilesProcessedPerProcess=100000). JVM tunables (forkedJvmArgs, javaPath, useSharedServer, maxIpcPayloadBytes, socket/heartbeat/startup) are proposed non-goals by construction. Unverified: ripstream isolated /pipes behavior (open bead tikajs-2az5: per-document queue_full aborts the run; fan-out vs one gate slot).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/jvm-process-tunables",
+  "kind": "semantics",
+  "upstream": "JVM-process tunables: forkedJvmArgs, javaPath, useSharedServer=false, maxIpcPayloadBytes, socketTimeoutMillis, startupTimeoutMillis, heartbeatIntervalMillis, numClients default = f(cores)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:76-77,101,114-121,133,171-172,356-381,627-680",
+  "ripstream": null,
+  "status": "non-goal-candidate",
+  "evidence": "Tika: PipesConfig.java:114 useSharedServer, :116 maxIpcPayloadBytes, :119-121 timeouts/heartbeat, :171-172 forkedJvmArgs/javaPath. ripstream: no counterpart; isolation limits are configured via RIPSTREAM_ISOLATION_* (packages/cli/src/isolation-config.ts:25).",
+  "note": "Proposed non-goal: describe JVM subprocess plumbing (java binary, JVM args, socket protocol). Node-side equivalents (child count, memory, deadline) are already configured under isolation. Owner decides.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "searched; not found"
+ },
+ {
+  "id": "semantics/concurrency-and-backpressure",
+  "kind": "semantics",
+  "upstream": "numClients parallel servers, bounded queue (queueSize 10000), async emitter pool (numEmitters 1)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:133,141-147; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/async/AsyncProcessor.java:68",
+  "ripstream": "packages/pipes/src/index.ts:87-97",
+  "status": "partial",
+  "evidence": "Tika: PipesConfig.java:133 numClients, :141 queueSize, :142 numEmitters. ripstream: `concurrency` workers default 4 and `maxQueue` default 64 (packages/pipes/src/index.ts:92-93), optional strictly-ordered delivery with a bounded window (`ordered`, `maxBuffered` default concurrency*4, packages/pipes/src/index.ts:95-97,:111-117,:198-216). run: ordered scenario emitted all 6 in order (parity/pipes/out-run2.txt).",
+  "note": "Bounded concurrency and backpressure are real and well-behaved; ordered delivery is an extra with no Tika analogue. Missing: emitter pool, time/size-based emit batching.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/per-tuple-reporting",
+  "kind": "semantics",
+  "upstream": "Reporting: ReporterManager invokes reporter.report(tuple, result, elapsed) for every result; TotalCount reporting; error(...)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36",
+  "ripstream": "packages/pipes/src/adapters.ts:103",
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36, PipesReporter.java:40,48. ripstream: Reporter interface + 3 adapters exist (packages/pipes/src/adapters.ts:103-131) but the engine has no reporter option (PipesEngineOptions packages/pipes/src/index.ts:47-65) and never calls report; I called JsonlReporter manually: wrote one aggregate line (parity/pipes/out-run-ripstream-pipes.txt, JsonlReporter output).",
+  "note": "Reporters are present as dead code from the engine's point of view.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/idempotent-rerun",
+  "kind": "semantics",
+  "upstream": "Re-run into an existing output dir: onExists=EXCEPTION default (fails), SKIP, REPLACE; JSONL reporter onExists",
+  "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitterConfig.java:26,39; tika-pipes/tika-pipes-plugins/tika-pipes-file-system/src/main/java/org/apache/tika/pipes/emitter/fs/FileSystemEmitter.java:140,165,332",
+  "ripstream": "packages/pipes/src/index.ts:402",
+  "status": "gap",
+  "evidence": "Tika: FileSystemEmitterConfig.java:26 enum SKIP/EXCEPTION/REPLACE, :39 default EXCEPTION; FileSystemEmitter.java:140 SKIP, :165-166 CREATE_NEW, :332 message. ripstream run: a second run silently overwrote a.txt.txt (parity/pipes/out-run2.txt scenario rerun); CheckpointStore (packages/pipes/src/resilience.ts:33) would give resume but is unwired.",
+  "note": "Ripstream default is the opposite of Tika's safe default.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/async-cli",
+  "kind": "semantics",
+  "upstream": "tika-async-cli: command line driver (TikaAsyncCLI, SimpleAsyncConfig, PluginsWriter, TikaConfigAsyncWriter, FileListPipesIterator)",
+  "upstreamSource": "tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/TikaAsyncCLI.java:60,71-94",
+  "ripstream": "packages/cli/src/main.ts",
+  "status": "gap",
+  "evidence": "Tika: tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/TikaAsyncCLI.java:60 options at :71-95 (-i inputDir, -o outputDir, -n numClients, --Xmx, -T timeoutMillis, --unpack-*, --on-exists exception|replace|skip), tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/SimpleAsyncConfig.java:21, tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/PluginsWriter.java:35, tika-pipes/tika-async-cli/src/main/java/org/apache/tika/async/cli/TikaConfigAsyncWriter.java:41. ripstream: CLI has no pipes command; `serve` (packages/cli/src/main.ts:238) never passes the `pipes` option to createRipstreamServer, so /pipes is unreachable from the CLI binary (case-insensitive 'pipes' matches in packages/cli/src/*.ts: 0).",
+  "note": "A batch CLI over a directory is the most common way users run Tika pipes (tika-async-cli); ripstream offers only the embedded PipesClient API.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/fork-parser",
+  "kind": "semantics",
+  "upstream": "PipesForkParser (embeddable forked parse; PipesForkParserConfig, PipesForkResult, PipesForkParserException)",
+  "upstreamSource": "tika-pipes/tika-pipes-fork-parser/src/main/java/org/apache/tika/pipes/fork/PipesForkParser.java:124",
+  "ripstream": "packages/core/src/isolated-ripstream.ts:34",
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-fork-parser/src/main/java/org/apache/tika/pipes/fork/PipesForkParser.java:124, tika-pipes/tika-pipes-fork-parser/src/main/java/org/apache/tika/pipes/fork/PipesForkParserConfig.java:36, tika-pipes/tika-pipes-fork-parser/src/main/java/org/apache/tika/pipes/fork/PipesForkResult.java:44, tika-pipes/tika-pipes-fork-parser/src/main/java/org/apache/tika/pipes/fork/PipesForkParserException.java:44. ripstream: createIsolatedRipstream (packages/core/src/isolated-ripstream.ts:34) wraps a ripstream so each parse runs in an isolated child.",
+  "note": "Same role (crash-contained parse from library code). Unverified: result/exception parity with PipesForkResult.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/pipes-parser",
+  "kind": "semantics",
+  "upstream": "PipesParser (programmatic entry: parse(FetchEmitTuple) -> PipesResult; PipesResults)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesParser.java:41",
+  "ripstream": "packages/pipes/src/index.ts:462",
+  "status": "partial",
+  "evidence": "Tika: tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesParser.java:41, tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesResults.java:21. ripstream: PipesClient.run() (packages/pipes/src/index.ts:462-476) runs a whole configured source->sink; no parse(one tuple) call, no result object.",
+  "note": "Spec 1.6 promised submit(tuple)/submitAll/awaitIdle/shutdown; not implemented.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "source-read"
+ },
+ {
+  "id": "semantics/endpoint-pipes",
+  "kind": "semantics",
+  "upstream": "POST /pipes: ONE FetchEmitTuple JSON, returns {status, message} (+ HTTP status mapping, Retry-After from maxWaitForClientMillis); gated by allowPipes",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/PipesResource.java:51-146 (responseBuilder :132, status map :139); tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/PipesParsingHelper.java:481-533; tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:60-84",
+  "ripstream": "packages/server/src/index.ts:320",
+  "status": "partial",
+  "evidence": "Tika: PipesResource.java:132-139 returns pipesResult.status().name() and a status->HTTP mapping with Retry-After. ripstream /pipes (packages/server/src/index.ts:320-336): requires options.pipes + Content-Type application/json, body = bespoke {mode, source, sink, concurrency, maxQueue, ordered} resolved against server roots (packages/server/src/index.ts:673-718), runs a WHOLE job synchronously and returns {count, stats}. runs: tuple bodies -> 400 'Missing source'; text/plain -> 415; '../x' -> 403 'Path escapes the configured root'; http source off -> 403; no options.pipes -> 404 (parity/pipes/out-run3.txt, gate_probe.txt). oracle: POST /pipes -> 404 (pipes disabled, parity/pipes/out-oracle-pipes.txt).",
+  "note": "Gating and path confinement are stronger than Tika's (roots, symlink rejection, followSymlinks forced false, packages/server/src/index.ts:712). Contract differs completely (job vs single tuple; no status/message/Retry-After). Unverified against a live Tika: status mapping (oracle has pipes off).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/endpoint-async",
+  "kind": "semantics",
+  "upstream": "POST /async: {\"tuples\":[...]} queued, returns {\"status\":\"ok\",\"added\":n}; 429 throttled after maxQueuePauseMillis; 400 if batch exceeds queue size; gated by allowPipes",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/AsyncResource.java:59,98-111,158-200",
+  "ripstream": "packages/server/src/index.ts:351",
+  "status": "partial",
+  "evidence": "Tika: AsyncResource.java:98 body shape, :158 asyncProcessor.offer, :184-185 {status:ok,added}, :196-200 429, :175 400. ripstream /async (packages/server/src/index.ts:351-373): body is ONE RAW DOCUMENT, returns 202 {id}, result retrievable via GET /status/{id} (packages/server/src/index.ts:309-319) as {status, result:{text}}. runs: gate_probe: '/async' with no pipes option and no authenticate -> 202 (ungated); a Tika-style {\"tuples\":[]} body was accepted as a document and returned 202 + id (parity/pipes/out-run3.txt line 11, gate_probe.txt). oracle: POST /async -> 404 (parity/pipes/out-oracle-pipes.txt).",
+  "note": "Different feature under the same path: ripstream's is a single-document background parse with a job id; Tika's is a tuple-queue ingestion endpoint. Ripstream /async is not behind the pipes gate and silently treats a tuple JSON as file bytes. Job cap: 503 'Too many running async jobs' (packages/server/src/index.ts:354).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/endpoint-status",
+  "kind": "semantics",
+  "upstream": "GET /status (TikaServerStatus): {status:\"OPERATING\", active_tasks, millis_since_last_parse_started, files_processed}; endpoint name `status` in TikaServerProcess",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaServerStatus.java:28,36-45; tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerProcess.java:111,542-543",
+  "ripstream": "packages/server/src/index.ts:341",
+  "status": "partial",
+  "evidence": "Tika (read, not run): TikaServerStatus.java:38-45 returns status OPERATING + active_tasks + millis_since_last_parse_started + files_processed; registered at TikaServerProcess.java:542-543. ripstream: GET /status (packages/server/src/index.ts:341-349) returns {status:'ok', active, queued, gate:{maxConcurrent,maxQueue}, isolation}; GET /status/{id} (packages/server/src/index.ts:309-319) is the /async job lookup (no Tika counterpart). run: parity/pipes/out-gate_probe.txt (status 200 JSON). oracle: GET /status -> 404 (parity/pipes/out-oracle-pipes.txt), so the endpoint is not enabled on the oracle.",
+  "note": "Both are server-health endpoints with different field names (active_tasks/files_processed vs active/queued/gate). Neither is pipes-run progress. Unverified live: oracle does not expose /status, so Tika's JSON was read from source only.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/allowPipes-gating",
+  "kind": "semantics",
+  "upstream": "allowPipes server flag (default off); /pipes and /async 404 or reject when off",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:60-61,84,264-276; tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerProcess.java:544-545,557-561",
+  "ripstream": "packages/server/src/index.ts:89-100,159",
+  "status": "partial",
+  "evidence": "Tika: TikaServerConfig.java:60-61 ENDPOINTS_REQUIRING_PIPES=[pipes, async], :84 allowPipes=false default, :264-276 startup FAILS (TikaConfigException) when a selected pipes/async endpoint is configured while allowPipes is off. ripstream: /pipes is off unless options.pipes is set, requires authenticate (docs/security.md:98-114; construction guard packages/server/src/index.ts:159), roots, optional sink root; /async has NO gate (gate_probe: 202 with neither option, parity/pipes/out-gate_probe.txt). oracle: both 404 (pipes off).",
+  "note": "/pipes gating is arguably stricter than Tika's boolean; /async is a gap against it.",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/http-status-mapping",
+  "kind": "semantics",
+  "upstream": "PipesResult status -> HTTP status mapping (OK 200 for all SUCCESS-category statuses; TIMEOUT/OOM/UNSPECIFIED_CRASH 503 + Retry-After 5 s; CLIENT_UNAVAILABLE_WITHIN_MS 429 + Retry-After from maxWaitForClientMillis; *_NOT_FOUND and PRESET_NOT_FOUND 400; PAYLOAD_LIMIT_EXCEEDED 413; FETCH/EMIT/initialization failures 500)",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/PipesParsingHelper.java:481-506 (table), :509-533 (Retry-After)",
+  "ripstream": "packages/core/src/errors.ts:162",
+  "status": "partial",
+  "evidence": "Tika (read, not run): PipesParsingHelper.java:481-506 mapStatusToHttpResponse; :517-526 responseBuilder adds Retry-After (429: retryAfterSeconds(maxWaitForClientMillis) :523; 503: CRASH_RETRY_AFTER_SECONDS=5 :510,:525). ripstream: httpStatusForError (packages/core/src/errors.ts:162-197) maps ERROR CODES (UNSUPPORTED_FORMAT 415; ENCRYPTED/MALFORMED/LIMIT_EXCEEDED 422; PARSE_TIMEOUT 408; REQUEST_TOO_LARGE 413; ISOLATION_FAILED queue_full/unavailable 503, crash 500; others 500); /pipes returns it for the first failing document (observed 422 'Unable to read PDF', parity/pipes/out-badpdf_probe.txt). No Retry-After anywhere in packages/server/src/index.ts for pipes.",
+  "note": "Different taxonomy and a different failure unit: Tika maps one tuple's status; ripstream maps the first error of a whole run. Notable semantic differences: Tika returns 200 for parse-exception statuses and 503 for timeout/OOM; ripstream returns 422/408. Unverified live (oracle pipes off).",
+  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ },
+ {
+  "id": "semantics/emit-output-serialization",
+  "kind": "semantics",
+  "upstream": "Emitted metadata shape: Tika rmeta JSON uses scalar-or-array values and tk:* keys (oracle /rmeta)",
+  "upstreamSource": "oracle http://127.0.0.1:9998/rmeta (live) vs tika-core TikaCoreProperties",
+  "ripstream": "packages/pipes/src/index.ts:169",
+  "status": "partial",
+  "evidence": "oracle PUT /rmeta of a.txt returned [{\"tk:content-type-parser-override\":\"text/plain\",...,\"tk:content\":\"Hello pipes world. Second line. \\n\", ...}]; ripstream RMETA emit wrote [{\"resourceName\":[\"a.txt\"],...,\"X-TIKA:content\":\"\\n\\n...Hello pipes world.\\nSecond line.\\n\\n\"}] (parity/pipes/out-rmeta_cmp.txt). Emission goes through core serializeRmeta (packages/pipes/src/index.ts:169).",
+  "note": "Shared core serialization issue (array-valued fields, X-TIKA:content vs tk:content, whitespace); belongs to the metadata/rmeta parity workstream, not pipes. Flagged because every RMETA emitter inherits it.",
+  "tikaVerification": "live oracle /rmeta + source",
+  "ripstreamVerification": "ran code (see out-*.txt)"
+ }
+]

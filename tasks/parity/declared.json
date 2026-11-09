@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "ng-external-binary",
+      "match": { "class": "\\.(ExternalParser|GDALParser|LibPstParser|UnrarParser|DWGReadParser|StringsParser|Latin1StringsParser|EncodeOCRParser)$" },
+      "status": "non-goal",
+      "reason": "Shells out to a native binary or service (arbitrary command, gdalinfo, readpst, unrar, dwgread, strings, encode-ocr). A JS library does not ship or spawn these; Tesseract is the one opt-in exception (parser-media TesseractOcrParser, bounded and flagged unsafe). Formats with a JS route are covered by our own parsers (OutlookPSTParser, ArchiveMetadataParser for RAR, ScienceMetadataParser for DWG)."
+    },
+    {
+      "id": "ng-nlp-ml",
+      "match": { "class": "\\.(GeoParser|JournalParser|NamedEntityParser)$" },
+      "status": "non-goal",
+      "reason": "NLP/ML parsers (Lucene geo-gazetteer, GROBID journal extraction, named-entity models) need JVM-resident models or external services; not a parser concern in a JS runtime."
+    },
+    {
+      "id": "ng-vendor-ai",
+      "match": { "class": "\\.(AmazonTranscribe|ClaudeVLMParser|GeminiVLMParser|OpenAIVLMParser)$" },
+      "status": "non-goal",
+      "reason": "Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install."
+    },
+    {
+      "id": "ng-jni",
+      "match": { "class": "\\.Tess4JParser$" },
+      "status": "non-goal",
+      "reason": "JNI binding to Tesseract. The CLI route (TesseractOcrParser) covers OCR."
+    },
+    {
+      "id": "ng-bpg",
+      "match": { "class": "\\.BPGParser$" },
+      "status": "non-goal",
+      "reason": "BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain."
+    },
+    {
+      "id": "ng-prt",
+      "match": { "class": "\\.PRTParser$" },
+      "status": "non-goal",
+      "reason": "Siemens/Creo PRT is proprietary and Tika's parser only reads a header; low value, decline unless a user needs it."
+    },
+    {
+      "id": "ng-activemime",
+      "match": { "class": "\\.ActiveMimeParser$" },
+      "status": "non-goal",
+      "reason": "ActiveMime is a macro-malware container; the useful output is the embedded VBA, which the OLE route already exposes."
+    },
+    {
+      "id": "ng-pst-mail-item",
+      "match": { "class": "\\.PSTMailItemParser$" },
+      "status": "non-goal",
+      "reason": "application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly."
+    },
+    {
+      "id": "ng-pack200",
+      "match": { "class": "\\.CompressorParser$", "type": "^application/x-java-pack200$" },
+      "status": "non-goal",
+      "reason": "Pack200 is a JVM-only JAR compression removed from the JDK in 14; no JS decoder."
+    },
+    {
+      "id": "ng-camera-raw",
+      "match": { "class": "\\.RawTiffParser$" },
+      "status": "non-goal",
+      "reason": "Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them."
+    },
+
+    {
+      "id": "af-ooxml-subtypes",
+      "match": { "class": "\\.OOXMLParser$" },
+      "status": "accepted-fallback",
+      "reason": "Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential."
+    },
+    {
+      "id": "af-epub-ibooks",
+      "match": { "class": "\\.EpubParser$" },
+      "status": "accepted-fallback",
+      "reason": "application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3)."
+    },
+    {
+      "id": "af-executable-elf",
+      "match": { "class": "\\.ExecutableParser$", "type": "^application/x-(coredump|object|sharedlib)$" },
+      "status": "accepted-fallback",
+      "reason": "ELF core/object/shared-library are subtypes of application/x-executable; same ExecutableParser through the supertype (tikajs-68os.3)."
+    },
+    {
+      "id": "af-msworks-spreadsheet",
+      "match": { "class": "\\.OfficeParser$", "type": "^application/x-tika-msworks-spreadsheet$" },
+      "status": "accepted-fallback",
+      "reason": "Subtype of application/vnd.ms-excel; Tika's OfficeParser reaches the Excel extractor the same way (tikajs-68os.3)."
+    },
+    {
+      "id": "af-m4v",
+      "match": { "class": "\\.MP4Parser$", "type": "^video/x-m4v$" },
+      "status": "accepted-fallback",
+      "reason": "Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3)."
+    },
+
+    {
+      "id": "af-tsv",
+      "match": { "class": "\\.TextAndCSVParser$", "type": "^text/tsv$" },
+      "status": "accepted-fallback",
+      "reason": "text/tsv is claim-only; both sides detect a.tsv as text/tab-separated-values and TextParser's text equals the oracle's (differential on a generated TSV)."
+    },
+    {
+      "id": "af-groovy",
+      "match": { "class": "\\.SourceCodeParser$", "type": "^text/x-groovy$" },
+      "status": "accepted-fallback",
+      "reason": "Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10)."
+    },
+
+    { "id": "gap-odf", "match": { "class": "\\.OpenDocumentParser$" }, "status": "tracked", "bead": "tikajs-68os.12", "reason": "ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser." },
+    { "id": "gap-zip-formats", "match": { "class": "\\.(GeoGebraParser|IDMLParser|WACZParser|XLZParser)$" }, "status": "tracked", "bead": "tikajs-68os.13", "reason": "ZIP-based formats parsed by the generic ZipParser." },
+    { "id": "gap-text-xml", "match": { "class": "\\.(HttpParser|MIFParser|DIFParser|JSoupParser|RFC822Parser)$" }, "status": "tracked", "bead": "tikajs-68os.14", "reason": "Text/XML-based formats parsed by a generic parser." },
+    { "id": "gap-media", "match": { "class": "\\.(OggParser|TheoraParser|VorbisParser|OpusParser|SpeexParser|FlacParser|AudioParser|MidiParser|HeifParser|MP4Parser)$" }, "status": "tracked", "bead": "tikajs-68os.15", "reason": "Ogg family, au/midi, mp4 alias and HEIF sequences." },
+    { "id": "gap-image", "match": { "class": "\\.(ICNSParser|JXLParser|ICOParser|ImageParser)$" }, "status": "tracked", "bead": "tikajs-68os.16", "reason": "Image formats with no registration." },
+    { "id": "gap-executable", "match": { "class": "\\.(ExecutableParser|UniversalExecutableParser)$" }, "status": "tracked", "bead": "tikajs-68os.17", "reason": "Mach-O variants and fat binaries." },
+    { "id": "gap-ole", "match": { "class": "\\.(OldExcelParser|OfficeParser)$" }, "status": "tracked", "bead": "tikajs-68os.18", "reason": "BIFF2-4 and Tika-internal OLE type strings." },
+    { "id": "gap-iwork", "match": { "class": "\\.(IWork13PackageParser|IWork18PackageParser)$" }, "status": "tracked", "bead": "tikajs-68os.19", "reason": "Version-suffixed iWork package types." },
+    { "id": "gap-streams", "match": { "class": "\\.(CompressorParser|PackageParser|WARCParser)$" }, "status": "tracked", "bead": "tikajs-68os.20", "reason": "Compression streams, unix dump and WARC variants." },
+    { "id": "gap-misc-data", "match": { "class": "\\.(SAS7BDATParser|QuattroProParser|DGN8Parser|TSDParser|PListParser|TNEFParser|ChmParser)$" }, "status": "tracked", "bead": "tikajs-68os.21", "reason": "Single-format parsers with no registration, several claim-only." },
+    { "id": "gap-extended", "match": { "class": "\\.(EnviHeaderParser|GribParser|ISArchiveParser|GeoPkgParser|GeographicInformationParser)$" }, "status": "tracked", "bead": "tikajs-68os.22", "reason": "Extended-module scientific/geo formats." },
+    { "id": "gap-opt-in-utility", "match": { "class": "\\.(RegexCaptureParser|XMLProfiler)$" }, "status": "tracked", "bead": "tikajs-68os.23", "reason": "Opt-in utility parsers." }
+  ],
+  "implementedBy": {
+    "org.apache.tika.parser.DefaultParser": "CompositeParser",
+    "org.apache.tika.parser.EmptyParser": "EmptyParser",
+    "org.apache.tika.parser.ErrorParser": "ErrorParser",
+    "org.apache.tika.parser.txt.TXTParser": "TextParser",
+    "org.apache.tika.parser.xml.XMLParser": "XMLParser",
+    "org.apache.tika.parser.sqlite3.SQLite3Parser": "SQLite3Parser",
+    "org.apache.tika.parser.hdf.HDFParser": "ScienceMetadataParser",
+    "org.apache.tika.parser.netcdf.NetCDFParser": "ScienceMetadataParser",
+    "org.apache.tika.parser.ocr.TesseractOCRParser": "TesseractOCRParser"
+  }
+}

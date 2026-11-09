@@ -2,9 +2,10 @@ import {
   AutoDetectParser,
   CompositeParser,
   Ripstream,
+  type MediaTypeRegistry,
   type Parser,
 } from "@spikedpunch/ripstream-core";
-import { DefaultDetector } from "@spikedpunch/ripstream-mime";
+import { DefaultDetector, MimeTypes } from "@spikedpunch/ripstream-mime";
 import { TextParser } from "./text.ts";
 import { HtmlDocumentParser } from "./html.ts";
 import { XmlParser } from "./xml.ts";
@@ -72,10 +73,20 @@ export interface DefaultParserOptions {
   /** Product limits for the default CsvParser (ignored when `parsers` is supplied). */
   readonly csv?: CsvParserOptions;
   readonly pdfPassword?: string | import("@spikedpunch/ripstream-core").PasswordProvider;
+  /**
+   * Aliases and supertypes used to pick a parser, as in Tika's CompositeParser.
+   * Defaults to the bundled Tika registry; pass the detector's own when it was
+   * built with custom types.
+   */
+  readonly registry?: MediaTypeRegistry;
 }
 
-export function createDefaultParser(options: DefaultParserOptions = {}): Parser {
+let bundledRegistry: MediaTypeRegistry | undefined;
+
+export function createDefaultParser(options: DefaultParserOptions = {}): CompositeParser {
+  bundledRegistry ??= new MimeTypes().getMediaTypeRegistry();
   return new CompositeParser({
+    registry: options.registry ?? bundledRegistry,
     parsers: options.parsers ?? [
       new TextParser(),
       new CsvParser(options.csv),
@@ -159,7 +170,7 @@ export function createRipstream(options: CreateRipstreamOptions = {}): Ripstream
   const detector = options.detector ?? new DefaultDetector();
   const parser = new AutoDetectParser({
     detector,
-    parser: createDefaultParser(options),
+    parser: createDefaultParser({ ...options, registry: options.registry ?? detector.getMediaTypeRegistry() }),
   });
   return new Ripstream({ detector, parser });
 }

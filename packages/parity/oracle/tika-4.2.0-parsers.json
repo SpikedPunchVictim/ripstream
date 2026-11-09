@@ -1,0 +1,738 @@
+{
+ "tikaVersion": "4.2.0",
+ "source": "GET /parsers/details on apache/tika:4.2.0 (tika-server-standard); the parsers its DefaultParser loads",
+ "parsers": [
+  {
+   "name": "org.apache.tika.parser.apple.AppleSingleFileParser",
+   "supportedTypes": [
+    "application/applefile"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.apple.PListParser",
+   "supportedTypes": [
+    "application/x-bplist",
+    "application/x-bplist-itunes",
+    "application/x-bplist-memgraph",
+    "application/x-bplist-webarchive",
+    "application/x-plist"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.asm.ClassParser",
+   "supportedTypes": [
+    "application/java-vm"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.audio.AudioParser",
+   "supportedTypes": [
+    "audio/basic",
+    "audio/vnd.wave",
+    "audio/x-aiff",
+    "audio/x-wav"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.audio.MidiParser",
+   "supportedTypes": [
+    "application/x-midi",
+    "audio/midi"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.code.SourceCodeParser",
+   "supportedTypes": [
+    "text/x-c++src",
+    "text/x-groovy",
+    "text/x-java-source"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.crypto.Pkcs7Parser",
+   "supportedTypes": [
+    "application/pkcs7-mime",
+    "application/pkcs7-signature"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.crypto.TSDParser",
+   "supportedTypes": [
+    "application/timestamped-data"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.csv.TextAndCSVParser",
+   "supportedTypes": [
+    "text/csv",
+    "text/plain",
+    "text/tsv"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.dbf.DBFParser",
+   "supportedTypes": [
+    "application/x-dbf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.dgn.DGN8Parser",
+   "supportedTypes": [
+    "image/vnd.dgn; version=8"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.dif.DIFParser",
+   "supportedTypes": [
+    "application/dif+xml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.dwg.DWGParser",
+   "supportedTypes": [
+    "image/vnd.dwg"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.epub.EpubParser",
+   "supportedTypes": [
+    "application/epub+zip",
+    "application/x-ibooks+zip"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.executable.ExecutableParser",
+   "supportedTypes": [
+    "application/x-coredump",
+    "application/x-elf",
+    "application/x-executable",
+    "application/x-mach-o",
+    "application/x-mach-o-bundle",
+    "application/x-mach-o-core",
+    "application/x-mach-o-dsym",
+    "application/x-mach-o-dylib",
+    "application/x-mach-o-dylib-stub",
+    "application/x-mach-o-dylinker",
+    "application/x-mach-o-executable",
+    "application/x-mach-o-fvmlib",
+    "application/x-mach-o-kext-bundle",
+    "application/x-mach-o-object",
+    "application/x-mach-o-preload",
+    "application/x-msdownload",
+    "application/x-object",
+    "application/x-sharedlib"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.executable.UniversalExecutableParser",
+   "supportedTypes": [
+    "application/x-mach-o-universal"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.feed.FeedParser",
+   "supportedTypes": [
+    "application/atom+xml",
+    "application/rss+xml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.font.AdobeFontMetricParser",
+   "supportedTypes": [
+    "application/x-font-adobe-metric"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.font.TrueTypeParser",
+   "supportedTypes": [
+    "application/x-font-ttf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.geogebra.GeoGebraParser",
+   "supportedTypes": [
+    "application/vnd.geogebra.file",
+    "application/vnd.geogebra.slides",
+    "application/vnd.geogebra.tool"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.html.JSoupParser",
+   "supportedTypes": [
+    "application/vnd.mozilla.xul+xml",
+    "application/vnd.wap.xhtml+xml",
+    "application/x-asp",
+    "application/xhtml+xml",
+    "text/html"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.http.HttpParser",
+   "supportedTypes": [
+    "application/x-httpresponse"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.hwp.HwpV5Parser",
+   "supportedTypes": [
+    "application/x-hwp-v5"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.BPGParser",
+   "supportedTypes": [
+    "image/bpg",
+    "image/x-bpg"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.HeifParser",
+   "supportedTypes": [
+    "image/avif",
+    "image/heic",
+    "image/heic-sequence",
+    "image/heif",
+    "image/heif-sequence"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.ICNSParser",
+   "supportedTypes": [
+    "image/icns"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.ICOParser",
+   "supportedTypes": [
+    "image/vnd.microsoft.icon",
+    "image/x-icon",
+    "image/x-win-bitmap"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.ImageParser",
+   "supportedTypes": [
+    "image/bmp",
+    "image/gif",
+    "image/jp2",
+    "image/jpx",
+    "image/png",
+    "image/vnd.wap.wbmp",
+    "image/x-jbig2",
+    "image/x-ms-bmp",
+    "image/x-portable-pixmap",
+    "image/x-xcf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.JpegParser",
+   "supportedTypes": [
+    "image/jpeg"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.JXLParser",
+   "supportedTypes": [
+    "image/jxl"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.PSDParser",
+   "supportedTypes": [
+    "image/vnd.adobe.photoshop"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.RawTiffParser",
+   "supportedTypes": [
+    "image/x-canon-cr2",
+    "image/x-raw-adobe",
+    "image/x-raw-epson",
+    "image/x-raw-kodak",
+    "image/x-raw-leaf",
+    "image/x-raw-nikon",
+    "image/x-raw-olympus",
+    "image/x-raw-panasonic",
+    "image/x-raw-pentax",
+    "image/x-raw-samsung",
+    "image/x-raw-sony"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.TiffParser",
+   "supportedTypes": [
+    "image/tiff"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.image.WebPParser",
+   "supportedTypes": [
+    "image/webp"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.indesign.IDMLParser",
+   "supportedTypes": [
+    "application/vnd.adobe.indesign-idml-package"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.iptc.IptcAnpaParser",
+   "supportedTypes": [
+    "text/vnd.iptc.anpa"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.iwork.iwana.IWork13PackageParser",
+   "supportedTypes": [
+    "application/vnd.apple.keynote.13",
+    "application/vnd.apple.numbers.13",
+    "application/vnd.apple.pages.13",
+    "application/vnd.apple.unknown.13"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.iwork.iwana.IWork18PackageParser",
+   "supportedTypes": [
+    "application/vnd.apple.keynote.18",
+    "application/vnd.apple.numbers.18",
+    "application/vnd.apple.pages.18"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.iwork.IWorkPackageParser",
+   "supportedTypes": [
+    "application/vnd.apple.iwork",
+    "application/vnd.apple.keynote",
+    "application/vnd.apple.numbers",
+    "application/vnd.apple.pages"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mail.RFC822Parser",
+   "supportedTypes": [
+    "message/rfc822",
+    "message/x-emlx"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.markdown.MarkdownParser",
+   "supportedTypes": [
+    "text/markdown"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mat.MatParser",
+   "supportedTypes": [
+    "application/x-matlab-data"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mbox.MboxParser",
+   "supportedTypes": [
+    "application/mbox"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.activemime.ActiveMimeParser",
+   "supportedTypes": [
+    "application/x-activemime"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.chm.ChmParser",
+   "supportedTypes": [
+    "application/chm",
+    "application/vnd.ms-htmlhelp",
+    "application/x-chm"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.EMFParser",
+   "supportedTypes": [
+    "image/emf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.JackcessParser",
+   "supportedTypes": [
+    "application/x-msaccess"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.MSOwnerFileParser",
+   "supportedTypes": [
+    "application/x-ms-owner"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.OfficeParser",
+   "supportedTypes": [
+    "application/msword",
+    "application/sldworks",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-outlook",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.ms-project",
+    "application/vnd.visio",
+    "application/x-mspublisher",
+    "application/x-tika-msoffice",
+    "application/x-tika-msoffice-embedded; format=ole10_native",
+    "application/x-tika-msworks-spreadsheet",
+    "application/x-tika-ole-drm-encrypted",
+    "application/x-tika-ooxml-protected"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.OldExcelParser",
+   "supportedTypes": [
+    "application/vnd.ms-excel.sheet.2",
+    "application/vnd.ms-excel.sheet.3",
+    "application/vnd.ms-excel.sheet.4",
+    "application/vnd.ms-excel.workspace.3",
+    "application/vnd.ms-excel.workspace.4"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.onenote.OneNoteParser",
+   "supportedTypes": [
+    "application/onenote; format=one"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.ooxml.OOXMLParser",
+   "supportedTypes": [
+    "application/vnd.ms-excel.addin.macroenabled.12",
+    "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.ms-excel.template.macroenabled.12",
+    "application/vnd.ms-powerpoint.addin.macroenabled.12",
+    "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+    "application/vnd.ms-powerpoint.slide.macroenabled.12",
+    "application/vnd.ms-powerpoint.slideshow.macroenabled.12",
+    "application/vnd.ms-powerpoint.template.macroenabled.12",
+    "application/vnd.ms-visio.drawing",
+    "application/vnd.ms-visio.drawing.macroenabled.12",
+    "application/vnd.ms-visio.stencil",
+    "application/vnd.ms-visio.stencil.macroenabled.12",
+    "application/vnd.ms-visio.template",
+    "application/vnd.ms-visio.template.macroenabled.12",
+    "application/vnd.ms-word.document.macroenabled.12",
+    "application/vnd.ms-word.template.macroenabled.12",
+    "application/vnd.ms-xpsdocument",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.presentationml.slide",
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+    "application/vnd.openxmlformats-officedocument.presentationml.template",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+    "model/vnd.dwfx+xps"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.ooxml.xwpf.ml2006.Word2006MLParser",
+   "supportedTypes": [
+    "application/vnd.ms-word2006ml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.pst.OutlookPSTParser",
+   "supportedTypes": [
+    "application/vnd.ms-outlook-pst"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.pst.PSTMailItemParser",
+   "supportedTypes": [
+    "application/x-tika-pst-mail-item"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.rtf.RTFParser",
+   "supportedTypes": [
+    "application/rtf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.TNEFParser",
+   "supportedTypes": [
+    "application/ms-tnef",
+    "application/vnd.ms-tnef",
+    "application/x-tnef"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.WMFParser",
+   "supportedTypes": [
+    "image/wmf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.xml.SpreadsheetMLParser",
+   "supportedTypes": [
+    "application/vnd.ms-spreadsheetml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.microsoft.xml.WordMLParser",
+   "supportedTypes": [
+    "application/vnd.ms-wordml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mif.MIFParser",
+   "supportedTypes": [
+    "application/vnd.mif",
+    "application/x-maker",
+    "application/x-mif"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mp3.Mp3Parser",
+   "supportedTypes": [
+    "audio/mpeg"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.mp4.MP4Parser",
+   "supportedTypes": [
+    "application/mp4",
+    "audio/mp4",
+    "video/3gpp",
+    "video/3gpp2",
+    "video/mp4",
+    "video/quicktime",
+    "video/x-m4v"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.odf.FlatOpenDocumentParser",
+   "supportedTypes": [
+    "application/vnd.oasis.opendocument.flat.presentation",
+    "application/vnd.oasis.opendocument.flat.spreadsheet",
+    "application/vnd.oasis.opendocument.flat.text",
+    "application/vnd.oasis.opendocument.tika.flat.document"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.odf.OpenDocumentParser",
+   "supportedTypes": [
+    "application/vnd.oasis.opendocument.chart",
+    "application/vnd.oasis.opendocument.chart-template",
+    "application/vnd.oasis.opendocument.formula",
+    "application/vnd.oasis.opendocument.formula-template",
+    "application/vnd.oasis.opendocument.graphics",
+    "application/vnd.oasis.opendocument.graphics-template",
+    "application/vnd.oasis.opendocument.image",
+    "application/vnd.oasis.opendocument.image-template",
+    "application/vnd.oasis.opendocument.presentation",
+    "application/vnd.oasis.opendocument.presentation-template",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.spreadsheet-template",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.text-master",
+    "application/vnd.oasis.opendocument.text-template",
+    "application/vnd.oasis.opendocument.text-web",
+    "application/vnd.sun.xml.writer",
+    "application/x-vnd.oasis.opendocument.chart",
+    "application/x-vnd.oasis.opendocument.chart-template",
+    "application/x-vnd.oasis.opendocument.formula",
+    "application/x-vnd.oasis.opendocument.formula-template",
+    "application/x-vnd.oasis.opendocument.graphics",
+    "application/x-vnd.oasis.opendocument.graphics-template",
+    "application/x-vnd.oasis.opendocument.image",
+    "application/x-vnd.oasis.opendocument.image-template",
+    "application/x-vnd.oasis.opendocument.presentation",
+    "application/x-vnd.oasis.opendocument.presentation-template",
+    "application/x-vnd.oasis.opendocument.spreadsheet",
+    "application/x-vnd.oasis.opendocument.spreadsheet-template",
+    "application/x-vnd.oasis.opendocument.text",
+    "application/x-vnd.oasis.opendocument.text-master",
+    "application/x-vnd.oasis.opendocument.text-template",
+    "application/x-vnd.oasis.opendocument.text-web"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.FlacParser",
+   "supportedTypes": [
+    "audio/x-flac",
+    "audio/x-oggflac"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.OggParser",
+   "supportedTypes": [
+    "application/kate",
+    "application/ogg",
+    "audio/ogg",
+    "audio/x-oggpcm",
+    "video/daala",
+    "video/ogg",
+    "video/x-dirac",
+    "video/x-oggrgb",
+    "video/x-ogguvs",
+    "video/x-oggyuv",
+    "video/x-ogm"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.OpusParser",
+   "supportedTypes": [
+    "audio/ogg; codecs=opus",
+    "audio/opus"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.SpeexParser",
+   "supportedTypes": [
+    "audio/ogg; codecs=speex",
+    "audio/speex"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.TheoraParser",
+   "supportedTypes": [
+    "video/theora"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.ogg.VorbisParser",
+   "supportedTypes": [
+    "audio/vorbis"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pdf.PDFParser",
+   "supportedTypes": [
+    "application/pdf"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pkg.CompressorParser",
+   "supportedTypes": [
+    "application/deflate64",
+    "application/gzip",
+    "application/x-brotli",
+    "application/x-bzip",
+    "application/x-bzip2",
+    "application/x-compress",
+    "application/x-gzip",
+    "application/x-java-pack200",
+    "application/x-lz4",
+    "application/x-lzma",
+    "application/x-snappy",
+    "application/x-xz",
+    "application/zlib"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pkg.PackageParser",
+   "supportedTypes": [
+    "application/x-archive",
+    "application/x-arj",
+    "application/x-cpio",
+    "application/x-tar",
+    "application/x-tika-unix-dump"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pkg.RarParser",
+   "supportedTypes": [
+    "application/x-rar-compressed"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pkg.SevenZParser",
+   "supportedTypes": [
+    "application/x-7z-compressed"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.pkg.ZipParser",
+   "supportedTypes": [
+    "application/java-archive",
+    "application/zip"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.prt.PRTParser",
+   "supportedTypes": [
+    "application/x-prt"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.sas.SAS7BDATParser",
+   "supportedTypes": [
+    "application/x-sas-data"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.tmx.TMXParser",
+   "supportedTypes": [
+    "application/x-tmx"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.video.FLVParser",
+   "supportedTypes": [
+    "video/x-flv"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.wacz.WACZParser",
+   "supportedTypes": [
+    "application/x-wacz"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.warc.WARCParser",
+   "supportedTypes": [
+    "application/arc+gz",
+    "application/warc",
+    "application/warc+gz",
+    "application/x-internet-archive"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.wordperfect.QuattroProParser",
+   "supportedTypes": [
+    "application/x-quattro-pro; version=9"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.wordperfect.WordPerfectParser",
+   "supportedTypes": [
+    "application/vnd.wordperfect; version=5.0",
+    "application/vnd.wordperfect; version=5.1",
+    "application/vnd.wordperfect; version=6.x"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.xliff.XLIFF12Parser",
+   "supportedTypes": [
+    "application/x-xliff+xml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.xliff.XLZParser",
+   "supportedTypes": [
+    "application/x-xliff+zip"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.xml.DcXMLParser",
+   "supportedTypes": [
+    "application/xml",
+    "image/svg+xml"
+   ]
+  },
+  {
+   "name": "org.apache.tika.parser.xml.FictionBookParser",
+   "supportedTypes": [
+    "application/x-fictionbook+xml"
+   ]
+  }
+ ]
+}

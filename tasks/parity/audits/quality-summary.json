@@ -1,0 +1,1813 @@
+{
+  "sample": "deterministic sample (<=30 per family, evenly spaced over sorted union); not a population",
+  "limit": {
+    "ripstreamMaxOutputChars": 1000000,
+    "tikaWriteLimit": "none observed (30M chars returned)"
+  },
+  "selection": {
+    "dropped": {
+      "excludedName": 170,
+      "pdfjsAllowedNotOk": 20,
+      "zero": 0,
+      "tooBig": 3,
+      "noFamily": 616
+    },
+    "poolSizes": {
+      "ooxml": {
+        "pool": 546,
+        "byCorpus": {
+          "format-corpus": 2,
+          "poi": 544
+        }
+      },
+      "ole2": {
+        "pool": 783,
+        "byCorpus": {
+          "format-corpus": 21,
+          "poi": 762
+        }
+      },
+      "pdf": {
+        "pool": 1331,
+        "byCorpus": {
+          "format-corpus": 285,
+          "pdfjs": 1045,
+          "poi": 1
+        }
+      },
+      "odf": {
+        "pool": 14,
+        "byCorpus": {
+          "format-corpus": 13,
+          "poi": 1
+        }
+      },
+      "rtf": {
+        "pool": 6,
+        "byCorpus": {
+          "format-corpus": 5,
+          "poi": 1
+        }
+      },
+      "html-xml": {
+        "pool": 27,
+        "byCorpus": {
+          "format-corpus": 22,
+          "poi": 5
+        }
+      },
+      "text": {
+        "pool": 103,
+        "byCorpus": {
+          "format-corpus": 84,
+          "pdfjs": 1,
+          "poi": 18
+        }
+      },
+      "email": {
+        "pool": 0,
+        "byCorpus": {}
+      },
+      "archive": {
+        "pool": 13,
+        "byCorpus": {
+          "format-corpus": 13
+        }
+      },
+      "image": {
+        "pool": 44,
+        "byCorpus": {
+          "format-corpus": 24,
+          "poi": 20
+        }
+      },
+      "audio-video": {
+        "pool": 62,
+        "byCorpus": {
+          "format-corpus": 61,
+          "poi": 1
+        }
+      },
+      "epub": {
+        "pool": 3,
+        "byCorpus": {
+          "format-corpus": 3
+        }
+      },
+      "other": {
+        "pool": 101,
+        "byCorpus": {
+          "format-corpus": 60,
+          "poi": 41
+        }
+      }
+    }
+  },
+  "families": {
+    "ooxml": {
+      "n": 30,
+      "bothOk": 29,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 96.7,
+        "strictAgreePct": 96.7,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 29,
+        "excluded": 0,
+        "bothEmpty": 0,
+        "textBearingN": 29,
+        "topJaccard": {
+          "median": 1,
+          "p10": 0.218,
+          "n": 29
+        },
+        "topLenRatio": {
+          "median": 1,
+          "p10": 0.198
+        },
+        "allJaccard": {
+          "median": 0.992,
+          "p10": 0.218
+        },
+        "allLenRatio": {
+          "median": 0.989,
+          "p10": 0.198
+        },
+        "topLevMedian": 1,
+        "topLevN": 24,
+        "exactTop": 17
+      },
+      "metadata": {
+        "fixedKeysInTika": 316,
+        "equalPct": 59.8,
+        "presentPct": 60.1,
+        "ripOnlyFixedKeys": 31,
+        "excludingContentType": {
+          "keysInTika": 287,
+          "equalPct": 55.7,
+          "presentPct": 56.1,
+          "verbatimEqualPct": 55.7,
+          "equalOrAliasEqualPct": 69.7
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 29,
+        "median": 1,
+        "p10": 0.218
+      },
+      "ms": {
+        "tikaMedian": 16.5,
+        "ripstreamMedian": 274.5,
+        "ripstreamMax": 938
+      },
+      "embedded": {
+        "comparable": 29,
+        "agreePct": 72.4,
+        "ripFewer": 8,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 1,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 1,
+        "tika": 1,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 1,
+        "ripstreamModes": {
+          "error:MALFORMED_DOCUMENT": 1
+        },
+        "tikaModes": {
+          "record_exception:200": 1
+        }
+      }
+    },
+    "ole2": {
+      "n": 30,
+      "bothOk": 27,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 93.3,
+        "strictAgreePct": 93.3,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 27,
+        "excluded": 0,
+        "bothEmpty": 1,
+        "textBearingN": 26,
+        "topJaccard": {
+          "median": 0.191,
+          "p10": 0,
+          "n": 26
+        },
+        "topLenRatio": {
+          "median": 0.587,
+          "p10": 0.223
+        },
+        "allJaccard": {
+          "median": 0.191,
+          "p10": 0
+        },
+        "allLenRatio": {
+          "median": 0.587,
+          "p10": 0.223
+        },
+        "topLevMedian": 0.285,
+        "topLevN": 26,
+        "exactTop": 4
+      },
+      "metadata": {
+        "fixedKeysInTika": 254,
+        "equalPct": 53.1,
+        "presentPct": 54.3,
+        "ripOnlyFixedKeys": 19,
+        "excludingContentType": {
+          "keysInTika": 227,
+          "equalPct": 48,
+          "presentPct": 48.9,
+          "verbatimEqualPct": 39.2,
+          "equalOrAliasEqualPct": 55.9
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 28,
+        "median": 0.135,
+        "p10": 0
+      },
+      "ms": {
+        "tikaMedian": 11,
+        "ripstreamMedian": 260.5,
+        "ripstreamMax": 279
+      },
+      "embedded": {
+        "comparable": 27,
+        "agreePct": 74.1,
+        "ripFewer": 7,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 2,
+        "ripstream": 3,
+        "tika": 1,
+        "ripOnly": 2,
+        "tikaOnly": 0,
+        "both": 1,
+        "ripstreamModes": {
+          "error:MALFORMED_DOCUMENT": 2,
+          "error:UNSUPPORTED_FORMAT": 1
+        },
+        "tikaModes": {
+          "record_exception:200": 1
+        }
+      }
+    },
+    "pdf": {
+      "n": 30,
+      "bothOk": 30,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 30,
+        "excluded": 0,
+        "bothEmpty": 4,
+        "textBearingN": 26,
+        "topJaccard": {
+          "median": 0.98,
+          "p10": 0.125,
+          "n": 26
+        },
+        "topLenRatio": {
+          "median": 1,
+          "p10": 0.373
+        },
+        "allJaccard": {
+          "median": 0.98,
+          "p10": 0.125
+        },
+        "allLenRatio": {
+          "median": 1,
+          "p10": 0.373
+        },
+        "topLevMedian": 0.85,
+        "topLevN": 20,
+        "exactTop": 10
+      },
+      "metadata": {
+        "fixedKeysInTika": 256,
+        "equalPct": 33.6,
+        "presentPct": 39.8,
+        "ripOnlyFixedKeys": 32,
+        "excludingContentType": {
+          "keysInTika": 226,
+          "equalPct": 24.8,
+          "presentPct": 31.9,
+          "verbatimEqualPct": 13.3,
+          "equalOrAliasEqualPct": 63.7
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 26,
+        "median": 0.98,
+        "p10": 0.125
+      },
+      "ms": {
+        "tikaMedian": 25.5,
+        "ripstreamMedian": 376.5,
+        "ripstreamMax": 1001
+      },
+      "embedded": {
+        "comparable": 30,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 1,
+        "ripTextOver100k": 1,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "odf": {
+      "n": 14,
+      "bothOk": 14,
+      "contentType": {
+        "n": 14,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 14,
+        "excluded": 0,
+        "bothEmpty": 1,
+        "textBearingN": 13,
+        "topJaccard": {
+          "median": 1,
+          "p10": 1,
+          "n": 13
+        },
+        "topLenRatio": {
+          "median": 1,
+          "p10": 0.969
+        },
+        "allJaccard": {
+          "median": 1,
+          "p10": 1
+        },
+        "allLenRatio": {
+          "median": 1,
+          "p10": 0.969
+        },
+        "topLevMedian": 1,
+        "topLevN": 13,
+        "exactTop": 11
+      },
+      "metadata": {
+        "fixedKeysInTika": 116,
+        "equalPct": 70.7,
+        "presentPct": 71.6,
+        "ripOnlyFixedKeys": 0,
+        "excludingContentType": {
+          "keysInTika": 102,
+          "equalPct": 66.7,
+          "presentPct": 67.6,
+          "verbatimEqualPct": 47.1,
+          "equalOrAliasEqualPct": 76.5
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 13,
+        "median": 1,
+        "p10": 1
+      },
+      "ms": {
+        "tikaMedian": 14,
+        "ripstreamMedian": 273,
+        "ripstreamMax": 327
+      },
+      "embedded": {
+        "comparable": 14,
+        "agreePct": 0,
+        "ripFewer": 14,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "rtf": {
+      "n": 6,
+      "bothOk": 6,
+      "contentType": {
+        "n": 6,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 6,
+        "excluded": 0,
+        "bothEmpty": 0,
+        "textBearingN": 6,
+        "topJaccard": {
+          "median": 1,
+          "p10": 0.981,
+          "n": 6
+        },
+        "topLenRatio": {
+          "median": 0.996,
+          "p10": 0.945
+        },
+        "allJaccard": {
+          "median": 1,
+          "p10": 0.981
+        },
+        "allLenRatio": {
+          "median": 0.996,
+          "p10": 0.945
+        },
+        "topLevMedian": 0.996,
+        "topLevN": 6,
+        "exactTop": 2
+      },
+      "metadata": {
+        "fixedKeysInTika": 16,
+        "equalPct": 56.3,
+        "presentPct": 68.8,
+        "ripOnlyFixedKeys": 1,
+        "excludingContentType": {
+          "keysInTika": 10,
+          "equalPct": 30,
+          "presentPct": 50,
+          "verbatimEqualPct": 20,
+          "equalOrAliasEqualPct": 30
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 6,
+        "median": 1,
+        "p10": 0.981
+      },
+      "ms": {
+        "tikaMedian": 15,
+        "ripstreamMedian": 278,
+        "ripstreamMax": 315
+      },
+      "embedded": {
+        "comparable": 6,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "html-xml": {
+      "n": 27,
+      "bothOk": 24,
+      "contentType": {
+        "n": 27,
+        "aliasedAgreePct": 92.6,
+        "strictAgreePct": 92.6,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 24,
+        "excluded": 0,
+        "bothEmpty": 1,
+        "textBearingN": 23,
+        "topJaccard": {
+          "median": 0.518,
+          "p10": 0.197,
+          "n": 23
+        },
+        "topLenRatio": {
+          "median": 0.89,
+          "p10": 0.764
+        },
+        "allJaccard": {
+          "median": 0.518,
+          "p10": 0.197
+        },
+        "allLenRatio": {
+          "median": 0.89,
+          "p10": 0.764
+        },
+        "topLevMedian": 0.876,
+        "topLevN": 22,
+        "exactTop": 6
+      },
+      "metadata": {
+        "fixedKeysInTika": 39,
+        "equalPct": 76.9,
+        "presentPct": 76.9,
+        "ripOnlyFixedKeys": 1,
+        "excludingContentType": {
+          "keysInTika": 15,
+          "equalPct": 40,
+          "presentPct": 40,
+          "verbatimEqualPct": 40,
+          "equalOrAliasEqualPct": 40
+        },
+        "encodingAgreePct": 50,
+        "encodingN": 2
+      },
+      "textFailuresAsZero": {
+        "n": 24,
+        "median": 0.516,
+        "p10": 0.196
+      },
+      "ms": {
+        "tikaMedian": 15,
+        "ripstreamMedian": 11,
+        "ripstreamMax": 343
+      },
+      "embedded": {
+        "comparable": 24,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 1,
+        "ripstream": 3,
+        "tika": 1,
+        "ripOnly": 2,
+        "tikaOnly": 0,
+        "both": 1,
+        "ripstreamModes": {
+          "error:MALFORMED_DOCUMENT": 2,
+          "error:UNSUPPORTED_FORMAT": 1
+        },
+        "tikaModes": {
+          "record_exception:200": 1
+        }
+      }
+    },
+    "text": {
+      "n": 30,
+      "bothOk": 30,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 30,
+        "excluded": 0,
+        "bothEmpty": 0,
+        "textBearingN": 30,
+        "topJaccard": {
+          "median": 1,
+          "p10": 0.937,
+          "n": 30
+        },
+        "topLenRatio": {
+          "median": 0.997,
+          "p10": 0.896
+        },
+        "allJaccard": {
+          "median": 1,
+          "p10": 0.937
+        },
+        "allLenRatio": {
+          "median": 0.997,
+          "p10": 0.896
+        },
+        "topLevMedian": 0.995,
+        "topLevN": 29,
+        "exactTop": 7
+      },
+      "metadata": {
+        "fixedKeysInTika": 30,
+        "equalPct": 100,
+        "presentPct": 100,
+        "ripOnlyFixedKeys": 0,
+        "excludingContentType": {
+          "keysInTika": 0,
+          "equalPct": null,
+          "presentPct": null,
+          "verbatimEqualPct": null,
+          "equalOrAliasEqualPct": null
+        },
+        "encodingAgreePct": 13.3,
+        "encodingN": 30
+      },
+      "textFailuresAsZero": {
+        "n": 30,
+        "median": 1,
+        "p10": 0.937
+      },
+      "ms": {
+        "tikaMedian": 5,
+        "ripstreamMedian": 2,
+        "ripstreamMax": 17
+      },
+      "embedded": {
+        "comparable": 30,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "archive": {
+      "n": 13,
+      "bothOk": 12,
+      "contentType": {
+        "n": 13,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 12,
+        "excluded": 0,
+        "bothEmpty": 0,
+        "textBearingN": 12,
+        "topJaccard": {
+          "median": 1,
+          "p10": 1,
+          "n": 12
+        },
+        "topLenRatio": {
+          "median": 1,
+          "p10": 1
+        },
+        "allJaccard": {
+          "median": 0.899,
+          "p10": 0.47
+        },
+        "allLenRatio": {
+          "median": 0.906,
+          "p10": 0.708
+        },
+        "topLevMedian": 1,
+        "topLevN": 12,
+        "exactTop": 12
+      },
+      "metadata": {
+        "fixedKeysInTika": 12,
+        "equalPct": 100,
+        "presentPct": 100,
+        "ripOnlyFixedKeys": 0,
+        "excludingContentType": {
+          "keysInTika": 0,
+          "equalPct": null,
+          "presentPct": null,
+          "verbatimEqualPct": null,
+          "equalOrAliasEqualPct": null
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 13,
+        "median": 1,
+        "p10": 1
+      },
+      "ms": {
+        "tikaMedian": 23,
+        "ripstreamMedian": 316,
+        "ripstreamMax": 1284
+      },
+      "embedded": {
+        "comparable": 12,
+        "agreePct": 75,
+        "ripFewer": 3,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 1,
+        "ripTextOver100k": 1,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 1,
+        "ripstream": 17
+      },
+      "failures": {
+        "ripFailTikaProducedText": 1,
+        "ripstream": 1,
+        "tika": 0,
+        "ripOnly": 1,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {
+          "error:LIMIT_EXCEEDED": 1
+        },
+        "tikaModes": {}
+      }
+    },
+    "image": {
+      "n": 30,
+      "bothOk": 30,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 30,
+        "excluded": 0,
+        "bothEmpty": 29,
+        "textBearingN": 1,
+        "topJaccard": {
+          "median": 0,
+          "p10": 0,
+          "n": 1
+        },
+        "topLenRatio": {
+          "median": 0,
+          "p10": 0
+        },
+        "allJaccard": {
+          "median": 0,
+          "p10": 0
+        },
+        "allLenRatio": {
+          "median": 0,
+          "p10": 0
+        },
+        "topLevMedian": 0,
+        "topLevN": 1,
+        "exactTop": 0
+      },
+      "metadata": {
+        "fixedKeysInTika": 133,
+        "equalPct": 70.7,
+        "presentPct": 70.7,
+        "ripOnlyFixedKeys": 2,
+        "excludingContentType": {
+          "keysInTika": 103,
+          "equalPct": 62.1,
+          "presentPct": 62.1,
+          "verbatimEqualPct": 62.1,
+          "equalOrAliasEqualPct": 62.1
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 1,
+        "median": 0,
+        "p10": 0
+      },
+      "ms": {
+        "tikaMedian": 44.5,
+        "ripstreamMedian": 338,
+        "ripstreamMax": 368
+      },
+      "embedded": {
+        "comparable": 30,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "audio-video": {
+      "n": 30,
+      "bothOk": 30,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 30,
+        "excluded": 0,
+        "bothEmpty": 30,
+        "textBearingN": 0,
+        "topJaccard": {
+          "median": null,
+          "p10": null,
+          "n": 0
+        },
+        "topLenRatio": {
+          "median": null,
+          "p10": null
+        },
+        "allJaccard": {
+          "median": null,
+          "p10": null
+        },
+        "allLenRatio": {
+          "median": null,
+          "p10": null
+        },
+        "topLevMedian": null,
+        "topLevN": 0,
+        "exactTop": 0
+      },
+      "metadata": {
+        "fixedKeysInTika": 210,
+        "equalPct": 14.3,
+        "presentPct": 14.3,
+        "ripOnlyFixedKeys": 0,
+        "excludingContentType": {
+          "keysInTika": 180,
+          "equalPct": 0,
+          "presentPct": 0,
+          "verbatimEqualPct": 0,
+          "equalOrAliasEqualPct": 0
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 0,
+        "median": null,
+        "p10": null
+      },
+      "ms": {
+        "tikaMedian": 60.5,
+        "ripstreamMedian": 349,
+        "ripstreamMax": 388
+      },
+      "embedded": {
+        "comparable": 30,
+        "agreePct": 100,
+        "ripFewer": 0,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "epub": {
+      "n": 3,
+      "bothOk": 3,
+      "contentType": {
+        "n": 3,
+        "aliasedAgreePct": 100,
+        "strictAgreePct": 100,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 3,
+        "excluded": 0,
+        "bothEmpty": 0,
+        "textBearingN": 3,
+        "topJaccard": {
+          "median": 0.985,
+          "p10": 0.985,
+          "n": 3
+        },
+        "topLenRatio": {
+          "median": 0.996,
+          "p10": 0.996
+        },
+        "allJaccard": {
+          "median": 0.985,
+          "p10": 0.985
+        },
+        "allLenRatio": {
+          "median": 0.996,
+          "p10": 0.996
+        },
+        "topLevMedian": 0.996,
+        "topLevN": 3,
+        "exactTop": 0
+      },
+      "metadata": {
+        "fixedKeysInTika": 18,
+        "equalPct": 77.8,
+        "presentPct": 77.8,
+        "ripOnlyFixedKeys": 0,
+        "excludingContentType": {
+          "keysInTika": 15,
+          "equalPct": 73.3,
+          "presentPct": 73.3,
+          "verbatimEqualPct": 73.3,
+          "equalOrAliasEqualPct": 73.3
+        },
+        "encodingAgreePct": null,
+        "encodingN": 0
+      },
+      "textFailuresAsZero": {
+        "n": 3,
+        "median": 0.985,
+        "p10": 0.985
+      },
+      "ms": {
+        "tikaMedian": 38,
+        "ripstreamMedian": 296,
+        "ripstreamMax": 302
+      },
+      "embedded": {
+        "comparable": 3,
+        "agreePct": 33.3,
+        "ripFewer": 2,
+        "ripMore": 0
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 0
+      },
+      "failures": {
+        "ripFailTikaProducedText": 0,
+        "ripstream": 0,
+        "tika": 0,
+        "ripOnly": 0,
+        "tikaOnly": 0,
+        "both": 0,
+        "ripstreamModes": {},
+        "tikaModes": {}
+      }
+    },
+    "other": {
+      "n": 30,
+      "bothOk": 16,
+      "contentType": {
+        "n": 30,
+        "aliasedAgreePct": 76.7,
+        "strictAgreePct": 76.7,
+        "noTypeOnASide": 0
+      },
+      "text": {
+        "comparable": 16,
+        "excluded": 0,
+        "bothEmpty": 6,
+        "textBearingN": 10,
+        "topJaccard": {
+          "median": 0.053,
+          "p10": 0,
+          "n": 10
+        },
+        "topLenRatio": {
+          "median": 0.125,
+          "p10": 0
+        },
+        "allJaccard": {
+          "median": 0.01,
+          "p10": 0
+        },
+        "allLenRatio": {
+          "median": 0.002,
+          "p10": 0
+        },
+        "topLevMedian": 0.085,
+        "topLevN": 10,
+        "exactTop": 4
+      },
+      "metadata": {
+        "fixedKeysInTika": 23,
+        "equalPct": 60.9,
+        "presentPct": 69.6,
+        "ripOnlyFixedKeys": 20,
+        "excludingContentType": {
+          "keysInTika": 7,
+          "equalPct": 0,
+          "presentPct": 0,
+          "verbatimEqualPct": 0,
+          "equalOrAliasEqualPct": 0
+        },
+        "encodingAgreePct": 0,
+        "encodingN": 2
+      },
+      "textFailuresAsZero": {
+        "n": 14,
+        "median": 0,
+        "p10": 0
+      },
+      "ms": {
+        "tikaMedian": 19,
+        "ripstreamMedian": 290,
+        "ripstreamMax": 620
+      },
+      "embedded": {
+        "comparable": 16,
+        "agreePct": 87.5,
+        "ripFewer": 1,
+        "ripMore": 1
+      },
+      "limits": {
+        "tikaTextOver100k": 0,
+        "ripTextOver100k": 0,
+        "tikaTextOver1M": 0
+      },
+      "embeddedExceptions": {
+        "tika": 0,
+        "ripstream": 12
+      },
+      "failures": {
+        "ripFailTikaProducedText": 4,
+        "ripstream": 12,
+        "tika": 3,
+        "ripOnly": 11,
+        "tikaOnly": 2,
+        "both": 1,
+        "ripstreamModes": {
+          "error:UNSUPPORTED_FORMAT": 11,
+          "error:MALFORMED_DOCUMENT": 1
+        },
+        "tikaModes": {
+          "record_exception:200": 3
+        }
+      }
+    }
+  },
+  "overall": {
+    "n": 273,
+    "bothOk": 251,
+    "contentType": {
+      "n": 273,
+      "aliasedAgreePct": 95.6,
+      "strictAgreePct": 95.6,
+      "noTypeOnASide": 0
+    },
+    "text": {
+      "comparable": 251,
+      "excluded": 0,
+      "bothEmpty": 72,
+      "textBearingN": 179,
+      "topJaccard": {
+        "median": 0.995,
+        "p10": 0.022,
+        "n": 179
+      },
+      "topLenRatio": {
+        "median": 0.997,
+        "p10": 0.314
+      },
+      "allJaccard": {
+        "median": 0.962,
+        "p10": 0.01
+      },
+      "allLenRatio": {
+        "median": 0.974,
+        "p10": 0.205
+      },
+      "topLevMedian": 0.991,
+      "topLevN": 166,
+      "exactTop": 73
+    },
+    "metadata": {
+      "fixedKeysInTika": 1423,
+      "equalPct": 50.9,
+      "presentPct": 52.7,
+      "ripOnlyFixedKeys": 106,
+      "excludingContentType": {
+        "keysInTika": 1172,
+        "equalPct": 40.7,
+        "presentPct": 42.6,
+        "verbatimEqualPct": 35,
+        "equalOrAliasEqualPct": 54
+      },
+      "encodingAgreePct": 14.7,
+      "encodingN": 34
+    },
+    "textFailuresAsZero": {
+      "n": 187,
+      "median": 0.985,
+      "p10": 0
+    },
+    "ms": {
+      "tikaMedian": 18,
+      "ripstreamMedian": 283,
+      "ripstreamMax": 1284
+    },
+    "embedded": {
+      "comparable": 251,
+      "agreePct": 85.7,
+      "ripFewer": 35,
+      "ripMore": 1
+    },
+    "limits": {
+      "tikaTextOver100k": 2,
+      "ripTextOver100k": 3,
+      "tikaTextOver1M": 0
+    },
+    "embeddedExceptions": {
+      "tika": 1,
+      "ripstream": 29
+    },
+    "failures": {
+      "ripFailTikaProducedText": 8,
+      "ripstream": 20,
+      "tika": 6,
+      "ripOnly": 16,
+      "tikaOnly": 2,
+      "both": 4,
+      "ripstreamModes": {
+        "error:MALFORMED_DOCUMENT": 6,
+        "error:UNSUPPORTED_FORMAT": 13,
+        "error:LIMIT_EXCEEDED": 1
+      },
+      "tikaModes": {
+        "record_exception:200": 6
+      }
+    }
+  },
+  "sampleComposition": {
+    "ooxml": {
+      "poi": 30
+    },
+    "ole2": {
+      "format-corpus": 1,
+      "poi": 29
+    },
+    "pdf": {
+      "format-corpus": 6,
+      "pdfjs": 24
+    },
+    "odf": {
+      "format-corpus": 13,
+      "poi": 1
+    },
+    "rtf": {
+      "format-corpus": 5,
+      "poi": 1
+    },
+    "html-xml": {
+      "format-corpus": 22,
+      "poi": 5
+    },
+    "text": {
+      "format-corpus": 24,
+      "pdfjs": 1,
+      "poi": 5
+    },
+    "archive": {
+      "format-corpus": 13
+    },
+    "image": {
+      "format-corpus": 16,
+      "poi": 14
+    },
+    "audio-video": {
+      "format-corpus": 30
+    },
+    "epub": {
+      "format-corpus": 3
+    },
+    "other": {
+      "format-corpus": 18,
+      "poi": 12
+    }
+  },
+  "definitions": {
+    "families": "by file extension; pool = union of poi(test-data/{document,spreadsheet,slideshow,hsmf,diagram,publisher,hpsf,hmef}) + format-corpus + pdfjs(test/pdfs); sorted by corpus/path; index floor((i+0.5)*pool/30)",
+    "exclusions": "name regex /fuzz|encrypt|passw|protect|crypt|clusterfuzz|crash-|poc-|saslprep|auth-event/i; pdf.js allowedNotOk basenames; zero-byte; >25 MiB",
+    "contentType": "parameters stripped, lowercased, small alias table; if ripstream fails, ripstream.detect() type is used",
+    "text": "whitespace collapsed, lowercased; tokens = runs of letters/digits; Jaccard on token sets; lenRatio = min/max of normalised lengths; top = record 0 only, all = all records concatenated; median/p10 over files where both sides succeeded and at least one side has text",
+    "metadata": "fixed key list (see run.mjs FIXED_KEYS), top-level record only; equalPct and presentPct are over fixed keys Tika emits (Content-Type excluded); dates compared as instants, numbers numerically; verbatim = raw strings equal; equalOrAlias also accepts the same value under an equivalent ripstream key name",
+    "embedded": "records.length - 1 on each side, equality of counts, only files where both succeeded",
+    "failure": "tika failure = HTTP error/timeout or exception key on record 0; ripstream failure = thrown error or exception on record 0"
+  },
+  "worst": [
+    {
+      "score": 0,
+      "family": "archive",
+      "corpus": "format-corpus",
+      "path": "droid-jhove-datetest-files/images_severalformats_historicaldates.zip",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/zip",
+        "application/zip"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        11,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "ebooks/calibre 0.8.57/Lorem Ipsum - Andrew Jackson.azw3",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/x-mobipocket-ebook",
+        "application/octet-stream"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "ebooks/calibre 0.8.57/Lorem Ipsum - Andrew Jackson.lrf",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/octet-stream",
+        "application/octet-stream"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "ebooks/calibre 0.9.0/lorem-ipsum.azw3",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/x-mobipocket-ebook",
+        "application/octet-stream"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "ebooks/calibre 0.9.0/lorem-ipsum.lrf",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/octet-stream",
+        "application/octet-stream"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "html-xml",
+      "corpus": "format-corpus",
+      "path": "office-examples/OpenOffice.org 3.2.0 OSX/pdf-features/simple.xhtml",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/xhtml+xml; charset=UTF-8",
+        "application/xml"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "office/spreadsheet/wk1/KSBASE.WK1",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.lotus-1-2-3; version=2",
+        "application/vnd.lotus-1-2-3; version=2"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "office/spreadsheet/wk1/PFVALUES.WK1",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.lotus-1-2-3; version=2",
+        "application/vnd.lotus-1-2-3; version=2"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "ole2",
+      "corpus": "format-corpus",
+      "path": "office/wordprocessing/WordPerfect51/testWordPerfect_51_52.doc",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.wordperfect; version=5.1",
+        "application/vnd.wordperfect; version=5.1"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "office/wordprocessing/WordPerfect6/TOPOPREC.WPD",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.wordperfect; version=6.x",
+        "application/vnd.wordperfect; version=6.x"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "poi",
+      "path": "test-data/diagram/SimpleMacro.vsdm",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.ms-visio.drawing.macroenabled.12",
+        "application/x-tika-ooxml"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        1,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "poi",
+      "path": "test-data/diagram/test_text_extraction.vsdx",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.ms-visio.drawing",
+        "application/x-tika-ooxml"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/publisher/LinkAt10Longer.pub",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/x-mspublisher",
+        "application/x-tika-msoffice"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        1,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "poi",
+      "path": "test-data/slideshow/cow.pict",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "image/x-pict",
+        "image/x-pict"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "other",
+      "corpus": "poi",
+      "path": "test-data/spreadsheet/sample.xlsb",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+        "application/x-tika-ooxml"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0,
+      "family": "html-xml",
+      "corpus": "format-corpus",
+      "path": "variations/variations/text/html/4.0/lorem-ipsum_files/themedata.xml",
+      "tika": "ok",
+      "ripstream": "error",
+      "ct": [
+        "application/vnd.openxmlformats-officedocument",
+        "application/x-tika-ooxml"
+      ],
+      "topJaccard": null,
+      "embedded": [
+        0,
+        null
+      ]
+    },
+    {
+      "score": 0.021,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "ebooks/iBooks Author 1.1 (190)/lorem-ipsum-plus-image.ibooks",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/x-ibooks+zip",
+        "application/zip"
+      ],
+      "topJaccard": 0.08368200836820083,
+      "embedded": [
+        11,
+        37
+      ]
+    },
+    {
+      "score": 0.333,
+      "family": "other",
+      "corpus": "poi",
+      "path": "test-data/spreadsheet/63327.emf",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "image/emf",
+        "image/emf"
+      ],
+      "topJaccard": 0,
+      "embedded": [
+        1,
+        0
+      ]
+    },
+    {
+      "score": 0.383,
+      "family": "ooxml",
+      "corpus": "poi",
+      "path": "test-data/document/Bug54771b.docx",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ],
+      "topJaccard": 0.1111111111111111,
+      "embedded": [
+        1,
+        0
+      ]
+    },
+    {
+      "score": 0.428,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/slideshow/sound.ppt",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-powerpoint"
+      ],
+      "topJaccard": 0.1111111111111111,
+      "embedded": [
+        2,
+        0
+      ]
+    },
+    {
+      "score": 0.47,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/slideshow/bug62591.ppt",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-powerpoint"
+      ],
+      "topJaccard": 0.15384615384615385,
+      "embedded": [
+        1,
+        0
+      ]
+    },
+    {
+      "score": 0.485,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/slideshow/59302.ppt",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-powerpoint"
+      ],
+      "topJaccard": 0.10526315789473684,
+      "embedded": [
+        2,
+        0
+      ]
+    },
+    {
+      "score": 0.5,
+      "family": "other",
+      "corpus": "format-corpus",
+      "path": "jp2k-test/icc/balloon_eciRGBv2_ps_adobeplugin.jpf",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "image/jpx",
+        "image/jp2"
+      ],
+      "topJaccard": 1,
+      "embedded": [
+        0,
+        0
+      ]
+    },
+    {
+      "score": 0.5,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/slideshow/42485.ppt",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-powerpoint"
+      ],
+      "topJaccard": 0.3333333333333333,
+      "embedded": [
+        1,
+        0
+      ]
+    },
+    {
+      "score": 0.5,
+      "family": "ole2",
+      "corpus": "poi",
+      "path": "test-data/spreadsheet/44200.xls",
+      "tika": "ok",
+      "ripstream": "ok",
+      "ct": [
+        "application/vnd.ms-excel",
+        "application/vnd.ms-excel"
+      ],
+      "topJaccard": 0,
+      "embedded": [
+        0,
+        0
+      ]
+    }
+  ],
+  "worst10": {
+    "ranking": "all-records token Jaccard ascending (ripstream failure with Tika text counted as 0); ties broken by Tika char count descending",
+    "filesAtZero": 25,
+    "filesBelow0_35": 49,
+    "top": [
+      {
+        "sim": 0,
+        "tikaChars": 15749,
+        "family": "other",
+        "file": "format-corpus/office/wordprocessing/WordPerfect6/TOPOPREC.WPD",
+        "why": "ripstream MALFORMED_DOCUMENT: Unrecognized legacy format"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 797,
+        "family": "other",
+        "file": "poi/test-data/slideshow/64716_image3.wmf",
+        "why": "text differs"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 748,
+        "family": "archive",
+        "file": "format-corpus/droid-jhove-datetest-files/images_severalformats_historicaldates.zip",
+        "why": "ripstream LIMIT_EXCEEDED: ZIP entry images_severalformats_historicaldates/image-24bit-300ppi.bmp exceeds the decompression ratio limit"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 622,
+        "family": "ole2",
+        "file": "poi/test-data/spreadsheet/51535.xls",
+        "why": "text differs"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 474,
+        "family": "ole2",
+        "file": "format-corpus/office/wordprocessing/WordPerfect51/testWordPerfect_51_52.doc",
+        "why": "ripstream MALFORMED_DOCUMENT: Unrecognized legacy format"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 316,
+        "family": "other",
+        "file": "poi/test-data/spreadsheet/sample.xlsb",
+        "why": "ripstream UNSUPPORTED_FORMAT: Unrecognized OOXML package"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 267,
+        "family": "ole2",
+        "file": "poi/test-data/spreadsheet/SimpleWithColours.xls",
+        "why": "text differs"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 201,
+        "family": "ole2",
+        "file": "poi/test-data/spreadsheet/56325a.xls",
+        "why": "text differs"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 149,
+        "family": "other",
+        "file": "poi/test-data/diagram/SimpleMacro.vsdm",
+        "why": "ripstream UNSUPPORTED_FORMAT: Unrecognized OOXML package"
+      },
+      {
+        "sim": 0,
+        "tikaChars": 130,
+        "family": "image",
+        "file": "format-corpus/desktop-publishing/InDesign/Neddy_Flyer_ft_HeatherRyan.jpg",
+        "why": "text differs"
+      }
+    ]
+  }
+}

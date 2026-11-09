@@ -12,4 +12,4 @@
 - [ ] Node/Bun/Deno and browser matrix green
 - [ ] Final semver/publish review and 1.0 tag
 
-Generated docs: `pnpm parity:report`, `pnpm api:report`, `pnpm sbom`, `pnpm provenance`.
+Generated docs: `pnpm parity:matrix`, `pnpm parity:report`, `pnpm api:report`, `pnpm sbom`, `pnpm provenance`.

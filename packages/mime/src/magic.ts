@@ -71,6 +71,13 @@ export class MagicDetector {
     return results;
   }
 
+  /** Whether any rule for `type` matches, whatever its priority band. */
+  matches(prefix: Uint8Array, type: MediaType): boolean {
+    return this.magics.some(
+      (magic) => magic.type.equals(type) && magic.matches.some((match) => evaluate(match, prefix)),
+    );
+  }
+
   get ruleCount(): number {
     return this.magics.length;
   }
@@ -99,7 +106,9 @@ function compileMatch(raw: TikaMatch): CompiledMatch {
         ? null
         : new RegExp(`^(?:${regex.source})`, regex.flags),
     children,
-    minShouldMatch: raw.minShouldMatch ?? children.length,
+    // Tika ORs a match's sub-matches (AND with the match itself) unless minShouldMatch says otherwise: a docx
+    // is `PK\003\004` followed by `[Content_Types].xml` OR `_rels/.rels`, never both.
+    minShouldMatch: raw.minShouldMatch ?? (isGroup || children.length === 0 ? children.length : 1),
   };
 }
 

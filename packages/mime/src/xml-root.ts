@@ -8,12 +8,12 @@ export interface XmlRoot {
 const STOP = Symbol("xml-root-found");
 
 /**
- * Extracts only the root element and namespace. DTDs are rejected so no
- * entity expansion or external resolution can occur during detection.
+ * Extracts only the root element and namespace. A DOCTYPE is read past (XHTML, DITA and SVG nearly all carry one), but
+ * saxes keeps its internal subset as opaque text and never fetches an external one, so no entity is declared, expanded
+ * or resolved; parsing stops at the root's start tag.
  */
 export function extractXmlRoot(data: Uint8Array): XmlRoot | null {
   const text = decodePrefix(data);
-  if (/<!DOCTYPE/i.test(text)) return null;
 
   const parser = new SaxesParser({ xmlns: true });
   let root: XmlRoot | null = null;

@@ -1,0 +1,702 @@
+[
+ {
+  "id": "dig-algorithms",
+  "kind": "digester",
+  "upstream": "DigestDef.Algorithm (MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-384, SHA3-512)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestDef.java:48",
+  "ripstream": "packages/core/src/runtime.ts:65-83",
+  "status": "partial",
+  "evidence": "run: sha256Digest('abc') = node:crypto = FIPS 180 known answer ba7816bf...15ad; the only digest/hash export in @spikedpunch/ripstream-core is sha256Digest",
+  "note": "1 of 9 algorithms. node:crypto covers md5, sha1, sha2, sha3; MD2 is not in OpenSSL 3 defaults (needs a JS lib)."
+ },
+ {
+  "id": "dig-encodings",
+  "kind": "digester",
+  "upstream": "DigestDef.Encoding (HEX default, BASE32, BASE64)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestDef.java:77",
+  "ripstream": "packages/core/src/runtime.ts:65-83",
+  "status": "partial",
+  "evidence": "source: sha256Digest returns lowercase hex only; no Encoder abstraction",
+  "note": "Key suffix rule: hex is bare tk:digest:<ALG>, others append :BASE32/:BASE64."
+ },
+ {
+  "id": "dig-commons-digester",
+  "kind": "digester",
+  "upstream": "CommonsDigester (JCA MessageDigest; MD2..SHA-512; rejects SHA3)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/CommonsDigester.java:84",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: CommonsDigester.checkSupported throws for SHA3-* and points to BouncyCastleDigester; no ripstream class",
+  "note": "Feeds tk:digest:* keys. Cheap to build on node:crypto streaming hash."
+ },
+ {
+  "id": "dig-bouncycastle-digester",
+  "kind": "digester",
+  "upstream": "BouncyCastleDigester (SHA3-256/384/512 via BC)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/BouncyCastleDigester.java:45",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: BC is the only upstream path for SHA3",
+  "note": "node:crypto createHash('sha3-256') makes this trivial in JS; no BC needed."
+ },
+ {
+  "id": "dig-input-stream-digester",
+  "kind": "digester",
+  "upstream": "InputStreamDigester (reads the whole stream; digest() and digestSink(); rewinds the TikaInputStream)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/InputStreamDigester.java:105",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: InputStreamDigester.java:105-141 reads to EOF, no markLimit, uses enableRewind/rewind",
+  "note": "Semantics: one pass over all bytes regardless of parser read limits; side effect: sets Content-Length (InputStreamDigester.java:74-79) when blank; honours CacheMemoryBudget from the ParseContext; tis.tryRetainInMemory() for embedded entries."
+ },
+ {
+  "id": "dig-composite-digester",
+  "kind": "digester",
+  "upstream": "CompositeDigester (runs N digesters in sequence, stream rewound between)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/CompositeDigester.java:27",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: CompositeDigester runs each child digest() in turn (stream rewound by each); digestSink() fans every write to all child sinks",
+  "note": "Part of every multi-algorithm config."
+ },
+ {
+  "id": "dig-commons-factory",
+  "kind": "digester",
+  "upstream": "CommonsDigesterFactory (parse-context key commons-digester-factory; config: digests[{algorithm,encoding}], skipContainerDocumentDigest=false)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/CommonsDigesterFactory.java:52",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: factory fields at CommonsDigesterFactory.java:52-53; registry entry packages/core/src/generated/upstream-services.ts:141",
+  "note": "Config surface to mirror in RipstreamConfig; today no digest option exists."
+ },
+ {
+  "id": "dig-bc-factory",
+  "kind": "digester",
+  "upstream": "BouncyCastleDigesterFactory (bouncy-castle-digester-factory)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/BouncyCastleDigesterFactory.java:52",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "registry entry packages/core/src/generated/upstream-services.ts:140",
+  "note": "Same config as commons factory but allows SHA3."
+ },
+ {
+  "id": "dig-skip-container",
+  "kind": "digester",
+  "upstream": "DigestHelper.maybeDigest + SkipContainerDocumentDigest marker (digest container before parse unless skipContainerDocumentDigest; embedded docs digested at depth>0; depth null/0 = container)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestHelper.java:61",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: DigestHelper.java:61-121; pipes ParseHandler.java:137-142 digests the container then sets the skip marker so AutoDetectParser does not re-digest",
+  "note": "Embedded-vs-container semantics are the subtle part for parity of rmeta lists."
+ },
+ {
+  "id": "dig-sinks",
+  "kind": "digester",
+  "upstream": "DigestSink / BufferingDigestSink (digest embedded bytes while a parser streams them)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestSink.java:44",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Lets OLE2/PST embedded streams be digested without a second read."
+ },
+ {
+  "id": "dig-embedded-translators",
+  "kind": "digester",
+  "upstream": "MSEmbeddedStreamTranslator, PSTEmailStreamTranslator, DefaultEmbeddedStreamTranslator (EmbeddedStreamTranslator SPI; NOT language translators)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/extractor/microsoft/MSEmbeddedStreamTranslator.java:42",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "registry entries packages/core/src/generated/upstream-services.ts:87-88; source only",
+  "note": "Translates OLE2/PST embedded byte streams to the bytes a user wants (and digests them). Depends on OLE2/PST parsers being present; belongs with the Microsoft/embedded audit."
+ },
+ {
+  "id": "dig-metadata-keys",
+  "kind": "digester",
+  "upstream": "tk:digest:<ALG>[:BASE32|:BASE64] metadata keys (TikaCoreProperties.digestProperty)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/TikaCoreProperties.java:45",
+  "ripstream": "packages/core/src/generated/metadata-schema.ts:610-636",
+  "status": "gap",
+  "evidence": "run: grep finds 27 tk:digest:* keys (9 algorithms x 3 encodings) in packages/core/src/generated/metadata-schema.ts; no code in packages/*/src writes any",
+  "note": "Schema-only: keys declared, never produced."
+ },
+ {
+  "id": "dig-pipes-no-parse",
+  "kind": "digester",
+  "upstream": "ParseMode.NO_PARSE = detect + digest only (ParseHandler.detectOnly)",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/ParseHandler.java:93",
+  "ripstream": "packages/pipes/src/index.ts:40-45,155",
+  "status": "partial",
+  "evidence": "source: ripstream NO_PARSE returns [{id, bytes}] (pipes/src/index.ts:155); no detection, no digest, no metadata",
+  "note": "Mode name exists, semantics differ."
+ },
+ {
+  "id": "ren-spi",
+  "kind": "renderer",
+  "upstream": "Renderer SPI (Renderer, RenderRequest, RenderResult(s), PageRangeRequest, PageBasedRenderResults, RenderingState, RenderingTracker). Note FastMarkdownTextRenderer matches the grep but is a commonmark NodeRenderer, not a page renderer.",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/renderer/Renderer.java:35",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "run: Object.keys(@spikedpunch/ripstream-core) has no export matching /render/i; no Renderer type in packages/*/src",
+  "note": "No page-render SPI at all; ripstream has no image-out path."
+ },
+ {
+  "id": "ren-settings",
+  "kind": "renderer",
+  "upstream": "RenderSettings (dpi, imageType RGB|GRAY, imageFormat PNG|TIFF|JPEG, imageQuality, maxImagePixels, min/max width/height; over() overlay, tightenedTo() ceiling, effectiveDpi, belowMinimum, estimatedPixels)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/renderer/RenderSettings.java:69",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: RenderSettings.java:69 over, :112 tightenedTo, :178 effectiveDpi, :190 belowMinimum, :196 estimatedPixels",
+  "note": "The ceiling (tightenedTo) is a resource-safety control; relevant to isolation budgets if rendering is ever added."
+ },
+ {
+  "id": "ren-pages-config",
+  "kind": "renderer",
+  "upstream": "PagesConfig / TextPolicy (pages.render, pages.text, pages.ocr, pages.inference, pages.emit)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/parser/pages/PagesConfig.java:61",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: PagesConfig.java:61-65 fields",
+  "note": "Per-document page scoping; no ripstream analogue."
+ },
+ {
+  "id": "ren-pdfbox",
+  "kind": "renderer",
+  "upstream": "PDFBoxRenderer (pdfbox-renderer; temp file per page, renderImageWithDPI, writes tk:rendering:pdfbox-*)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/pdfbox/PDFBoxRenderer.java:63",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: PDFBoxRenderer.java:239-258; ripstream blocks pdf.js native canvas on purpose (block-pdfjs-canvas.ts:14-38) and never renders",
+  "note": "Page rasterization is the prerequisite for scanned-PDF OCR and thumbnails. JS path would be pdfjs-dist + @napi-rs/canvas, which the isolation child currently refuses to load (address-space cost), so it needs its own budget/decision."
+ },
+ {
+  "id": "ren-pddocument",
+  "kind": "renderer",
+  "upstream": "PDDocumentRenderer (stub interface so PDFParser can hand over a PDDocument instead of a temp file)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/pdfbox/PDDocumentRenderer.java:26",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: PDFBox in-memory object handoff; JVM-only."
+ },
+ {
+  "id": "ren-textonly",
+  "kind": "renderer",
+  "upstream": "TextOnlyPDFRenderer (PDFRenderer + PageDrawer drawing only text)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/pdfbox/TextOnlyPDFRenderer.java:34",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: PDFBox PageDrawer subclass; pdf.js has no equivalent hook without intercepting the canvas operator list."
+ },
+ {
+  "id": "ren-notext",
+  "kind": "renderer",
+  "upstream": "NoTextPDFRenderer (renders without electronic text, so OCR sees only non-text)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/pdfbox/NoTextPDFRenderer.java:33",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: PDFBox PageDrawer subclass. Revisit only if a PDF OCR NO_TEXT strategy is wanted."
+ },
+ {
+  "id": "ren-vector",
+  "kind": "renderer",
+  "upstream": "VectorGraphicsOnlyPDFRenderer (PDFRenderer + PageDrawer drawing only vector paths)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/pdfbox/VectorGraphicsOnlyPDFRenderer.java:40",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: PDFBox PageDrawer subclass; niche (vector-graphics detection)."
+ },
+ {
+  "id": "ren-poppler",
+  "kind": "renderer",
+  "upstream": "PopplerRenderer (pdftoppm per page; spi=false, opt-in; timeoutMillis 120000, maxScaleTo 4096, 300 dpi gray default)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pdf-module/src/main/java/org/apache/tika/renderer/pdf/poppler/PopplerRenderer.java:76",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source: PopplerRenderer.java:86-97 and ProcessBuilder at :165; registry packages/core/src/generated/upstream-services.ts:271 (spi:false)",
+  "note": "Reason: external-process (pdftoppm). Precedent exists: ripstream already spawns tesseract as an `unsafe` parser (packages/parser-media/src/ocr.ts)."
+ },
+ {
+  "id": "ren-poi-metafile",
+  "kind": "renderer",
+  "upstream": "POIMetafileRenderer (EMF/WMF to raster via POI HEMF/HWMF; tk:rendering:rendered-by=poi-metafile-renderer)",
+  "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/renderer/microsoft/POIMetafileRenderer.java:75",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source: SUPPORTED_TYPES image/emf, image/wmf; Java2D based",
+  "note": "Reason: Java2D rasterization of EMF/WMF; no JS EMF/WMF renderer. Used for Word WMF thumbnails."
+ },
+ {
+  "id": "ren-composite",
+  "kind": "renderer",
+  "upstream": "CompositeRenderer (media-type -> renderer map, last registration wins; throws when type missing)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/renderer/CompositeRenderer.java:36",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Needs ren-spi first."
+ },
+ {
+  "id": "ren-metadata",
+  "kind": "renderer",
+  "upstream": "tk:rendering:* keys (rendered-by, rendering-time-ms, failed-page, pdfbox-rendering-ms, pdfbox-image-writing-ms)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/Rendering.java:22",
+  "ripstream": "packages/core/src/generated/metadata-schema.ts:671-675",
+  "status": "gap",
+  "evidence": "run: grep finds tk:rendering:* keys declared in packages/core/src/generated/metadata-schema.ts; no producer",
+  "note": "Schema-only."
+ },
+ {
+  "id": "ren-thumbnail-presets",
+  "kind": "renderer",
+  "upstream": "pipes presets thumbnail.json and render-thumbnail.json",
+  "upstreamSource": "tika-pipes/tika-pipes-core/src/main/resources/org/apache/tika/pipes/core/presets/thumbnail.json:1",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Preset pages.render config for thumbnails; depends on ren-spi."
+ },
+ {
+  "id": "ren-image-checks",
+  "kind": "renderer",
+  "upstream": "tika-image-processing checks: BlankImageCheck, ByteSizeCheck, MinImageSizeCheck (skip useless images before OCR/inference)",
+  "upstreamSource": "tika-image-processing/src/main/java/org/apache/tika/imageprocessing/BlankImageCheck.java:40",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "registry packages/core/src/generated/upstream-services.ts:99-101 (kind image-checks)",
+  "note": "Boundary item with the OCR/image audit; pure pixel logic, no native dependency."
+ },
+ {
+  "id": "mf-spi",
+  "kind": "metadata-filter",
+  "upstream": "MetadataFilter.filter(List<Metadata>, ParseContext) + MetadataFilterBase (per-Metadata filter(Metadata)); trusted write bracket for reserved tk: keys",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/MetadataFilterBase.java:30",
+  "ripstream": "packages/core/src/metadata-utils.ts:4-6",
+  "status": "partial",
+  "evidence": "source: ripstream interface is filter(Metadata): Metadata; no list, no context, no trusted writes",
+  "note": "Cannot express list-level filters (RemoveByMime) or reserved-key writes (GeoPoint, LegacyKeyMigration)."
+ },
+ {
+  "id": "mf-composite",
+  "kind": "metadata-filter",
+  "upstream": "CompositeMetadataFilter (ordered chain)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/CompositeMetadataFilter.java:27",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "No chain object anywhere in ripstream."
+ },
+ {
+  "id": "mf-default",
+  "kind": "metadata-filter",
+  "upstream": "DefaultMetadataFilter (ServiceLoader-discovered filters, sorted by class name)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/DefaultMetadataFilter.java:24",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Needs a registry/ordering rule if filters become pluggable."
+ },
+ {
+  "id": "mf-noop",
+  "kind": "metadata-filter",
+  "upstream": "NoOpFilter",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/NoOpFilter.java:30",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Trivial."
+ },
+ {
+  "id": "mf-include",
+  "kind": "metadata-filter",
+  "upstream": "IncludeFieldMetadataFilter (config include[]; exact, case-sensitive name match; removes all other keys)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/IncludeFieldMetadataFilter.java:29",
+  "ripstream": "packages/core/src/metadata-utils.ts:14-32",
+  "status": "partial",
+  "evidence": "run: IncludeExcludeFilter({include:['author']}) on keys Author, author, dc:creator kept [Author, author]; compileGlob uses the 'i' flag (metadata-utils.ts:122-125)",
+  "note": "Behavior differs: ripstream matches globs case-insensitively, Tika exact/case-sensitive. A literal include could keep keys Tika would drop."
+ },
+ {
+  "id": "mf-exclude",
+  "kind": "metadata-filter",
+  "upstream": "ExcludeFieldMetadataFilter (config exclude[]; exact name match)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/ExcludeFieldMetadataFilter.java:29",
+  "ripstream": "packages/core/src/metadata-utils.ts:14-32",
+  "status": "partial",
+  "evidence": "run: same class and 'i'-flag glob as mf-include",
+  "note": "Same case-sensitivity divergence; ripstream also accepts globs, Tika does not."
+ },
+ {
+  "id": "mf-field-mapping",
+  "kind": "metadata-filter",
+  "upstream": "FieldNameMappingFilter (config mappings{from:to}, excludeUnmapped=true by default)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/FieldNameMappingFilter.java:27",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Default drops every unmapped key, easy to get wrong."
+ },
+ {
+  "id": "mf-capture-group",
+  "kind": "metadata-filter",
+  "upstream": "CaptureGroupMetadataFilter (config regex, sourceField, targetField; first group of first match on first value; no-op if no match/no source; overwrites target)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/CaptureGroupMetadataFilter.java:54",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Pure string logic."
+ },
+ {
+  "id": "mf-clear-by-attachment",
+  "kind": "metadata-filter",
+  "upstream": "ClearByAttachmentTypeMetadataFilter (config types[] validated against EmbeddedResourceType; clears all keys of an embedded doc whose tk embedded-resource-type matches)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/ClearByAttachmentTypeMetadataFilter.java:36",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "ripstream rmeta uses X-TIKA:embedded_resource_path/depth (rmeta.ts:49-57); embedded-resource-type enum parity not verified."
+ },
+ {
+  "id": "mf-remove-by-mime",
+  "kind": "metadata-filter",
+  "upstream": "RemoveByMimeMetadataFilter (config mimes[]; removes whole Metadata objects from the list when Content-Type base type matches)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/RemoveByMimeMetadataFilter.java:38",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "List-level filter; needs mf-spi change. Base type = parameters stripped."
+ },
+ {
+  "id": "mf-date-normalizing",
+  "kind": "metadata-filter",
+  "upstream": "DateNormalizingMetadataFilter (config defaultTimeZone=UTC; rewrites every DATE-typed property to yyyy-MM-dd'T'HH:mm:ss'Z'; date-only = midday; partial dates take minimum fields; unparseable left as is)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/DateNormalizingMetadataFilter.java:51",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Depends on the property value-type table; ripstream has generated schema valueType (metadata-schema.ts)."
+ },
+ {
+  "id": "mf-geopoint",
+  "kind": "metadata-filter",
+  "upstream": "GeoPointMetadataFilter (config geoPointFieldName='location'; writes 'lat,lng' via setTrusted when both present)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/GeoPointMetadataFilter.java:33",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Needs trusted write for reserved target names."
+ },
+ {
+  "id": "mf-legacy-key-migration",
+  "kind": "metadata-filter",
+  "upstream": "LegacyKeyMigrationFilter (direction V4_TO_V3 default | V3_TO_V4; data-driven table of flat renames, drops, egress-only renames, prefix rules incl. digests; unmapped pass through)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/LegacyKeyMigrationFilter.java:87",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: LegacyKeyMigrationFilter.java:87-89 config; ripstream rmeta emits X-TIKA:* spellings (rmeta.ts:49-57) while Tika 4.2.0 emits tk:*",
+  "note": "Key-spelling divergence is the larger parity issue than the filter itself: ripstream output is already V3-style for X-TIKA keys, so there is no 4.x-key output to migrate."
+ },
+ {
+  "id": "mf-charsoup-lang",
+  "kind": "metadata-filter",
+  "upstream": "CharSoupMetadataFilter (tk:content -> tk:detected-language, -confidence = enum name, -confidence-raw = float; no-op when no content)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-charsoup/src/main/java/org/apache/tika/langdetect/charsoup/CharSoupMetadataFilter.java:42",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source: CharSoupMetadataFilter.java:55-68; schema declares the 3 keys (metadata-schema.ts) but nothing writes them",
+  "note": "Nothing in ripstream calls a LanguageDetector during a parse; only /language and the CLI `language` command use FrancLanguageDetector."
+ },
+ {
+  "id": "mf-optimaize-lang",
+  "kind": "metadata-filter",
+  "upstream": "OptimaizeMetadataFilter (maxCharsForDetection; same 3 keys)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-optimaize/src/main/java/org/apache/tika/langdetect/optimaize/metadatafilter/OptimaizeMetadataFilter.java:29",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: same output keys as the CharSoup filter, backend-specific; one generic language filter would cover all three."
+ },
+ {
+  "id": "mf-opennlp-lang",
+  "kind": "metadata-filter",
+  "upstream": "OpenNLPMetadataFilter (maxCharsForDetection=10000; same 3 keys)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-opennlp/src/main/java/org/apache/tika/langdetect/opennlp/metadatafilter/OpenNLPMetadataFilter.java:29",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: same as mf-optimaize-lang; OpenNLP backend is an ML model stack."
+ },
+ {
+  "id": "mf-tika-eval",
+  "kind": "metadata-filter",
+  "upstream": "TikaEvalMetadataFilter (tika-eval-core: numTokens, numUniqueTokens, numAlphaTokens, numCommonTokens, numUniqueAlphaTokens, lang, langConfidence, oov, languageness)",
+  "upstreamSource": "tika-eval/tika-eval-core/src/main/java/org/apache/tika/eval/core/metadata/TikaEvalMetadataFilter.java:41",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source: TikaEvalMetadataFilter.java:46-67 keys; registry upstream-services.ts:117",
+  "note": "Reason: extraction-QA tooling that needs bundled per-language common-token lists and a JunkDetector model; not on the parse path."
+ },
+ {
+  "id": "mf-write-limiter",
+  "kind": "metadata-filter",
+  "upstream": "StandardMetadataLimiter + Factory (write-time: includeFields, excludeFields, maxKeySize, maxFieldSize, maxTotalBytes, maxValuesPerField, includeEmpty; UTF-16 byte budgets; ALWAYS_SET/ADD fields protected)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/writelimiter/StandardMetadataLimiter.java:68",
+  "ripstream": "packages/core/src/metadata-utils.ts:40-63",
+  "status": "partial",
+  "evidence": "run: MetadataWriteLimitFilter({maxValueChars:4}) on 'aaaaaaaaaa' -> 'aaaa'; it is a post-hoc filter over a finished Metadata: per-value chars + values per key only",
+  "note": "Missing: total budget, key-size cap, UTF-16 byte accounting, write-time enforcement, always-set protection for Content-Type. A hostile parser can still allocate before the filter runs."
+ },
+ {
+  "id": "mf-config-wiring",
+  "kind": "metadata-filter",
+  "upstream": "metadataFilters config list (tika-config filter chain)",
+  "upstreamSource": "n/a",
+  "ripstream": "packages/core/src/config.ts:13,23,56,81,92",
+  "status": "gap",
+  "evidence": "run: grep -rn metadataFilters packages/*/src hits only config.ts (declared, validated, frozen at :92); no consumer",
+  "note": "Accepted and silently ignored, so a user config of filters has no effect."
+ },
+ {
+  "id": "ld-spi",
+  "kind": "langdetect",
+  "upstream": "LanguageDetector SPI (reset, addText, detectAll -> ranked List<LanguageResult>, hasEnoughText, isReasonablyCertain)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/detect/LanguageDetector.java:49",
+  "ripstream": "packages/core/src/language.ts:3-11",
+  "status": "partial",
+  "evidence": "source: ripstream LanguageDetector is detect(text) -> single result",
+  "note": "No ranked candidates, no incremental addText, no enough-text signal."
+ },
+ {
+  "id": "ld-result",
+  "kind": "langdetect",
+  "upstream": "LanguageResult / LanguageConfidence (HIGH, MEDIUM, LOW, NONE + rawScore)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/detect/LanguageResult.java:21",
+  "ripstream": "packages/core/src/language.ts:3-11",
+  "status": "partial",
+  "evidence": "run: ripstream confidence values observed over 43 inputs = {0.9, 0} only (franc path)",
+  "note": "Franc detector emits constant 0.9 or 0; confidence carries no signal. Oracle /language returns no confidence at all (text/plain)."
+ },
+ {
+  "id": "ld-charsoup",
+  "kind": "langdetect",
+  "upstream": "CharSoupLanguageDetector (default detector in server; 204 languages; ServiceLoader class-name order picks it first)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-charsoup/src/main/java/org/apache/tika/langdetect/charsoup/CharSoupLanguageDetector.java:63",
+  "ripstream": "packages/language/src/index.ts:5-21",
+  "status": "partial",
+  "evidence": "run: 38-input differential, oracle correct 37/38, ripstream (franc, minLength 10) correct 31/38, agree 30/38 (78.9%); long 19/19 agree, short 11/19",
+  "note": "ripstream returns ISO 639-3 (franc), oracle ISO 639-1. Optional Cld3LanguageDetector exists (cld3.ts:8) but is not used by server or CLI."
+ },
+ {
+  "id": "ld-optimaize",
+  "kind": "langdetect",
+  "upstream": "OptimaizeLangDetector (n-gram profiles; superseded by CharSoup as default)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-optimaize/src/main/java/org/apache/tika/langdetect/optimaize/OptimaizeLangDetector.java:48",
+  "ripstream": "packages/language/src/index.ts:5-21",
+  "status": "non-goal-candidate",
+  "evidence": "registry packages/core/src/generated/upstream-services.ts:106",
+  "note": "Reason: JVM-only library; franc/cld3 fill the same role."
+ },
+ {
+  "id": "ld-opennlp",
+  "kind": "langdetect",
+  "upstream": "OpenNLPDetector + ProbingLanguageDetector",
+  "upstreamSource": "tika-langdetect/tika-langdetect-opennlp/src/main/java/org/apache/tika/langdetect/opennlp/OpenNLPDetector.java:82",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "registry packages/core/src/generated/upstream-services.ts:105",
+  "note": "Reason: OpenNLP JVM ML model stack."
+ },
+ {
+  "id": "ld-mitll",
+  "kind": "langdetect",
+  "upstream": "TextLangDetector (MIT Lincoln Lab text language id)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-mitll-text/src/main/java/org/apache/tika/langdetect/mitll/TextLangDetector.java:49",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "registry packages/core/src/generated/upstream-services.ts:104",
+  "note": "Reason: JVM-only model jar."
+ },
+ {
+  "id": "ld-lingo24",
+  "kind": "langdetect",
+  "upstream": "Lingo24LangDetector (vendor cloud API)",
+  "upstreamSource": "tika-langdetect/tika-langdetect-lingo24/src/main/java/org/apache/tika/langdetect/lingo24/Lingo24LangDetector.java:49",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "registry packages/core/src/generated/upstream-services.ts:103",
+  "note": "Reason: vendor cloud API with API key."
+ },
+ {
+  "id": "ld-endpoint",
+  "kind": "langdetect",
+  "upstream": "PUT/POST /language (text/plain body; response text/plain ISO 639-1 via toIso1; first 100000 chars only; '' when undetermined)",
+  "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/LanguageResource.java:39",
+  "ripstream": "packages/server/src/index.ts:378-390",
+  "status": "partial",
+  "evidence": "run: both endpoints called with 43 inputs; contract differs: oracle text/plain '639-1', ripstream application/json {language(639-3), confidence, isReasonablyCertain}; edge-empty oracle '' vs ripstream 'und'; no 100k sample cap in ripstream (only maxBodyBytes)",
+  "note": "Clients written for Tika's /language break on ripstream's JSON. Oracle 4.2.0 has no /language/string route (404)."
+ },
+ {
+  "id": "ld-handler-writer",
+  "kind": "langdetect",
+  "upstream": "LanguageHandler / LanguageWriter (SAX/Writer wrappers that detect as content streams)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/detect/LanguageHandler.java:29",
+  "ripstream": "packages/language/src/streaming.ts:4-34",
+  "status": "partial",
+  "evidence": "source: StreamingLanguageDetector buffers first 20000 chars and re-detects every feed",
+  "note": "Different shape (re-detect per chunk, prefix cap); not wired into any handler."
+ },
+ {
+  "id": "ld-names",
+  "kind": "langdetect",
+  "upstream": "LanguageNames (code/name normalization helper)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/detect/LanguageNames.java:30",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "Low value; ripstream hard-codes none."
+ },
+ {
+  "id": "ld-parse-integration",
+  "kind": "langdetect",
+  "upstream": "Language detection during a parse (filter writes tk:detected-language*)",
+  "upstreamSource": "n/a",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "run: no producer of tk:detected-language* in packages/*/src; detectors used only by server /language and CLI `language` (cli/src/main.ts:166-172)",
+  "note": "Same gap as mf-charsoup-lang from the detector side."
+ },
+ {
+  "id": "tr-spi",
+  "kind": "translator",
+  "upstream": "Translator SPI (translate(text, src, dest), translate(text, dest), isAvailable)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/translate/Translator.java:29",
+  "ripstream": "packages/core/src/language.ts:19-26",
+  "status": "partial",
+  "evidence": "source: ripstream translate(text, target, source?) is async; no isAvailable",
+  "note": "Argument order differs (target before source)."
+ },
+ {
+  "id": "tr-default",
+  "kind": "translator",
+  "upstream": "DefaultTranslator (first isAvailable() translator via ServiceLoader)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/translate/DefaultTranslator.java:34",
+  "ripstream": "none",
+  "status": "gap",
+  "evidence": "source only",
+  "note": "No translator registry; server takes one translator in options."
+ },
+ {
+  "id": "tr-empty",
+  "kind": "translator",
+  "upstream": "EmptyTranslator (returns null, isAvailable=true)",
+  "upstreamSource": "tika-core/src/main/java/org/apache/tika/language/translate/EmptyTranslator.java:26",
+  "ripstream": "packages/core/src/language.ts:28-32",
+  "status": "partial",
+  "evidence": "source: IdentityTranslator returns input text unchanged, Tika EmptyTranslator returns null",
+  "note": "Semantics differ."
+ },
+ {
+  "id": "tr-cached",
+  "kind": "translator",
+  "upstream": "CachedTranslator (LRU per sourceLang:targetLang)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/CachedTranslator.java:32",
+  "ripstream": "packages/language/src/translate.ts:129",
+  "status": "gap",
+  "evidence": "source: ReliableTranslator adds retry, timeout and min interval only (translate.ts:129); no cache",
+  "note": "Cache is the missing part."
+ },
+ {
+  "id": "tr-google",
+  "kind": "translator",
+  "upstream": "GoogleTranslator (REST, API key)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/GoogleTranslator.java:46",
+  "ripstream": "packages/language/src/translate.ts:29",
+  "status": "partial",
+  "evidence": "source: RemoteTranslator provider 'google'; unverified: no live provider call made",
+  "note": "Config surface differs from Tika's properties-file keys."
+ },
+ {
+  "id": "tr-microsoft",
+  "kind": "translator",
+  "upstream": "MicrosoftTranslator (REST, subscription key)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/MicrosoftTranslator.java:38",
+  "ripstream": "packages/language/src/translate.ts:29",
+  "status": "partial",
+  "evidence": "source: RemoteTranslator provider 'microsoft'; unverified: no live provider call made",
+  "note": "Same as tr-google."
+ },
+ {
+  "id": "tr-lingo24",
+  "kind": "translator",
+  "upstream": "Lingo24Translator (vendor API)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/Lingo24Translator.java:44",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: vendor cloud translation API."
+ },
+ {
+  "id": "tr-yandex",
+  "kind": "translator",
+  "upstream": "YandexTranslator (vendor API)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/YandexTranslator.java:45",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: vendor cloud translation API."
+ },
+ {
+  "id": "tr-moses",
+  "kind": "translator",
+  "upstream": "MosesTranslator (spawns the moses binary)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/MosesTranslator.java:36",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: external process, ML decoder stack."
+ },
+ {
+  "id": "tr-joshua",
+  "kind": "translator",
+  "upstream": "JoshuaNetworkTranslator (HTTP to a Joshua server)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/JoshuaNetworkTranslator.java:66",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: JVM ML stack server; ripstream's libre/local providers cover self-hosted HTTP."
+ },
+ {
+  "id": "tr-marian",
+  "kind": "translator",
+  "upstream": "MarianTranslator (HTTP to a Marian server)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/MarianTranslator.java:60",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: ML stack server; same cover as tr-joshua."
+ },
+ {
+  "id": "tr-rtg",
+  "kind": "translator",
+  "upstream": "RTGTranslator (HTTP to an RTG server)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/RTGTranslator.java:74",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: ML stack server; same cover as tr-joshua."
+ },
+ {
+  "id": "tr-external",
+  "kind": "translator",
+  "upstream": "ExternalTranslator (abstract command-line translator base)",
+  "upstreamSource": "tika-translate/src/main/java/org/apache/tika/language/translate/impl/ExternalTranslator.java:34",
+  "ripstream": "none",
+  "status": "non-goal-candidate",
+  "evidence": "source only",
+  "note": "Reason: external-process base class."
+ }
+]

@@ -23,7 +23,7 @@ jobs:
       - run: pnpm run test
       - run: pnpm run test:types
       - run: pnpm run api:check
-      - run: pnpm run audit:parsers
+      - run: pnpm run parity:matrix:check
   security:
     runs-on: ubuntu-latest
     steps:

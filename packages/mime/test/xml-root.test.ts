@@ -24,11 +24,20 @@ test("handles comments, processing instructions, and prefixes", () => {
   });
 });
 
-test("rejects DTD-bearing documents", () => {
-  assert.equal(
-    extractXmlRoot(utf8('<!DOCTYPE foo [<!ENTITY x "y">]><foo>&x;</foo>')),
-    null,
+test("reads the root past a DOCTYPE without expanding or fetching anything", () => {
+  assert.deepEqual(
+    extractXmlRoot(
+      utf8(
+        '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://127.0.0.1:1/x.dtd">' +
+          '<html xmlns="http://www.w3.org/1999/xhtml"></html>',
+      ),
+    ),
+    { localName: "html", namespaceURI: "http://www.w3.org/1999/xhtml" },
   );
+  const laughs =
+    '<!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">' +
+    '<!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">]><lolz>&lol3;</lolz>';
+  assert.equal(extractXmlRoot(utf8(laughs))?.localName, "lolz");
 });
 
 test("returns null for malformed XML", () => {

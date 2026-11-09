@@ -42,10 +42,12 @@ export {
   type MetadataValueType,
 } from "./generated/metadata-schema.ts";
 export {
+  UPSTREAM_COMPONENTS,
   UPSTREAM_DETECTORS,
   UPSTREAM_ENCODING_DETECTORS,
   UPSTREAM_PARSERS,
   UPSTREAM_SERVICE_STATS,
+  type UpstreamComponent,
   type UpstreamServiceGroup,
 } from "./generated/upstream-services.ts";
 export {
@@ -187,6 +189,7 @@ export {
   type Detector,
   type Parser,
   type ParserCapabilities,
+  type ParserMatch,
 } from "./parser.ts";
 export {
   EmbeddedDocumentBytesHandler,

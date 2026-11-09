@@ -3,73 +3,13 @@ import { test } from "node:test";
 import { deflateRawSync } from "node:zlib";
 import { RipstreamInputStream } from "@spikedpunch/ripstream-core";
 import { detectZipContainer } from "../src/containers/zip.ts";
+import { zip } from "./zip-fixture.ts";
 import {
   detectOle2Container,
   detectOle2Names,
 } from "../src/containers/ole2.ts";
 
 const encoder = new TextEncoder();
-
-function zip(
-  entries: Array<{ name: string; data?: string; deflated?: Uint8Array }>,
-): Uint8Array {
-  const locals: Uint8Array[] = [];
-  const centrals: Uint8Array[] = [];
-  let offset = 0;
-
-  for (const entry of entries) {
-    const name = encoder.encode(entry.name);
-    const data = entry.deflated ?? encoder.encode(entry.data ?? "x");
-    const method = entry.deflated === undefined ? 0 : 8;
-    const local = new Uint8Array(30 + name.length + data.length);
-    const localView = new DataView(local.buffer);
-    localView.setUint32(0, 0x04034b50, true);
-    localView.setUint16(4, 20, true);
-    localView.setUint16(8, method, true);
-    localView.setUint32(18, data.length, true);
-    localView.setUint32(22, data.length, true);
-    localView.setUint16(26, name.length, true);
-    local.set(name, 30);
-    local.set(data, 30 + name.length);
-    locals.push(local);
-
-    const central = new Uint8Array(46 + name.length);
-    const centralView = new DataView(central.buffer);
-    centralView.setUint32(0, 0x02014b50, true);
-    centralView.setUint16(4, 20, true);
-    centralView.setUint16(6, 20, true);
-    centralView.setUint16(10, method, true);
-    centralView.setUint32(20, data.length, true);
-    centralView.setUint32(24, data.length, true);
-    centralView.setUint16(28, name.length, true);
-    centralView.setUint32(42, offset, true);
-    central.set(name, 46);
-    centrals.push(central);
-
-    offset += local.length;
-  }
-
-  const centralOffset = offset;
-  const centralSize = centrals.reduce((sum, part) => sum + part.length, 0);
-  const total = centralOffset + centralSize + 22;
-  const result = new Uint8Array(total);
-  let cursor = 0;
-  for (const local of locals) {
-    result.set(local, cursor);
-    cursor += local.length;
-  }
-  for (const central of centrals) {
-    result.set(central, cursor);
-    cursor += central.length;
-  }
-  const end = new DataView(result.buffer, cursor, 22);
-  end.setUint32(0, 0x06054b50, true);
-  end.setUint16(8, entries.length, true);
-  end.setUint16(10, entries.length, true);
-  end.setUint32(12, centralSize, true);
-  end.setUint32(16, centralOffset, true);
-  return result;
-}
 
 async function detect(bytes: Uint8Array) {
   const stream = await RipstreamInputStream.from(bytes, { spoolThreshold: 32 });
@@ -84,30 +24,48 @@ test("plain zip", async () => {
   assert.equal((await detect(zip([{ name: "a.txt" }])))?.toString(), "application/zip");
 });
 
-test("OOXML refinement", async () => {
+const CONTENT_TYPES = (main: string): string =>
+  `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+  `<Default Extension="xml" ContentType="application/xml"/>` +
+  `<Override PartName="/${main.split("|")[0]}" ContentType="${main.split("|")[1]}"/></Types>`;
+const RELS = (target: string): string =>
+  `<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+  `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${target}"/></Relationships>`;
+
+function opc(part: string, contentType: string, zip64 = false) {
+  return zip([
+    { name: "[Content_Types].xml", data: CONTENT_TYPES(`${part}|${contentType}`), zip64 },
+    { name: "_rels/.rels", data: RELS(part), zip64 },
+    { name: part, zip64 },
+  ]);
+}
+
+test("OOXML refinement reads the main part's content type", async () => {
+  const cases: Array<[string, string, string]> = [
+    ["word/document.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    ["xl/workbook.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    ["ppt/presentation.xml", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml", "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+    ["word/document.xml", "application/vnd.ms-word.document.macroEnabled.main+xml", "application/vnd.ms-word.document.macroenabled.12"],
+    ["xl/workbook.xml", "application/vnd.ms-excel.addin.macroEnabled.main+xml", "application/vnd.ms-excel.addin.macroenabled.12"],
+    ["visio/document.xml", "application/vnd.ms-visio.drawing.main+xml", "application/vnd.ms-visio.drawing"],
+  ];
+  for (const [part, contentType, expected] of cases) {
+    assert.equal((await detect(opc(part, contentType)))?.toString(), expected, contentType);
+  }
+});
+
+test("members written with ZIP64 central entries are read (streaming writers such as 3MF's)", async () => {
   assert.equal(
-    (
-      await detect(
-        zip([{ name: "[Content_Types].xml" }, { name: "word/document.xml" }]),
-      )
-    )?.toString(),
+    (await detect(opc("word/document.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml", true)))?.toString(),
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   );
+});
+
+test("a package with no recognisable main part stays a plain zip", async () => {
   assert.equal(
-    (
-      await detect(
-        zip([{ name: "[Content_Types].xml" }, { name: "xl/workbook.xml" }]),
-      )
-    )?.toString(),
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  );
-  assert.equal(
-    (
-      await detect(
-        zip([{ name: "[Content_Types].xml" }, { name: "ppt/presentation.xml" }]),
-      )
-    )?.toString(),
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    (await detect(zip([{ name: "[Content_Types].xml" }, { name: "word/document.xml" }])))?.toString(),
+    "application/zip",
   );
 });
 
@@ -153,39 +111,86 @@ test("deflate-bomb mimetype entry is ignored without inflating it", async () => 
   );
 });
 
-test("JAR, APK, iWork, and encrypted OOXML", async () => {
+test("JAR, APK and iWork", async () => {
   assert.equal(
     (await detect(zip([{ name: "META-INF/MANIFEST.MF" }])))?.toString(),
     "application/java-archive",
   );
   assert.equal(
-    (
-      await detect(
-        zip([{ name: "AndroidManifest.xml" }, { name: "classes.dex" }]),
-      )
-    )?.toString(),
+    (await detect(zip([{ name: "AndroidManifest.xml" }, { name: "classes.dex" }])))?.toString(),
     "application/vnd.android.package-archive",
   );
+  // Tika needs iWork's build-version marker; a bare `Index/` directory is not an iWork package.
   assert.equal(
     (await detect(zip([{ name: "Index/Document.iwa" }])))?.toString(),
-    "application/vnd.apple.iwork",
+    "application/zip",
+  );
+  assert.equal(
+    (await detect(zip([{ name: "Metadata/BuildVersionHistory.plist" }, { name: "Index/Slide.iwa" }])))?.toString(),
+    "application/vnd.apple.keynote.13",
+  );
+});
+
+test("an iWork 2009 index is identified from its root element without inflating all of it", async () => {
+  // Real indexes run to tens of MB; the root element is at the front.
+  const root = '<sl:document xmlns:sl="http://developer.apple.com/namespaces/sl">';
+  const index = encoder.encode(root + " ".repeat(40 * 1024 * 1024));
+  const deflated = deflateRawSync(index, { level: 9 });
+  assert.ok(deflated.length < 100 * 1024);
+  assert.equal(
+    (
+      await detect(
+        zip([{ name: "buildVersionHistory.plist" }, { name: "index.xml", deflated }]),
+      )
+    )?.toString(),
+    "application/vnd.apple.pages",
   );
 });
 
 test("the central directory walk is bounded: many entries, or a huge directory, are not walked", async () => {
-  const marker = [{ name: "[Content_Types].xml" }, { name: "word/document.xml" }];
+  const marker = [{ name: "mimetype", data: "application/epub+zip" }];
   const filler = (count: number) => Array.from({ length: count }, (_, index) => ({ name: `f${index}` }));
-  const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
   // At the entry limit the walk still refines the type...
-  assert.equal((await detect(zip([...marker, ...filler(9_998)])))?.toString(), docx);
+  assert.equal((await detect(zip([...marker, ...filler(9_999)])))?.toString(), "application/epub+zip");
   // ...one past it gives up (null: the caller falls back to the PK signature) rather than walking on.
-  assert.equal(await detect(zip([...marker, ...filler(9_999)])), null);
+  assert.equal(await detect(zip([...marker, ...filler(10_000)])), null);
 
   // A directory of few entries with enormous names is just as much work.
   const longName = "n".repeat(60_000);
   const heavy = Array.from({ length: 150 }, (_, index) => ({ name: `${index}${longName}` }));
   assert.equal(await detect(zip(heavy)), null);
+});
+
+test("a hostile or truncated container reads as not a container instead of throwing", async () => {
+  const sig = (...bytes: number[]) => Uint8Array.from(bytes);
+  const local = sig(0x50, 0x4b, 3, 4);
+  // EOCD signature with fewer than 22 bytes after it.
+  assert.equal(await detect(Uint8Array.from([...local, ...new Array(30).fill(0), 0x50, 0x4b, 5, 6, 0, 0, 0, 0])), null);
+
+  // ZIP64 locator and record pointing at 2^64-1, and a ZIP64 extra field with the same offset.
+  const eocd = new Uint8Array(22);
+  const eocdView = new DataView(eocd.buffer);
+  eocdView.setUint32(0, 0x06054b50, true);
+  eocdView.setUint16(10, 0xffff, true);
+  eocdView.setUint32(16, 0xffffffff, true);
+  const locator = new Uint8Array(20);
+  const locatorView = new DataView(locator.buffer);
+  locatorView.setUint32(0, 0x07064b50, true);
+  locatorView.setBigUint64(8, 0xffffffffffffffffn, true);
+  assert.equal(await detect(Uint8Array.from([...local, ...new Array(60).fill(0), ...locator, ...eocd])), null);
+
+  const valid = zip([{ name: "mimetype", data: "application/epub+zip", zip64: true }]);
+  const extraOffset = valid.length - 22 - (4 + 24) + 4 + 16; // the central entry's local-offset slot
+  new DataView(valid.buffer).setBigUint64(extraOffset, 0xffffffffffffffffn, true);
+  assert.equal((await detect(valid))?.toString(), "application/zip");
+});
+
+test("a directory that ends before its declared entry count is not read as a partial name list", async () => {
+  const bytes = zip([{ name: "mimetype", data: "application/epub+zip" }]);
+  // The end record claims two entries; only one exists.
+  new DataView(bytes.buffer).setUint16(bytes.length - 22 + 10, 2, true);
+  assert.equal(await detect(bytes), null);
 });
 
 test("non-zip returns null", async () => {

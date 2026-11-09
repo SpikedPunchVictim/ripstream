@@ -2,6 +2,7 @@ import {
   MediaType,
   Metadata,
   type Detector,
+  type MediaTypeRegistry,
   type ParseContext,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
@@ -44,6 +45,11 @@ export class DefaultDetector implements Detector {
     this.prefixLength = options.prefixLength ?? 64 * 1024;
   }
 
+  /** The registry this detector resolves aliases and supertypes with. */
+  getMediaTypeRegistry(): MediaTypeRegistry {
+    return this.mimeTypes.getMediaTypeRegistry();
+  }
+
   async detect(
     stream: RipstreamInputStream | null,
     metadata: Metadata,
@@ -65,47 +71,69 @@ export class DefaultDetector implements Detector {
         ? new Uint8Array()
         : await stream.peek(this.prefixLength);
 
+    // Tika's CompositeDetector: container detectors run first, the name/magic detector last, and a later answer
+    // replaces the running one only when it is a specialization of it.
+    const registry = this.getMediaTypeRegistry();
+    let detected = MediaType.OCTET_STREAM;
+    const consider = (candidate: MediaType | null): void => {
+      if (candidate !== null && registry.isSpecializationOf(candidate, detected)) detected = candidate;
+    };
+
     if (stream !== null && startsWith(prefix, ZIP_SIGNATURE)) {
-      const container = await detectZipContainer(stream);
-      if (container !== null) return applyHint(container, byName);
+      consider(await detectZipContainer(stream));
     }
     if (stream !== null && startsWith(prefix, ZIP_EMPTY_SIGNATURE)) {
-      return applyHint(MediaType.APPLICATION_ZIP, byName);
+      consider(MediaType.APPLICATION_ZIP);
     }
     if (stream !== null && startsWith(prefix, OLE2_SIGNATURE)) {
-      const container = await detectOle2Container(stream);
-      if (container !== null) return applyHint(container, byName);
+      consider(await detectOle2Container(stream));
     }
+    consider(this.detectByMagicAndName(prefix, byName));
+    return detected;
+  }
 
-    const magic = this.magic.detect(prefix)[0] ?? null;
-    if (magic !== null) {
-      if (magic.equals(MediaType.APPLICATION_XML) || magic.equals(MediaType.TEXT_HTML)) {
-        const root = extractXmlRoot(prefix);
-        if (root !== null) {
-          const byRoot = this.mimeTypes.forRootXML(
-            root.localName,
-            root.namespaceURI,
-          );
-          if (byRoot !== null) return applyHint(byRoot, byName);
-        }
-      }
-      return applyHint(magic, byName);
-    }
+  /** Tika's MimeTypes detector: magic (or XML root, or text) refined by the name hint. */
+  private detectByMagicAndName(prefix: Uint8Array, byName: MediaType | null): MediaType {
+    const registry = this.getMediaTypeRegistry();
+    const magic = this.magic.detect(prefix).map((type) => this.refineByXmlRoot(prefix, type));
+    const first = magic[0] ?? null;
+    if (first !== null) return applyHint(registry, magic, byName)[0] ?? first;
 
-    if (byName !== null) return byName;
+    // No magic: Tika sniffs for text, and the name hint can only specialise that (a `.csv` of text is CSV, a `.docx`
+    // of text is plain text; anything specialises octet-stream, so a name settles binary content).
+    const sniffed =
+      prefix.length === 0 || detectEncoding(prefix).binary ? MediaType.OCTET_STREAM : MediaType.TEXT_PLAIN;
+    return applyHint(registry, [sniffed], byName)[0] ?? sniffed;
+  }
 
-    if (prefix.length === 0) return MediaType.OCTET_STREAM;
-
-    const encoding = detectEncoding(prefix);
-    if (!encoding.binary) return MediaType.TEXT_PLAIN;
-    return MediaType.OCTET_STREAM;
+  /**
+   * Tika's `MimeTypes.getMimeType(byte[])`: a generic XML or HTML magic hit becomes the type its root element names (an
+   * XHTML page matches both `application/xhtml+xml` and `text/html`, and both become XHTML). Generic XML that is not
+   * well formed is HTML when an HTML magic rule matches, plain text otherwise.
+   */
+  private refineByXmlRoot(prefix: Uint8Array, matched: MediaType): MediaType {
+    if (!matched.equals(MediaType.APPLICATION_XML) && !matched.equals(MediaType.TEXT_HTML)) return matched;
+    const root = extractXmlRoot(prefix);
+    if (root !== null) return this.mimeTypes.forRootXML(root.localName, root.namespaceURI) ?? matched;
+    if (!matched.equals(MediaType.APPLICATION_XML)) return matched;
+    return this.magic.matches(prefix, MediaType.TEXT_HTML) ? MediaType.TEXT_HTML : MediaType.TEXT_PLAIN;
   }
 }
 
-function applyHint(type: MediaType, hint: MediaType | null): MediaType {
-  if (hint === null) return type;
-  if (hint.equals(type)) return hint;
-  return type;
+/**
+ * Tika's `MimeTypes.applyHint`: the name hint wins when it is one of the magic types or a specialization of any of
+ * them (a zip named `.docx` is a docx); otherwise the magic types stand.
+ */
+function applyHint(
+  registry: MediaTypeRegistry,
+  possible: readonly MediaType[],
+  hint: MediaType | null,
+): readonly MediaType[] {
+  if (hint === null) return possible;
+  for (const type of possible) {
+    if (hint.equals(type) || registry.isSpecializationOf(hint, type)) return [hint];
+  }
+  return possible;
 }
 
 function resourceName(metadata: Metadata): string | null {

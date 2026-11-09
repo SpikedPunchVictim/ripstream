@@ -18,8 +18,12 @@ export class MediaTypeRegistry {
     this.aliases.set(alias.getBaseType().toString(), type.getBaseType());
   }
 
+  /**
+   * Keyed by the full type, parameters included, as upstream does: `x-rar-compressed;version=4` is a kind of
+   * `x-rar-compressed`, and keying by the base type would make `x-rar-compressed` its own parent.
+   */
   addSuperType(type: MediaType, parent: MediaType): void {
-    this.inheritance.set(type.getBaseType().toString(), parent.getBaseType());
+    this.inheritance.set(type.toString(), parent.getBaseType());
   }
 
   normalize(type: MediaType | null): MediaType | null {
@@ -40,7 +44,7 @@ export class MediaTypeRegistry {
   getSupertype(type: MediaType | null): MediaType | null {
     if (type === null) return null;
 
-    const configured = this.inheritance.get(type.getBaseType().toString());
+    const configured = this.inheritance.get(type.toString());
     if (configured !== undefined) return configured;
     if (type.hasParameters) return type.getBaseType();
     if (type.subtype.endsWith("+xml")) return MediaType.APPLICATION_XML;

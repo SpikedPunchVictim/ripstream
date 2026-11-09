@@ -23,7 +23,6 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "generate:metadata-schema": "node scripts/generate-metadata-schema.ts",
-    "generate:upstream-registry": "node scripts/generate-upstream-registry.ts",
-    "audit:parsers": "node scripts/audit-parser-coverage.ts"
+    "generate:upstream-registry": "node scripts/generate-upstream-registry.ts"
   }
 }

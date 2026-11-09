@@ -6,6 +6,7 @@ import {
   UnsupportedFormatError,
 } from "./errors.ts";
 import { MediaType } from "./media-type.ts";
+import type { MediaTypeRegistry } from "./media-type-registry.ts";
 import { Metadata } from "./metadata.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
 import type { RipstreamInputStream } from "./ripstream-input-stream.ts";
@@ -60,19 +61,97 @@ export interface Detector {
 
 export interface CompositeParserOptions {
   readonly parsers?: readonly Parser[];
+  /**
+   * Canonicalises aliases and supplies supertypes, as Tika's CompositeParser
+   * does with its MediaTypeRegistry. Without one only exact and wildcard
+   * registrations match.
+   */
+  readonly registry?: MediaTypeRegistry;
 }
+
+/** How a parser's registration matched the content type. */
+export interface ParserMatch {
+  readonly parser: Parser;
+  /** `exact`: the type itself; `supertype`: an ancestor; `wildcard`: `type/*` or `*` + `/*`. */
+  readonly kind: "exact" | "supertype" | "wildcard";
+  /** The registered type that matched; null for a wildcard. */
+  readonly via: MediaType | null;
+}
+
+/** Ancestors are followed until the registry runs out; this only guards a cyclic registry. */
+const MAX_SUPERTYPE_DEPTH = 16;
 
 /**
  * Runs the best parser whose supported set matches the detected type.
- * Exact matches beat wildcard registrations; ties go to registration order.
+ * Candidates rank exact, then supertype by distance (Tika's registry walk),
+ * then `type/*`, then `*` + `/*`; ties go to registration order.
  * ParserDeclinedError rewinds the stream and moves to the next candidate.
  */
 export class CompositeParser implements Parser {
   readonly name = "CompositeParser";
   private readonly parsers: Parser[];
+  private readonly registry: MediaTypeRegistry | undefined;
 
   constructor(options: CompositeParserOptions = {}) {
     this.parsers = [...(options.parsers ?? [])];
+    this.registry = options.registry;
+  }
+
+  /** Every parser that can take `type`, best match first. */
+  async selectParsers(type: MediaType, ctx: ParseContext): Promise<readonly ParserMatch[]> {
+    const chain = this.supertypeChain(type);
+    const position = new Map<string, number>();
+    chain.forEach((link, index) => {
+      const key = link.getBaseType().toString();
+      if (!position.has(key)) position.set(key, index);
+    });
+    // A type wildcard is more specific than the root (`application/octet-stream`) and less than any real supertype.
+    const rootRank = chain.length - 1;
+    const wildcardRank = rootRank > 0 ? rootRank - 0.5 : 0.5;
+    const ranked: Array<ParserMatch & { rank: number }> = [];
+    for (const parser of this.parsers) {
+      let best: (ParserMatch & { rank: number }) | null = null;
+      for (const supported of await parser.getSupportedTypes(ctx)) {
+        let match: (ParserMatch & { rank: number }) | null = null;
+        if (supported.subtype === "*") {
+          if (supported.type === "*") match = { parser, kind: "wildcard", via: null, rank: chain.length + 1 };
+          else if (supported.type === type.type) match = { parser, kind: "wildcard", via: null, rank: wildcardRank };
+        } else {
+          const key = (this.registry?.normalize(supported) ?? supported).getBaseType().toString();
+          const index = position.get(key);
+          if (index !== undefined) {
+            match = {
+              parser,
+              kind: index === 0 ? "exact" : "supertype",
+              via: (chain[index] as MediaType).getBaseType(),
+              rank: index,
+            };
+          }
+        }
+        if (match !== null && (best === null || match.rank < best.rank)) best = match;
+      }
+      if (best !== null) ranked.push(best);
+    }
+    // Array#sort is stable, so equal ranks keep registration order.
+    return ranked.sort((a, b) => a.rank - b.rank).map(({ rank: _rank, ...match }) => match);
+  }
+
+  /**
+   * The canonical type, then its supertypes up to the root, as `MediaTypeRegistry.getSupertype` gives them. The walk
+   * starts from the full type, parameters included: `image/vnd.dgn; version=8` is an OLE2 file, `image/vnd.dgn` is not.
+   */
+  private supertypeChain(type: MediaType): MediaType[] {
+    const chain: MediaType[] = [];
+    const seen = new Set<string>();
+    let current: MediaType | null = this.registry?.normalize(type) ?? type;
+    while (current !== null && chain.length < MAX_SUPERTYPE_DEPTH) {
+      const key = current.toString();
+      if (seen.has(key)) break;
+      seen.add(key);
+      chain.push(current);
+      current = this.registry?.getSupertype(current) ?? null;
+    }
+    return chain;
   }
 
   addParser(parser: Parser): void {
@@ -105,14 +184,9 @@ export class CompositeParser implements Parser {
     }
 
     // Only one parser may consume the stream. Candidates are ordered by how
-    // specifically they match (exact, then type/*, then */*), then registration
-    // order; a parser that declines gets the stream rewound for the next one.
-    const candidates: Array<{ parser: Parser; rank: number }> = [];
-    for (const parser of this.parsers) {
-      const rank = matchRank(await parser.getSupportedTypes(ctx), type);
-      if (rank !== null) candidates.push({ parser, rank });
-    }
-    candidates.sort((a, b) => a.rank - b.rank);
+    // specifically they match (selectParsers), then registration order; a
+    // parser that declines gets the stream rewound for the next one.
+    const candidates = await this.selectParsers(type, ctx);
 
     if (candidates.length === 0) {
       throw new UnsupportedFormatError(`No parser for ${type.toString()}`);
@@ -285,20 +359,6 @@ export class MimeFilteringDecorator extends ParserDecorator {
       [...supported].filter((type) => this.#allowed.has(type.getBaseType().toString())),
     );
   }
-}
-
-/** 0 = exact, 1 = type/*, 2 = star/star, null = no match. */
-function matchRank(supported: ReadonlySet<MediaType>, type: MediaType): number | null {
-  const base = type.getBaseType();
-  let best: number | null = null;
-  for (const candidate of supported) {
-    let rank: number | null = null;
-    if (candidate.equals(base)) rank = 0;
-    else if (candidate.type === "*" && candidate.subtype === "*") rank = 2;
-    else if (candidate.type === base.type && candidate.subtype === "*") rank = 1;
-    if (rank !== null && (best === null || rank < best)) best = rank;
-  }
-  return best;
 }
 
 export function resolveContentType(
