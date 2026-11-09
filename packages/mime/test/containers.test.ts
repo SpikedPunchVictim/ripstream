@@ -172,6 +172,22 @@ test("JAR, APK, iWork, and encrypted OOXML", async () => {
   );
 });
 
+test("the central directory walk is bounded: many entries, or a huge directory, are not walked", async () => {
+  const marker = [{ name: "[Content_Types].xml" }, { name: "word/document.xml" }];
+  const filler = (count: number) => Array.from({ length: count }, (_, index) => ({ name: `f${index}` }));
+  const docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+  // At the entry limit the walk still refines the type...
+  assert.equal((await detect(zip([...marker, ...filler(9_998)])))?.toString(), docx);
+  // ...one past it gives up (null: the caller falls back to the PK signature) rather than walking on.
+  assert.equal(await detect(zip([...marker, ...filler(9_999)])), null);
+
+  // A directory of few entries with enormous names is just as much work.
+  const longName = "n".repeat(60_000);
+  const heavy = Array.from({ length: 150 }, (_, index) => ({ name: `${index}${longName}` }));
+  assert.equal(await detect(zip(heavy)), null);
+});
+
 test("non-zip returns null", async () => {
   assert.equal(await detect(encoder.encode("not a zip")), null);
 });

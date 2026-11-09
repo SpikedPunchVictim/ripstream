@@ -15,6 +15,14 @@ const LOCAL = 0x04034b50;
 const ZIP64_LOCATOR = 0x07064b50;
 /** A real `mimetype` entry is a short media type string. */
 const MAX_MIMETYPE_BYTES = 4096;
+/**
+ * Detection happens in the caller's process, before any parser limit applies, and the central directory sits at the
+ * end of the input where a hostile one can claim millions of entries (a 92 MB file took 20 s and 290 MB to walk).
+ * Past either bound the walk stops and the type stays plain `application/zip`; a genuine container is far below both.
+ * The entry bound is core's default `maxZipEntries`: a zip over it is refused by the archive parser anyway.
+ */
+const MAX_DETECT_ENTRIES = 10_000;
+const MAX_DETECT_DIRECTORY_BYTES = 8 * 1024 * 1024;
 
 /**
  * Port of Ripstream's ZipContainerDetector decision table. Parses the central
@@ -112,9 +120,12 @@ async function readCentralDirectory(
       }
     }
 
+    if (entryCount > MAX_DETECT_ENTRIES) return null;
+
     const entries: ZipEntry[] = [];
     let cursor = centralOffset;
     for (let index = 0; index < entryCount; index++) {
+      if (cursor - centralOffset > MAX_DETECT_DIRECTORY_BYTES) return null;
       const header = await readAt(handle, cursor, 46);
       if (header.length < 46) return null;
       const headerView = new DataView(header.buffer, header.byteOffset, header.byteLength);
