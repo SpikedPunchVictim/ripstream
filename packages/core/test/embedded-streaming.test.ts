@@ -11,6 +11,7 @@ import {
   RipstreamInputStream,
   type ContentHandler,
   type Parser,
+  XHTMLContentHandler,
 } from "../src/index.ts";
 
 const CHUNK = "x".repeat(100);
@@ -139,4 +140,49 @@ test("metered embedded source is closed when the child fails", async () => {
     /child boom/,
   );
   assert.equal(sourceClosed, true);
+});
+
+/**
+ * Parent that filters text per characters() call like a real document handler: a surrogate half that
+ * arrives alone becomes U+FFFD, so a split pair is only healed if the sink forwards it whole.
+ */
+function filtering(sink: ContentHandler): ContentHandler {
+  return new XHTMLContentHandler(sink, new Metadata());
+}
+
+/** Child that emits `pieces` to the handler as separate characters() calls inside <body>. */
+function splittingChild(pieces: readonly string[]): Parser {
+  return {
+    name: "Splitting",
+    getSupportedTypes: () => new Set(),
+    async parse(_stream, handler): Promise<void> {
+      await handler.startElement?.("", "body", "body", attrs);
+      for (const piece of pieces) await handler.characters?.(piece, 0, piece.length);
+      await handler.endElement?.("", "body", "body");
+    },
+  };
+}
+
+test("embedded text rejoins a surrogate pair split across two child chunks", async () => {
+  const sink = collector();
+  await runEmbedded(splittingChild(["A\uD83D", "\uDE00B"]), filtering(sink));
+  assert.equal(sink.text, "A\u{1F600}B");
+});
+
+test("embedded text rejoins a pair split across a chunk that is only the high half", async () => {
+  const sink = collector();
+  await runEmbedded(splittingChild(["A", "\uD83D", "\uDE00", "B"]), filtering(sink));
+  assert.equal(sink.text, "A\u{1F600}B");
+});
+
+test("embedded text still forwards a trailing lone high surrogate at the end of the child", async () => {
+  const sink = collector();
+  await runEmbedded(splittingChild(["A\uD83D"]), filtering(sink));
+  assert.equal(sink.text, "A\uFFFD");
+});
+
+test("embedded text does not invent a pair from a lone low surrogate", async () => {
+  const sink = collector();
+  await runEmbedded(splittingChild(["A", "\uDE00B"]), filtering(sink));
+  assert.equal(sink.text, "A\uFFFDB");
 });

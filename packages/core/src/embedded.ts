@@ -140,14 +140,26 @@ export class ParsingEmbeddedDocumentExtractor
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     // Forward each chunk as it is produced so the enclosing handler's output
     // cap fires mid-child instead of after the whole child text is buffered.
+    // A trailing high surrogate waits for the next chunk: the enclosing handler
+    // filters per call and would turn the two halves of a split pair into U+FFFD.
+    let heldHighSurrogate = "";
     const text = new BodyContentHandler(async (chunk) => {
-      if (chunk.length > 0) await handler.characters?.(chunk, 0, chunk.length);
+      let out = heldHighSurrogate + chunk;
+      heldHighSurrogate = "";
+      const last = out.charCodeAt(out.length - 1);
+      if (last >= 0xd800 && last <= 0xdbff) {
+        heldHighSurrogate = out.slice(-1);
+        out = out.slice(0, -1);
+      }
+      if (out.length > 0) await handler.characters?.(out, 0, out.length);
     });
     try {
       await parser.parse(source, text, metadata, child);
     } finally {
       if (source !== stream) await source.close();
     }
+    // The child ended on a lone high surrogate: let the enclosing handler filter it.
+    if (heldHighSurrogate.length > 0) await handler.characters?.(heldHighSurrogate, 0, 1);
   }
 }
 
