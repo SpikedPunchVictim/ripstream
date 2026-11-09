@@ -28,6 +28,9 @@ Added: per-document child-process isolation with a host memory budget (`@spikedp
 - CI: `isolation-chaos` runs the Linux chaos fixtures on native x86_64 and arm64 runners (glibc and musl);
   `isolation-benchmark` runs two pinned public corpora (Apache POI OOXML, pdf.js PDFs) through the real isolator
   and fails on a memory, time or outcome regression.
+- The standard isolation child no longer lets pdf.js load the native `@napi-rs/canvas`: it cost about 1.6 GiB of address
+  space per child and made PDFs fail "out of memory" under the 6 GiB `ulimit -v` on native arm64 (found by the
+  `isolation-benchmark` workflow). Text and metadata are unchanged.
 - Hazard probes (`hazard-probes.test.ts`): hostile music-metadata, hyparquet and 10,000-entry-archive inputs through the
   real isolator, with measured numbers in [docs/isolation.md](docs/isolation.md). One macOS-only gap is recorded
   (tikajs-ubpo).

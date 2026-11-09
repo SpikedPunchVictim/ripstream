@@ -6,7 +6,7 @@
 // that set each maximum, so the defaults in docs/isolation.md can be tied to a measured file.
 //
 // usage: node profile.mjs --corpus DIR [--corpus DIR ...] [--mode records|text] [--heap-mb N] [--per-child-mb N]
-//          [--max-task-ms N] [--ext docx,xlsx] [--limit N] [--out FILE.jsonl] [--summary FILE.json]
+//          [--max-task-ms N] [--vmem-kb N] [--ext docx,xlsx] [--limit N] [--out FILE.jsonl] [--summary FILE.json]
 //          [--check expected.json]
 //   --check   compare the run with an expected file and exit 1 on a regression (see check() below)
 //
@@ -17,7 +17,7 @@ import { basename, extname, join, relative, resolve } from "node:path";
 import { createStandardIsolation } from "../../../bundle-standard/src/isolation.ts";
 
 function parseArgs(argv) {
-  const options = { corpus: [], mode: "records", ext: null, limit: 0, out: null, summary: null, check: null, config: {} };
+  const options = { corpus: [], mode: "records", ext: null, limit: 0, out: null, summary: null, check: null, config: {}, runner: {} };
   const number = (name, value) => {
     const parsed = Number(value);
     if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${name} must be a non-negative integer, got ${value}`);
@@ -35,6 +35,7 @@ function parseArgs(argv) {
       case "--heap-mb": options.config.heapMb = number(flag, value()); break;
       case "--per-child-mb": options.config.perChildMb = number(flag, value()); break;
       case "--max-task-ms": options.config.maxTaskMillis = number(flag, value()); break;
+      case "--vmem-kb": options.runner.vmemKb = number(flag, value()); break;
       case "--ext": options.ext = new Set(value().split(",").map((e) => `.${e.replace(/^\./, "").toLowerCase()}`)); break;
       case "--limit": options.limit = number(flag, value()); break;
       case "--out": options.out = resolve(value()); break;
@@ -132,7 +133,7 @@ async function main() {
   const settled = [];
   const standard = await createStandardIsolation({
     config: { mode: "strict", ...options.config },
-    runner: { onRunSettled: (diagnostics) => settled.push(diagnostics) },
+    runner: { ...options.runner, onRunSettled: (diagnostics) => settled.push(diagnostics) },
   });
   const out = options.out === null ? null : createWriteStream(options.out);
   const results = [];

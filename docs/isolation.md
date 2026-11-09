@@ -165,6 +165,16 @@ tikajs-ubpo (poll `phys_footprint`) and tikajs-5bg6 (bound the Parquet footer an
 
 Ogg Vorbis and Opus files answer `UNSUPPORTED_FORMAT` because no parser claims the detected types (tikajs-joxh).
 
+**The native canvas.** pdf.js requires the native `@napi-rs/canvas` the moment it is imported, to polyfill rendering
+classes the parser never uses. It adds about 1.2 GiB of address space plus 65 MiB per visible core (19 threads against
+11), which is counted by L4. On native arm64 CI runners, with the canvas installed as it is in any real deployment, the
+6 GiB cap was nearly spent before the heap grew: 180 of 1,089 PDFs and 2 of 599 OOXML files failed "out of memory" at
+a child RSS under 210 MiB. The corpus runs above had been made without the binding and missed it. The standard child
+now stops pdf.js from loading it (`block-pdfjs-canvas.ts`, scoped to requests made from pdfjs-dist): address space
+drops by 1.6 GiB, text and metadata are identical on 88 sampled PDFs, and both corpora pass at the 6 GiB default.
+The first failures appear at the 4 GiB floor, so the default keeps about 1.5x headroom. The in-process path still loads
+the canvas (tikajs-lqku).
+
 Two files of the OOXML corpus fail with an internal failure (a `RangeError` on a fuzzed docx); they are tracked as a
 parser bug, not an isolation defect.
 
