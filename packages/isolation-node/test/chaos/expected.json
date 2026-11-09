@@ -65,5 +65,45 @@
   "w3-limits-visible": { "allow": ["code:0"], "ready": true },
   "w4-hard-backstop": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": null, "limits": { "minWallMs": 2500 } },
 
+  "_prod_doc": "Rows ending in -prod run through the PRODUCTION supervisor/wrapper/frame reader/classifier (src/*.ts) via lib-prod.mjs. Same keys as above plus: error = the class the production classifier produced (IsolationError:<reason> | <ClassName> | null for success). killedBy uses the production kill names: timeout | rss | frame_cap | result_cap | protocol | grace | ready-timeout | null.",
+
+  "a-sync-hang-prod": { "allow": ["signal:SIGKILL"], "forbid": ["code:0"], "ready": true, "killedBy": "timeout", "error": "ParseTimeoutError" },
+  "b-heap-oom-prod": { "allow": ["signal:SIGABRT"], "stderrAny": ["JavaScript heap out of memory"], "ready": true, "killedBy": null, "error": "LimitExceededError", "limits": { "maxWallMs": 10000 } },
+  "c-string-length-prod": { "allow": ["code:1"], "forbid": ["signal:SIGABRT"], "stderrAny": ["Invalid string length"], "ready": true, "killedBy": null, "error": "LimitExceededError" },
+  "d-page-touch-prod": {
+    "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "rss", "error": "LimitExceededError", "emulatedSoft": true,
+    "limits": { "pollMs": 20, "designPollMs": 20, "reps": 10, "designStepMb": 350, "maxStepMb": 1024 }
+  },
+  "e-pressure-worker-prod": {
+    "allow": ["signal:SIGTRAP", "signal:SIGABRT", "signal:SIGSEGV"],
+    "forbid": ["code:0", "code:126", "code:127"],
+    "stderrAny": ["Failed to reserve virtual memory", "out of memory"],
+    "ready": true,
+    "killedBy": null,
+    "error": "LimitExceededError"
+  },
+  "e-startup-control-prod": { "allow": ["code:1"], "ready": false, "killedBy": null, "error": "IsolationError:unavailable" },
+  "f-sqljs-coarse-prod": { "allow": ["code:0"], "ready": true, "error": null },
+  "f-sqlite-coarse-prod": { "allow": ["code:0"], "ready": true, "error": null },
+  "g-cgroup-oom-prod": { "allow": ["code:0"] },
+  "h-orphan-hung-prod": { "limits": { "death": "soft", "maxGoneMs": 60000 }, "emulatedSoft": true },
+  "h-orphan-hung-hard-prod": { "limits": { "death": "hard", "maxGoneMs": 60000 }, "emulatedSoft": true },
+  "i-giant-frame-capped-prod": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "frame_cap", "error": "LimitExceededError" },
+  "j-done-linger-group-prod": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": "grace", "error": null },
+  "k-no-shell-prod": { "allow": ["spawn:ENOENT"], "ready": false, "killedBy": null, "error": "IsolationError:unavailable" },
+  "k-no-node-prod": { "allow": ["code:127"], "stderrAny": ["not found"], "ready": false, "killedBy": null, "error": "IsolationError:unavailable" },
+  "k-ulimit-fails-prod": { "allow": ["code:126"], "ready": false, "error": "IsolationError:unavailable" },
+  "k-midrun-crash-prod": { "allow": ["signal:SIGABRT"], "ready": true, "killedBy": null, "error": "LimitExceededError" },
+  "l-production-xcpu": { "allow": ["signal:SIGXCPU"], "forbid": ["signal:SIGKILL"], "ready": true, "killedBy": null, "error": "LimitExceededError" },
+  "n-close-vs-exit-grace-prod": { "allow": ["code:0"], "ready": true, "killedBy": null, "error": null },
+  "w1-fail-closed-cpu-prod": { "allow": ["rejected-before-spawn"], "ready": false, "error": "TypeError" },
+  "w2-fail-closed-vmem-prod": { "allow": ["rejected-before-spawn"], "ready": false, "error": "TypeError" },
+  "w5-fail-closed-cpu-unlimited-prod": { "allow": ["rejected-before-spawn"], "ready": false, "error": "TypeError" },
+  "w6-fail-closed-vmem-unlimited-prod": { "allow": ["rejected-before-spawn"], "ready": false, "error": "TypeError" },
+  "w8-fail-closed-vmem-20-digits-prod": { "allow": ["rejected-before-spawn"], "ready": false, "error": "TypeError" },
+  "w7-fail-closed-ulimit-refused-prod": { "allow": ["code:126"], "ready": false, "error": "IsolationError:unavailable" },
+  "w3-limits-visible-prod": { "allow": ["code:0"], "ready": true, "error": null },
+  "w4-hard-backstop-prod": { "allow": ["signal:SIGKILL"], "ready": true, "killedBy": null, "error": "LimitExceededError", "limits": { "minWallMs": 2500 } },
+
   "m-issue-cmap12": { "skip": "TODO tikajs-zgg2.8 (P6): needs pdf fixture" }
 }

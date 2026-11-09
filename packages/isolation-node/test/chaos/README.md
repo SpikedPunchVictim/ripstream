@@ -1,8 +1,11 @@
 # Isolation chaos fixtures (P0, bead tikajs-zgg2.2)
 
 Linux-only fixtures that pin down the OS-level behaviour the parse-isolation design (tikajs-zgg2, design v3)
-depends on, **before** any production isolation code exists. The P2 harness (tikajs-zgg2.4) will replace the
-stand-in pieces here (`reference.sh`, the reader/classifier logic in `cases.mjs`) and keep the expectations.
+depends on. They were written **before** any production isolation code existed (P0) and ran against stand-ins
+(`reference.sh`, the reader/classifier logic in `cases.mjs`). Since P2 (tikajs-zgg2.4) every row that models the
+production path ALSO runs through the real harness: rows named `*-prod` spawn through `src/supervisor.ts`
+(real wrapper, frame reader, classifier, RSS poller, group kill) via `lib-prod.mjs`. The P0 rows are kept unchanged:
+they pin raw OS facts and are the mutant-detection baseline for the stand-ins.
 
 This directory is deliberately **not** a workspace package: no `package.json`, no `tsconfig`, nothing in `tsc -b`.
 Files are plain `.mjs`/`.sh`/`.json`. They are not matched by the root `pnpm test` glob
@@ -55,6 +58,8 @@ CI wiring (`.github/workflows`) is deliberately not done: tracked as bead tikajs
 | --- | --- |
 | `reference.sh` | REFERENCE wrapper (stand-in until P2): `/bin/sh -c`, `ulimit -S -t N; ulimit -H -t N+2; ulimit -v <coarse>` each `\|\| exit 126` after a numeric validation (`REF_CPU_SECS`, `REF_VMEM_KB`, `REF_HEAP_MB` must be 1-12 digit positive decimals, else exit 126: `unlimited` is accepted by `ulimit` itself and would run node uncapped), `oom_score_adj=1000` best effort, `MALLOC_ARENA_MAX=1`, `exec node --max-old-space-size=<MB>`. Env: `REF_CPU_SECS` (60), `REF_VMEM_KB` (6 GiB), `REF_HEAP_MB` (256), `REF_NO_OOM_ADJ` (tests only). The `N+2` arithmetic happens only after `ulimit -S` validated N (dash exits 2 on `$((bogus+2))`; found by fixture w1). **The real P2 wrapper must also validate these values numerically in JS before building the command** (never interpolate unvalidated config into the shell string). |
 | `expected.json` | The single EXPECTED-OUTCOME table: allowed outcomes, forbidden outcomes, stderr markers, ready-required, parent kill reason, numeric bounds, per-platform `variants` (`glibc-arm64`, `glibc-amd64`, `musl-arm64`, `musl-amd64`), `unobserved` flags. |
+| `lib-prod.mjs` | `runProd`: runs a child through the PRODUCTION `runChild` (`src/supervisor.ts`, type-stripped by node) and returns an observation shaped like `lib.mjs` `runChild`'s plus the production error class (`obs.error`), so the same `expected.json` table applies; also asserts the process group is gone once the run settled. |
+| `procs/p-*.child.mjs`, `procs/*-prod.parent.mjs`, `procs/p-ulimit-refused.parent.mjs` | Children that speak ONLY the production frame protocol (the P0 children send ad-hoc frames such as `hello`/`gc`/`limits`, which the strict production reader rejects as protocol violations), and the parents for the production g/h/k/w7 rows. Settings reach them as arguments or files: the production wrapper passes no custom env vars. |
 | `lib.mjs` | `runChild` (spawns exactly like the design: detached process group, fd-3 NDJSON with a pre-parse frame cap, 8 KiB stderr ring, statm poller using the real page size, parent timer), table checker, phase classifier. |
 | `cases.mjs`, `run.mjs` | Parent-side checks per case; the runner prints results and applies the table. |
 | `procs/*.child.mjs`, `procs/*.parent.mjs` | The hostile children and the doomed parents. |
@@ -79,6 +84,7 @@ CI wiring (`.github/workflows`) is deliberately not done: tracked as bead tikajs
 | l | RLIMIT_CPU | Through a shell: soft/hard split -> the shell's `$?` is 152; hard-only -> 137; IO sleep accrues no CPU; every failing `ulimit` step is nonzero (dash rc2 / busybox ash rc1) and the `\|\| exit 126` form exits 126. Through the exec'ing `reference.sh` the PARENT does not see rc152: it sees `signal:SIGXCPU` (152 is only a shell's `$?` encoding) |
 | n | close-vs-exit hazard | a grandchild keeps the child's stdout/stderr/fd 3 open after the child exits, so `close` lags `exit` (until the grandchild dies). The reader still finishes via the terminal frame + grace kill of the group; the control shows `close` alone only ends at the safety timer. **Classification must never wait on `close` alone** |
 | w | `reference.sh` itself | fails closed (`REF_CPU_SECS=bogus`/`unlimited`, `REF_VMEM_KB=bogus`/`unlimited`/20 digits -> exit 126, node never ran; and valid numbers that `ulimit` itself refuses, w7, also exit 126); `/proc/self/limits` of the wrapped child shows CPU soft=N hard=N+2, address space = the coarse cap, `oom_score_adj`=1000, `MALLOC_ARENA_MAX=1`; a child that handles SIGXCPU is still SIGKILLed at the hard limit (~3 s with N=1) |
+| `*-prod` | production twins | a, b, c, d, e (+startup control), f (+ default-cap check against the sweep), g, h (soft and hard), i (capped), j, k (shell, node, ulimit-refused, mid-run), l (`l-production-xcpu`), n, w (JS fail-closed validation of cpu/vmem inputs, ulimit refused, limits visible, hard backstop) run through the production code. Differences that are deliberate: the production vmem floor is 4 GiB (e uses it; w3 asserts 4 GiB instead of 3 GiB); the production process settles on terminal frame + leader exit, never on `close`, so `n-close-vs-exit-grace-prod` has no safety timer and its `killedBy` is null (the child exits by itself); the fail-closed validation rows assert a JS `TypeError` before anything is spawned instead of a shell exit 126. NOT duplicated because they are raw OS facts: g1 (oom.group=1), the `l-*` shell rows, `j-leader-only-control`, `n-close-vs-exit-control`, `i-giant-frame-naive`, `f-sqlite-sweep`'s matrix itself |
 | m | issue_cmap12 heap need | **SKIPPED**: needs the 2 KB PDF fixture (282 MB heap); TODO tikajs-zgg2.8 (P6). Not faked. |
 
 Not covered although listed in the bead description: the 10k-entry archive timing fixture (also P6 material).

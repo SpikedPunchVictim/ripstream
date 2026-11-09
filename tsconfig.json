@@ -45,6 +45,9 @@
     },
     {
       "path": "./packages/parser-db"
+    },
+    {
+      "path": "./packages/isolation-node"
     }
   ]
 }

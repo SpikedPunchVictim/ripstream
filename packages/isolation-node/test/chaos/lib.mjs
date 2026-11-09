@@ -178,6 +178,8 @@ export function checkObs(e, obs) {
   if (e.ready === true && !obs.readySeen) fails.push('ready frame NOT seen before death (would be misread as startup failure)');
   if (e.ready === false && obs.readySeen) fails.push('ready frame seen but expected startup-phase death');
   if ('killedBy' in e && (obs.killReason ?? null) !== e.killedBy) fails.push(`killReason ${obs.killReason} != ${e.killedBy}`);
+  // Production rows only: the error class the production classifier produced (null = the run succeeded).
+  if ('error' in e && (obs.error ?? null) !== e.error) fails.push(`classified error ${obs.error ?? null} != ${e.error}`);
   return fails;
 }
 
