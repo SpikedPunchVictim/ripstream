@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_LIMITS, LimitExceededError, type IsolationConfig } from "@spikedpunch/ripstream-core";
 import {
+  DEFAULT_MAX_DISK_MB,
   DEFAULT_MAX_INPUT_BYTES,
   DEFAULT_PER_CHILD_MB,
   MAX_RECORDS_METADATA_BYTES,
@@ -23,6 +24,7 @@ test("defaults: a text request with no overrides", () => {
     maxTaskMillis: 60_000,
     maxParseMillis: 58_000, // 60 s minus the 2 s margin
     maxInputBytes: 100 * MIB,
+    maxDiskMb: 1024,
     maxOutputChars: 100_000,
     maxEmbeddedResources: 10_000,
     output: "text",
@@ -38,6 +40,14 @@ test("defaults come from core and the exported constants, not from copies", () =
   assert.equal(limits.maxEmbeddedResources, DEFAULT_LIMITS.maxEmbeddedResources);
   assert.equal(limits.perChildMb, DEFAULT_PER_CHILD_MB);
   assert.equal(limits.maxInputBytes, DEFAULT_MAX_INPUT_BYTES);
+  assert.equal(limits.maxDiskMb, DEFAULT_MAX_DISK_MB);
+});
+
+test("maxDiskMb: 1024 MiB by default, the config's value when it states one, the same for every request", () => {
+  assert.equal(DEFAULT_MAX_DISK_MB, 1024);
+  assert.equal(deriveLimits(strict).maxDiskMb, 1024);
+  assert.equal(deriveLimits({ mode: "strict", maxDiskMb: 64 }).maxDiskMb, 64);
+  assert.equal(deriveLimits({ mode: "strict", maxDiskMb: 64 }, { output: "records", maxOutputChars: 5 }).maxDiskMb, 64);
 });
 
 test("the config's own values win over the defaults", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { IsolationError, RipstreamError } from "@spikedpunch/ripstream-core";
+import { IsolationError, LimitExceededError, RipstreamError } from "@spikedpunch/ripstream-core";
 import { classifyExit, type ExitFacts } from "../src/classify.ts";
 import type { ErrorFrame } from "../src/frames.ts";
 
@@ -115,6 +115,25 @@ runMatrix("killReason protocol", [
   ["pre-ready", { phase: "pre-ready", killReason: "protocol", signal: "SIGKILL" }, UNAVAILABLE],
   ["terminal done wins", { terminal: "done", killReason: "protocol", signal: "SIGKILL" }, "success"],
 ]);
+
+test("disk kill: LimitExceededError (the class a heap or RSS kill gets) naming the budget", () => {
+  const error = classifyExit(facts({ killReason: "disk", signal: "SIGKILL", disk: { limitMb: 1024, boundHit: false } }));
+  assert.ok(error instanceof LimitExceededError);
+  assert.equal(error.message, "Isolated parser: temporary disk budget of 1024 MiB exceeded");
+});
+
+test("disk kill by the walk bound says so, since the bytes are not what tripped it", () => {
+  const error = classifyExit(facts({ killReason: "disk", signal: "SIGKILL", disk: { limitMb: 5, boundHit: true } }));
+  assert.match(error?.message ?? "", /^Isolated parser: temporary disk budget of 5 MiB exceeded \(more than 10000 files and directories, or nested deeper than 8 levels\)$/);
+});
+
+test("disk kill without the budget in the facts still classifies as a limit", () => {
+  assert.equal(classifyExit(facts({ killReason: "disk", signal: "SIGKILL" }))?.message, "Isolated parser: temporary disk budget exceeded");
+});
+
+test("a disk kill after the done frame is still a success", () => {
+  assert.equal(classifyExit(facts({ terminal: "done", killReason: "disk", signal: "SIGKILL" })), null);
+});
 
 test("protocol kill message carries the sanitised violation detail", () => {
   const error = classifyExit(facts({ killReason: "protocol", protocolDetail: "bad\u0000 frame\nline2" }));

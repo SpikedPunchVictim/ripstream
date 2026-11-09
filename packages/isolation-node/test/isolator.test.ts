@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, readdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,8 +25,9 @@ import { MemoryPool } from "../src/pool.ts";
 import type { ProbeOptions, ProbeResult } from "../src/probe.ts";
 import { DEFAULT_IN_PROCESS_MAX_BYTES } from "../src/routing.ts";
 import { parentResultMb } from "../src/runner.ts";
+import { fakeSpawn } from "./fixtures/fake-child.ts";
 import { fakeRipstream, IN_PROCESS_TEXT, type FakeRipstream } from "./fixtures/fake-ripstream.ts";
-import { CHILD } from "./fixtures/helpers.ts";
+import { CHILD, DISK_CHILD } from "./fixtures/helpers.ts";
 
 const HEADER_CHILD = fileURLToPath(new URL("./fixtures/header-child.ts", import.meta.url));
 const MIB = 1024 * 1024;
@@ -73,6 +75,7 @@ function setup(overrides: Partial<NodeIsolatorOptions> = {}): Setup {
     childModule: CHILD,
     childArgs: ["echo"],
     pool: roomyPool(),
+    tempDir: scratch, // fake children are never reaped, so their call directories must not land in the shared temp dir
     log: (level, message) => logs.push({ level, message }),
     probe: async (probeOptions = {}): Promise<ProbeResult> => {
       probeCalls.push(probeOptions);
@@ -948,3 +951,76 @@ test("status is a copy: changing it changes nothing", async () => {
   assert.deepEqual(isolator.status().containment, containmentFor(process.platform));
   assert.equal(isolator.status().limits?.heapMb, deriveLimits(STRICT).heapMb);
 });
+
+// ---------------------------------------------------------------- disk (L6)
+
+const diskScratch = (): string => mkdtempSync(join(scratch, "disk-"));
+
+test("status().limits reports the disk budget: 1024 MiB by default, the configured one when set", async () => {
+  assert.equal((await setup().create()).status().limits?.maxDiskMb, 1024);
+  const isolator = await setup({ config: { ...STRICT, maxDiskMb: 7 } }).create();
+  assert.equal(isolator.status().limits?.maxDiskMb, 7);
+});
+
+test("config.maxDiskMb must be a positive integer of MiB; the error names the key", async () => {
+  for (const bad of [0, -5, 1.5, Number.NaN]) {
+    await assert.rejects(setup({ config: { ...STRICT, maxDiskMb: bad } }).create(), /maxDiskMb/, String(bad));
+  }
+});
+
+test("tempDir: an absolute path to an existing directory, handed to the probe too; anything else fails construction", async () => {
+  await assert.rejects(setup({ tempDir: "relative/dir" }).create(), (error: unknown) => {
+    return error instanceof TypeError && /tempDir must be an absolute path/.test(error.message);
+  });
+  await assert.rejects(setup({ tempDir: join(scratch, "missing") }).create(), (error: unknown) => {
+    return error instanceof RangeError && /tempDir must be an existing directory/.test(error.message);
+  });
+  const tempDir = diskScratch();
+  const h = setup({ tempDir });
+  await h.create();
+  assert.equal(h.probeCalls[0]?.tempDir, tempDir);
+});
+
+test("a document that makes the child write past the disk budget is a LimitExceededError naming it, and nothing is left behind", async () => {
+  const tempDir = diskScratch();
+  const h = setup({
+    childModule: DISK_CHILD,
+    childArgs: ["spool", "64", "hang"],
+    tempDir,
+    config: { ...STRICT, maxDiskMb: 5 },
+    runner: { diskPollMs: 20 },
+  });
+  const isolator = await h.create();
+  await assert.rejects(isolator.isolate({ input: bytes("hostile") }), (error: unknown) => {
+    return error instanceof LimitExceededError && /temporary disk budget of 5 MiB exceeded/.test(error.message);
+  });
+  await isolator.dispose();
+  assert.deepEqual(readdirSync(tempDir), []);
+  assert.equal(isolator.status().unreapedChildren, 0);
+});
+
+test(
+  "a call directory that cannot be removed is logged as a warning and the call still answers",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const tempDir = diskScratch();
+    const { spawnFn } = fakeSpawn({
+      onInput: (child) => {
+        // Removing an entry needs write access to the parent: take it away, then let the child finish normally.
+        chmodSync(tempDir, 0o500);
+        child.writeFd3('{"t":"meta","metadata":{}}\n{"t":"text","chunk":"fine"}\n{"t":"done"}\n');
+        child.exit(0, null);
+        child.close();
+      },
+    });
+    const h = setup({ tempDir, runner: { spawnFn } });
+    const isolator = await h.create();
+    try {
+      assert.deepEqual(await isolator.isolate({ input: bytes("x") }), { kind: "text", metadata: {}, text: "fine" });
+      const warnings = h.logs.filter((entry) => entry.level === "warn" && /Could not remove the isolated parser's temporary directory/.test(entry.message));
+      assert.equal(warnings.length, 1, JSON.stringify(h.logs));
+    } finally {
+      chmodSync(tempDir, 0o700);
+    }
+  },
+);

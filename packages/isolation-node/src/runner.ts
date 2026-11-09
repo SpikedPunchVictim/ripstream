@@ -1,5 +1,7 @@
 import { stat } from "node:fs/promises";
 import { AbortError, IsolationError, LimitExceededError, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
+import { requireTempDir } from "./disk.ts";
+import { DEFAULT_MAX_DISK_MB } from "./limits.ts";
 import type { MemoryPool } from "./pool.ts";
 import { startChild, type RunChildOptions, type RunDiagnostics } from "./supervisor.ts";
 import { clampTimerMs } from "./timers.ts";
@@ -98,6 +100,21 @@ export interface ChildRunnerOptions {
   readonly maxResultBytes: number;
   /** RSS kill limit, MiB. Must be above `heapMb` (the heap alone would trip it) and at most `perChildMb`. */
   readonly rssLimitMb: number;
+  /**
+   * Budget of one child's temporary directory in MiB of allocated bytes (L6). Default DEFAULT_MAX_DISK_MB. A child
+   * that exceeds it is killed (LimitExceededError); the poll runs every `diskPollMs`, so a fast writer overshoots by
+   * about that interval times its write rate before it is stopped.
+   */
+  readonly maxDiskMb?: number;
+  /** Disk poll interval in ms. Default 100. */
+  readonly diskPollMs?: number;
+  /**
+   * Where each call's private directory (the child's TMPDIR) is made. Absolute and existing; default os.tmpdir().
+   * Library-only: the CLI and the server never expose it.
+   */
+  readonly tempDir?: string;
+  /** Called with a description when a call's directory could not be removed. The call's outcome is unaffected. */
+  readonly onTempCleanupError?: (message: string) => void;
   readonly nodePath?: string;
   readonly execArgv?: readonly string[];
   readonly vmemKb?: number;
@@ -168,6 +185,8 @@ export class ChildRunner {
     for (const name of ["perChildMb", "heapMb", "cpuSecs", "maxTaskMillis", "maxInputBytes", "maxResultBytes", "rssLimitMb"] as const) {
       requirePositiveInteger(name, options[name]);
     }
+    if (options.maxDiskMb !== undefined) requirePositiveInteger("maxDiskMb", options.maxDiskMb);
+    if (options.tempDir !== undefined) requireTempDir(options.tempDir);
     if (options.childScript.length === 0) throw new TypeError("childScript must be a non-empty path");
     requireMemoryOrder(options.heapMb, options.rssLimitMb, options.perChildMb);
     this.#disposeWaitMs = options.disposeWaitMs ?? DEFAULT_DISPOSE_WAIT_MS;
@@ -264,6 +283,9 @@ export class ChildRunner {
         ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
         ...(o.maxFrames === undefined ? {} : { maxFrames: o.maxFrames }),
         ...(o.stderrBudgetBytes === undefined ? {} : { stderrBudgetBytes: o.stderrBudgetBytes }),
+        ...(o.diskPollMs === undefined ? {} : { diskPollMs: o.diskPollMs }),
+        ...(o.tempDir === undefined ? {} : { tempDir: o.tempDir }),
+        ...(o.onTempCleanupError === undefined ? {} : { onTempCleanupError: o.onTempCleanupError }),
         ...(o.platform === undefined ? {} : { platform: o.platform }),
         ...(o.parentEnv === undefined ? {} : { parentEnv: o.parentEnv }),
         ...(o.onRunSettled === undefined ? {} : { onSettled: o.onRunSettled }),
@@ -272,6 +294,7 @@ export class ChildRunner {
         cpuSecs: o.cpuSecs,
         heapMb,
         rssLimitMb: o.rssLimitMb,
+        maxDiskMb: o.maxDiskMb ?? DEFAULT_MAX_DISK_MB,
         maxResultBytes,
         request,
         deadlineMs: lease.remainingMs(),

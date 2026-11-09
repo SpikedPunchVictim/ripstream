@@ -5,7 +5,7 @@ import { AbortError, IsolationError, LimitExceededError, ParseTimeoutError } fro
 import { MemoryPool } from "../src/pool.ts";
 import { ChildRunner, PARENT_RESULT_SLACK_MB, parentResultMb, type ChildRunnerOptions } from "../src/runner.ts";
 import { fakeSpawn } from "./fixtures/fake-child.ts";
-import { CHILD, expectGroupGone } from "./fixtures/helpers.ts";
+import { CHILD, expectGroupGone, TEST_TEMP_DIR } from "./fixtures/helpers.ts";
 import type { RunDiagnostics } from "../src/supervisor.ts";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -35,6 +35,7 @@ function runner(mode: string, pool: MemoryPool, overrides: Partial<ChildRunnerOp
     maxInputBytes: 1024 * 1024,
     maxResultBytes: MAX_RESULT_BYTES,
     rssLimitMb: CHILD_MB,
+    tempDir: TEST_TEMP_DIR, // fake children are never reaped, so their directories must not land in the shared temp dir
     ...overrides,
   });
 }

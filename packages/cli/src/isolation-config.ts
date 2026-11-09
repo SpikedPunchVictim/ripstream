@@ -25,6 +25,7 @@ const NUMBER_VARIABLES = [
   ["RIPSTREAM_ISOLATION_MAX_TASK_MILLIS", "maxTaskMillis"],
   ["RIPSTREAM_ISOLATION_HEAP_MB", "heapMb"],
   ["RIPSTREAM_ISOLATION_MAX_QUEUE", "maxQueue"],
+  ["RIPSTREAM_ISOLATION_MAX_DISK_MB", "maxDiskMb"],
 ] as const;
 
 function parseMode(value: string, where: string): IsolationMode {

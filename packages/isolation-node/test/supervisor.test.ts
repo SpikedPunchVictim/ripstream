@@ -686,6 +686,7 @@ test("M25: the child really receives only the allowlist, plus MALLOC_ARENA_MAX",
     HOME: "/home/test",
     LANG: "C.UTF-8",
     TZ: "UTC",
+    TMPDIR: "/parent/tmpdir",
     NODE_OPTIONS: "--no-warnings --require /evil.js",
     LD_PRELOAD: "/evil.so",
     LD_LIBRARY_PATH: "/evil",
@@ -706,8 +707,9 @@ test("M25: the child really receives only the allowlist, plus MALLOC_ARENA_MAX",
   assert.equal(env.LANG, "C.UTF-8");
   assert.equal(env.TZ, "UTC");
   assert.equal(env.PATH, parentEnv.PATH);
+  assert.match(env.TMPDIR ?? "", /ripstream-call-/, "TMPDIR is the call's private directory, set by the harness, not the parent's");
   // What sh and the OS add on their own is not ours to forbid; nothing else may be there.
-  const allowed = new Set(["PATH", "HOME", "LANG", "TZ", "MALLOC_ARENA_MAX", "PWD", "OLDPWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING"]);
+  const allowed = new Set(["PATH", "HOME", "LANG", "TZ", "TMPDIR", "MALLOC_ARENA_MAX", "PWD", "OLDPWD", "SHLVL", "_", "__CF_USER_TEXT_ENCODING"]);
   const extra = Object.keys(env).filter((name) => !allowed.has(name));
   assert.deepEqual(extra, []);
 });

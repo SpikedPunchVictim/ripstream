@@ -22,6 +22,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { defaultPoolMb, readCgroupLimits, validatePoolAgainstCgroup } from "./cgroup.ts";
 import type { Containment } from "./containment.ts";
+import { requireTempDir } from "./disk.ts";
 import { deriveLimits, type DerivedLimits } from "./limits.ts";
 import { DEFAULT_OVERSHOOT_MB, MemoryPool, type PoolStats } from "./pool.ts";
 import { probeIsolation } from "./probe.ts";
@@ -54,6 +55,7 @@ export type IsolatorRunnerOptions = Pick<
   | "execArgv"
   | "vmemKb"
   | "pollMs"
+  | "diskPollMs"
   | "readyTimeoutMs"
   | "graceMs"
   | "maxFrames"
@@ -61,6 +63,7 @@ export type IsolatorRunnerOptions = Pick<
   | "disposeWaitMs"
   | "parentEnv"
   | "onRunSettled"
+  | "onTempCleanupError"
   | "spawnFn"
   | "reapWaitMs"
 >;
@@ -83,6 +86,13 @@ export interface NodeIsolatorOptions {
   readonly childModule: string;
   readonly childArgs?: readonly string[];
   readonly nodePath?: string;
+  /**
+   * Where each call's private directory (the child's TMPDIR) is made, and where the probe makes its own. Absolute and
+   * existing, or construction throws. Default os.tmpdir(). Every call's directory is removed when its child is gone;
+   * a removal that fails is logged as a warning (or reaches `runner.onTempCleanupError`). Library-only: the CLI and
+   * the server expose no such setting.
+   */
+  readonly tempDir?: string;
   /**
    * The memory gate. Pass one pool to every isolator in the process so they share it; this isolator disposes a
    * pool it created, never one it was given. A given pool decides: `config.memoryPoolMb` and `config.maxQueue`
@@ -157,6 +167,7 @@ const CONFIG_KEYS = [
   "maxTaskMillis",
   "heapMb",
   "maxQueue",
+  "maxDiskMb",
 ] as const;
 
 /**
@@ -542,6 +553,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   if (config.mode === "off") return new NodeIsolatorImpl({ ...base, isolating: null, degradedReason: null });
 
   requireChildModule(options.childModule);
+  if (options.tempDir !== undefined) requireTempDir(options.tempDir);
   const defaults = deriveDefaultLimits(config, options.defaultMaxOutputChars);
 
   // Isolation cannot be provided: strict refuses, lenient carries on without it, loudly, and says so in status().
@@ -559,6 +571,8 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     cpuSecs: defaults.cpuSecs,
     heapMb: defaults.heapMb,
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
+    ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }),
+    onTempCleanupError: (message: string) => log("warn", message),
   });
   if (!probed.available) return unavailable(probed.reason);
 
@@ -596,7 +610,10 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     maxResultBytes: defaults.maxResultBytes,
     rssLimitMb: defaults.rssLimitMb,
     maxFrameBytes: defaults.maxFrameBytes,
+    maxDiskMb: defaults.maxDiskMb,
+    onTempCleanupError: (message) => log("warn", message),
     platform,
+    ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }),
     ...(options.childArgs === undefined ? {} : { childArgs: options.childArgs }),
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
     ...options.runner,

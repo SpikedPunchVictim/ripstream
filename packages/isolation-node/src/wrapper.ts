@@ -69,6 +69,11 @@ export interface WrapperOptions {
   readonly parentEnv?: Readonly<Record<string, string | undefined>>;
   /** Target platform. Default process.platform. Only Linux gets the vmem cap. */
   readonly platform?: NodeJS.Platform;
+  /**
+   * The child's TMPDIR: its private per-call directory. Set here and never inherited, so a parent TMPDIR cannot
+   * send the child's spool files somewhere the disk budget does not look.
+   */
+  readonly tmpDir?: string;
 }
 
 export interface WrapperCommand {
@@ -167,13 +172,14 @@ function checkExecArgv(execArgv: readonly string[]): string[] {
   });
 }
 
-function buildEnv(parentEnv: Readonly<Record<string, string | undefined>>): Record<string, string> {
+function buildEnv(parentEnv: Readonly<Record<string, string | undefined>>, tmpDir: string | undefined): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of ENV_ALLOWLIST) {
     const value = parentEnv[name];
     if (typeof value === "string" && !value.includes("\0")) env[name] = value;
   }
   env.MALLOC_ARENA_MAX = "1";
+  if (tmpDir !== undefined) env.TMPDIR = tmpDir;
   return env;
 }
 
@@ -185,6 +191,7 @@ export function buildWrapperCommand(options: WrapperOptions): WrapperCommand {
   const scriptPath = checkNotOption("scriptPath", options.scriptPath);
   const execArgv = checkExecArgv(options.execArgv ?? []);
   const scriptArgs = (options.scriptArgs ?? []).map((arg, index) => checkString(`scriptArgs[${index}]`, arg, true));
+  const tmpDir = options.tmpDir === undefined ? undefined : checkString("tmpDir", options.tmpDir);
 
   const withVmem = supportsAddressSpaceCap(options.platform ?? process.platform);
 
@@ -203,6 +210,6 @@ export function buildWrapperCommand(options: WrapperOptions): WrapperCommand {
       scriptPath,
       ...scriptArgs,
     ],
-    env: buildEnv(options.parentEnv ?? process.env),
+    env: buildEnv(options.parentEnv ?? process.env, tmpDir),
   };
 }

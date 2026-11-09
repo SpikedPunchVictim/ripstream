@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, test, type TestContext } from "node:test";
 import { crc32 } from "node:zlib";
 import {
@@ -8,6 +11,7 @@ import {
 } from "@spikedpunch/ripstream-isolation-node";
 import {
   CompositeParser,
+  LimitExceededError,
   ParseContext,
   UnsupportedFormatError,
   createRipstream,
@@ -388,4 +392,33 @@ test("a lenient isolator that found isolation unavailable parses everything in t
       assert.equal(answer.text, (await referenceText(input, "a.docx")).text);
     },
   );
+});
+
+// ---- 6. the child's disk (L6) ----------------------------------------------------------------------------------------
+
+test("a zip whose stored PDF entry makes the child spool past the disk budget is a LimitExceededError that names it, and leaves no temp directory", async () => {
+  // An entry the child spools to disk (RipstreamInputStream writes anything above 1 MiB to TMPDIR) before a parser
+  // looks at it. The directory is the test's own, so "nothing left behind" is checked on it and never on os.tmpdir().
+  const tempDir = mkdtempSync(join(tmpdir(), "ripstream-standard-disk-"));
+  try {
+    const entry = Buffer.alloc(40 * 1024 * 1024, 0x41);
+    entry.write("%PDF-1.4\n");
+    const input = storedZip({ "evil.pdf": entry });
+    await withStandard(
+      { config: { mode: "strict", maxDiskMb: 20 }, tempDir, runner: { onRunSettled: (d) => settled.push(d), diskPollMs: 20 } },
+      async ({ ripstream }) => {
+        const before = settled.length;
+        await assert.rejects(ripstream.parse(input, { filename: "evil.zip" }), (error: unknown) => {
+          assert.ok(error instanceof LimitExceededError, String(error));
+          assert.match(error.message, /temporary disk budget of 20 MiB exceeded/);
+          return true;
+        });
+        assert.equal(settled.length - before, 1, "one child ran");
+        assert.equal(settled.at(-1)?.killReason, "disk");
+      },
+    );
+    assert.deepEqual(readdirSync(tempDir), [], "the call directory is removed once the child is gone");
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });

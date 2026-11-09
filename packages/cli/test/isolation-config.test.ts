@@ -46,6 +46,26 @@ test("numeric settings come from the file and are overridden per field by the en
   });
 });
 
+test("maxDiskMb comes from RIPSTREAM_ISOLATION_MAX_DISK_MB or the file's isolation.maxDiskMb, the variable winning", () => {
+  assert.equal(
+    resolveIsolationConfig({ ...none, defaultMode: "strict", env: { RIPSTREAM_ISOLATION_MAX_DISK_MB: "512" } }).config.maxDiskMb,
+    512,
+  );
+  assert.equal(
+    resolveIsolationConfig({ ...none, defaultMode: "strict", fileIsolation: { mode: "strict", maxDiskMb: 256 } }).config.maxDiskMb,
+    256,
+  );
+  assert.equal(
+    resolveIsolationConfig({
+      ...none,
+      defaultMode: "strict",
+      fileIsolation: { mode: "strict", maxDiskMb: 256 },
+      env: { RIPSTREAM_ISOLATION_MAX_DISK_MB: "2048" },
+    }).config.maxDiskMb,
+    2048,
+  );
+});
+
 test("requireStrictContainment comes from the environment or the file", () => {
   assert.equal(
     resolveIsolationConfig({ ...none, defaultMode: "strict", env: { RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT: "true" } }).config
@@ -69,6 +89,9 @@ test("a bad value names where it came from", () => {
     [{ env: { RIPSTREAM_ISOLATION: "yes" } }, /RIPSTREAM_ISOLATION.*strict, lenient or off/],
     [{ env: { RIPSTREAM_ISOLATION_MEMORY_POOL_MB: "lots" } }, /RIPSTREAM_ISOLATION_MEMORY_POOL_MB.*integer/],
     [{ env: { RIPSTREAM_ISOLATION_MAX_QUEUE: "-1" } }, /RIPSTREAM_ISOLATION_MAX_QUEUE.*integer/],
+    [{ env: { RIPSTREAM_ISOLATION_MAX_DISK_MB: "lots" } }, /RIPSTREAM_ISOLATION_MAX_DISK_MB expects a non-negative integer, got "lots"/],
+    [{ env: { RIPSTREAM_ISOLATION_MAX_DISK_MB: "1.5" } }, /RIPSTREAM_ISOLATION_MAX_DISK_MB.*integer/],
+    [{ env: { RIPSTREAM_ISOLATION_MAX_DISK_MB: "0" } }, /maxDiskMb/],
     [{ env: { RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT: "maybe" } }, /REQUIRE_STRICT_CONTAINMENT.*true or false/],
   ];
   for (const [overrides, pattern] of cases) {

@@ -26,6 +26,7 @@ export {
   type InputHeader,
 } from "./child-io.ts";
 export type { RunDiagnostics } from "./supervisor.ts";
+export { DEFAULT_DISK_POLL_MS, type DiskStats } from "./disk.ts";
 export {
   createNodeIsolator,
   missingStrictContainment,
@@ -48,6 +49,7 @@ export {
 } from "./routing.ts";
 export {
   deriveLimits,
+  DEFAULT_MAX_DISK_MB,
   DEFAULT_MAX_INPUT_BYTES,
   DEFAULT_PER_CHILD_MB,
   type DerivedLimits,

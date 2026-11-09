@@ -25,6 +25,10 @@ export interface ProbeOptions {
   readonly heapMb?: number;
   readonly vmemKb?: number;
   readonly execArgv?: readonly string[];
+  /** Where the probe child's private directory is made; pass the runner's so the probe shows that it works. */
+  readonly tempDir?: string;
+  /** Called when the probe child's directory could not be removed. The probe's answer is unaffected. */
+  readonly onTempCleanupError?: (message: string) => void;
   /** Whole-probe budget in ms. Default 10 s. */
   readonly timeoutMs?: number;
   /** @internal Test seam: replaces the built-in probe child script. */
@@ -58,6 +62,8 @@ export async function probeIsolation(options: ProbeOptions = {}): Promise<ProbeR
       ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
       ...(options.execArgv === undefined ? {} : { execArgv: options.execArgv }),
       ...(options.vmemKb === undefined ? {} : { vmemKb: options.vmemKb }),
+      ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }),
+      ...(options.onTempCleanupError === undefined ? {} : { onTempCleanupError: options.onTempCleanupError }),
       platform,
       cpuSecs: options.cpuSecs ?? 30,
       heapMb: options.heapMb ?? 64,

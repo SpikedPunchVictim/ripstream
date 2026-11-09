@@ -35,6 +35,7 @@ const ISOLATION_KEYS = new Set([
   "maxTaskMillis",
   "heapMb",
   "maxQueue",
+  "maxDiskMb",
 ]);
 /** Inclusive bounds. 2_147_483_647 is the largest setTimeout delay. */
 const ISOLATION_NUMBER_BOUNDS = {
@@ -45,6 +46,7 @@ const ISOLATION_NUMBER_BOUNDS = {
   heapMb: [1, 1_048_576],
   // 0 means "no waiting room": shed load as soon as every child is busy.
   maxQueue: [0, Number.MAX_SAFE_INTEGER],
+  maxDiskMb: [1, 1_048_576],
 } as const;
 
 const COMPONENT_LIST_KEYS = [

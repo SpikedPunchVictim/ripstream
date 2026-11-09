@@ -1,7 +1,19 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RunChildOptions, RunDiagnostics } from "../../src/supervisor.ts";
 
 export const CHILD = fileURLToPath(new URL("./child.ts", import.meta.url));
+/** Child that leaves files in, and writes into, its TMPDIR (see disk-child.ts). */
+export const DISK_CHILD = fileURLToPath(new URL("./disk-child.ts", import.meta.url));
+
+/**
+ * The `tempDir` of every run built by `runOptions`: a directory this test process owns, so the call directories of
+ * runs that are never reaped (fake children) land here instead of in the shared temp directory. Removed at exit.
+ */
+export const TEST_TEMP_DIR = mkdtempSync(join(tmpdir(), "ripstream-test-"));
+process.on("exit", () => rmSync(TEST_TEMP_DIR, { recursive: true, force: true }));
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -17,6 +29,7 @@ export function runOptions(
     cpuSecs: 30,
     heapMb: 128,
     request: { input },
+    tempDir: TEST_TEMP_DIR,
     deadlineMs: 10_000,
     maxResultBytes: 1024 * 1024,
     ...overrides,

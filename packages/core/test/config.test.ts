@@ -76,6 +76,7 @@ test("loads a valid isolation block as a frozen copy", () => {
     maxTaskMillis: 30000,
     heapMb: 512,
     maxQueue: 8,
+    maxDiskMb: 2048,
   };
   const config = loadConfig({ isolation: source });
   assert.deepEqual(config.isolation, source);
@@ -104,6 +105,7 @@ test("isolation validation rejects bad shapes and values", () => {
     "maxTaskMillis",
     "heapMb",
     "maxQueue",
+    "maxDiskMb",
   ]) {
     const rejected = [Number.NaN, -1, 0, -0, 1.5, Infinity, "10", null, Number.MAX_SAFE_INTEGER + 1];
     for (const value of field === "maxQueue" ? rejected.filter((v) => v !== 0) : rejected) {
@@ -130,6 +132,9 @@ test("isolation numeric fields have upper bounds", () => {
   assert.equal(bad({ mode: "off", maxTaskMillis: 2_147_483_648 }).length, 1);
   assert.deepEqual(bad({ mode: "off", maxTaskMillis: 2_147_483_647 }), []);
   assert.deepEqual(bad({ mode: "off", heapMb: 1_048_576 }), []);
+  assert.equal(bad({ mode: "off", maxDiskMb: 1_048_577 }).length, 1);
+  assert.deepEqual(bad({ mode: "off", maxDiskMb: 1_048_576 }), []);
+  assert.deepEqual(bad({ mode: "off", maxDiskMb: 1 }), []);
   assert.deepEqual(bad({ mode: "off", maxInputBytes: Number.MAX_SAFE_INTEGER }), []);
   assert.equal(bad({ mode: "off", maxInputBytes: Number.MAX_SAFE_INTEGER + 1 }).length, 1);
 });

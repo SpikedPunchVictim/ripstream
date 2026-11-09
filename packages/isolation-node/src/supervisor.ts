@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
+import { tmpdir } from "node:os";
 import type { Readable } from "node:stream";
 import { IsolationError, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { encodeInputPrefix, type InputHeader } from "./child-io.ts";
@@ -9,6 +10,14 @@ import {
   type ExitFacts,
   type KillReason,
 } from "./classify.ts";
+import {
+  createCallDir,
+  DEFAULT_DISK_POLL_MS,
+  DiskPoller,
+  removeCallDir,
+  type DiskPollerOptions,
+  type DiskStats,
+} from "./disk.ts";
 import { FrameReader, type FrameEvent, type FrameViolationKind } from "./frames.ts";
 import { DEFAULT_POLL_MS, RssPoller, type RssPollerOptions, type RssStats } from "./rss.ts";
 import { rssPollKind } from "./containment.ts";
@@ -41,7 +50,8 @@ const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>>
  *    deadline) kills a child that never gets there; that is infrastructure
  *    failure (unavailable), not a timeout.
  *  - post-ready: input is written to stdin; the wall-clock deadline, the
- *    AbortSignal, the RSS poll and the frame reader's caps can kill the group.
+ *    AbortSignal, the RSS poll, the disk poll and the frame reader's caps can
+ *    kill the group.
  *  - terminal frame ("done" | "error"): the child gets `graceMs` to exit by
  *    itself, then the group is killed. The run settles when the group leader
  *    has been reaped; it never waits for 'close', which a grandchild that
@@ -53,10 +63,21 @@ const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>>
  * Two promises, two questions. `result` answers the CALLER and settles
  * promptly (if the leader is not reaped within `reapWaitMs` after a kill, the
  * caller is answered anyway). `dead` answers the RESOURCE OWNER: it resolves
- * only once the leader has been reaped (and the group swept), or at once when
- * nothing was ever spawned. Whoever holds memory for the child (the pool
- * lease) must release it on `dead`, not on `result`, or a child that
- * survives its SIGKILL would be paid for by nobody.
+ * only once the leader has been reaped (and the group swept) and the call's
+ * temporary directory is removed, or at once when nothing was ever spawned.
+ * Whoever holds memory for the child (the pool lease) must release it on
+ * `dead`, not on `result`, or a child that survives its SIGKILL would be paid
+ * for by nobody.
+ *
+ * Disk (L6): every call gets a private directory under `tempDir`, handed to the
+ * child as TMPDIR (the working directory is left alone: relative input and
+ * script paths resolve against it). The directory is removed once the leader is
+ * reaped and its group swept, on every outcome, and never before: a child that
+ * is still running could keep writing into it. The caller is answered after
+ * the removal when the leader was reaped, so a verdict never races its own
+ * cleanup. A removal that fails is reported (`onTempCleanupError`,
+ * `RunDiagnostics.tempCleanupError`) and never changes the verdict. A leader
+ * that is never reaped leaves its directory behind, as it leaves its memory.
  *
  * stderr has two budgets, one per side, and the child's is the smaller:
  *  - The CHILD (every child entry calls `initChildProcess()`, child-io.ts)
@@ -132,6 +153,18 @@ export interface RunChildOptions {
   /** Bytes of stderr read before its pipe is closed. Default 1 MiB. */
   readonly stderrBudgetBytes?: number;
   readonly signal?: AbortSignal;
+  /**
+   * Where the call's private directory is made (L6). Default os.tmpdir(). The child gets the directory as TMPDIR and
+   * it is removed when the child is gone. The caller validates the path (absolute, existing); a directory that
+   * cannot be created here is "unavailable".
+   */
+  readonly tempDir?: string;
+  /** Budget for the call's directory in MiB of allocated bytes (L6). Omit to disable the poll. */
+  readonly maxDiskMb?: number;
+  /** Disk poll interval. Default 100 ms. */
+  readonly diskPollMs?: number;
+  /** Called with a description when the call's directory could not be removed. The run's outcome is unaffected. */
+  readonly onTempCleanupError?: (message: string) => void;
   /** Called once, just before the run settles, with what was observed. Never throws into the run. */
   readonly onSettled?: (diagnostics: RunDiagnostics) => void;
   /** @internal Test seam for spawn failures. */
@@ -140,6 +173,8 @@ export interface RunChildOptions {
   readonly reapWaitMs?: number;
   /** @internal Replaces the RSS measurement (test seam). */
   readonly rssSampler?: RssPollerOptions["sample"];
+  /** @internal Replaces the disk measurement (test seam). */
+  readonly diskSampler?: DiskPollerOptions["sample"];
 }
 
 /** What `startChild` returns; see the two-promise note at the top of this file. */
@@ -177,8 +212,17 @@ export interface RunDiagnostics {
   readonly stderrClosed: boolean;
   readonly stdinError: string | null;
   readonly rss: RssStats | null;
+  readonly disk: DiskStats | null;
+  /** The call's private directory (removed when the child is gone), or null when none was made. */
+  readonly callDir: string | null;
+  /** Why the directory could not be removed, or null (removed, or the leader had not been reaped yet). */
+  readonly tempCleanupError: string | null;
   /** "signal:SIGKILL" | "code:0" | "spawn:ENOENT" | "unreaped" */
   readonly outcome: string;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function checkFinite(name: string, value: number, min: number): number {
@@ -247,6 +291,11 @@ class Supervision {
   #prefix: Buffer | null = null;
   #t0 = 0;
   #poller: RssPoller | null = null;
+  #diskPoller: DiskPoller | null = null;
+  #callDir: string | null = null;
+  #removal: Promise<void> | null = null;
+  #removed = false;
+  #tempCleanupError: string | null = null;
   #deadlineTimer: NodeJS.Timeout | undefined;
   #readyTimer: NodeJS.Timeout | undefined;
   #graceTimer: NodeJS.Timeout | undefined;
@@ -290,6 +339,8 @@ class Supervision {
     this.#readyTimeoutMs = checkFinite("readyTimeoutMs", options.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS, 1);
     if (options.rssLimitMb !== undefined) checkFinite("rssLimitMb", options.rssLimitMb, 1);
     checkFinite("pollMs", options.pollMs ?? DEFAULT_POLL_MS, 1);
+    if (options.maxDiskMb !== undefined) checkFinite("maxDiskMb", options.maxDiskMb, 1);
+    checkFinite("diskPollMs", options.diskPollMs ?? DEFAULT_DISK_POLL_MS, 1);
     this.#reapWaitMs = checkFinite("reapWaitMs", options.reapWaitMs ?? REAP_WAIT_MS, 0);
     this.#stderrBudget = checkFinite("stderrBudgetBytes", options.stderrBudgetBytes ?? DEFAULT_STDERR_BUDGET_BYTES, 1);
     this.#resolve = resolve;
@@ -306,6 +357,19 @@ class Supervision {
 
   start(): void {
     const options = this.#options;
+    let callDir: string;
+    try {
+      callDir = createCallDir(options.tempDir ?? tmpdir());
+    } catch (error) {
+      this.#markDead(); // nothing was spawned
+      this.#reject(
+        new IsolationError("unavailable", `Could not create the isolated parser's temporary directory: ${errorText(error)}`, {
+          cause: error,
+        }),
+      );
+      return;
+    }
+    this.#callDir = callDir;
     let wrapperArgs: ReturnType<typeof buildWrapperCommand>;
     try {
       wrapperArgs = buildWrapperCommand({
@@ -318,11 +382,11 @@ class Supervision {
         ...(options.vmemKb === undefined ? {} : { vmemKb: options.vmemKb }),
         ...(options.parentEnv === undefined ? {} : { parentEnv: options.parentEnv }),
         platform: this.#platform,
+        tmpDir: callDir,
       });
       this.#prefix = encodeInputPrefix(this.#header());
     } catch (error) {
-      this.#markDead(); // nothing was spawned
-      this.#reject(error instanceof Error ? error : new Error(String(error)));
+      this.#failBeforeSpawn(error instanceof Error ? error : new Error(String(error)));
       return;
     }
 
@@ -335,8 +399,7 @@ class Supervision {
         env: wrapperArgs.env,
       });
     } catch (error) {
-      this.#markDead(); // nothing was spawned
-      this.#reject(
+      this.#failBeforeSpawn(
         new IsolationError("unavailable", `Could not start the isolated parser: ${String(error)}`, { cause: error }),
       );
       return;
@@ -438,6 +501,7 @@ class Supervision {
     if (this.#readyTimer !== undefined) clearTimeout(this.#readyTimer);
     this.#readyTimer = undefined;
     this.#startPoller();
+    this.#startDiskPoller();
     this.#writeInput();
   }
 
@@ -454,6 +518,26 @@ class Supervision {
       ...(this.#options.rssSampler === undefined ? {} : { sample: this.#options.rssSampler }),
     });
     this.#poller.start();
+  }
+
+  /** Disk writes start with the input, so the budget is watched from "ready" on, like the RSS limit. */
+  #startDiskPoller(): void {
+    const { maxDiskMb, diskPollMs, diskSampler } = this.#options;
+    const dir = this.#callDir;
+    if (maxDiskMb === undefined || dir === null) return;
+    this.#diskPoller = new DiskPoller({
+      dir,
+      limitMb: maxDiskMb,
+      pollMs: diskPollMs ?? DEFAULT_DISK_POLL_MS,
+      onOverLimit: () => this.#kill("disk"),
+      ...(diskSampler === undefined ? {} : { sample: diskSampler }),
+    });
+    this.#diskPoller.start();
+  }
+
+  #stopPollers(): void {
+    this.#poller?.stop();
+    this.#diskPoller?.stop();
   }
 
   /** The child sent "ready" BEFORE reading, so the input waits in the pipe until it does. */
@@ -507,7 +591,7 @@ class Supervision {
     }
     this.#stopping = true;
     this.#clearTimers();
-    this.#poller?.stop();
+    this.#stopPollers();
     this.#groupKill();
     this.#armReapTimer();
   }
@@ -533,12 +617,16 @@ class Supervision {
   #onChildError(error: NodeJS.ErrnoException): void {
     if (this.#child?.pid !== undefined) return; // not a spawn failure; the exit event decides
     this.#spawnError = { code: error.code, syscall: error.syscall };
-    this.#markDead(); // nothing was spawned
-    this.#settle(
-      new IsolationError("unavailable", `Could not start the isolated parser (${error.code ?? error.message})`, {
-        cause: error,
-      }),
-    );
+    this.#clearTimers();
+    // Nothing was spawned, so nothing can write to the directory: it goes before the caller is answered.
+    void this.#removeCallDir().then(() => {
+      this.#markDead();
+      this.#settle(
+        new IsolationError("unavailable", `Could not start the isolated parser (${error.code ?? error.message})`, {
+          cause: error,
+        }),
+      );
+    });
   }
 
   #onExit(code: number | null, signal: NodeJS.Signals | null): void {
@@ -546,25 +634,64 @@ class Supervision {
     this.#code = code;
     this.#signal = signal;
     this.#exitMs = this.#now();
-    this.#poller?.stop();
+    this.#stopPollers();
+    // The leader is reaped, so no timer can still change the verdict.
+    this.#clearTimers();
     // Sweep lingering grandchildren. The leader is reaped, but the group id stays reserved while any member lives, so the
     // negative-pid kill cannot hit an unrelated group; with no member left it is ESRCH (pid reuse in that window is negligible).
     this.#groupKill();
+    // Nothing can write to the call directory any more: remove it, THEN report the child dead and answer the caller.
     // Dead BEFORE settling, so a lease released on `dead` is already free when the caller's promise continues.
     // This also runs for a leader reaped after the caller was answered (the reap wait ran out first).
-    this.#markDead();
+    void this.#removeCallDir().then(() => {
+      this.#markDead();
+      this.#afterExit();
+    });
+  }
+
+  #afterExit(): void {
     if (this.#settled) return;
     if (this.#terminalSeen || this.#stopping) {
       this.#settle();
       return;
     }
-    // No verdict yet: frames may still be in the pipe. The sweep above closes any fds a grandchild held.
-    this.#clearTimers();
+    // No verdict yet: frames may still be in the pipe. The sweep in #onExit closes any fds a grandchild held.
     this.#drainTimer = setTimeout(() => this.#settle(), DRAIN_MS);
   }
 
   #onClose(): void {
     if (this.#exited) this.#settle();
+  }
+
+  // ---- the call directory ---------------------------------------------------
+
+  /** Removes the call directory, once. A failure is reported and recorded; it never rejects and never changes the verdict. */
+  #removeCallDir(): Promise<void> {
+    if (this.#removal !== null) return this.#removal;
+    const dir = this.#callDir;
+    const removal = dir === null ? Promise.resolve() : removeCallDir(dir);
+    this.#removal = removal
+      .catch((error: unknown) => {
+        const message = `Could not remove the isolated parser's temporary directory ${String(dir)}: ${errorText(error)}`;
+        this.#tempCleanupError = message;
+        try {
+          this.#options.onTempCleanupError?.(message);
+        } catch {
+          // reporting is best effort
+        }
+      })
+      .then(() => {
+        this.#removed = true;
+      });
+    return this.#removal;
+  }
+
+  /** A failure before anything was spawned: the directory goes first, then the caller is answered. */
+  #failBeforeSpawn(error: Error): void {
+    void this.#removeCallDir().then(() => {
+      this.#markDead(); // nothing was spawned
+      this.#reject(error);
+    });
   }
 
   // ---- settling -------------------------------------------------------------
@@ -591,6 +718,9 @@ class Supervision {
       stderrMarkers: this.#stderrMarkers,
       ...(this.#killReason === "abort" ? { abortReason: this.#abortReason } : {}),
       ...(this.#protocolDetail === undefined ? {} : { protocolDetail: this.#protocolDetail }),
+      ...(this.#killReason === "disk" && this.#options.maxDiskMb !== undefined
+        ? { disk: { limitMb: this.#options.maxDiskMb, boundHit: this.#diskPoller?.stats().boundHit ?? false, unreadable: this.#diskPoller?.stats().unreadable ?? false } }
+        : {}),
     };
   }
 
@@ -624,6 +754,9 @@ class Supervision {
       stderrClosed: this.#stderrClosed,
       stdinError: this.#stdinError,
       rss: this.#poller?.stats() ?? null,
+      disk: this.#diskPoller?.stats() ?? null,
+      callDir: this.#callDir,
+      tempCleanupError: this.#tempCleanupError,
       outcome,
     };
   }
@@ -631,6 +764,11 @@ class Supervision {
   /** Settles exactly once. `forced` is an error decided outside the classifier (spawn failure). */
   #settle(forced?: Error): void {
     if (this.#settled) return;
+    if (this.#removal !== null && !this.#removed) {
+      // The leader is reaped and its directory is being removed: the caller is answered once it is gone.
+      void this.#removal.then(() => this.#settle(forced));
+      return;
+    }
     this.#settled = true;
 
     const facts = this.#facts();
@@ -663,7 +801,7 @@ class Supervision {
     }
     this.#reapTimer = undefined;
     this.#drainTimer = undefined;
-    this.#poller?.stop();
+    this.#stopPollers();
     this.#options.signal?.removeEventListener("abort", this.#onAbort);
     const child = this.#child;
     if (child === null) return;

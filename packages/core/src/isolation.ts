@@ -35,6 +35,11 @@ export interface IsolationConfig {
   readonly heapMb?: number;
   /** Tasks allowed to wait for a free child before queue_full is raised. */
   readonly maxQueue?: number;
+  /**
+   * Allocated disk one child may hold in its private temporary directory, in MiB; the isolator kills the child above
+   * it. The isolator checks the directory on a poll, so a child can overshoot between two samples.
+   */
+  readonly maxDiskMb?: number;
 }
 
 /** One parsed document (top-level or embedded) in plain, serializable form. */

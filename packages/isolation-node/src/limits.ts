@@ -21,6 +21,13 @@ export const DEFAULT_PER_CHILD_MB = 1536;
  */
 export const DEFAULT_MAX_INPUT_BYTES = 100 * MIB;
 
+/**
+ * Allocated bytes one child may leave in its private temp directory when the config says nothing (L6). Measured:
+ * a stored 90 MiB entry typed PDF made a child spool 270 MiB (three copies at once), so the 100 MiB input cap needs
+ * about 300 MiB; 1 GiB leaves room for that and for the OCR parser's temp image.
+ */
+export const DEFAULT_MAX_DISK_MB = 1024;
+
 /** The design's heap range (L1). The derived heap never leaves it (unless the child budget is smaller, see below). */
 export const MIN_DERIVED_HEAP_MB = 384;
 export const MAX_DERIVED_HEAP_MB = 512;
@@ -107,6 +114,8 @@ export interface DerivedLimits {
   /** The child's own parse timer, always below `maxTaskMillis` (except at 1 ms). */
   readonly maxParseMillis: number;
   readonly maxInputBytes: number;
+  /** The most allocated disk, in MiB, a child may hold in its private temp directory; the parent kills it above this. */
+  readonly maxDiskMb: number;
   /** The request's effective output cap: what the child is told and what the sizes below derive from. */
   readonly maxOutputChars: number;
   readonly maxEmbeddedResources: number;
@@ -214,6 +223,7 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     maxTaskMillis,
     maxParseMillis: parseMillisFor(maxTaskMillis),
     maxInputBytes: config.maxInputBytes ?? DEFAULT_MAX_INPUT_BYTES,
+    maxDiskMb: config.maxDiskMb ?? DEFAULT_MAX_DISK_MB,
     maxOutputChars,
     maxEmbeddedResources,
     output,

@@ -5,6 +5,7 @@ import {
   ParseTimeoutError,
   type RipstreamError,
 } from "@spikedpunch/ripstream-core";
+import { MAX_DISK_DEPTH, MAX_DISK_ENTRIES } from "./disk.ts";
 import { decodeErrorFrame, oneLineText, sanitizeText } from "./error-codec.ts";
 import type { ErrorFrame } from "./frames.ts";
 
@@ -16,8 +17,6 @@ export type KillReason =
   | "result_cap"
   | "frame_cap"
   | "metadata_cap"
-  // Nothing records this yet: the per-call disk budget is tracked by bead tikajs-zgg2.11. Kept so the classifier
-  // and its tests already know what a disk-budget kill means when that lands.
   | "disk"
   | "protocol";
 
@@ -42,6 +41,8 @@ export interface ExitFacts {
   readonly abortReason?: unknown;
   /** What the frame reader objected to when killReason is "protocol" (untrusted-influenced text). */
   readonly protocolDetail?: string;
+  /** The budget that was exceeded when killReason is "disk", and whether the walk's entry or depth bound tripped it. */
+  readonly disk?: { readonly limitMb: number; readonly boundHit: boolean; readonly unreadable?: boolean };
 }
 
 // Observed in the P0 chaos fixtures (b, e, f): "JavaScript heap out of memory",
@@ -83,6 +84,17 @@ function isTimeoutReason(reason: unknown): boolean {
   return typeof reason === "object" && reason !== null && (reason as { name?: unknown }).name === "TimeoutError";
 }
 
+/** Names the budget; when the walk bound tripped it the bytes are not the cause, so the message says what is. */
+function diskMessage(disk: ExitFacts["disk"]): string {
+  if (disk === undefined) return "Isolated parser: temporary disk budget exceeded";
+  const bound = disk.boundHit
+    ? ` (more than ${MAX_DISK_ENTRIES} files and directories, or nested deeper than ${MAX_DISK_DEPTH} levels)`
+    : disk.unreadable === true
+      ? " (its temporary directory could not be read)"
+      : "";
+  return `Isolated parser: temporary disk budget of ${disk.limitMb} MiB exceeded${bound}`;
+}
+
 function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
   switch (reason) {
     case "timeout":
@@ -100,7 +112,7 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
     case "metadata_cap":
       return new LimitExceededError("Isolated parser result metadata exceeded the maximum size", stderrCause(facts));
     case "disk":
-      return new LimitExceededError("Isolated parser exceeded its disk budget", stderrCause(facts));
+      return new LimitExceededError(diskMessage(facts.disk), stderrCause(facts));
     case "protocol": {
       // A child that breaks the frame protocol is broken or hostile, never a malformed document.
       const detail = oneLine(facts.protocolDetail ?? "unspecified");

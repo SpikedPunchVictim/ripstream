@@ -363,6 +363,21 @@ test("a parent MALLOC_ARENA_MAX cannot override ours", () => {
   assert.equal(build({ parentEnv: { MALLOC_ARENA_MAX: "64" } }).env.MALLOC_ARENA_MAX, "1");
 });
 
+test("tmpDir becomes the child's TMPDIR; without it the child gets none, whatever the parent has", () => {
+  assert.equal(build({ tmpDir: "/scratch/call-1", parentEnv: {} }).env.TMPDIR, "/scratch/call-1");
+  assert.equal("TMPDIR" in build({ parentEnv: { TMPDIR: "/parent/tmp" } }).env, false);
+});
+
+test("a parent TMPDIR (or TMP, TEMP) cannot reach the child; tmpDir wins", () => {
+  const env = build({ tmpDir: "/scratch/call-1", parentEnv: { TMPDIR: "/parent/tmp", TMP: "/parent/tmp", TEMP: "/parent/tmp" } }).env;
+  assert.deepEqual(Object.keys(env).sort(), ["MALLOC_ARENA_MAX", "TMPDIR"]);
+  assert.equal(env.TMPDIR, "/scratch/call-1");
+});
+
+test("tmpDir must be a non-empty string without NUL", () => {
+  for (const tmpDir of ["", 5, "a\0b"]) assert.throws(() => build({ tmpDir }), TypeError, String(tmpDir));
+});
+
 test("defaults to filtering process.env", () => {
   const saved = process.env.NODE_OPTIONS;
   process.env.NODE_OPTIONS = "--trace-warnings";
