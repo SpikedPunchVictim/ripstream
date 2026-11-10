@@ -510,3 +510,14 @@ test("a detectors section naming a detector ripstream does not implement is a us
     assert.equal(await main(["detect", "--config", file, "-"], detect, { env: {} }), 2);
   });
 });
+
+test("a --config file saved with a byte order mark loads", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-bom-"));
+  try {
+    const file = join(directory, "config.json");
+    writeFileSync(file, `﻿${JSON.stringify({ isolation: { mode: "off" } })}`);
+    assert.equal(await main(["--config", file, "-"], io("plain"), { env: {} }), 0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

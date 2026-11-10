@@ -41,6 +41,9 @@ Changed: the CLI and `loadConfig` no longer take what they would misread (`tikaj
   only (`--port ""` was port 0).
 - `loadConfig` refuses an object with a repeated key (`JSON.parse` kept the last) and nesting deeper than 64 levels.
 
+Fixed: a configuration file saved with a UTF-8 byte order mark loads (`tikajs-68os.8.5`); `JSON.parse` rejected it with
+an unhelpful message. One leading mark is skipped, as Jackson skips it.
+
 Added: the `parsers` section of a Tika configuration is applied (`tikajs-68os.8.6`,
 [docs/parsing.md](docs/parsing.md#the-parsers-section)).
 

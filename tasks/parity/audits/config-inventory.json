@@ -38,10 +38,15 @@
     "upstreamKey": "parsers",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaLoader.java:115-117; ParserLoader.java:53-99",
     "ripstream": "config.parsers: ComponentConfig[] parsed and validated (packages/core/src/config.ts:136-169) but never consumed; real selection is the hardcoded list in createDefaultParser (packages/parsers/src/index.ts:77-)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J01,J02,J03,J04,J05,C01,C02",
     "unknownKeyBehaviour": "Tika-shaped entries ({\"pdf-parser\":{}} or string) rejected loudly; ripstream-shaped entries with unknown params or nonexistent class names ACCEPTED SILENTLY and never applied",
-    "note": "FALSE-GREEN: a validated config whose parsers section changes nothing. CLI never reads it (packages/cli/src/main.ts:342 takes only .isolation)."
+    "note": "FALSE-GREEN: a validated config whose parsers section changes nothing. CLI never reads it (packages/cli/src/main.ts:342 takes only .isolation).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4 712f12e",
+      "why": "The section is read and applied by name (createRipstream and the CLI)."
+    }
   },
   {
     "id": "CFG-005",
@@ -49,10 +54,15 @@
     "upstreamKey": "detectors",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; DetectorLoader.java",
     "ripstream": "config.detectors validated, never consumed; DefaultDetector has a fixed order (packages/mime/src/detector.ts)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "C02,C03,X09",
     "unknownKeyBehaviour": "silent-ignore for ripstream-shaped entries",
-    "note": "Same dead-section false-green as parsers."
+    "note": "Same dead-section false-green as parsers.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4 712f12e",
+      "why": "The section is read and applied by name (createRipstream and the CLI)."
+    }
   },
   {
     "id": "CFG-006",
@@ -63,7 +73,12 @@
     "status": "gap",
     "evidence": "J07,C02",
     "unknownKeyBehaviour": "kebab key rejected loudly (unknown top-level key); ripstream key accepted silently",
-    "note": "No pluggable encoding detectors in ripstream (grep for EncodingDetector: none)."
+    "note": "No pluggable encoding detectors in ripstream (grep for EncodingDetector: none).",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-1 pluggable encoding detectors",
+      "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    }
   },
   {
     "id": "CFG-007",
@@ -74,7 +89,12 @@
     "status": "gap",
     "evidence": "J07,J25",
     "unknownKeyBehaviour": "kebab key rejected; ripstream key accepted silently incl. nonexistent class",
-    "note": "Filters cannot be selected by config or applied to parse output."
+    "note": "Filters cannot be selected by config or applied to parse output.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.2",
+      "why": "Metadata filters: selection by config and the filter interface."
+    }
   },
   {
     "id": "CFG-008",
@@ -85,7 +105,12 @@
     "status": "gap",
     "evidence": "J07,J25,S02",
     "unknownKeyBehaviour": "unknown handler value silently ignored (S02)",
-    "note": "Tika handler types t,h,x,m,b,i (cli docs :338-340) vs ripstream meta/json."
+    "note": "Tika handler types t,h,x,m,b,i (cli docs :338-340) vs ripstream meta/json.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.7.6",
+      "why": "Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown."
+    }
   },
   {
     "id": "CFG-009",
@@ -96,7 +121,12 @@
     "status": "gap",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "No Renderer abstraction (grep for `interface Renderer|class .*Renderer` in packages/*/src: no match)."
+    "note": "No Renderer abstraction (grep for `interface Renderer|class .*Renderer` in packages/*/src: no match).",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.4",
+      "why": "Renderers, pages block and the metadata limiter budgets."
+    }
   },
   {
     "id": "CFG-010",
@@ -107,7 +137,12 @@
     "status": "partial",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "OCR is a constructor option, not a selectable/ordered recognizer list with _min-width/_min-height checks."
+    "note": "OCR is a constructor option, not a selectable/ordered recognizer list with _min-width/_min-height checks.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-2 OCR selection by config",
+      "why": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
+    }
   },
   {
     "id": "CFG-011",
@@ -140,7 +175,12 @@
     "status": "partial",
     "evidence": "O01",
     "unknownKeyBehaviour": "loud (ripstream rejects) at top level (unknown key); no file form",
-    "note": "No file/JSON form; provider names differ from Tika translator class names."
+    "note": "No file/JSON form; provider names differ from Tika translator class names.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-3 translators",
+      "why": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
+    }
   },
   {
     "id": "CFG-014",
@@ -151,7 +191,12 @@
     "status": "gap",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "Per-config spoolToDisk/outputThreshold/digester/content-handler-factory/metadata-write-filter defaults have no config surface."
+    "note": "Per-config spoolToDisk/outputThreshold/digester/content-handler-factory/metadata-write-filter defaults have no config surface.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-015",
@@ -162,7 +207,12 @@
     "status": "gap",
     "evidence": "J07,C12,P11,S07",
     "unknownKeyBehaviour": "loud (ripstream rejects) in file config; per-request parse-context in server multipart silently ignored (S07); unknown ParseOptions key silently ignored (P11)",
-    "note": "Tika's central extension point. ripstream cannot load a parse-context from JSON at all."
+    "note": "Tika's central extension point. ripstream cannot load a parse-context from JSON at all.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-016",
@@ -173,7 +223,12 @@
     "status": "partial",
     "evidence": "S04,S05,C16,C17",
     "unknownKeyBehaviour": "unknown preset name in ?preset= SILENTLY IGNORED (S04, 200 OK); Tika treats an unknown catalog preset as fatal",
-    "note": "Different concept: ripstream presets are server-side handler+limits bundles; Tika presets are catalog config fragments activated by --preset/TIKA_PRESETS."
+    "note": "Different concept: ripstream presets are server-side handler+limits bundles; Tika presets are catalog config fragments activated by --preset/TIKA_PRESETS.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-4 Tika presets",
+      "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    }
   },
   {
     "id": "CFG-017",
@@ -184,7 +239,12 @@
     "status": "partial",
     "evidence": "O01-O06",
     "unknownKeyBehaviour": "unknown option SILENTLY IGNORED (O01)",
-    "note": "No file form: CLI `serve` takes only --port/--host/--isolation/--max-output-chars."
+    "note": "No file form: CLI `serve` takes only --port/--host/--isolation/--max-output-chars.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-018",
@@ -206,7 +266,12 @@
     "status": "partial",
     "evidence": "E01,S09",
     "unknownKeyBehaviour": "Tika-shaped body rejected as 'Missing source' (S09) or TypeError (E01)",
-    "note": "Only filesystem + http fetchers; no id-keyed multi-fetcher map."
+    "note": "Only filesystem + http fetchers; no id-keyed multi-fetcher map.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.2",
+      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+    }
   },
   {
     "id": "CFG-020",
@@ -217,7 +282,12 @@
     "status": "partial",
     "evidence": "E06",
     "unknownKeyBehaviour": "sink.type other than filesystem silently treated as filesystem (E06)",
-    "note": "No s3/gcs/az/opensearch emitters declared in config."
+    "note": "No s3/gcs/az/opensearch emitters declared in config.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+    }
   },
   {
     "id": "CFG-021",
@@ -228,7 +298,12 @@
     "status": "partial",
     "evidence": "S11",
     "unknownKeyBehaviour": "Tika iterator name as source.type rejected loudly (S11)",
-    "note": "No iterator abstraction by name."
+    "note": "No iterator abstraction by name.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.2",
+      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+    }
   },
   {
     "id": "CFG-022",
@@ -239,7 +314,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "No config form."
+    "note": "No config form.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.1",
+      "why": "Reporters and the per-tuple failure policy keys."
+    }
   },
   {
     "id": "CFG-023",
@@ -250,7 +330,12 @@
     "status": "partial",
     "evidence": "E02,E04,E05,S10,S12",
     "unknownKeyBehaviour": "unknown keys, bad numeric types and bad mode SILENTLY ACCEPTED by createEngine (E02,E04,E05); POST /pipes silently ignores unknown keys and a bogus mode (S10)",
-    "note": "See pipes rows."
+    "note": "See pipes rows.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6",
+      "why": "Pipes section: see the pipes rows."
+    }
   },
   {
     "id": "CFG-024",
@@ -269,10 +354,15 @@
     "upstreamKey": "default-parser marker + SPI fallback",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/AbstractSpiComponentLoader.java:62,330; ParserLoader.java:63",
     "ripstream": "createDefaultParser({parsers?}) hardcoded list (packages/parsers/src/index.ts:77-)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "R05,J01",
     "unknownKeyBehaviour": "n/a in config; unknown options to createRipstream silently ignored (R04)",
-    "note": "Programmatic list override exists; no marker/fallback semantics, no auto-exclusion of listed components."
+    "note": "Programmatic list override exists; no marker/fallback semantics, no auto-exclusion of listed components.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "default-parser / default-detector marker, auto-exclusion of listed components and the marker position follow AbstractSpiComponentLoader."
+    }
   },
   {
     "id": "CFG-026",
@@ -280,10 +370,15 @@
     "upstreamKey": "default-parser.exclude",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/AbstractSpiComponentLoader.java:266-269,330",
     "ripstream": "none",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J02,X02",
     "unknownKeyBehaviour": "loud (ripstream rejects) for Tika shape; legacy XML <parser-exclude> INVERTED into an include (X02)",
-    "note": "Upstream: unregistered exclude name is fatal, non-string exclude item silently skipped (TikaJsonConfig.java:333)."
+    "note": "Upstream: unregistered exclude name is fatal, non-string exclude item silently skipped (TikaJsonConfig.java:333).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "An unknown exclude name is fatal as upstream; a non-string exclude item is refused where upstream skips it silently."
+    }
   },
   {
     "id": "CFG-027",
@@ -291,10 +386,15 @@
     "upstreamKey": "_mime-include / _mime-exclude on a parser entry",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/ComponentInstantiator.java:190-191,291-294,317-326; FrameworkConfig.java:42-43,81-82",
     "ripstream": "none",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J22",
     "unknownKeyBehaviour": "silent-ignore (accepted as an extra key of a ComponentConfig, never applied)",
-    "note": "FALSE-GREEN. Upstream: non-array/non-string value is silently an empty filter (ComponentInstantiator.java:317-345, unverified line); image/ocr-* names fail load (migrating-to-4x.adoc:239)."
+    "note": "FALSE-GREEN. Upstream: non-array/non-string value is silently an empty filter (ComponentInstantiator.java:317-345, unverified line); image/ocr-* names fail load (migrating-to-4x.adoc:239).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "Media type filters equal ParserDecorator.withMimeFilters; a malformed value and the retired image/ocr-* types are refused where upstream is silent or fails later."
+    }
   },
   {
     "id": "CFG-028",
@@ -305,7 +405,12 @@
     "status": "partial",
     "evidence": "J04,C02",
     "unknownKeyBehaviour": "silent-ignore (J04: bogus param accepted)",
-    "note": "Option names differ from upstream property names; no JSON path to them."
+    "note": "Option names differ from upstream property names; no JSON path to them.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.10",
+      "why": "Parser settings by Tika property name."
+    }
   },
   {
     "id": "CFG-029",
@@ -313,10 +418,15 @@
     "upstreamKey": "string shorthand ('pdf-parser')",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:322-326",
     "ripstream": "none",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J03",
     "unknownKeyBehaviour": "loud (ripstream rejects) ('parsers[0] must be an object')",
-    "note": "Valid upstream shorthand rejected."
+    "note": "Valid upstream shorthand rejected.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "The string shorthand is accepted."
+    }
   },
   {
     "id": "CFG-030",
@@ -324,10 +434,15 @@
     "upstreamKey": "object entry with >1 key (first field only)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:327-331 (break after first field)",
     "ripstream": "none",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J24",
     "unknownKeyBehaviour": "loud (ripstream rejects) (no class)",
-    "note": "Upstream silently drops the 2nd+ keys (TikaJsonConfig.java:330)."
+    "note": "Upstream silently drops the 2nd+ keys (TikaJsonConfig.java:330).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "An entry with more than one key is refused where upstream drops the extra keys without a word."
+    }
   },
   {
     "id": "CFG-031",
@@ -346,10 +461,15 @@
     "upstreamKey": "name-based parser lookup (kebab-case, @TikaComponent name, spi flag)",
     "upstreamSource": "tika-annotation-processor TikaComponent.java; KebabCaseConverter.java:35; ComponentNameResolver.java",
     "ripstream": "UPSTREAM_PARSERS/UPSTREAM_COMPONENTS catalog (227 entries) in packages/core/src/generated/upstream-services.ts; not used for lookup; PluginRegistry.get(name) returns undefined for unknown (plugins.ts:13-52)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "R01,R02",
     "unknownKeyBehaviour": "unknown name: PluginRegistry.get -> undefined (R02), initializeAll ignores options for unregistered names (R01)",
-    "note": "Upstream: unregistered name fatal and lists registered names; no Class.forName fallback."
+    "note": "Upstream: unregistered name fatal and lists registered names; no Class.forName fallback.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "Names are Tika's kebab-case names; an unknown one is fatal. Only the 89 standard-server parsers that claim types can be named (docs/parsing.md)."
+    }
   },
   {
     "id": "CFG-033",
@@ -360,7 +480,12 @@
     "status": "gap",
     "evidence": "H01,H04",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "No introspection endpoints /parsers, /parsers/details, /detectors, /mime-types."
+    "note": "No introspection endpoints /parsers, /parsers/details, /detectors, /mime-types.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.24 (already proposed)",
+      "why": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
+    }
   },
   {
     "id": "CFG-034",
@@ -368,10 +493,15 @@
     "upstreamKey": "default-detector marker + exclude",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/DetectorLoader.java; AbstractSpiComponentLoader.java:62",
     "ripstream": "DefaultDetector options + fixed ordering (packages/mime/src/detector.ts)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "X09",
     "unknownKeyBehaviour": "n/a",
-    "note": "Oracle DefaultDetector has 8 leaf detectors (oracle-introspection.json)."
+    "note": "Oracle DefaultDetector has 8 leaf detectors (oracle-introspection.json).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "default-parser / default-detector marker, auto-exclusion of listed components and the marker position follow AbstractSpiComponentLoader."
+    }
   },
   {
     "id": "CFG-035",
@@ -379,10 +509,15 @@
     "upstreamKey": "ordered detector list",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/DetectorLoader.java",
     "ripstream": "programmatic createRipstream({detector})",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "R04",
     "unknownKeyBehaviour": "unknown createRipstream option silently ignored",
-    "note": "Order is caller-supplied object, not config."
+    "note": "Order is caller-supplied object, not config.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "f8c1ac4",
+      "why": "default-parser / default-detector marker, auto-exclusion of listed components and the marker position follow AbstractSpiComponentLoader."
+    }
   },
   {
     "id": "CFG-036",
@@ -390,10 +525,15 @@
     "upstreamKey": "detector _mime-include/_mime-exclude",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/FrameworkConfig.java:42-43",
     "ripstream": "none",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J22",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "712f12e",
+      "why": "A detector takes no media type filters: refused, which is what Tika does on the marker and a silent drop on a named entry."
+    }
   },
   {
     "id": "CFG-037",
@@ -404,7 +544,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "Custom magic/glob additions cannot be supplied at runtime."
+    "note": "Custom magic/glob additions cannot be supplied at runtime.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.11",
+      "why": "Custom media type definitions."
+    }
   },
   {
     "id": "CFG-038",
@@ -415,7 +560,12 @@
     "status": "gap",
     "evidence": "H02",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.24 (already proposed)",
+      "why": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
+    }
   },
   {
     "id": "CFG-039",
@@ -426,7 +576,12 @@
     "status": "gap",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-1 pluggable encoding detectors",
+      "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    }
   },
   {
     "id": "CFG-040",
@@ -437,7 +592,12 @@
     "status": "gap",
     "evidence": "J07,C02",
     "unknownKeyBehaviour": "silent-ignore for ripstream key `encodingDetector`",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-1 pluggable encoding detectors",
+      "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    }
   },
   {
     "id": "CFG-041",
@@ -448,7 +608,12 @@
     "status": "gap",
     "evidence": "J25",
     "unknownKeyBehaviour": "silent-ignore for config.metadataFilters",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.2",
+      "why": "Metadata filters: selection by config and the filter interface."
+    }
   },
   {
     "id": "CFG-042",
@@ -459,7 +624,12 @@
     "status": "gap",
     "evidence": "P11",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.2",
+      "why": "Metadata filters: selection by config and the filter interface."
+    }
   },
   {
     "id": "CFG-043",
@@ -470,7 +640,12 @@
     "status": "gap",
     "evidence": "C14",
     "unknownKeyBehaviour": "loud (ripstream rejects) for CLI (--digest unknown option)",
-    "note": "No digest metadata (X-TIKA:digest:*) at all."
+    "note": "No digest metadata (X-TIKA:digest:*) at all.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.1",
+      "why": "Digesters and --digest."
+    }
   },
   {
     "id": "CFG-044",
@@ -481,7 +656,12 @@
     "status": "partial",
     "evidence": "S02",
     "unknownKeyBehaviour": "unknown ?handler= silently ignored (S02); CLI --output validated",
-    "note": "Tika 4.x default is Markdown (migrating-to-4x.adoc:108)."
+    "note": "Tika 4.x default is Markdown (migrating-to-4x.adoc:108).",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.7.6",
+      "why": "Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown."
+    }
   },
   {
     "id": "CFG-045",
@@ -492,7 +672,12 @@
     "status": "partial",
     "evidence": "P10,P06,S05",
     "unknownKeyBehaviour": "loud (ripstream rejects) only for the output limit; other limits silent (P01-P05)",
-    "note": "Behaviour differs: ripstream throws LimitExceededError (422) when exceeded (P10,S05); Tika default (throwOnWriteLimit=false) truncates and flags. Unverified how Tika reports."
+    "note": "Behaviour differs: ripstream throws LimitExceededError (422) when exceeded (P10,S05); Tika default (throwOnWriteLimit=false) truncates and flags. Unverified how Tika reports.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.7.5",
+      "why": "Write limit: ripstream throws (422) where Tika truncates and flags."
+    }
   },
   {
     "id": "CFG-046",
@@ -503,7 +688,12 @@
     "status": "gap",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "pages.* unreachable; PDF page text policy fixed."
+    "note": "pages.* unreachable; PDF page text policy fixed.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.4",
+      "why": "Renderers, pages block and the metadata limiter budgets."
+    }
   },
   {
     "id": "CFG-047",
@@ -514,7 +704,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-2 OCR selection by config",
+      "why": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
+    }
   },
   {
     "id": "CFG-048",
@@ -547,7 +742,12 @@
     "status": "partial",
     "evidence": "O01",
     "unknownKeyBehaviour": "n/a",
-    "note": "No file config; Tika list-of-one semantics absent."
+    "note": "No file config; Tika list-of-one semantics absent.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-3 translators",
+      "why": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
+    }
   },
   {
     "id": "CFG-051",
@@ -558,7 +758,12 @@
     "status": "partial",
     "evidence": "C04",
     "unknownKeyBehaviour": "n/a",
-    "note": "No top-level `language-detectors` key exists upstream either (KNOWN_KEYS); selection happens by name in parse-context. No config surface found in packages/language (only TranslationConfig); unverified beyond that grep."
+    "note": "No top-level `language-detectors` key exists upstream either (KNOWN_KEYS); selection happens by name in parse-context. No config surface found in packages/language (only TranslationConfig); unverified beyond that grep.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.3",
+      "why": "Language detection selection by name."
+    }
   },
   {
     "id": "CFG-052",
@@ -569,7 +774,12 @@
     "status": "gap",
     "evidence": "P01",
     "unknownKeyBehaviour": "silent-ignore for unknown limit key (P01)",
-    "note": "No embedded-depth limit."
+    "note": "No embedded-depth limit.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-053",
@@ -580,7 +790,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-054",
@@ -602,7 +817,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-056",
@@ -624,7 +844,12 @@
     "status": "gap",
     "evidence": "P10",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "Cannot opt into truncate-and-flag."
+    "note": "Cannot opt into truncate-and-flag.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-058",
@@ -635,7 +860,12 @@
     "status": "partial",
     "evidence": "P07",
     "unknownKeyBehaviour": "silent-ignore for Infinity (P07)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-059",
@@ -657,7 +887,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-061",
@@ -668,7 +903,12 @@
     "status": "partial",
     "evidence": "P05",
     "unknownKeyBehaviour": "silent-ignore for 0 (P05)",
-    "note": "Default differs from upstream 1000; no threshold companion."
+    "note": "Default differs from upstream 1000; no threshold companion.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-062",
@@ -679,7 +919,12 @@
     "status": "partial",
     "evidence": "P04",
     "unknownKeyBehaviour": "silent-ignore for non-number (P04)",
-    "note": "Upstream default 1 hour in CLI docs (cli/index.adoc:242)."
+    "note": "Upstream default 1 hour in CLI docs (cli/index.adoc:242).",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-063",
@@ -690,7 +935,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "Stall detector."
+    "note": "Stall detector.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-064",
@@ -701,7 +951,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-065",
@@ -712,7 +967,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "tk:exception:* bounding."
+    "note": "tk:exception:* bounding.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.7.2",
+      "why": "tk:exception:* bounding belongs with the failure semantics."
+    }
   },
   {
     "id": "CFG-066",
@@ -723,7 +983,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "No unpack output layout config (frictionless/regular)."
+    "note": "No unpack output layout config (frictionless/regular).",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.7.4",
+      "why": "Unpack output layout (frictionless/regular, name strategy) belongs with /unpack."
+    }
   },
   {
     "id": "CFG-067",
@@ -734,7 +999,12 @@
     "status": "partial",
     "evidence": "P01",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.4",
+      "why": "Renderers, pages block and the metadata limiter budgets."
+    }
   },
   {
     "id": "CFG-068",
@@ -745,7 +1015,12 @@
     "status": "gap",
     "evidence": "R01",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": "Wire-instantiable (6) vs blocked (6) policy and @OperatorOnly guard have no equivalent."
+    "note": "Wire-instantiable (6) vs blocked (6) policy and @OperatorOnly guard have no equivalent.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-5 per-request config and instantiated context",
+      "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    }
   },
   {
     "id": "CFG-069",
@@ -756,7 +1031,12 @@
     "status": "gap",
     "evidence": "S07,P11",
     "unknownKeyBehaviour": "silent-ignore (multipart config part ignored, S07)",
-    "note": "FALSE-GREEN: a client sending Tika-4 per-request config gets 200 and unmodified output."
+    "note": "FALSE-GREEN: a client sending Tika-4 per-request config gets 200 and unmodified output.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-5 per-request config and instantiated context",
+      "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    }
   },
   {
     "id": "CFG-070",
@@ -775,10 +1055,15 @@
     "upstreamKey": "FAIL_ON_UNKNOWN_PROPERTIES",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:190",
     "ripstream": "ComponentConfig index signature accepts any key (config.ts:3-6); validateComponent checks only `class` (config.ts:265-274)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J04,J25",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": "Core false-green class: component bodies are unvalidated."
+    "note": "Core false-green class: component bodies are unvalidated.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c f8c1ac4",
+      "why": "Every known section and every component setting is validated; an unknown key or setting is refused by name."
+    }
   },
   {
     "id": "CFG-072",
@@ -797,10 +1082,15 @@
     "upstreamKey": "STRICT_DUPLICATE_DETECTION",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:187",
     "ripstream": "JSON.parse last-wins (config.ts:112)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J18",
     "unknownKeyBehaviour": "silent-ignore (second 'isolation' overrides first)",
-    "note": "FALSE-GREEN: duplicate keys silently resolved."
+    "note": "FALSE-GREEN: duplicate keys silently resolved.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "c41e22b",
+      "why": "loadConfig refuses a repeated key (escapes decoded)."
+    }
   },
   {
     "id": "CFG-074",
@@ -811,7 +1101,12 @@
     "status": "gap",
     "evidence": "J19,J30",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "Config files with // comments are rejected; arguably acceptable."
+    "note": "Config files with // comments are rejected; arguably acceptable.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-6 loader leniency",
+      "why": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
+    }
   },
   {
     "id": "CFG-075",
@@ -822,7 +1117,12 @@
     "status": "partial",
     "evidence": "J17",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "Stricter than upstream: 'STRICT' rejected."
+    "note": "Stricter than upstream: 'STRICT' rejected.",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-6 loader leniency",
+      "why": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
+    }
   },
   {
     "id": "CFG-076",
@@ -830,10 +1130,15 @@
     "upstreamKey": "FAIL_ON_NULL_FOR_PRIMITIVES",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:156",
     "ripstream": "typeof checks for isolation only",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "J13,J16",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "1bc5b63 c41e22b",
+      "why": "A null, string, fractional or out-of-range value is refused for every numeric setting."
+    }
   },
   {
     "id": "CFG-077",
@@ -844,7 +1149,12 @@
     "status": "gap",
     "evidence": "J20,J21",
     "unknownKeyBehaviour": "silent-ignore (literal '${env:HOME}' kept in params, J20)",
-    "note": "FALSE-GREEN for params; loud only because isolation.mode validation fails (J21)."
+    "note": "FALSE-GREEN for params; loud only because isolation.mode validation fails (J21).",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-7 ${env:NAME} interpolation",
+      "why": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
+    }
   },
   {
     "id": "CFG-078",
@@ -852,10 +1162,15 @@
     "upstreamKey": "nesting / size limits (Jackson StreamReadConstraints)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaLoader.java:584-660 (metadata-list)",
     "ripstream": "JSON.parse unbounded",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J26,J28",
     "unknownKeyBehaviour": "silent-ignore (100000-deep and 200000-entry configs accepted, J26,J28)",
-    "note": "Jackson default max nesting 1000 (general Jackson knowledge, unverified for Tika's mapper)."
+    "note": "Jackson default max nesting 1000 (general Jackson knowledge, unverified for Tika's mapper).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "c41e22b",
+      "why": "loadConfig refuses nesting deeper than 64 levels (Jackson's bound is 1000)."
+    }
   },
   {
     "id": "CFG-079",
@@ -863,10 +1178,15 @@
     "upstreamKey": "UTF-8 BOM tolerance",
     "upstreamSource": "Jackson (unverified)",
     "ripstream": "readFile 'utf8' keeps BOM; JSON.parse fails (C11)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "J29,C11",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": "Windows-edited config files fail with an unhelpful message."
+    "note": "Windows-edited config files fail with an unhelpful message.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "working tree (this change)",
+      "why": "One leading UTF-8 byte order mark is skipped, for text and for bytes."
+    }
   },
   {
     "id": "CFG-080",
@@ -885,10 +1205,15 @@
     "upstreamKey": "3.x XML <parsers>/<parser class=...>",
     "upstreamSource": "docs/modules/ROOT/pages/migration-to-4x/migrating-to-4x.adoc:118-216",
     "ripstream": "loadXmlConfig regex scan (config.ts:288-317)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "X01",
     "unknownKeyBehaviour": "silent-ignore (<params> dropped, X01)",
-    "note": "Upstream 4.x does NOT read XML at runtime ('legacy format no longer supported', :120-121); it only converts via --convert-config-xml-to-json. ripstream's loader keeps XML alive but lossy."
+    "note": "Upstream 4.x does NOT read XML at runtime ('legacy format no longer supported', :120-121); it only converts via --convert-config-xml-to-json. ripstream's loader keeps XML alive but lossy.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c",
+      "why": "ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed)."
+    }
   },
   {
     "id": "CFG-082",
@@ -896,10 +1221,15 @@
     "upstreamKey": "<parser-exclude class=...> / <detector-exclude>",
     "upstreamSource": "migrating-to-4x.adoc:213-215",
     "ripstream": "loadXmlConfig tag regex /<parser[^>]*class=/ (config.ts:298-300)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "X02,X09",
     "unknownKeyBehaviour": "INVERTED: an excluded class becomes an INCLUDED parser/detector (X02,X09)",
-    "note": "FALSE-GREEN with inverted semantics (worse than ignore)."
+    "note": "FALSE-GREEN with inverted semantics (worse than ignore).",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c",
+      "why": "ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed)."
+    }
   },
   {
     "id": "CFG-083",
@@ -907,10 +1237,15 @@
     "upstreamKey": "XML comments",
     "upstreamSource": "n/a",
     "ripstream": "regex scan matches inside comments (config.ts:286 admits this for <isolation> only)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "X04",
     "unknownKeyBehaviour": "INVERTED: commented-out parser is loaded (X04)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c",
+      "why": "ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed)."
+    }
   },
   {
     "id": "CFG-084",
@@ -918,10 +1253,15 @@
     "upstreamKey": "malformed XML / DOCTYPE",
     "upstreamSource": "n/a",
     "ripstream": "no XML parsing at all (regex)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "X05,X06",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": "Unclosed tags accepted (X05); no XXE risk because nothing is parsed."
+    "note": "Unclosed tags accepted (X05); no XXE risk because nothing is parsed.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c",
+      "why": "ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed)."
+    }
   },
   {
     "id": "CFG-085",
@@ -929,10 +1269,15 @@
     "upstreamKey": "other 3.x sections (<detectors>,<encodingDetectors>,<translator>,<autoDetectParserConfig>,<service-loader>,<mimeTypeRepository>,<server>)",
     "upstreamSource": "migrating-to-4x.adoc:145-146 (converter: parsers only)",
     "ripstream": "only parser/detector/encodingDetector class attrs",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "X03,X09",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": "Upstream converter also parsers-only; but upstream says so and does not run the XML."
+    "note": "Upstream converter also parsers-only; but upstream says so and does not run the XML.",
+    "triage": {
+      "disposition": "implemented",
+      "resolvedBy": "234e04c",
+      "why": "ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed)."
+    }
   },
   {
     "id": "CFG-086",
@@ -943,7 +1288,12 @@
     "status": "gap",
     "evidence": "C07",
     "unknownKeyBehaviour": "Unknown option (loud)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-9 fork mode, server id, XML conversion",
+      "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    }
   },
   {
     "id": "CFG-087",
@@ -965,7 +1315,12 @@
     "status": "partial",
     "evidence": "C21",
     "unknownKeyBehaviour": "--port abc rejected loudly (C21)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-089",
@@ -976,7 +1331,12 @@
     "status": "partial",
     "evidence": "C22",
     "unknownKeyBehaviour": "`-h <host>` Tika spelling prints help and exits 0 (C22)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-090",
@@ -987,7 +1347,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-9 fork mode, server id, XML conversion",
+      "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    }
   },
   {
     "id": "CFG-091",
@@ -998,7 +1363,12 @@
     "status": "gap",
     "evidence": "O01",
     "unknownKeyBehaviour": "n/a: cannot enable/disable endpoints",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-092",
@@ -1009,7 +1379,12 @@
     "status": "partial",
     "evidence": "S09",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-093",
@@ -1020,7 +1395,12 @@
     "status": "gap",
     "evidence": "S07",
     "unknownKeyBehaviour": "per-request config silently ignored (S07)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-5 per-request config and instantiated context",
+      "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    }
   },
   {
     "id": "CFG-094",
@@ -1053,7 +1433,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-097",
@@ -1075,7 +1460,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-099",
@@ -1086,7 +1476,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-100",
@@ -1097,7 +1492,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-101",
@@ -1108,7 +1508,12 @@
     "status": "partial",
     "evidence": "O03,O04",
     "unknownKeyBehaviour": "invalid values rejected loudly (O03,O04)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-102",
@@ -1119,7 +1524,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-103",
@@ -1130,7 +1540,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.24 (already proposed)",
+      "why": "TLS is the deployer's job (spec/04); a metrics port goes with it."
+    }
   },
   {
     "id": "CFG-104",
@@ -1141,7 +1556,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.24 (already proposed)",
+      "why": "TLS is the deployer's job (spec/04); a metrics port goes with it."
+    }
   },
   {
     "id": "CFG-105",
@@ -1152,7 +1572,12 @@
     "status": "gap",
     "evidence": "O01",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-106",
@@ -1163,7 +1588,12 @@
     "status": "partial",
     "evidence": "C16,C21,C22",
     "unknownKeyBehaviour": "unknown flag rejected loudly (C16); flag-letter collisions: -h help vs host, -p password vs port (C22)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-107",
@@ -1174,7 +1604,12 @@
     "status": "gap",
     "evidence": "C17",
     "unknownKeyBehaviour": "silent-ignore (TIKA_PRESETS=foo ignored, exit 0, C17)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-4 Tika presets",
+      "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    }
   },
   {
     "id": "CFG-108",
@@ -1196,7 +1631,12 @@
     "status": "partial",
     "evidence": "H01-H06",
     "unknownKeyBehaviour": "missing: /mime, /mime-types, /detectors, /parsers, /parsers/details (404)",
-    "note": "/status is enabled by default here but opt-in upstream; oracle /status is 404 because it is not in `endpoints`."
+    "note": "/status is enabled by default here but opt-in upstream; oracle /status is 404 because it is not in `endpoints`.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.9",
+      "why": "A server section for ripstream serve."
+    }
   },
   {
     "id": "CFG-110",
@@ -1207,7 +1647,12 @@
     "status": "partial",
     "evidence": "C01,C02,C07,C12",
     "unknownKeyBehaviour": "--config=FILE spelling rejected (C07); Tika-shaped config rejected (C01,C12); ripstream-shaped config accepted but parsers/detectors/etc. have NO effect (C02-C04,C13)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-111",
@@ -1218,7 +1663,12 @@
     "status": "partial",
     "evidence": "C24",
     "unknownKeyBehaviour": "unknown short flags rejected (-t, C24)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-112",
@@ -1229,7 +1679,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-113",
@@ -1240,7 +1695,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "flag-letter collision",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-114",
@@ -1251,7 +1711,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "rejected (unknown option)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-115",
@@ -1284,7 +1749,12 @@
     "status": "partial",
     "evidence": "C20",
     "unknownKeyBehaviour": "silent-ignore for env TIKA_PASSWORD (C20)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-8 TIKA_PASSWORD",
+      "why": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
+    }
   },
   {
     "id": "CFG-118",
@@ -1295,7 +1765,12 @@
     "status": "gap",
     "evidence": "C14",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.9.1",
+      "why": "Digesters and --digest."
+    }
   },
   {
     "id": "CFG-119",
@@ -1306,7 +1781,12 @@
     "status": "gap",
     "evidence": "C15",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.8",
+      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+    }
   },
   {
     "id": "CFG-120",
@@ -1317,7 +1797,12 @@
     "status": "gap",
     "evidence": "C23",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-121",
@@ -1328,7 +1813,12 @@
     "status": "gap",
     "evidence": "C07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-9 fork mode, server id, XML conversion",
+      "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    }
   },
   {
     "id": "CFG-122",
@@ -1339,7 +1829,12 @@
     "status": "partial",
     "evidence": "C05,C06b,C18,C19",
     "unknownKeyBehaviour": "typo'd env var name (RIPSTREAM_ISOLATION_MAXQUEUE) SILENTLY IGNORED (C18); bad value rejected loudly (C19)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-9 fork mode, server id, XML conversion",
+      "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    }
   },
   {
     "id": "CFG-123",
@@ -1350,7 +1845,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-124",
@@ -1361,7 +1861,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "rejected (unknown option)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-125",
@@ -1372,7 +1877,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "decision",
+      "target": "tikajs-68os.24",
+      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+    }
   },
   {
     "id": "CFG-126",
@@ -1383,7 +1893,12 @@
     "status": "partial",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.2",
+      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+    }
   },
   {
     "id": "CFG-127",
@@ -1394,7 +1909,12 @@
     "status": "partial",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.3",
+      "why": "parseMode and emit strategy semantics."
+    }
   },
   {
     "id": "CFG-128",
@@ -1405,7 +1925,12 @@
     "status": "gap",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.3",
+      "why": "parseMode and emit strategy semantics."
+    }
   },
   {
     "id": "CFG-129",
@@ -1416,7 +1941,12 @@
     "status": "partial",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.2",
+      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+    }
   },
   {
     "id": "CFG-130",
@@ -1460,7 +1990,12 @@
     "status": "gap",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.1",
+      "why": "Reporters and the per-tuple failure policy keys."
+    }
   },
   {
     "id": "CFG-134",
@@ -1493,7 +2028,12 @@
     "status": "gap",
     "evidence": "S09",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.2",
+      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+    }
   },
   {
     "id": "CFG-137",
@@ -1504,7 +2044,12 @@
     "status": "partial",
     "evidence": "S11",
     "unknownKeyBehaviour": "unsupported source.type: createEngine silently falls back to filesystem (E03); server returns 400 (S11)",
-    "note": "s3/gcs/az-blob are cloud-SDK dependent: non-goal-candidate for the core package, config shape could still exist."
+    "note": "s3/gcs/az-blob are cloud-SDK dependent: non-goal-candidate for the core package, config shape could still exist.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+    }
   },
   {
     "id": "CFG-138",
@@ -1515,7 +2060,12 @@
     "status": "partial",
     "evidence": "E06",
     "unknownKeyBehaviour": "sink.type != filesystem silently coerced (E06)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+    }
   },
   {
     "id": "CFG-139",
@@ -1526,7 +2076,12 @@
     "status": "partial",
     "evidence": "S11",
     "unknownKeyBehaviour": "n/a",
-    "note": "kafka/jdbc/solr/graph: JVM client libraries, non-goal-candidate."
+    "note": "kafka/jdbc/solr/graph: JVM client libraries, non-goal-candidate.",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+    }
   },
   {
     "id": "CFG-140",
@@ -1537,7 +2092,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+    }
   },
   {
     "id": "CFG-141",
@@ -1548,7 +2108,12 @@
     "status": "gap",
     "evidence": "C17",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-4 Tika presets",
+      "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    }
   },
   {
     "id": "CFG-142",
@@ -1559,7 +2124,12 @@
     "status": "gap",
     "evidence": "C20",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-8 TIKA_PASSWORD",
+      "why": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
+    }
   },
   {
     "id": "CFG-143",
@@ -1570,7 +2140,12 @@
     "status": "gap",
     "evidence": "J20",
     "unknownKeyBehaviour": "silent-ignore",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-7 ${env:NAME} interpolation",
+      "why": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
+    }
   },
   {
     "id": "CFG-144",
@@ -1603,7 +2178,12 @@
     "status": "gap",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "bead",
+      "target": "tikajs-68os.8.11",
+      "why": "Custom media type definitions."
+    }
   },
   {
     "id": "CFG-147",
@@ -1614,7 +2194,12 @@
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "",
+    "triage": {
+      "disposition": "non-goal-candidate",
+      "target": "NG-10 JVM system properties",
+      "why": "java.io.tmpdir is a JVM property; the isolation child's TMPDIR is set per child."
+    }
   },
   {
     "id": "CFG-148",

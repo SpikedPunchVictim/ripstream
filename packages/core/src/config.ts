@@ -97,9 +97,13 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
   // What JSON.parse accepts silently (a repeated key, absurd nesting) is reported with the other problems.
   let structureIssues: string[] = [];
   if (typeof source === "string" || source instanceof Uint8Array) {
+    // One leading byte order mark is skipped, as Jackson does: an editor on Windows writes it. Decoding bytes drops it
+    // already; a string keeps it, since a file read as text does.
     const text =
       typeof source === "string"
-        ? source
+        ? source.startsWith("\uFEFF")
+          ? source.slice(1)
+          : source
         : new TextDecoder("utf-8", { fatal: false }).decode(source);
     try {
       value = JSON.parse(text) as unknown;

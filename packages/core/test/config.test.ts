@@ -202,3 +202,17 @@ test("isolation rejects prototype-related and negative-zero keys", () => {
     /unknown key "constructor" in isolation/,
   );
 });
+
+test("a UTF-8 byte order mark before the JSON is skipped, as Jackson skips it", () => {
+  const json = '{"version":2,"isolation":{"mode":"off"}}';
+  // As text (a file read as a string keeps the mark) and as bytes.
+  assert.equal(loadConfig(`﻿${json}`).version, 2);
+  assert.equal(loadConfig(new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode(json)])).isolation?.mode, "off");
+  // Only one, and only at the start: anything else is still not JSON.
+  assert.throws(() => loadConfig(`﻿﻿${json}`), RipstreamConfigError);
+  assert.throws(() => loadConfig(` ﻿${json}`), RipstreamConfigError);
+  const bytes = new TextEncoder().encode(json);
+  assert.throws(() => loadConfig(new Uint8Array([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf, ...bytes])), RipstreamConfigError);
+  // The structure scan sees the same text, so a repeated key after a mark is still found.
+  assert.throws(() => loadConfig('﻿{"isolation":{"mode":"off","mode":"strict"}}'), /duplicate key "mode"/);
+});
