@@ -1,9 +1,12 @@
 import {
   MediaType,
   Metadata,
+  RipstreamConfigError,
+  type ComponentEntry,
   type Detector,
   type MediaTypeRegistry,
   type ParseContext,
+  type RipstreamConfig,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { MagicDetector } from "./magic.ts";
@@ -26,6 +29,8 @@ export interface DefaultDetectorOptions extends MimeTypesOptions {
   readonly magic?: MagicDetector;
   readonly trustContentTypeHeader?: boolean;
   readonly prefixLength?: number;
+  /** A loaded configuration. Its `detectors` section chooses which of Tika's detectors run (tikajs-68os.8.6). */
+  readonly config?: RipstreamConfig;
 }
 
 const TEXT_BASED_MESSAGE = MediaType.parse("text/x-tika-text-based-message") as MediaType;
@@ -33,6 +38,104 @@ const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const ZIP_EMPTY_SIGNATURE = [0x50, 0x4b, 0x05, 0x06];
 const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 const BPLIST_SIGNATURE = [0x62, 0x70, 0x6c, 0x69, 0x73, 0x74];
+
+/** What a stage is given: the stream (null when there is none) and the sniffing prefix of it. */
+interface StageInput {
+  readonly stream: RipstreamInputStream | null;
+  readonly prefix: Uint8Array;
+}
+
+/**
+ * One step of detection, and the Tika detectors it stands for. A Tika detector may be several steps (the ZIP container
+ * detector is the ZIP check, the empty-ZIP signature and the compressor signatures) and one step may be two Tika
+ * detectors (both OLE2 detectors read the same compound file), so `run` is told which of its names are on.
+ */
+interface Stage {
+  readonly names: readonly string[];
+  readonly run: (input: StageInput, on: ReadonlySet<string>) => Promise<MediaType | null> | MediaType | null;
+}
+
+const ZIP_CONTAINER = "default-zip-container-detector";
+const POIFS_CONTAINER = "poifs-container-detector";
+const MISC_OLE = "misc-ole-detector";
+/** Tika's name for the name, magic and XML root detector (`MimeTypes`), which ripstream runs after the stages. */
+const MIME_TYPES_NAME = "mime-types";
+/** Tika's detector that never answers. Naming it adds nothing; it is accepted because it is a real name. */
+const NO_OP_NAME = "no-op-detector";
+
+/**
+ * Tika's CompositeDetector: container detectors run first, the name/magic detector (`mime-types`) last, and a later
+ * answer replaces the running one only when it is a specialization of it. The order is the order the default detector
+ * runs them in: warc+gz is not a specialization of gzip, so the gzip detector must answer before the compressor check.
+ */
+const STAGES: readonly Stage[] = [
+  { names: [ZIP_CONTAINER], run: ({ stream, prefix }) => (stream !== null && startsWith(prefix, ZIP_SIGNATURE) ? detectZipContainer(stream) : null) },
+  { names: [ZIP_CONTAINER], run: ({ stream, prefix }) => (stream !== null && startsWith(prefix, ZIP_EMPTY_SIGNATURE) ? MediaType.APPLICATION_ZIP : null) },
+  {
+    names: [POIFS_CONTAINER, MISC_OLE],
+    run: ({ stream, prefix }, on) =>
+      stream !== null && startsWith(prefix, OLE2_SIGNATURE)
+        ? detectOle2Container(stream, { poifs: on.has(POIFS_CONTAINER), misc: on.has(MISC_OLE) })
+        : null,
+  },
+  { names: ["bp-list-detector"], run: ({ stream, prefix }) => (stream !== null && startsWith(prefix, BPLIST_SIGNATURE) ? detectBplist(stream) : null) },
+  { names: ["gzip-specialization-detector"], run: ({ prefix }) => detectGzipSpecialization(prefix) },
+  { names: [ZIP_CONTAINER], run: ({ prefix }) => detectCompressor(prefix) },
+  { names: ["matroska-detector"], run: ({ prefix }) => detectMatroska(prefix) },
+  { names: ["ogg-detector"], run: ({ prefix }) => detectOgg(prefix) },
+];
+
+/** Every Tika detector name ripstream can run, in a `detectors` section. */
+const IMPLEMENTED_NAMES: ReadonlySet<string> = new Set([...STAGES.flatMap((stage) => stage.names), MIME_TYPES_NAME, NO_OP_NAME]);
+/** What `default-detector` is: every stage and `mime-types`. */
+const DEFAULT_NAMES: ReadonlySet<string> = new Set([...STAGES.flatMap((stage) => stage.names), MIME_TYPES_NAME]);
+
+/** One Tika detector, or the default set: the steps that run for it, decided once. */
+interface Component {
+  readonly steps: readonly { readonly stage: Stage; readonly on: ReadonlySet<string> }[];
+  readonly mimeTypes: boolean;
+}
+
+function compile(enabled: ReadonlySet<string>): Component {
+  return {
+    steps: STAGES.flatMap((stage) => {
+      const on = new Set(stage.names.filter((name) => enabled.has(name)));
+      return on.size === 0 ? [] : [{ stage, on }];
+    }),
+    mimeTypes: enabled.has(MIME_TYPES_NAME),
+  };
+}
+
+/**
+ * A `detectors` section (AbstractSpiComponentLoader and DetectorLoader, tika-serialization 4.2.0) as the detectors
+ * that run, in order. `default-detector` is every detector Tika loads by default, less its `exclude` list and less
+ * the ones also listed by name (those run where they are listed); a named entry is exactly that detector; with no
+ * marker only the named entries run, so leaving out `mime-types` leaves out name and magic detection.
+ */
+function componentsOf(entries: readonly ComponentEntry[]): readonly Component[] {
+  const issues: string[] = [];
+  const listed = entries.filter((entry) => !entry.marker);
+  for (const entry of listed) {
+    if (!IMPLEMENTED_NAMES.has(entry.name)) {
+      issues.push(
+        `detector "${entry.name}" is not implemented: ripstream has no counterpart for it (implemented: ${[...IMPLEMENTED_NAMES].join(", ")})`,
+      );
+    }
+  }
+  const marker = entries.find((entry) => entry.marker);
+  if (marker?.exclude.includes(MIME_TYPES_NAME)) {
+    // Tika's default detector runs MimeTypes itself, outside the list that `exclude` filters, so excluding it does nothing.
+    issues.push(`default-detector: "${MIME_TYPES_NAME}" cannot be excluded: the default detector always runs it`);
+  }
+  if (issues.length > 0) throw new RipstreamConfigError(issues);
+
+  return entries.map((entry) => {
+    if (!entry.marker) return compile(new Set([entry.name]));
+    const left = new Set([...entry.exclude, ...listed.map((other) => other.name)]);
+    left.delete(MIME_TYPES_NAME);
+    return compile(new Set([...DEFAULT_NAMES].filter((name) => !left.has(name))));
+  });
+}
 
 /**
  * Port of Ripstream's DefaultDetector ordering: name hint, container sniffing,
@@ -44,12 +147,16 @@ export class DefaultDetector implements Detector {
   private readonly magic: MagicDetector;
   private readonly trustContentTypeHeader: boolean;
   private readonly prefixLength: number;
+  /** The detectors that run, in order. One component, the default set, unless a `detectors` section says otherwise. */
+  private readonly components: readonly Component[];
 
   constructor(options: DefaultDetectorOptions = {}) {
     this.mimeTypes = new MimeTypes(options);
     this.magic = options.magic ?? new MagicDetector(options.registry);
     this.trustContentTypeHeader = options.trustContentTypeHeader ?? false;
     this.prefixLength = options.prefixLength ?? 64 * 1024;
+    const section = options.config?.detectors ?? null;
+    this.components = section === null || section.length === 0 ? [compile(DEFAULT_NAMES)] : componentsOf(section);
   }
 
   /** The registry this detector resolves aliases and supertypes with. */
@@ -78,32 +185,26 @@ export class DefaultDetector implements Detector {
         ? new Uint8Array()
         : await stream.peek(this.prefixLength);
 
-    // Tika's CompositeDetector: container detectors run first, the name/magic detector last, and a later answer
-    // replaces the running one only when it is a specialization of it.
+    const input: StageInput = { stream, prefix };
+    // Each detector answers in turn, and an answer replaces the running one only when it specializes it.
+    const registry = this.getMediaTypeRegistry();
+    let detected = MediaType.OCTET_STREAM;
+    for (const component of this.components) {
+      const answer = await this.run(component, input, byName);
+      if (registry.isSpecializationOf(answer, detected)) detected = answer;
+    }
+    return detected;
+  }
+
+  /** One component: its stages in order, then name and magic, merged the same way. */
+  private async run(component: Component, input: StageInput, byName: MediaType | null): Promise<MediaType> {
     const registry = this.getMediaTypeRegistry();
     let detected = MediaType.OCTET_STREAM;
     const consider = (candidate: MediaType | null): void => {
       if (candidate !== null && registry.isSpecializationOf(candidate, detected)) detected = candidate;
     };
-
-    if (stream !== null && startsWith(prefix, ZIP_SIGNATURE)) {
-      consider(await detectZipContainer(stream));
-    }
-    if (stream !== null && startsWith(prefix, ZIP_EMPTY_SIGNATURE)) {
-      consider(MediaType.APPLICATION_ZIP);
-    }
-    if (stream !== null && startsWith(prefix, OLE2_SIGNATURE)) {
-      consider(await detectOle2Container(stream));
-    }
-    if (stream !== null && startsWith(prefix, BPLIST_SIGNATURE)) {
-      consider(await detectBplist(stream));
-    }
-    // warc+gz is not a specialization of gzip, so the gzip detector must answer first.
-    consider(detectGzipSpecialization(prefix));
-    consider(detectCompressor(prefix));
-    consider(detectMatroska(prefix));
-    consider(detectOgg(prefix));
-    consider(this.detectByMagicAndName(prefix, byName));
+    for (const { stage, on } of component.steps) consider(await stage.run(input, on));
+    if (component.mimeTypes) consider(this.detectByMagicAndName(input.prefix, byName));
     return detected;
   }
 

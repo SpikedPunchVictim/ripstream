@@ -1,4 +1,4 @@
-import { parseComponentSection, type ComponentEntry } from "./component-config.ts";
+import { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 
@@ -7,16 +7,17 @@ export interface RipstreamConfigShape {
   readonly isolation?: IsolationConfig;
   /** The `parsers` section, already read into entries by `loadConfig`. */
   readonly parsers?: readonly ComponentEntry[];
+  /** The `detectors` section, already read into entries by `loadConfig`. */
+  readonly detectors?: readonly ComponentEntry[];
 }
 
-const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers"]);
+const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors"]);
 
 /**
  * Sections Tika's configuration has and ripstream does not apply. They are refused by name rather than accepted and
  * ignored, which would report success while changing nothing.
  */
 const UNAPPLIED_SECTIONS = new Set([
-  "detectors",
   "contentHandlers",
   "metadataFilters",
   "encodingDetector",
@@ -69,21 +70,25 @@ export class RipstreamConfig {
   readonly isolation: IsolationConfig | null;
   /** null means no `parsers` section: every default parser. `createRipstream({ config })` applies it. */
   readonly parsers: readonly ComponentEntry[] | null;
+  /** null means no `detectors` section: every default detector. `createRipstream({ config })` applies it. */
+  readonly detectors: readonly ComponentEntry[] | null;
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
     this.version = shape.version ?? 1;
     this.isolation =
       shape.isolation === undefined ? null : Object.freeze({ ...shape.isolation });
-    this.parsers =
-      shape.parsers === undefined
-        ? null
-        : Object.freeze(shape.parsers.map((entry) => Object.freeze({ ...entry })));
+    this.parsers = freezeEntries(shape.parsers);
+    this.detectors = freezeEntries(shape.detectors);
   }
 
   get current(): boolean {
     return this.generation === generationCounter;
   }
+}
+
+function freezeEntries(entries: readonly ComponentEntry[] | undefined): readonly ComponentEntry[] | null {
+  return entries === undefined ? null : Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
 }
 
 /** Loads JSON configuration, failing fast with every validation issue. */
@@ -106,7 +111,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers, detectors } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -115,6 +120,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(version === undefined ? {} : { version }),
     ...(isolation === undefined ? {} : { isolation }),
     ...(parsers === undefined ? {} : { parsers }),
+    ...(detectors === undefined ? {} : { detectors }),
   });
 }
 
@@ -126,6 +132,7 @@ interface InspectedConfig {
   readonly issues: string[];
   readonly isolation?: IsolationConfig;
   readonly parsers?: readonly ComponentEntry[];
+  readonly detectors?: readonly ComponentEntry[];
 }
 
 function inspectConfig(value: unknown): InspectedConfig {
@@ -161,16 +168,19 @@ function inspectConfig(value: unknown): InspectedConfig {
     if (result.issues.length === 0) isolation = result.isolation;
   }
 
-  let parsers: readonly ComponentEntry[] | undefined;
-  if (record.parsers !== undefined) {
-    const result = parseComponentSection("parsers", record.parsers);
+  const sections: Partial<Record<ComponentSection, readonly ComponentEntry[]>> = {};
+  for (const section of ["parsers", "detectors"] as const) {
+    const raw = record[section];
+    if (raw === undefined) continue;
+    const result = parseComponentSection(section, raw);
     issues.push(...result.issues);
-    if (result.issues.length === 0) parsers = result.entries;
+    if (result.issues.length === 0) sections[section] = result.entries;
   }
   return {
     issues,
     ...(isolation === undefined ? {} : { isolation }),
-    ...(parsers === undefined ? {} : { parsers }),
+    ...(sections.parsers === undefined ? {} : { parsers: sections.parsers }),
+    ...(sections.detectors === undefined ? {} : { detectors: sections.detectors }),
   };
 }
 

@@ -56,13 +56,17 @@ const MPP_DATA_NAME = /^[ \t\n\x0B\f\r]{3}[0-9]+$/;
  */
 export async function detectOle2Container(
   stream: RipstreamInputStream,
+  /** Which of Tika's two detectors run; a configuration can turn either off. */
+  run: { readonly poifs: boolean; readonly misc: boolean } = { poifs: true, misc: true },
 ): Promise<MediaType | null> {
   const file = await CompoundFile.open(await stream.getFile());
   if (file === null) return null;
   try {
     const topLevelNames = (file.root.children ?? []).map((node) => node.name);
+    // MiscOLEDetector on its own answers plain OLE when it finds nothing, as POIFSContainerDetector does.
+    if (!run.poifs) return run.misc ? detectMisc(topLevelNames) : null;
     const poifs = detectPoifs(topLevelNames, file.root, await compObjFormat(file));
-    return poifs.equals(OLE) ? detectMisc(topLevelNames) : poifs;
+    return run.misc && poifs.equals(OLE) ? detectMisc(topLevelNames) : poifs;
   } finally {
     await file.close();
   }

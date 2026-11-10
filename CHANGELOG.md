@@ -7,10 +7,10 @@ All notable changes. The project has no tagged release yet, so everything is und
 ### Configuration (`tikajs-68os.8.1`, `tikajs-68os.8.2`, `tikajs-68os.8.3`)
 
 Changed: configuration no longer accepts what it would ignore. Only `version`, `isolation` and (since
-`tikajs-68os.8.6`, below) `parsers` are read.
+`tikajs-68os.8.6`, below) `parsers` and `detectors` are read.
 
-- `loadConfig` and `validateConfig` refuse `detectors`, `contentHandlers`, `metadataFilters` and
-  `encodingDetector` by name (and refused `parsers` until `tikajs-68os.8.6`) (`"parsers" is not supported: ripstream would ignore it`). They used to be validated and
+- `loadConfig` and `validateConfig` refuse `contentHandlers`, `metadataFilters` and `encodingDetector` by name (and
+  refused `parsers` and `detectors` until `tikajs-68os.8.6`) (`"parsers" is not supported: ripstream would ignore it`). They used to be validated and
   dropped, so a config naming a nonexistent class loaded cleanly. Compose parsers and detectors in code with
   `createRipstream`.
 - Removed `loadXmlConfig`, `ComponentConfig`, and the `parsers`/`detectors`/`contentHandlers`/`metadataFilters`/
@@ -54,11 +54,26 @@ Added: the `parsers` section of a Tika configuration is applied (`tikajs-68os.8.
   inventory by `scripts/parity-matrix.ts` and checked by `parity:matrix:check`.
 - Refused, where Tika reads silently: an entry with more than one key (Tika uses the first), a parser setting other
   than the media type filters, an `exclude` item that is not a string, and the retired `image/ocr-*` types.
-- With `parsers` set the CLI requires isolation off. The isolation child builds its own ripstream and cannot yet be
-  given the section, so `serve` (strict by default) and `--isolation strict|lenient` refuse it with a usage error that
-  names `tikajs-68os.8.7`, instead of parsing with every parser.
 - `RipstreamConfig.parsers` is the parsed section (`null` when absent); `parseComponentSection` and `ComponentEntry`
   are exported from `@spikedpunch/ripstream-core`.
+
+Added: the `detectors` section is applied too (`tikajs-68os.8.6`, [docs/parsing.md](docs/parsing.md#the-detectors-section)).
+
+- `new DefaultDetector({ config })`, `createRipstream({ config })` and the CLI's `detect`, `parse` and `metadata` apply
+  it: `default-detector` with `exclude`, detectors named by their Tika name (`default-zip-container-detector`,
+  `poifs-container-detector`, `misc-ole-detector`, `bp-list-detector`, `gzip-specialization-detector`,
+  `matroska-detector`, `ogg-detector`, `mime-types`, `no-op-detector`), combined as Tika's `CompositeDetector` does.
+  Without `default-detector` only the named ones run, so leaving out `mime-types` leaves out name and magic detection.
+- Naming a detector ripstream has no counterpart for (`magika-detector`, `siegfried-detector`, `raw-tiff-detector`,
+  `empty-detector`, `file-command-detector`, `magic-detector`, `pkcs-7-detector`) is an error; excluding one is fine.
+  Excluding `mime-types` from `default-detector` is refused: Tika's default detector runs it whatever the list says.
+  A detector takes no `_mime-include` / `_mime-exclude` (Tika drops them on a named detector and refuses them on the
+  marker).
+- `createRipstream({ detector, config })` with a `detectors` section is an error (`RipstreamConfigError`).
+- With `parsers` or `detectors` set, `parse`, `metadata` and `serve` require isolation off. The isolation child
+  builds its own ripstream and cannot yet be given the sections, so `serve` (strict by default) and
+  `--isolation strict|lenient` refuse them with a usage error that names `tikajs-68os.8.7`, instead of parsing with
+  every parser and detector. `detect` never isolates and applies `detectors` whatever the isolation settings.
 
 ### Parse isolation (epic `tikajs-zgg2`)
 

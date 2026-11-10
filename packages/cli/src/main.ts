@@ -335,7 +335,7 @@ async function openIsolation(
 
 interface CliSettings {
   readonly isolation: ResolvedIsolation;
-  /** The loaded `--config` file, or null. Its `parsers` section is applied by `createRipstream`. */
+  /** The loaded `--config` file, or null. `createRipstream` applies its `parsers` and `detectors` sections. */
   readonly config: RipstreamConfig | null;
   /** The server-side output ceiling from `--max-output-chars` / RIPSTREAM_MAX_OUTPUT_CHARS, or null. */
   readonly maxOutputChars: number | null;
@@ -351,10 +351,14 @@ async function resolveSettings(
 ): Promise<CliSettings> {
   const config = options.config === null ? null : loadConfig(await readFile(options.config, "utf8"));
   const fileIsolation = config === null ? null : config.isolation;
-  // detect and language run in this process whatever is set, so what is set cannot make them fail. They run no parser,
-  // so a `parsers` section has nothing to change for them either.
+  // detect and language run in this process whatever is set, so what is set cannot make them fail. Detection reads the
+  // `detectors` section; neither runs a parser, so a `parsers` section has nothing to change for them.
   if (options.command === "detect" || options.command === "language") {
-    return { isolation: { config: { mode: "off" }, modeSource: "default" }, config: null, maxOutputChars: null };
+    return {
+      isolation: { config: { mode: "off" }, modeSource: "default" },
+      config: options.command === "detect" ? config : null,
+      maxOutputChars: null,
+    };
   }
   try {
     // After detect and language, which read no setting: a misspelling there changes nothing.
@@ -365,12 +369,14 @@ async function resolveSettings(
       env,
       fileIsolation,
     });
-    if (config !== null && config.parsers !== null && isolation.config.mode !== "off") {
-      // The isolation child builds its own ripstream and is never handed the section, so it would parse with every
-      // parser. Refuse rather than report success while the section changes nothing (tikajs-68os.8.7).
+    const sections = config === null ? [] : (["parsers", "detectors"] as const).filter((name) => config[name] !== null);
+    if (sections.length > 0 && isolation.config.mode !== "off") {
+      // The isolation child builds its own ripstream and is never handed these sections, so it would parse with every
+      // parser and detector. Refuse rather than report success while they change nothing (tikajs-68os.8.7).
       throw new IsolationSettingsError(
-        `the configuration has a "parsers" section, which an isolated parse cannot yet receive (tikajs-68os.8.7): ` +
-          `isolation is ${isolation.config.mode} (${isolation.modeSource}); pass --isolation off to apply the section in this process`,
+        `the configuration sets ${sections.map((name) => `"${name}"`).join(" and ")}, which an isolated parse cannot yet receive ` +
+          `(tikajs-68os.8.7): isolation is ${isolation.config.mode} (${isolation.modeSource}); ` +
+          "pass --isolation off to apply it in this process",
       );
     }
     return {

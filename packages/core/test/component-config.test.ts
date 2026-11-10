@@ -141,8 +141,27 @@ test("loadConfig and validateConfig refuse a bad parsers section, naming it", ()
   assert.deepEqual(validateConfig({ parsers: [{ "default-parser": {} }] }), []);
 });
 
-test("loadConfig reads the section from JSON text, and keeps refusing the sections still unapplied", () => {
+test("loadConfig reads the sections from JSON text, and keeps refusing the ones still unapplied", () => {
   assert.equal(loadConfig('{"parsers":["pdf-parser"]}').parsers?.[0]?.name, "pdf-parser");
+  assert.equal(loadConfig('{"detectors":["mime-types"]}').detectors?.[0]?.name, "mime-types");
   assert.throws(() => loadConfig('{"contentHandlers":[]}'), /"contentHandlers" is not supported/);
-  assert.throws(() => loadConfig('{"detectors":["mime-types"]}'), /"detectors" is not supported/);
+});
+
+test("loadConfig keeps the normalized detectors section, and null means none", () => {
+  const config = loadConfig({ detectors: [{ "default-detector": { exclude: ["ogg-detector"] } }, "mime-types"] });
+  assert.deepEqual(config.detectors?.map((entry) => entry.name), ["default-detector", "mime-types"]);
+  assert.deepEqual(config.detectors?.[0]?.exclude, ["ogg-detector"]);
+  assert.equal(loadConfig({}).detectors, null);
+  assert.equal(loadConfig({ parsers: ["pdf-parser"] }).detectors, null);
+  assert.match(validateConfig({ detectors: "nope" }).join("|"), /detectors must be an array/);
+  assert.throws(() => loadConfig({ detectors: ["no-such-detector"] }), /detectors\[0\]: unknown detector "no-such-detector"/);
+});
+
+test("a detector takes no media type filter: Tika drops it on a named entry and refuses it on the marker", () => {
+  for (const entry of [{ "mime-types": { "_mime-include": ["text/plain"] } }, { "default-detector": { "_mime-exclude": ["text/plain"] } }]) {
+    const { issues } = parseComponentSection("detectors", [entry]);
+    assert.match(issues.join("|"), /setting "_mime-(include|exclude)" is not supported/, JSON.stringify(entry));
+  }
+  // The same keys stay valid on parsers.
+  assert.deepEqual(parseComponentSection("parsers", [{ "pdf-parser": { "_mime-include": ["application/pdf"] } }]).issues, []);
 });

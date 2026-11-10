@@ -97,8 +97,8 @@ function entryParts(entry: unknown, position: string, issues: string[]): [string
 /**
  * Reads a `parsers` or `detectors` section in Tika's JSON shape into entries, and reports everything that Tika would
  * accept and ripstream cannot honor: a name that is not a registered component, a second key in an entry, an `exclude`
- * item that is not a name, and any setting other than the media type filters (and `exclude` on the marker), which would
- * otherwise be dropped without a word.
+ * item that is not a name, and any setting other than `exclude` on the marker and, for parsers, the media type
+ * filters, which would otherwise be dropped without a word.
  *
  * It reads each value of the caller's object once, and returns copies.
  */
@@ -124,7 +124,9 @@ export function parseComponentSection(
     if (marker && ++markers > 1) issues.push(`${section}: ${JSON.stringify(name)} appears more than once`);
 
     const where = `${position} ${JSON.stringify(name)}`;
-    const allowed: readonly string[] = marker ? ["exclude", ...MIME_KEYS] : MIME_KEYS;
+    // Only a parser has media types to filter: Tika drops the filters on a named detector and refuses them on the marker.
+    const filters: readonly string[] = section === "parsers" ? MIME_KEYS : [];
+    const allowed: readonly string[] = marker ? ["exclude", ...filters] : filters;
     const read = Object.entries(settings);
     for (const [key] of read) {
       if (!allowed.includes(key)) issues.push(`${where}: setting ${JSON.stringify(key)} is not supported`);

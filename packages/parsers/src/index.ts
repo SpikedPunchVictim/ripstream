@@ -182,7 +182,12 @@ export interface CreateRipstreamOptions extends DefaultParserOptions {
 
 /** Wires the default detector and parser registry into the Ripstream facade. */
 export function createRipstream(options: CreateRipstreamOptions = {}): Ripstream {
-  const detector = options.detector ?? new DefaultDetector();
+  if (options.detector !== undefined && options.config !== undefined && options.config.detectors !== null) {
+    throw new RipstreamConfigError([
+      "the configuration's `detectors` section cannot be combined with `detector`: pass one or the other",
+    ]);
+  }
+  const detector = options.detector ?? new DefaultDetector(options.config === undefined ? {} : { config: options.config });
   const parser = new AutoDetectParser({
     detector,
     parser: createDefaultParser({ ...options, registry: options.registry ?? detector.getMediaTypeRegistry() }),

@@ -50,9 +50,10 @@ have no effect and the setting would keep its default. A config file with a repe
 levels, is refused the same way, and so is a flag that takes a value (`-c`, `-p`, `--port`, `--host`) when the value
 is missing or is another flag.
 
-A config file with a `parsers` section ([parsing.md](parsing.md#the-parsers-section)) needs `--isolation off`: the
-isolation child builds its own ripstream and cannot yet receive the section (`tikajs-68os.8.7`), so `serve` and
-`--isolation strict|lenient` refuse it with a usage error instead of parsing with every parser.
+A config file with a `parsers` or `detectors` section ([parsing.md](parsing.md#the-parsers-section)) needs
+`--isolation off` to parse or serve: the isolation child builds its own ripstream and cannot yet receive the
+sections (`tikajs-68os.8.7`), so `serve` and `--isolation strict|lenient` refuse them with a usage error instead of
+parsing with every parser and detector.
 
 `detect` and `language` run in this process whatever is set, so they do not read these settings and a bad value cannot
 make them fail. `--max-output-chars` and `RIPSTREAM_MAX_OUTPUT_CHARS` belong to `serve`; one-shot commands ignore them.

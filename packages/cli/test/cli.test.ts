@@ -459,3 +459,54 @@ test("a config with no parsers section still isolates", async () => {
     assert.equal(log.created.length, 1);
   });
 });
+
+const NO_DETECTORS = { detectors: ["no-op-detector"], isolation: { mode: "off" } };
+
+test("a detectors section in --config is applied to detect and to what a parse is offered", async () => {
+  await withConfig(NO_DETECTORS, async (file) => {
+    const detected = io("plain");
+    assert.equal(await main(["detect", "--config", file, "-"], detected, { env: {} }), 0);
+    assert.equal(detected.out.join("").trim(), "application/octet-stream");
+    // The parser is offered what the configured detector says, so text with no detector is a type nothing parses.
+    const refused = io("plain");
+    assert.equal(await main(["metadata", "--config", file, "-"], refused, { env: {} }), 3);
+    assert.match(refused.err.join(""), /application\/octet-stream/);
+    assert.equal(await main(["metadata", "-"], io("plain"), { env: {} }), 0);
+  });
+  const plain = io("plain");
+  assert.equal(await main(["detect", "-"], plain, { env: {} }), 0);
+  assert.equal(plain.out.join("").trim(), "text/plain");
+});
+
+test("detect applies detectors even when isolation settings are set, since it never isolates", async () => {
+  await withConfig({ detectors: ["no-op-detector"] }, async (file) => {
+    const sink = io("plain");
+    assert.equal(await main(["detect", "--config", file, "-"], sink, { env: { RIPSTREAM_ISOLATION: "strict" } }), 0);
+    assert.equal(sink.out.join("").trim(), "application/octet-stream");
+  });
+});
+
+test("a detectors section with isolation on is a usage error that names the gap", async () => {
+  await withConfig({ detectors: ["mime-types"] }, async (file) => {
+    const { log, createIsolation } = fakeIsolation();
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 2);
+    assert.match(sink.err.join(""), /sets "detectors"/);
+    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
+    assert.equal(log.created.length, 0);
+    const served = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file], served, { env: {} }), 2);
+    assert.equal(served.out.join(""), "", "the server never started");
+  });
+});
+
+test("a detectors section naming a detector ripstream does not implement is a usage error", async () => {
+  await withConfig({ detectors: ["siegfried-detector"], isolation: { mode: "off" } }, async (file) => {
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "-"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /detector "siegfried-detector" is not implemented/);
+    // detect builds the same ripstream, so it refuses too.
+    const detect = io("x");
+    assert.equal(await main(["detect", "--config", file, "-"], detect, { env: {} }), 2);
+  });
+});
