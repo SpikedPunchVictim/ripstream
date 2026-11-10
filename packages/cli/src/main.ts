@@ -13,6 +13,7 @@ import {
   rmetaObject,
   serializeRmeta,
   type Metadata,
+  type ParseLimits,
   type ParseRecord,
   type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
@@ -59,6 +60,9 @@ interface Options {
   readonly isolation: string | null;
   /** `--max-output-chars` as typed; validated by resolveMaxOutputChars. */
   readonly maxOutputChars: string | null;
+  /** `--maxEmbeddedDepth` and `--maxEmbeddedCount` as typed; validated by embeddedLimit. */
+  readonly maxEmbeddedDepth: string | null;
+  readonly maxEmbeddedCount: string | null;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -150,6 +154,7 @@ export async function main(
     const inProcess = createRipstream({
       ...(options.password === null ? {} : { pdfPassword: options.password }),
       ...(settings.config === null ? {} : { config: settings.config }),
+      ...(settings.limits === null ? {} : { limits: settings.limits }),
     });
     // Only the commands that run a parser are isolated; detection and language stay in this process.
     isolation =
@@ -339,6 +344,17 @@ interface CliSettings {
   readonly config: RipstreamConfig | null;
   /** The server-side output ceiling from `--max-output-chars` / RIPSTREAM_MAX_OUTPUT_CHARS, or null. */
   readonly maxOutputChars: number | null;
+  /** The limits of `--maxEmbeddedDepth` / `--maxEmbeddedCount`, which win over the configuration's, or null. */
+  readonly limits: Partial<ParseLimits> | null;
+}
+
+/** Digits only, as for --port: `Number("")` is 0 and `Number(" 3 ")` is 3, neither of which is what was typed. */
+function embeddedLimit(flag: string, raw: string | null): number | null {
+  if (raw === null) return null;
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new Error(`ripstream: ${flag} expects a non-negative integer, got ${JSON.stringify(raw)}`);
+  }
+  return Number(raw);
 }
 
 /**
@@ -351,6 +367,20 @@ async function resolveSettings(
 ): Promise<CliSettings> {
   const config = options.config === null ? null : loadConfig(await readFile(options.config, "utf8"));
   const fileIsolation = config === null ? null : config.isolation;
+  const depth = embeddedLimit("--maxEmbeddedDepth", options.maxEmbeddedDepth);
+  const count = embeddedLimit("--maxEmbeddedCount", options.maxEmbeddedCount);
+  const flagged = [
+    ...(depth === null ? [] : ["--maxEmbeddedDepth"]),
+    ...(count === null ? [] : ["--maxEmbeddedCount"]),
+  ];
+  if (flagged.length > 0 && options.command !== "parse" && options.command !== "metadata") {
+    // A flag that changes nothing for the command it is given to must not look as if it did.
+    throw new Error(`ripstream: ${flagged.join(" and ")} applies to parse and metadata, not ${options.command}`);
+  }
+  const limits: Partial<ParseLimits> | null =
+    flagged.length === 0
+      ? null
+      : { ...(depth === null ? {} : { maxNodeDepth: depth }), ...(count === null ? {} : { maxEmbeddedResources: count }) };
   // detect and language run in this process whatever is set, so what is set cannot make them fail. Detection reads the
   // `detectors` section; neither runs a parser, so a `parsers` section has nothing to change for them.
   if (options.command === "detect" || options.command === "language") {
@@ -358,7 +388,16 @@ async function resolveSettings(
       isolation: { config: { mode: "off" }, modeSource: "default" },
       config: options.command === "detect" ? config : null,
       maxOutputChars: null,
+      limits: null,
     };
+  }
+  if (options.command === "serve" && config !== null && config.limits !== null) {
+    // The server sets the limits of each request itself (its ceilings, the request's parameters), so a default set here
+    // would apply to some limits and not to others. The server's own section is tikajs-68os.8.9.
+    throw new Error(
+      'ripstream: serve does not apply the configuration\'s "parse-context" section yet (tikajs-68os.8.9): ' +
+        "the server takes its limits from --max-output-chars, RIPSTREAM_MAX_OUTPUT_CHARS and each request; remove the section to serve with this configuration",
+    );
   }
   try {
     // After detect and language, which read no setting: a misspelling there changes nothing.
@@ -369,19 +408,31 @@ async function resolveSettings(
       env,
       fileIsolation,
     });
-    const sections = config === null ? [] : (["parsers", "detectors"] as const).filter((name) => config[name] !== null);
-    if (sections.length > 0 && isolation.config.mode !== "off") {
-      // The isolation child builds its own ripstream and is never handed these sections, so it would parse with every
-      // parser and detector. Refuse rather than report success while they change nothing (tikajs-68os.8.7).
+    const sections: string[] =
+      config === null
+        ? []
+        : [
+            ...(["parsers", "detectors"] as const).filter((name) => config[name] !== null),
+            ...(config.limits === null ? [] : ["parse-context"]),
+          ];
+    if (sections.length + flagged.length > 0 && isolation.config.mode !== "off") {
+      // The isolation child builds its own ripstream and is never handed these sections or limits, so it would parse with
+      // every parser and detector and the default limits. Refuse rather than report success while they change nothing
+      // (tikajs-68os.8.7).
+      const unreceived = [
+        ...(sections.length === 0 ? [] : [`the configuration sets ${sections.map((name) => `"${name}"`).join(" and ")}`]),
+        ...(flagged.length === 0 ? [] : [`${flagged.join(" and ")} ${flagged.length > 1 ? "are" : "is"} set`]),
+      ];
       throw new IsolationSettingsError(
-        `the configuration sets ${sections.map((name) => `"${name}"`).join(" and ")}, which an isolated parse cannot yet receive ` +
+        `${unreceived.join(", and ")}, which an isolated parse cannot yet receive ` +
           `(tikajs-68os.8.7): isolation is ${isolation.config.mode} (${isolation.modeSource}); ` +
-          "pass --isolation off to apply it in this process",
+          `pass --isolation off to apply ${sections.length + flagged.length > 1 ? "them" : "it"} in this process`,
       );
     }
     return {
       isolation,
       config,
+      limits,
       // Only the server has an output ceiling; a one-shot command ignores it.
       maxOutputChars: options.command === "serve" ? resolveMaxOutputChars({ flag: options.maxOutputChars, env }) : null,
     };
@@ -406,26 +457,44 @@ function parseArgs(argv: readonly string[]): Options {
   let host = "127.0.0.1";
   let isolation: string | null = null;
   let maxOutputChars: string | null = null;
+  let maxEmbeddedDepth: string | null = null;
+  let maxEmbeddedCount: string | null = null;
 
   for (let index = 0; index < rest.length; index++) {
-    const argument = rest[index]!;
+    const written = rest[index]!;
+    // `--name=value` is `--name value`, split at the first `=`. Short options and flags that take no value do not
+    // have the form: `-c=x` is not an option, and `--json=yes` is not a way to say --json.
+    const equals = written.startsWith("--") ? written.indexOf("=") : -1;
+    const argument = equals > 2 ? written.slice(0, equals) : written;
+    const inline = equals > 2 ? written.slice(equals + 1) : null;
+    if (inline !== null && !VALUE_FLAGS.has(argument)) {
+      throw new Error(FLAGS.has(argument) ? `${argument} does not take a value` : `Unknown option: ${written}`);
+    }
+    const takeValue = (): string => {
+      if (inline === null) return requireValue(rest[++index], argument);
+      // The value was written after the `=`, so it is taken as it is even when it looks like a flag.
+      if (inline === "") throw new Error(`${argument} expects a value`);
+      return inline;
+    };
     if (argument === "--json" || argument === "-j") json = true;
     else if (argument === "--metadata" || argument === "-m") metadataOnly = true;
     else if (argument === "--recursive" || argument === "-r") recursive = true;
     else if (argument === "--help" || argument === "-h") return { ...defaultOptions(), command: "help" };
     else if (argument === "--version" || argument === "-V") return { ...defaultOptions(), command: "version" };
     else if (argument === "--output" || argument === "-o") {
-      const value = rest[++index];
+      const value = inline ?? rest[++index];
       if (value !== "text" && value !== "json" && value !== "jsonl") {
         throw new Error("--output expects text, json or jsonl");
       }
       output = value;
-    } else if (argument === "--config" || argument === "-c") config = requireValue(rest[++index], argument);
-    else if (argument === "--password" || argument === "-p") password = requireValue(rest[++index], argument);
-    else if (argument === "--port") port = parsePort(requireValue(rest[++index], argument));
-    else if (argument === "--host") host = requireValue(rest[++index], argument);
-    else if (argument === "--isolation") isolation = requireValue(rest[++index], argument);
-    else if (argument === "--max-output-chars") maxOutputChars = requireValue(rest[++index], argument);
+    } else if (argument === "--config" || argument === "-c") config = takeValue();
+    else if (argument === "--password" || argument === "-p") password = takeValue();
+    else if (argument === "--port") port = parsePort(takeValue());
+    else if (argument === "--host") host = takeValue();
+    else if (argument === "--isolation") isolation = takeValue();
+    else if (argument === "--max-output-chars") maxOutputChars = takeValue();
+    else if (argument === "--maxEmbeddedDepth") maxEmbeddedDepth = takeValue();
+    else if (argument === "--maxEmbeddedCount") maxEmbeddedCount = takeValue();
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
@@ -434,13 +503,20 @@ function parseArgs(argv: readonly string[]): Options {
   if (!["parse", "detect", "metadata", "language", "serve", "help", "version"].includes(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
-  return { command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars };
+  return { command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars, maxEmbeddedDepth, maxEmbeddedCount };
 }
 
 /** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
 const FLAGS: ReadonlySet<string> = new Set([
   "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount",
+]);
+
+/** The long options that take a value: the ones `--name=value` is for. */
+const VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "--output", "--config", "--password", "--port", "--host", "--isolation", "--max-output-chars",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount",
 ]);
 
 /** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
@@ -469,6 +545,8 @@ function defaultOptions(): Options {
     host: "127.0.0.1",
     isolation: null,
     maxOutputChars: null,
+    maxEmbeddedDepth: null,
+    maxEmbeddedCount: null,
   };
 }
 
@@ -494,13 +572,17 @@ function usage(): string {
     "  -m, --metadata       Metadata only",
     "  -r, --recursive      Recursive metadata JSON",
     "  -o, --output <mode>  text, json or jsonl",
-    "  -c, --config <file>  Validate JSON configuration",
+    "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context)",
     "  -p, --password <pw>  Document password (not available with --isolation)",
     "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
     "                          (serve: strict unless set; other commands: off unless set)",
     "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
+    "      --maxEmbeddedDepth <n>  parse, metadata: fail (exit 3) when an embedded document is nested deeper than n",
+    "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",
     "  -h, --help           Show help",
     "  -V, --version        Show version",
+    "",
+    "A long option that takes a value also accepts --name=value (--config=ripstream.json).",
     "",
     "Environment (flags win): RIPSTREAM_ISOLATION, RIPSTREAM_ISOLATION_MEMORY_POOL_MB, _PER_CHILD_MB,",
     "  _MAX_INPUT_BYTES, _MAX_TASK_MILLIS, _HEAP_MB, _MAX_QUEUE, _MAX_DISK_MB, _REQUIRE_STRICT_CONTAINMENT,",

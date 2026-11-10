@@ -1,6 +1,8 @@
 import { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
+import type { ParseLimits } from "./parse-context.ts";
+import { parseParseContextSection } from "./parse-context-config.ts";
 
 export interface RipstreamConfigShape {
   readonly version?: number;
@@ -9,9 +11,11 @@ export interface RipstreamConfigShape {
   readonly parsers?: readonly ComponentEntry[];
   /** The `detectors` section, already read into entries by `loadConfig`. */
   readonly detectors?: readonly ComponentEntry[];
+  /** The limits of the `parse-context` section, already read by `loadConfig`. */
+  readonly limits?: Readonly<Partial<ParseLimits>>;
 }
 
-const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors"]);
+const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors", "parse-context"]);
 
 /**
  * Sections Tika's configuration has and ripstream does not apply. They are refused by name rather than accepted and
@@ -72,6 +76,11 @@ export class RipstreamConfig {
   readonly parsers: readonly ComponentEntry[] | null;
   /** null means no `detectors` section: every default detector. `createRipstream({ config })` applies it. */
   readonly detectors: readonly ComponentEntry[] | null;
+  /**
+   * The ripstream limits the `parse-context` section sets, or null when it sets none. `createRipstream({ config })`
+   * applies them as the defaults of every parse; a limit a call names itself wins.
+   */
+  readonly limits: Readonly<Partial<ParseLimits>> | null;
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
@@ -80,6 +89,7 @@ export class RipstreamConfig {
       shape.isolation === undefined ? null : Object.freeze({ ...shape.isolation });
     this.parsers = freezeEntries(shape.parsers);
     this.detectors = freezeEntries(shape.detectors);
+    this.limits = shape.limits === undefined || Object.keys(shape.limits).length === 0 ? null : Object.freeze({ ...shape.limits });
   }
 
   get current(): boolean {
@@ -115,7 +125,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers, detectors } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers, detectors, limits } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -125,6 +135,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(isolation === undefined ? {} : { isolation }),
     ...(parsers === undefined ? {} : { parsers }),
     ...(detectors === undefined ? {} : { detectors }),
+    ...(limits === undefined ? {} : { limits }),
   });
 }
 
@@ -137,6 +148,7 @@ interface InspectedConfig {
   readonly isolation?: IsolationConfig;
   readonly parsers?: readonly ComponentEntry[];
   readonly detectors?: readonly ComponentEntry[];
+  readonly limits?: Partial<ParseLimits>;
 }
 
 function inspectConfig(value: unknown): InspectedConfig {
@@ -180,11 +192,19 @@ function inspectConfig(value: unknown): InspectedConfig {
     issues.push(...result.issues);
     if (result.issues.length === 0) sections[section] = result.entries;
   }
+
+  let limits: Partial<ParseLimits> | undefined;
+  if (record["parse-context"] !== undefined) {
+    const result = parseParseContextSection(record["parse-context"]);
+    issues.push(...result.issues);
+    if (result.issues.length === 0) limits = result.limits;
+  }
   return {
     issues,
     ...(isolation === undefined ? {} : { isolation }),
     ...(sections.parsers === undefined ? {} : { parsers: sections.parsers }),
     ...(sections.detectors === undefined ? {} : { detectors: sections.detectors }),
+    ...(limits === undefined ? {} : { limits }),
   };
 }
 

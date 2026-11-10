@@ -20,6 +20,11 @@ export interface RipstreamOptions {
   readonly detector: Detector;
   readonly parser: Parser;
   readonly eventSink?: EventSink;
+  /**
+   * Limits every parse starts from. A limit a call names in `ParseOptions.limits` wins; the rest keep the library
+   * defaults. `createRipstream` fills it from the `parse-context` section of a loaded configuration.
+   */
+  readonly limits?: Partial<ParseLimits>;
 }
 
 export interface ParseOptions {
@@ -39,11 +44,22 @@ export class Ripstream {
   private readonly detector: Detector;
   private readonly parser: Parser;
   private readonly eventSink: EventSink | undefined;
+  private readonly limits: Partial<ParseLimits> | undefined;
 
   constructor(options: RipstreamOptions) {
+    assertValidLimits(options.limits);
     this.detector = options.detector;
     this.parser = options.parser;
     this.eventSink = options.eventSink;
+    this.limits = options.limits === undefined ? undefined : { ...options.limits };
+  }
+
+  /** The limits of one call: this instance's defaults, under whatever the call names (a value of undefined names none). */
+  private limitsFor(call: Partial<ParseLimits> | undefined): Partial<ParseLimits> | undefined {
+    if (this.limits === undefined) return call;
+    const merged: Record<string, number | undefined> = { ...this.limits };
+    for (const [name, value] of Object.entries(call ?? {})) if (value !== undefined) merged[name] = value as number;
+    return merged as Partial<ParseLimits>;
   }
 
   async detect(
@@ -85,7 +101,7 @@ export class Ripstream {
     // The consumer-wait below must observe the parse timeout too, so the
     // timeout is armed here on the same controller instead of only in withStream.
     assertValidLimits(options.limits);
-    const timeout = options.limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
+    const timeout = this.limitsFor(options.limits)?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timer =
       timeout > 0 ? setTimeout(() => abort.abort(new ParseTimeoutError()), timeout) : null;
     timer?.unref?.();
@@ -224,7 +240,8 @@ export class Ripstream {
     ) => Promise<T>,
   ): Promise<T> {
     assertValidLimits(options.limits);
-    const timeout = options.limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
+    const limits = this.limitsFor(options.limits);
+    const timeout = limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timeoutController = new AbortController();
     const timer =
       timeout > 0
@@ -239,7 +256,7 @@ export class Ripstream {
         : AbortSignal.any([options.signal, timeoutController.signal]);
     const ctx = new ParseContext({
       signal,
-      ...(options.limits === undefined ? {} : { limits: options.limits }),
+      ...(limits === undefined ? {} : { limits }),
     });
     const metadata = metadataFor(options.filename);
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);

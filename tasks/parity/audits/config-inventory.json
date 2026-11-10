@@ -70,14 +70,22 @@
     "upstreamKey": "encoding-detectors",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; EncodingDetectorLoader.java",
     "ripstream": "config.encodingDetector (singular) validated, never consumed; no EncodingDetector abstraction in packages/*/src",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J07,C02",
     "unknownKeyBehaviour": "kebab key rejected loudly (unknown top-level key); ripstream key accepted silently",
     "note": "No pluggable encoding detectors in ripstream (grep for EncodingDetector: none).",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-1 pluggable encoding detectors",
       "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-1 pluggable encoding detectors",
+      "reason": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
     }
   },
   {
@@ -134,14 +142,22 @@
     "upstreamKey": "text-recognizers",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; ContentEnricherLoader.java:51-54",
     "ripstream": "none as config; TesseractOcrOptions (packages/parser-media/src/ocr.ts) programmatic only",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "OCR is a constructor option, not a selectable/ordered recognizer list with _min-width/_min-height checks.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-2 OCR selection by config",
       "why": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-2 OCR selection by config",
+      "reason": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
     }
   },
   {
@@ -172,14 +188,22 @@
     "upstreamKey": "translator",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaLoader.java:151-155",
     "ripstream": "TranslationConfig {provider,endpoint,apiKey,fetchImpl,local} programmatic (packages/language/src/translate.ts:5-11); server option `translator` (server index.ts:70)",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "O01",
     "unknownKeyBehaviour": "loud (ripstream rejects) at top level (unknown key); no file form",
     "note": "No file/JSON form; provider names differ from Tika translator class names.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-3 translators",
       "why": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-3 translators",
+      "reason": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
     }
   },
   {
@@ -194,8 +218,8 @@
     "note": "Per-config spoolToDisk/outputThreshold/digester/content-handler-factory/metadata-write-filter defaults have no config surface.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "The auto-detect-parser section is not read (an unknown top-level key is refused); its defaults need engine support."
     }
   },
   {
@@ -204,14 +228,14 @@
     "upstreamKey": "parse-context",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaLoader.java:462-473; ParseContextDeserializer.java",
     "ripstream": "none; per-call ParseOptions.limits + typed ParseContextKey map (packages/core/src/parse-context.ts)",
-    "status": "gap",
+    "status": "partial",
     "evidence": "J07,C12,P11,S07",
     "unknownKeyBehaviour": "loud (ripstream rejects) in file config; per-request parse-context in server multipart silently ignored (S07); unknown ParseOptions key silently ignored (P11)",
     "note": "Tika's central extension point. ripstream cannot load a parse-context from JSON at all.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.9.1, tikajs-68os.9.2, tikajs-68os.7.6, NG-5",
+      "why": "The limit blocks (embedded-limits, output-limits, timeout-limits) are applied (tikajs-68os.8.8). The other parse-context components are digesters (.9.1), metadata filters (.9.2), content handler factories (.7.6) or classes instantiated from JSON (NG-5, a non-goal); each other key is refused by name."
     }
   },
   {
@@ -220,14 +244,22 @@
     "upstreamKey": "presets",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; PresetRegistry.java; TikaServerConfig.java:186-198",
     "ripstream": "server option `presets` {handler,limits} selected by ?preset=NAME (server index.ts:86,409-413)",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "S04,S05,C16,C17",
     "unknownKeyBehaviour": "unknown preset name in ?preset= SILENTLY IGNORED (S04, 200 OK); Tika treats an unknown catalog preset as fatal",
     "note": "Different concept: ripstream presets are server-side handler+limits bundles; Tika presets are catalog config fragments activated by --preset/TIKA_PRESETS.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-4 Tika presets",
       "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-4 Tika presets",
+      "reason": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
     }
   },
   {
@@ -477,14 +509,22 @@
     "upstreamKey": "oracle parser inventory (GET /parsers)",
     "upstreamSource": "live oracle 127.0.0.1:9998 (oracle-introspection.json): DefaultParser with 89 leaf parsers",
     "ripstream": "GET /parsers -> 404 (H01)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "H01,H04",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "No introspection endpoints /parsers, /parsers/details, /detectors, /mime-types.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "tikajs-68os.24 (already proposed)",
       "why": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "tikajs-68os.24 (already proposed)",
+      "reason": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
     }
   },
   {
@@ -557,14 +597,22 @@
     "upstreamKey": "GET /detectors",
     "upstreamSource": "oracle introspection",
     "ripstream": "404 (H02)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "H02",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "tikajs-68os.24 (already proposed)",
       "why": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "tikajs-68os.24 (already proposed)",
+      "reason": "/parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)"
     }
   },
   {
@@ -573,14 +621,22 @@
     "upstreamKey": "default-encoding-detector marker + exclude",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/EncodingDetectorLoader.java; docs/modules/ROOT/pages/configuration/encoding-detectors.adoc",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-1 pluggable encoding detectors",
       "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-1 pluggable encoding detectors",
+      "reason": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
     }
   },
   {
@@ -589,14 +645,22 @@
     "upstreamKey": "ordered encoding detector list",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/EncodingDetectorLoader.java",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J07,C02",
     "unknownKeyBehaviour": "silent-ignore for ripstream key `encodingDetector`",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-1 pluggable encoding detectors",
       "why": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-1 pluggable encoding detectors",
+      "reason": "Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name."
     }
   },
   {
@@ -701,14 +765,22 @@
     "upstreamKey": "text-recognizers list / per-request {enabled:false}",
     "upstreamSource": "tika-core TextRecognizerSelection.java:30; ContentEnrichers.java:282",
     "ripstream": "OCR constructor option only",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-2 OCR selection by config",
       "why": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-2 OCR selection by config",
+      "reason": "OCR is an optional parser built in code (TesseractOcrParser); an external-process engine list with size checks is deployment wiring. Joins CFG-031."
     }
   },
   {
@@ -739,14 +811,22 @@
     "upstreamKey": "translator (first entry wins; DefaultTranslator)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaLoader.java:151-155",
     "ripstream": "createTranslator(TranslationConfig) programmatic (language/src/translate.ts:5-11); POST /translate (server index.ts:391-408)",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "O01",
     "unknownKeyBehaviour": "n/a",
     "note": "No file config; Tika list-of-one semantics absent.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-3 translators",
       "why": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-3 translators",
+      "reason": "Every Tika translator calls a hosted web service; none is implemented here and the filters audit already proposes the named ones as non-goals."
     }
   },
   {
@@ -771,14 +851,14 @@
     "upstreamKey": "embedded-limits.maxDepth (default 20)",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/EmbeddedLimits.java:79",
     "ripstream": "ParseLimits.maxNodeDepth (default 100) is node depth, not embedded depth",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "P01",
     "unknownKeyBehaviour": "silent-ignore for unknown limit key (P01)",
     "note": "No embedded-depth limit.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.8",
+      "why": "embedded-limits.maxDepth is maxNodeDepth (same boundary: a child deeper than N is refused). ripstream fails the parse at a limit, which is Tika's behaviour with the throwOn flag true, so the limit is accepted only beside that flag set to true. -1 (unlimited) is refused. Tika's default of 20 is not ripstream's (100)."
     }
   },
   {
@@ -787,14 +867,14 @@
     "upstreamKey": "embedded-limits.throwOnMaxDepth",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/EmbeddedLimits.java:80",
     "ripstream": "none",
-    "status": "gap",
+    "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "throwOn* true is accepted (it is what ripstream does). false, Tika's stop-quietly-and-flag default, is not built: a limit without the flag set to true is refused (tikajs-68os.8.8). Design reserve in .8.13."
     }
   },
   {
@@ -814,14 +894,14 @@
     "upstreamKey": "embedded-limits.throwOnMaxCount",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/EmbeddedLimits.java:82",
     "ripstream": "none",
-    "status": "gap",
+    "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "throwOn* true is accepted (it is what ripstream does). false, Tika's stop-quietly-and-flag default, is not built: a limit without the flag set to true is refused (tikajs-68os.8.8). Design reserve in .8.13."
     }
   },
   {
@@ -841,14 +921,14 @@
     "upstreamKey": "output-limits.throwOnWriteLimit",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/OutputLimits.java:77",
     "ripstream": "none (ripstream always throws LimitExceededError)",
-    "status": "gap",
+    "status": "partial",
     "evidence": "P10",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "Cannot opt into truncate-and-flag.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "throwOn* true is accepted (it is what ripstream does). false, Tika's stop-quietly-and-flag default, is not built: a limit without the flag set to true is refused (tikajs-68os.8.8). Design reserve in .8.13."
     }
   },
   {
@@ -863,8 +943,8 @@
     "note": "",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "maxXmlDepth is refused by name: ParseLimits has no XML element nesting limit (maxNodeDepth bounds embedded documents)."
     }
   },
   {
@@ -890,8 +970,8 @@
     "note": "",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "zipBombThreshold is refused by name: Tika compares output characters with input bytes once a character threshold is passed (SecureContentHandler); ripstream's maxDecompressionRatio compares decompressed with compressed bytes per archive entry."
     }
   },
   {
@@ -900,14 +980,14 @@
     "upstreamKey": "output-limits.zipBombRatio",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/OutputLimits.java:83",
     "ripstream": "ParseLimits.maxDecompressionRatio (default 100)",
-    "status": "partial",
+    "status": "gap",
     "evidence": "P05",
     "unknownKeyBehaviour": "silent-ignore for 0 (P05)",
     "note": "Default differs from upstream 1000; no threshold companion.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "zipBombRatio is refused by name, for the reason given at CFG-060."
     }
   },
   {
@@ -916,14 +996,14 @@
     "upstreamKey": "timeout-limits.totalTaskTimeoutMillis",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/TimeoutLimits.java:76",
     "ripstream": "ParseLimits.maxTaskMillis / maxParseMillis (60s)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "P04",
     "unknownKeyBehaviour": "silent-ignore for non-number (P04)",
     "note": "Upstream default 1 hour in CLI docs (cli/index.adoc:242).",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.8",
+      "why": "timeout-limits.totalTaskTimeoutMillis is maxParseMillis. ripstream fails the parse at a limit, which is Tika's behaviour with the throwOn flag true, so the limit is accepted only beside that flag set to true. Tika's 1 hour default is not ripstream's (60 s). 0 and values over 2^31-1 are refused."
     }
   },
   {
@@ -938,8 +1018,8 @@
     "note": "Stall detector.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "progressTimeoutMillis is refused by name: ripstream has no stall detector."
     }
   },
   {
@@ -948,14 +1028,14 @@
     "upstreamKey": "timeout-limits.throwOnDeadline",
     "upstreamSource": "tika-core/src/main/java/org/apache/tika/config/TimeoutLimits.java:78",
     "ripstream": "none",
-    "status": "gap",
+    "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "target": "tikajs-68os.8.13",
+      "why": "throwOn* true is accepted (it is what ripstream does). false, Tika's stop-quietly-and-flag default, is not built: a limit without the flag set to true is refused (tikajs-68os.8.8). Design reserve in .8.13."
     }
   },
   {
@@ -1012,14 +1092,22 @@
     "upstreamKey": "digester-factory / embedded-document-extractor-factory / content-handler-factory context entries",
     "upstreamSource": "ParseContextUtils; ComponentNameResolver (12 context-key interfaces)",
     "ripstream": "CONTEXT_KEYS typed map (parse-context.ts); no JSON-by-name resolution",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "R01",
     "unknownKeyBehaviour": "silent-ignore",
     "note": "Wire-instantiable (6) vs blocked (6) policy and @OperatorOnly guard have no equivalent.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-5 per-request config and instantiated context",
       "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-5 per-request config and instantiated context",
+      "reason": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
     }
   },
   {
@@ -1028,14 +1116,22 @@
     "upstreamKey": "per-request parse-context (server multipart `config` part, allowPerRequestConfig)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:233-244",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "S07,P11",
     "unknownKeyBehaviour": "silent-ignore (multipart config part ignored, S07)",
     "note": "FALSE-GREEN: a client sending Tika-4 per-request config gets 200 and unmodified output.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-5 per-request config and instantiated context",
       "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-5 per-request config and instantiated context",
+      "reason": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
     }
   },
   {
@@ -1098,14 +1194,22 @@
     "upstreamKey": "ALLOW_COMMENTS",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:185",
     "ripstream": "none (invalid JSON error)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J19,J30",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "Config files with // comments are rejected; arguably acceptable.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-6 loader leniency",
       "why": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-6 loader leniency",
+      "reason": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
     }
   },
   {
@@ -1114,14 +1218,22 @@
     "upstreamKey": "ACCEPT_CASE_INSENSITIVE_ENUMS / FAIL_ON_NUMBERS_FOR_ENUMS",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:192,195",
     "ripstream": "isolation.mode exact-case (config.ts:219)",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "J17",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "Stricter than upstream: 'STRICT' rejected.",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-6 loader leniency",
       "why": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-6 loader leniency",
+      "reason": "Comments in JSON and case-insensitive enum values are Jackson options. ripstream is stricter on purpose; the cost is that a config copied from Tika with a comment or STRICT is refused with a clear message."
     }
   },
   {
@@ -1146,14 +1258,22 @@
     "upstreamKey": "${env:NAME} interpolation (unset var fatal)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/EnvInterpolator.java:43,52-97",
     "ripstream": "none for config files; env overrides only via RIPSTREAM_ISOLATION_* (isolation-config.ts:21-29)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J20,J21",
     "unknownKeyBehaviour": "silent-ignore (literal '${env:HOME}' kept in params, J20)",
     "note": "FALSE-GREEN for params; loud only because isolation.mode validation fails (J21).",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-7 ${env:NAME} interpolation",
       "why": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-7 ${env:NAME} interpolation",
+      "reason": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
     }
   },
   {
@@ -1285,14 +1405,22 @@
     "upstreamKey": "--convert-config-xml-to-json=FILE",
     "upstreamSource": "cli/index.adoc:113-115",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C07",
     "unknownKeyBehaviour": "Unknown option (loud)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-9 fork mode, server id, XML conversion",
       "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-9 fork mode, server id, XML conversion",
+      "reason": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
     }
   },
   {
@@ -1344,14 +1472,22 @@
     "upstreamKey": "server.id",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:94,159-162",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-9 fork mode, server id, XML conversion",
       "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-9 fork mode, server id, XML conversion",
+      "reason": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
     }
   },
   {
@@ -1392,14 +1528,22 @@
     "upstreamKey": "server.allowPerRequestConfig",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:85,233-244",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "S07",
     "unknownKeyBehaviour": "per-request config silently ignored (S07)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-5 per-request config and instantiated context",
       "why": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-5 per-request config and instantiated context",
+      "reason": "Tika instantiates Java classes from JSON and guards them with @OperatorOnly; ripstream builds components in code and its request contract is a fixed allowlist by design (a part other than the file is a 400 since 8.3)."
     }
   },
   {
@@ -1537,14 +1681,22 @@
     "upstreamKey": "server.tlsConfig {active,keyStore*,trustStore*,clientAuthenticationRequired,checkRevocation,...}",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:105; TlsConfig.java:52-62",
     "ripstream": "none (HTTP only; terminate TLS in a proxy)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "tikajs-68os.24 (already proposed)",
       "why": "TLS is the deployer's job (spec/04); a metrics port goes with it."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "tikajs-68os.24 (already proposed)",
+      "reason": "TLS is the deployer's job (spec/04); a metrics port goes with it."
     }
   },
   {
@@ -1553,14 +1705,22 @@
     "upstreamKey": "server.metricsPort",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:106,164-171",
     "ripstream": "none (/status JSON only)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "tikajs-68os.24 (already proposed)",
       "why": "TLS is the deployer's job (spec/04); a metrics port goes with it."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "tikajs-68os.24 (already proposed)",
+      "reason": "TLS is the deployer's job (spec/04); a metrics port goes with it."
     }
   },
   {
@@ -1601,14 +1761,22 @@
     "upstreamKey": "env TIKA_PRESETS (comma list)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:51,116,128-134",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C17",
     "unknownKeyBehaviour": "silent-ignore (TIKA_PRESETS=foo ignored, exit 0, C17)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-4 Tika presets",
       "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-4 Tika presets",
+      "reason": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
     }
   },
   {
@@ -1649,9 +1817,9 @@
     "unknownKeyBehaviour": "--config=FILE spelling rejected (C07); Tika-shaped config rejected (C01,C12); ripstream-shaped config accepted but parsers/detectors/etc. have NO effect (C02-C04,C13)",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "bead",
+      "target": "tikajs-68os.8.12",
+      "why": "Owner decision: the CLI stays ripstream's own interface with --flag=value added (tikajs-68os.24)."
     }
   },
   {
@@ -1660,14 +1828,22 @@
     "upstreamKey": "-t/--text -x/--xml -h/--html -m/--metadata -j/--json -y/--xmp -T/--text-main -A/--text-all --md",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:128-153",
     "ripstream": "-j -m -r -o text|json|jsonl",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "C24",
     "unknownKeyBehaviour": "unknown short flags rejected (-t, C24)",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The output-format flags (-t -x -h -m -j -y -T -A --md) are declined; ripstream has -j -m -o text|json|jsonl. -h means help here and html in tika-app."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The output-format flags (-t -x -h -m -j -y -T -A --md) are declined; ripstream has -j -m -o text|json|jsonl. -h means help here and html in tika-app."
     }
   },
   {
@@ -1676,14 +1852,22 @@
     "upstreamKey": "-J/--jsonRecursive",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:155-157",
     "ripstream": "-r/--recursive",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -J/--jsonRecursive is -r/--recursive here."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -J/--jsonRecursive is -r/--recursive here."
     }
   },
   {
@@ -1692,14 +1876,22 @@
     "upstreamKey": "-r/--pretty-print",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:159",
     "ripstream": "none (-r means recursive here)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "flag-letter collision",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -r is recursive here and pretty-print in tika-app, so it cannot be both."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -r is recursive here and pretty-print in tika-app, so it cannot be both."
     }
   },
   {
@@ -1708,14 +1900,22 @@
     "upstreamKey": "--encoding=X",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:162",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "rejected (unknown option)",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). --encoding is declined."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). --encoding is declined."
     }
   },
   {
@@ -1746,14 +1946,22 @@
     "upstreamKey": "--password=X / env TIKA_PASSWORD",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:178; TikaCLI.java:206",
     "ripstream": "-p/--password PW (refused with isolation); TIKA_PASSWORD ignored",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "C20",
     "unknownKeyBehaviour": "silent-ignore for env TIKA_PASSWORD (C20)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-8 TIKA_PASSWORD",
       "why": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-8 TIKA_PASSWORD",
+      "reason": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
     }
   },
   {
@@ -1778,14 +1986,14 @@
     "upstreamKey": "--maxEmbeddedDepth=N / --maxEmbeddedCount=N",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:187-191",
     "ripstream": "none (limits only via API/server query)",
-    "status": "gap",
+    "status": "implemented",
     "evidence": "C15",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.8",
-      "why": "parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped)."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.8",
+      "why": "--maxEmbeddedDepth and --maxEmbeddedCount set maxNodeDepth and maxEmbeddedResources for one parse or metadata, in both spellings (--name=value since tikajs-68os.8.12). They fail the parse at the limit."
     }
   },
   {
@@ -1794,14 +2002,22 @@
     "upstreamKey": "--list-parsers --list-parser-names --list-parser-details[-apt] --list-detectors --list-detector-names --list-met-models --list-supported-types --compare-file-magic",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:200-225",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C23",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The --list-* flags are declined, like GET /parsers and /detectors (CFG-033, CFG-038); the component names a config can use are listed in docs/parsing.md."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The --list-* flags are declined, like GET /parsers and /detectors (CFG-033, CFG-038); the component names a config can use are listed in docs/parsing.md."
     }
   },
   {
@@ -1810,14 +2026,22 @@
     "upstreamKey": "--convert-config-xml-to-json=FILE",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:113",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C07",
     "unknownKeyBehaviour": "loud (ripstream rejects)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-9 fork mode, server id, XML conversion",
       "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-9 fork mode, server id, XML conversion",
+      "reason": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
     }
   },
   {
@@ -1826,14 +2050,22 @@
     "upstreamKey": "-f/--fork --task-timeout --progress-timeout --fork-jvm-args --fork-plugins-dir",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:238-252",
     "ripstream": "--isolation strict|lenient|off + RIPSTREAM_ISOLATION_* (isolation-config.ts:21-29)",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "C05,C06b,C18,C19",
     "unknownKeyBehaviour": "typo'd env var name (RIPSTREAM_ISOLATION_MAXQUEUE) SILENTLY IGNORED (C18); bad value rejected loudly (C19)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-9 fork mode, server id, XML conversion",
       "why": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-9 fork mode, server id, XML conversion",
+      "reason": "Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration."
     }
   },
   {
@@ -1842,14 +2074,22 @@
     "upstreamKey": "-v/--verbose -V/--version -g/--gui",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:94-100",
     "ripstream": "-V/--version only",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -V/--version works; -v/--verbose and -g/--gui are declined."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). -V/--version works; -v/--verbose and -g/--gui are declined."
     }
   },
   {
@@ -1858,14 +2098,22 @@
     "upstreamKey": "pipes mode: -i -o --fileList --on-exists --handler --concatenate --content-only -n --Xmx -T -c -p -a -z -Z --extract-dir --unpack-format --unpack-mode --unpack-include-metadata",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:297-418",
     "ripstream": "none in CLI (pipes via server /pipes or PipesClient API)",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "rejected (unknown option)",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The pipes mode of tika-app is declined; pipes run through the server's /pipes route or the PipesClient API."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). The pipes mode of tika-app is declined; pipes run through the server's /pipes route or the PipesClient API."
     }
   },
   {
@@ -1874,14 +2122,22 @@
     "upstreamKey": "pipes-mode activation by positional dirs / single .json arg",
     "upstreamSource": "docs/modules/ROOT/pages/using-tika/cli/index.adoc:297-307",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a",
     "note": "",
     "triage": {
-      "disposition": "decision",
-      "target": "tikajs-68os.24",
-      "why": "Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server."
+      "disposition": "non-goal",
+      "target": "CLI is ripstream's own interface",
+      "why": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). Pipes mode is not entered from positional arguments."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "CLI is ripstream's own interface",
+      "reason": "The ripstream CLI is its own interface (parse, detect, metadata, language, serve), not tika-app's. Owner decision: no tika-app flag aliases, except --flag=value (tikajs-68os.8.12) and the embedded-limit flags (tikajs-68os.8.8). Pipes mode is not entered from positional arguments."
     }
   },
   {
@@ -2105,14 +2361,22 @@
     "upstreamKey": "TIKA_PRESETS",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:51",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C17",
     "unknownKeyBehaviour": "silent-ignore",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-4 Tika presets",
       "why": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-4 Tika presets",
+      "reason": "Tika presets are catalog config fragments switched on by --preset / TIKA_PRESETS; ripstream has no catalog. Its server presets are a different, per-request thing."
     }
   },
   {
@@ -2121,14 +2385,22 @@
     "upstreamKey": "TIKA_PASSWORD",
     "upstreamSource": "tika-app TikaCLI.java:206",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "C20",
     "unknownKeyBehaviour": "silent-ignore",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-8 TIKA_PASSWORD",
       "why": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-8 TIKA_PASSWORD",
+      "reason": "A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain."
     }
   },
   {
@@ -2137,14 +2409,22 @@
     "upstreamKey": "${env:NAME} inside config strings",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/EnvInterpolator.java:43-97",
     "ripstream": "none",
-    "status": "gap",
+    "status": "non-goal",
     "evidence": "J20",
     "unknownKeyBehaviour": "silent-ignore",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-7 ${env:NAME} interpolation",
       "why": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-7 ${env:NAME} interpolation",
+      "reason": "No ripstream config value is a string worth interpolating (mode, component names, media types), and every setting already has a RIPSTREAM_* variable."
     }
   },
   {
@@ -2191,14 +2471,22 @@
     "upstreamKey": "java.io.tmpdir (logged by loader)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaLoader.java:197",
     "ripstream": "per-call temp dir inside isolation (docs/isolation.md); TMPDIR honoured by Node",
-    "status": "partial",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "non-goal-candidate",
+      "disposition": "non-goal",
       "target": "NG-10 JVM system properties",
       "why": "java.io.tmpdir is a JVM property; the isolation child's TMPDIR is set per child."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.24",
+      "by": "owner",
+      "date": "2026-11-09",
+      "group": "NG-10 JVM system properties",
+      "reason": "java.io.tmpdir is a JVM property; the isolation child's TMPDIR is set per child."
     }
   },
   {

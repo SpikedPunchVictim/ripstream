@@ -369,6 +369,60 @@ test("--port takes digits only: an empty or padded value is not port 0", async (
   }
 });
 
+test("--name=value means the same as --name value, for every long option that takes one", async () => {
+  const run = async (argv: string[], input = "Hello"): Promise<{ code: number; out: string; err: string }> => {
+    const sink = io(input);
+    const code = await main(argv, sink, { env: {} });
+    return { code, out: sink.out.join(""), err: sink.err.join("") };
+  };
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-equals-"));
+  try {
+    // The directory name has an `=` in it: only the first one separates the name from the value.
+    const config = join(directory, "a=b.json");
+    writeFileSync(config, '{"version":1,"isolation":{"mode":"off"}}');
+    for (const [spaced, joined] of [
+      [["--output", "json", "-"], ["--output=json", "-"]],
+      [["--output", "jsonl", "-"], ["--output=jsonl", "-"]],
+      [["--config", config, "-"], [`--config=${config}`, "-"]],
+      [["--isolation", "off", "-"], ["--isolation=off", "-"]],
+      [["--password", "secret", "-"], ["--password=secret", "-"]],
+    ] as Array<[string[], string[]]>) {
+      const a = await run(spaced);
+      const b = await run(joined);
+      assert.equal(a.code, 0, spaced.join(" "));
+      assert.deepEqual(b, a, joined.join(" "));
+    }
+    // The value is taken as written, even when it looks like a flag: --password=-m is a password, not a flag.
+    assert.equal((await run(["--password=-m", "-"])).code, 0);
+    // And a bad value is refused by the same check as before.
+    const bad = await run(["--isolation=paranoid", "-"]);
+    assert.equal(bad.code, 2);
+    assert.match(bad.err, /isolation/);
+    const port = await run(["serve", "--port=abc"]);
+    assert.equal(port.code, 2);
+    assert.match(port.err, /--port expects an integer between 0 and 65535/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("--name= with no value, a value on a flag that takes none, and -x=value are usage errors", async () => {
+  const cases: Array<[string[], RegExp]> = [
+    [["--config=", "-"], /--config expects a value/],
+    [["--output=", "-"], /--output expects text, json or jsonl/],
+    [["serve", "--port="], /--port expects a value/],
+    [["--json=yes", "-"], /--json does not take a value/],
+    [["--help=x"], /--help does not take a value/],
+    [["--bogus=1", "-"], /Unknown option: --bogus=1/],
+    [["-c=x", "-"], /Unknown option: -c=x/],
+  ];
+  for (const [argv, pattern] of cases) {
+    const sink = io("x");
+    assert.equal(await main(argv, sink, { env: {} }), 2, argv.join(" "));
+    assert.match(sink.err.join(""), pattern, argv.join(" "));
+  }
+});
+
 test("a config file with a repeated key, or deep nesting, is a usage error", async () => {
   const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-config-"));
   try {
@@ -508,6 +562,169 @@ test("a detectors section naming a detector ripstream does not implement is a us
     // detect builds the same ripstream, so it refuses too.
     const detect = io("x");
     assert.equal(await main(["detect", "--config", file, "-"], detect, { env: {} }), 2);
+  });
+});
+
+// A `parse-context` section sets limits (tikajs-68os.8.8); --maxEmbeddedDepth and --maxEmbeddedCount are tika-app's flags
+// for the same two limits. What the section may say is tested in core/test/parse-context-config.test.ts.
+
+/** A ustar archive with one text entry per name: enough for a parser that counts embedded documents. */
+function tarOf(names: readonly string[]): Uint8Array {
+  const blocks: Uint8Array[] = [];
+  for (const name of names) {
+    const body = new TextEncoder().encode(`text of ${name}`);
+    const header = new Uint8Array(512);
+    const put = (offset: number, text: string): void => header.set(new TextEncoder().encode(text), offset);
+    put(0, name);
+    put(100, "0000644\0");
+    put(108, "0000000\0");
+    put(116, "0000000\0");
+    put(124, `${body.length.toString(8).padStart(11, "0")}\0`);
+    put(136, "00000000000\0");
+    put(148, "        ");
+    put(156, "0");
+    put(257, "ustar\0");
+    put(263, "00");
+    const sum = header.reduce((total, byte) => total + byte, 0);
+    put(148, `${sum.toString(8).padStart(6, "0")}\0 `);
+    blocks.push(header);
+    const padded = new Uint8Array(Math.ceil(body.length / 512) * 512);
+    padded.set(body);
+    blocks.push(padded);
+  }
+  blocks.push(new Uint8Array(1024));
+  const result = new Uint8Array(blocks.reduce((total, block) => total + block.length, 0));
+  let offset = 0;
+  for (const block of blocks) {
+    result.set(block, offset);
+    offset += block.length;
+  }
+  return result;
+}
+
+function withTar(names: readonly string[], run: (tar: string) => Promise<void>): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-tar-"));
+  const tar = join(directory, "three.tar");
+  writeFileSync(tar, tarOf(names));
+  return run(tar).finally(() => rmSync(directory, { recursive: true, force: true }));
+}
+
+const THREE = ["a.txt", "b.txt", "c.txt"];
+const MAX_TWO = { "parse-context": { "embedded-limits": { maxCount: 2, throwOnMaxCount: true } } };
+
+test("the tar the tests use parses, with three embedded documents", async () => {
+  await withTar(THREE, async (tar) => {
+    const sink = io();
+    assert.equal(await main([tar], sink, { env: {} }), 0, sink.err.join(""));
+    assert.match(sink.out.join(""), /text of c\.txt/);
+  });
+});
+
+test("a parse-context section in --config limits parse, metadata and --recursive", async () => {
+  await withTar(THREE, async (tar) => {
+    await withConfig(MAX_TWO, async (file) => {
+      for (const args of [["--config", file, tar], ["metadata", "--config", file, tar], ["--recursive", "--config", file, tar]]) {
+        const sink = io();
+        assert.equal(await main(args, sink, { env: {} }), 3, args.join(" "));
+        assert.match(sink.err.join(""), /Embedded count 3 exceeds 2/, args.join(" "));
+      }
+    });
+    await withConfig({ "parse-context": { "embedded-limits": { maxCount: 3, throwOnMaxCount: true } } }, async (file) => {
+      assert.equal(await main(["--config", file, tar], io(), { env: {} }), 0);
+    });
+  });
+});
+
+test("--maxEmbeddedCount and --maxEmbeddedDepth set the same limits, in either spelling", async () => {
+  await withTar(THREE, async (tar) => {
+    for (const args of [["--maxEmbeddedCount=2", tar], ["--maxEmbeddedCount", "2", tar], ["metadata", "--maxEmbeddedCount=2", tar]]) {
+      const sink = io();
+      assert.equal(await main(args, sink, { env: {} }), 3, args.join(" "));
+      assert.match(sink.err.join(""), /Embedded count 3 exceeds 2/, args.join(" "));
+    }
+    assert.equal(await main(["--maxEmbeddedCount=3", tar], io(), { env: {} }), 0);
+    // A child of the container is at depth 1, so a depth of 0 refuses the first one.
+    const depth = io();
+    assert.equal(await main(["--maxEmbeddedDepth=0", tar], depth, { env: {} }), 3);
+    assert.match(depth.err.join(""), /Embedded depth 1 exceeds 0/);
+    assert.equal(await main(["--maxEmbeddedDepth=1", tar], io(), { env: {} }), 0);
+  });
+});
+
+test("a flag beats the configuration's limit", async () => {
+  await withTar(THREE, async (tar) => {
+    await withConfig(MAX_TWO, async (file) => {
+      assert.equal(await main(["--config", file, "--maxEmbeddedCount=10", tar], io(), { env: {} }), 0);
+      assert.equal(await main(["--config", file, "--maxEmbeddedCount=1", tar], io(), { env: {} }), 3);
+    });
+  });
+});
+
+test("--maxEmbeddedCount and --maxEmbeddedDepth take a non-negative integer, nothing else", async () => {
+  const cases: Array<[string[], RegExp]> = [
+    [["--maxEmbeddedCount=abc", "-"], /--maxEmbeddedCount expects a non-negative integer, got "abc"/],
+    [["--maxEmbeddedCount=-1", "-"], /--maxEmbeddedCount expects a non-negative integer, got "-1"/],
+    [["--maxEmbeddedCount=1.5", "-"], /--maxEmbeddedCount expects a non-negative integer/],
+    [["--maxEmbeddedDepth= 3", "-"], /--maxEmbeddedDepth expects a non-negative integer/],
+    [["--maxEmbeddedDepth=99999999999999999999", "-"], /--maxEmbeddedDepth expects a non-negative integer/],
+    [["--maxEmbeddedCount=", "-"], /--maxEmbeddedCount expects a value/],
+    [["--maxEmbeddedCount"], /--maxEmbeddedCount expects a value/],
+    [["--maxEmbeddedDepth", "--json", "-"], /--maxEmbeddedDepth expects a value, got the option --json/],
+  ];
+  for (const [argv, pattern] of cases) {
+    const sink = io("x");
+    assert.equal(await main(argv, sink, { env: {} }), 2, argv.join(" "));
+    assert.match(sink.err.join(""), pattern, argv.join(" "));
+  }
+});
+
+test("--maxEmbeddedCount is a parse and metadata option: detect, language and serve refuse it", async () => {
+  for (const command of ["detect", "language", "serve"]) {
+    const sink = io("x");
+    assert.equal(await main([command, "--maxEmbeddedCount=1", "-"], sink, { env: {} }), 2, command);
+    assert.match(sink.err.join(""), /--maxEmbeddedCount applies to parse and metadata/, command);
+    assert.equal(sink.out.join(""), "", `${command} did nothing`);
+  }
+});
+
+test("limits with isolation on are a usage error that names the gap, as the other sections are", async () => {
+  await withConfig(MAX_TWO, async (file) => {
+    const { log, createIsolation } = fakeIsolation();
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 2);
+    assert.match(sink.err.join(""), /sets "parse-context"/);
+    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
+    assert.equal(log.created.length, 0);
+  });
+  const { log, createIsolation } = fakeIsolation();
+  const flagged = io("x");
+  assert.equal(await main(["--maxEmbeddedCount=5", "--isolation", "lenient", "-"], flagged, { env: {}, createIsolation }), 2);
+  assert.match(flagged.err.join(""), /--maxEmbeddedCount is set, which an isolated parse cannot yet receive \(tikajs-68os\.8\.7\)/);
+  assert.equal(log.created.length, 0);
+});
+
+test("serve does not apply a parse-context section yet, and says so instead of half applying it", async () => {
+  await withConfig({ ...MAX_TWO, isolation: { mode: "off" } }, async (file) => {
+    const sink = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /"parse-context".*serve|serve.*"parse-context"/s);
+    assert.match(sink.err.join(""), /tikajs-68os\.8\.9/);
+    assert.equal(sink.out.join(""), "", "the server never started");
+  });
+});
+
+test("detect and language run no parse, so a parse-context section changes nothing for them", async () => {
+  await withConfig(MAX_TWO, async (file) => {
+    assert.equal(await main(["detect", "--config", file, "-"], io("plain"), { env: {} }), 0);
+    assert.equal(await main(["language", "--config", file, "-"], io("plain text here"), { env: {} }), 0);
+  });
+});
+
+test("a parse-context limit without its throw flag is a usage error that says what to set", async () => {
+  await withConfig({ "parse-context": { "embedded-limits": { maxCount: 2 } } }, async (file) => {
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "-"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /maxCount needs throwOnMaxCount: true/);
   });
 });
 

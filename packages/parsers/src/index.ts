@@ -5,6 +5,7 @@ import {
   RipstreamConfigError,
   type MediaTypeRegistry,
   type Parser,
+  type ParseLimits,
   type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
 import { DefaultDetector, MimeTypes } from "@spikedpunch/ripstream-mime";
@@ -178,6 +179,11 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
 
 export interface CreateRipstreamOptions extends DefaultParserOptions {
   readonly detector?: DefaultDetector;
+  /**
+   * Limits every parse starts from. They are laid over the `parse-context` limits of `config`, and a limit a call names
+   * in its own `limits` wins over both.
+   */
+  readonly limits?: Partial<ParseLimits>;
 }
 
 /** Wires the default detector and parser registry into the Ripstream facade. */
@@ -192,5 +198,8 @@ export function createRipstream(options: CreateRipstreamOptions = {}): Ripstream
     detector,
     parser: createDefaultParser({ ...options, registry: options.registry ?? detector.getMediaTypeRegistry() }),
   });
-  return new Ripstream({ detector, parser });
+  // The configuration's limits are the base, and what the caller passes beside it is laid over them.
+  const limits: Record<string, number | undefined> = { ...options.config?.limits };
+  for (const [name, value] of Object.entries(options.limits ?? {})) if (value !== undefined) limits[name] = value as number;
+  return new Ripstream({ detector, parser, ...(Object.keys(limits).length === 0 ? {} : { limits: limits as Partial<ParseLimits> }) });
 }

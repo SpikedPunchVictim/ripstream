@@ -1,15 +1,16 @@
 # Config parity triage (tikajs-68os.8.5)
 
 Every one of the 117 gap and partial rows of config-inventory.json has a disposition (the `triage` field of the row).
-Nothing is declared a non-goal: the candidates are proposals for the owner (tikajs-68os.24).
-Rows marked implemented were resolved by tikajs-68os.8.1 to .8.6 after the audit was taken; their `status` is updated.
+The owner accepted every non-goal group and the CLI recommendation on 2026-11-09 (tikajs-68os.24): those rows have
+status `non-goal` and a `decision` field. The 22 rows of the original audit that were already `non-goal-candidate`
+(CFG-001 and others, not gap or partial) are still proposals in tikajs-68os.24.
+Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after the audit was taken; their `status` is updated.
 
 | Disposition | Rows |
 | --- | --- |
-| implemented | 21 |
-| bead | 59 |
-| non-goal-candidate | 28 |
-| decision | 9 |
+| implemented | 24 |
+| bead | 57 |
+| non-goal (declared) | 36 |
 
 ## Implemented since the audit
 
@@ -27,6 +28,8 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.6 after the audit
 - CFG-079 (working tree (this change): One leading UTF-8 byte order mark is skipped, for text and for bytes.)
 - CFG-076 (1bc5b63 c41e22b: A null, string, fractional or out-of-range value is refused for every numeric setting.)
 - CFG-081, CFG-082, CFG-083, CFG-084, CFG-085 (234e04c: ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed).)
+- CFG-052, CFG-062 (tikajs-68os.8.8: embedded-limits.maxDepth is maxNodeDepth and timeout-limits.totalTaskTimeoutMillis is maxParseMillis; each is accepted only beside its throwOn flag set to true, because ripstream fails at a limit where Tika's default stops quietly.)
+- CFG-119 (tikajs-68os.8.8: --maxEmbeddedDepth and --maxEmbeddedCount.)
 
 ## Merged into beads
 
@@ -43,12 +46,14 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.6 after the audit
 - `tikajs-68os.6.3`: CFG-127, CFG-128. parseMode and emit strategy semantics.
 - `tikajs-68os.6.6`: CFG-020, CFG-137, CFG-138, CFG-139, CFG-140. Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24.
 - `tikajs-68os.6`: CFG-023. Pipes section: see the pipes rows.
-- `tikajs-68os.8.8`: CFG-014, CFG-015, CFG-052, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-062, CFG-063, CFG-064, CFG-119. parse-context limits: a design question for the owner (Tika-shaped or ripstream-shaped).
+- `tikajs-68os.8.13`: CFG-014, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-063, CFG-064. Limits that need new engine behavior (stop-and-flag mode, XML depth, output:input ratio, stall timeout) and the auto-detect-parser section; refused by name meanwhile. A design reserve: built only if someone asks.
+- `tikajs-68os.9.1`, `.9.2`, `.7.6` and NG-5: CFG-015. The parse-context limit blocks are applied (tikajs-68os.8.8); the other parse-context components follow their own beads.
 - `tikajs-68os.8.9`: CFG-017, CFG-088, CFG-089, CFG-091, CFG-092, CFG-096, CFG-098, CFG-099, CFG-100, CFG-101, CFG-102, CFG-105, CFG-106, CFG-109. A server section for ripstream serve.
 - `tikajs-68os.8.10`: CFG-028. Parser settings by Tika property name.
 - `tikajs-68os.8.11`: CFG-037, CFG-146. Custom media type definitions.
+- `tikajs-68os.8.12`: CFG-110. `--flag=value` on the CLI.
 
-## Non-goal candidates (proposed, not declared)
+## Non-goals (declared by the owner, 2026-11-09)
 
 - **tikajs-68os.24 (already proposed)**: CFG-033, CFG-038, CFG-103, CFG-104. /parsers and /detectors list a JVM class graph. (8.6 gives ripstream component names, which weakens that reason: a name list is now cheap.)
 - **NG-1 pluggable encoding detectors**: CFG-006, CFG-039, CFG-040. Text decoding uses a built-in detector with no plugin point; default-behavior parity is a parse-quality matter (tikajs-68os.10). The encodingDetector section is already refused by name.
@@ -62,6 +67,8 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.6 after the audit
 - **NG-9 fork mode, server id, XML conversion**: CFG-086, CFG-090, CFG-121, CFG-122. Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration.
 - **NG-10 JVM system properties**: CFG-147. java.io.tmpdir is a JVM property; the isolation child's TMPDIR is set per child.
 
-## Decision
+## CLI flags (decided: ripstream's own interface)
 
-- `tikajs-68os.24`: CFG-110, CFG-111, CFG-112, CFG-113, CFG-114, CFG-120, CFG-123, CFG-124, CFG-125. Is the ripstream CLI meant to speak tika-app's flags? It has its own commands (parse, detect, metadata, language, serve). Recommendation: no, except --flag=value and the embedded-limit flags (tikajs-68os.8.8). -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server.
+- Non-goal (CFG-111, 112, 113, 114, 120, 123, 124, 125): the CLI is ripstream's own interface (parse, detect, metadata, language, serve), not tika-app's, so the tika-app flags are declined. -r means recursive here and pretty-print in tika-app, and -h means help here and host in tika-server, so aliases would break one group of users either way. Anyone moving from tika-app uses the flag table in docs/migration.md.
+- Bead `tikajs-68os.8.12` (CFG-110): accept `--flag=value` as well as `--flag value`.
+- CFG-119 (done in tikajs-68os.8.8): the embedded-limit flags --maxEmbeddedDepth and --maxEmbeddedCount.

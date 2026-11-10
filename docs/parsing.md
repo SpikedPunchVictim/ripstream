@@ -115,6 +115,56 @@ How it differs from Tika:
   never isolates, so it applies the section whatever the isolation settings are.
 - Read from Tika's source, not checked against a running Tika 4.2.0.
 
+### The `parse-context` section
+
+```ts
+const config = loadConfig({
+  "parse-context": {
+    "embedded-limits": { maxDepth: 5, throwOnMaxDepth: true, maxCount: 100, throwOnMaxCount: true },
+    "output-limits": { writeLimit: 200000, throwOnWriteLimit: true },
+    "timeout-limits": { totalTaskTimeoutMillis: 30000, throwOnDeadline: true },
+  },
+});
+const ripstream = createRipstream({ config }); // these are the defaults of every parse
+```
+
+Tika's `parse-context` carries the limits of a parse in three blocks (`EmbeddedLimits`, `OutputLimits`,
+`TimeoutLimits`, tika-core 4.2.0). Ripstream applies the keys whose limit means the same here, and `config.limits`
+holds what they set. A limit a call names itself (`parse(..., { limits })`) wins over the configuration's.
+
+| Tika key | Ripstream limit | Boundary |
+| --- | --- | --- |
+| `embedded-limits.maxDepth` | `maxNodeDepth` | a document nested deeper than N is refused (the container is depth 0) |
+| `embedded-limits.maxCount` | `maxEmbeddedResources` | N embedded documents are parsed, the N+1st is refused |
+| `output-limits.writeLimit` | `maxOutputChars` | total characters across the container and what it embeds; `-1` is unlimited |
+| `timeout-limits.totalTaskTimeoutMillis` | `maxParseMillis` | wall-clock time of the whole parse |
+
+How it differs from Tika:
+
+- **What happens at the limit.** Tika's default is to stop quietly and set a flag (`throwOnMaxDepth`, `throwOnMaxCount`,
+  `throwOnWriteLimit` and `throwOnDeadline` are false by default). Ripstream fails the parse with a `LimitExceededError`
+  (CLI exit 3, HTTP 422), which is what Tika does with the flag true. So a limit is accepted only beside its flag set to
+  `true`, and `loadConfig` refuses `"maxCount": 1000` alone, saying what to set. Accepting it would turn Tika's truncated
+  result into a failure without a word. A flag with no limit beside it is accepted: `false` is Tika's default and
+  `true` is ripstream's behaviour. `writeLimit: -1` sets no limit and needs no flag.
+- **No unlimited depth or count.** `maxDepth: -1` and `maxCount: -1` are refused: ripstream always bounds them.
+- **Keys with no counterpart are refused by name**, with the reason: `maxXmlDepth` (ripstream has no limit on XML
+  element nesting among its parse limits), `maxPackageEntryDepth` (deprecated in Tika), `zipBombThreshold` and
+  `zipBombRatio` (Tika compares output characters with input bytes once a character threshold is passed; ripstream's
+  `maxDecompressionRatio` compares decompressed with compressed bytes per archive entry, which is another check) and
+  `progressTimeoutMillis` (no stall detector). A block other than the three, an unknown setting, and a value that is
+  not an integer in range are refused too; Tika's loader would coerce a string or a fraction.
+- **The defaults are ripstream's, not Tika's.** A limit the section does not set keeps ripstream's default (for
+  instance 10000 embedded documents where Tika has none, and 100000 output characters where Tika has none).
+- **Where it applies.** `createRipstream({ config })` and the CLI's `parse` and `metadata`, in this process. `serve` refuses a
+  `parse-context` section (`tikajs-68os.8.9`): the server sets the limits of each request itself, so a default set here
+  would reach some limits and not others. With isolation on the CLI refuses it, as it refuses `parsers` and `detectors`
+  (`tikajs-68os.8.7`), because only `maxOutputChars` and `maxEmbeddedResources` can cross the isolation boundary.
+- The CLI flags `--maxEmbeddedDepth` and `--maxEmbeddedCount` (tika-app's names) set `maxNodeDepth` and
+  `maxEmbeddedResources` for one `parse` or `metadata`, and win over the configuration. They fail the parse at the
+  limit, like the section.
+- Read from Tika's source, not checked against a running Tika 4.2.0.
+
 ## Handlers
 
 `BodyContentHandler`, `XHTMLContentHandler`, `MarkdownContentHandler`, `ToXMLContentHandler`,

@@ -78,6 +78,24 @@ Added: the `detectors` section is applied too (`tikajs-68os.8.6`, [docs/parsing.
   `--isolation strict|lenient` refuse them with a usage error that names `tikajs-68os.8.7`, instead of parsing with
   every parser and detector. `detect` never isolates and applies `detectors` whatever the isolation settings.
 
+Added: the `parse-context` section sets limits (`tikajs-68os.8.8`, [docs/parsing.md](docs/parsing.md#the-parse-context-section)).
+
+- `embedded-limits.maxDepth` and `maxCount`, `output-limits.writeLimit` and `timeout-limits.totalTaskTimeoutMillis` become
+  `maxNodeDepth`, `maxEmbeddedResources`, `maxOutputChars` and `maxParseMillis` in `RipstreamConfig.limits`. A limit is
+  accepted only beside its `throwOn*` flag set to `true`, because ripstream fails the parse at a limit where Tika's
+  default stops quietly. `maxXmlDepth`, `maxPackageEntryDepth`, `zipBombThreshold`, `zipBombRatio` and
+  `progressTimeoutMillis` are refused by name, with the reason.
+- `new Ripstream({ limits })` and `createRipstream({ config, limits })` take limits that every parse starts from; a limit
+  a call names wins. An invalid one throws when the ripstream is built.
+- CLI: `--maxEmbeddedDepth` and `--maxEmbeddedCount` (tika-app's flag names) limit one `parse` or `metadata`. `parse` and
+  `metadata` apply the section in this process and refuse it with isolation on (`tikajs-68os.8.7`); `serve` refuses it
+  (`tikajs-68os.8.9`).
+
+Added: the CLI accepts `--name=value` as well as `--name value` for every long option that takes a value
+(`--config=ripstream.json`, `--output=json`, `--port=8080`) (`tikajs-68os.8.12`). An empty value (`--config=`), a value on
+a flag that takes none (`--json=yes`) and the short form (`-c=x`) are usage errors. The CLI stays ripstream's own
+interface: tika-app's other flags are declined (`tikajs-68os.24`, [docs/migration.md](docs/migration.md#command-line)).
+
 ### Parse isolation (epic `tikajs-zgg2`)
 
 Added: per-document child-process isolation with a host memory budget (`@spikedpunch/ripstream-isolation-node`,
