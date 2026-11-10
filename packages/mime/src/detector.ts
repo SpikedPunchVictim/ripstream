@@ -280,8 +280,7 @@ function applyHint(
 
 function resourceName(metadata: Metadata): string | null {
   const explicit =
-    metadata.get("resourceName") ??
-    metadata.get("X-TIKA:resourceName") ??
+    metadata.get("tk:resource-name") ??
     metadata.get("Content-Disposition");
   if (explicit === null) return null;
 

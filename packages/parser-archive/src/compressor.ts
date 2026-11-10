@@ -109,7 +109,7 @@ abstract class CompressorParser implements Parser {
 
     checkDecompression(ctx, data.byteLength, decompressed.byteLength, this.name);
 
-    const name = (metadata.get("resourceName") ?? "embedded").replace(
+    const name = (metadata.get("tk:resource-name") ?? "embedded").replace(
       this.extension,
       "",
     );

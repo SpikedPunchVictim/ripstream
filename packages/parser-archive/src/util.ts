@@ -88,7 +88,7 @@ export async function parseEntry(
   ctx: ParseContext,
 ): Promise<void> {
   const childMetadata = new Metadata();
-  childMetadata.set("resourceName", name);
+  childMetadata.set("tk:resource-name", name);
   const stream = await RipstreamInputStream.from(bytes, { context: ctx });
   try {
     const extractor =
@@ -98,9 +98,9 @@ export async function parseEntry(
     await extractor.parseEmbedded(stream, handler, childMetadata, ctx);
   } catch (error) {
     if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
-    childMetadata.set(
-      `X-TIKA:EXCEPTION:${error instanceof Error ? error.constructor.name : "Error"}`,
-      error instanceof Error ? error.message : String(error),
+    childMetadata.add(
+      "tk:exception:embedded-exception",
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     );
   } finally {
     await stream.close();

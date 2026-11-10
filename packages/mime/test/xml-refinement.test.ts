@@ -29,7 +29,7 @@ test("XML and HTML magic hits are refined by the root element, as Tika 4.2.0 doe
     const stream = await RipstreamInputStream.from(new TextEncoder().encode(content));
     try {
       const metadata = new Metadata();
-      metadata.set("resourceName", name);
+      metadata.set("tk:resource-name", name);
       const actual = (await detector.detect(stream, metadata, new ParseContext())).toString();
       if (actual !== expected) failures.push(`${name} ${content.slice(0, 40)}: expected ${expected}, got ${actual}`);
     } finally {

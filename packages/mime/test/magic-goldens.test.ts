@@ -27,7 +27,7 @@ test("magic and name detection matches Tika 4.2.0 on every measured document hea
     const stream = await RipstreamInputStream.from(new Uint8Array(Buffer.from(golden.bytes, "base64")));
     try {
       const metadata = new Metadata();
-      metadata.set("resourceName", golden.filename);
+      metadata.set("tk:resource-name", golden.filename);
       const actual = (await detector.detect(stream, metadata, new ParseContext())).toString();
       if (actual !== golden.tika) failures.push(`${golden.id}: expected ${golden.tika}, got ${actual}`);
     } finally {

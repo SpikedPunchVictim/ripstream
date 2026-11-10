@@ -63,7 +63,7 @@ test("skips entries that escape the archive root", async () => {
   assert.doesNotMatch(result.text, /evil content/);
   assert.ok(
     result.metadata
-      .getAll("X-TIKA:EXCEPTION:zip-entry")
+      .getAll("tk:exception:embedded-stream-exception")
       .some((value) => value.includes("evil")),
   );
 });

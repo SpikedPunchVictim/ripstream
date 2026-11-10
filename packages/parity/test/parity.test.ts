@@ -30,7 +30,7 @@ const snapshot: OracleSnapshot = {
   text: "hello world",
   metadata: {
     "Content-Type": ["text/plain"],
-    "X-TIKA:parse_time_millis": ["12"],
+    "tk:parse-time-millis": ["12"],
   },
 };
 
@@ -53,7 +53,7 @@ test("captures and round-trips goldens", async () => {
     assert.equal(loaded.fixture.sha256, golden.fixture.sha256);
     assert.deepEqual(
       compareSnapshot(fixture.id, snapshot, loaded, {
-        ignoreMetadataKeys: ["X-TIKA:parse_time_millis"],
+        ignoreMetadataKeys: ["tk:parse-time-millis"],
       }),
       [],
     );

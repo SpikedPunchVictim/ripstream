@@ -54,7 +54,7 @@ export class AppleSingleParser implements Parser {
       throw new MalformedDocumentError("AppleSingle data fork is missing");
     }
 
-    const name = (metadata.get("resourceName") ?? "data").replace(
+    const name = (metadata.get("tk:resource-name") ?? "data").replace(
       /\.(as|ad)$/i,
       "",
     );

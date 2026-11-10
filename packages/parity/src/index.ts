@@ -38,12 +38,7 @@ export interface ParityDiff {
   readonly detail: string;
 }
 
-const DEFAULT_IGNORED = [
-  "X-TIKA:parse_time_millis",
-  "X-TIKA:digest",
-  "X-TIKA:EXCEPTION:embedded_parser",
-  "tk:parse-time-millis",
-];
+const DEFAULT_IGNORED = ["tk:parse-time-millis", "tk:digest", "tk:exception:embedded-parser"];
 
 export function fixtureSha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -281,15 +276,10 @@ export class RipstreamServerOracle implements Oracle {
     const first = payload[0] ?? {};
     const metadata: Record<string, string[]> = {};
     for (const [key, value] of Object.entries(first)) {
-      if (key === "X-TIKA:content" || key === "tk:content") continue;
+      if (key === "tk:content") continue;
       metadata[key] = Array.isArray(value) ? value.map(String) : [String(value)];
     }
-    const content =
-      typeof first["tk:content"] === "string"
-        ? first["tk:content"]
-        : typeof first["X-TIKA:content"] === "string"
-          ? first["X-TIKA:content"]
-          : "";
+    const content = typeof first["tk:content"] === "string" ? first["tk:content"] : "";
     return {
       mediaType: (metadata["Content-Type"] ?? [fixture.mediaType])[0] ?? fixture.mediaType,
       text: content,

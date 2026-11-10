@@ -181,7 +181,7 @@ export class PdfParser implements Parser {
         await xhtml.startElement("div", "class", "attachment");
         await xhtml.element("h1", attachment.filename);
         const embeddedMetadata = new Metadata();
-        embeddedMetadata.set("resourceName", attachment.filename);
+        embeddedMetadata.set("tk:resource-name", attachment.filename);
         embeddedMetadata.set("Content-Type", "application/octet-stream");
         const extractor = ctx.get(
           CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR,

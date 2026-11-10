@@ -621,7 +621,7 @@ async function parseEmbeddedPart(
       | undefined) ?? undefined;
   if (extractor === undefined) return;
   const metadata = new Metadata();
-  metadata.set("resourceName", name);
+  metadata.set("tk:resource-name", name);
   const stream = await RipstreamInputStream.from(bytes, { context: ctx });
   try {
     await extractor.parseEmbedded(stream, handler, metadata, ctx);

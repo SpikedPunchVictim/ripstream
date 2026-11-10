@@ -2,6 +2,7 @@ export * from "./registry-types.ts";
 export {
   MimeTypes,
   filenameFromContentDisposition,
+  withCustomMimeTypes,
   type CustomMimeType,
   type MimeTypesOptions,
 } from "./mime-types.ts";

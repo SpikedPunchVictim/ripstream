@@ -40,7 +40,7 @@ export class GzipParser implements Parser {
 
     checkDecompression(ctx, data.byteLength, decompressed.byteLength, "GZIP");
 
-    const name = (metadata.get("resourceName") ?? "embedded")
+    const name = (metadata.get("tk:resource-name") ?? "embedded")
       .replace(/\.(gz|gzip)$/i, "");
 
     await withXhtml(handler, metadata, async (xhtml) => {

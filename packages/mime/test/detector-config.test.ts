@@ -37,7 +37,7 @@ async function detect(detector: DefaultDetector, bytes: Uint8Array, filename?: s
   const stream = await RipstreamInputStream.from(bytes, { spoolThreshold: 128 });
   try {
     const metadata = new Metadata();
-    if (filename !== undefined) metadata.set("resourceName", filename);
+    if (filename !== undefined) metadata.set("tk:resource-name", filename);
     return (await detector.detect(stream, metadata, new ParseContext())).toString();
   } finally {
     await stream.close();

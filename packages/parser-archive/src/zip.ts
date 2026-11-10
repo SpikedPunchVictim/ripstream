@@ -82,7 +82,7 @@ export class ZipParser implements Parser {
         if (name.endsWith("/")) continue;
         if (safeEntryName(name) === null) {
           metadata.add(
-            "X-TIKA:EXCEPTION:zip-entry",
+            "tk:exception:embedded-stream-exception",
             `unsafe archive path skipped: ${name}`,
           );
           continue;

@@ -31,7 +31,7 @@ export class UnixCompressParser implements Parser {
       data,
       new OutputBudget(data.byteLength, inflateLimits(ctx), ".Z output"),
     );
-    const name = (metadata.get("resourceName") ?? "embedded").replace(/\.Z$/, "");
+    const name = (metadata.get("tk:resource-name") ?? "embedded").replace(/\.Z$/, "");
     await withXhtml(handler, metadata, async (xhtml) => {
       await parseEntry(xhtml, name || "embedded", decompressed, metadata, ctx);
     });

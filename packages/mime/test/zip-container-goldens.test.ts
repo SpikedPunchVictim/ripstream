@@ -31,7 +31,7 @@ async function detect(golden: Golden, filename: string): Promise<string> {
   const stream = await RipstreamInputStream.from(bytes, { spoolThreshold: 32 });
   try {
     const metadata = new Metadata();
-    metadata.set("resourceName", filename);
+    metadata.set("tk:resource-name", filename);
     return (await detector.detect(stream, metadata, new ParseContext())).toString();
   } finally {
     await stream.close();

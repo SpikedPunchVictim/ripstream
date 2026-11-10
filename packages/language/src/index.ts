@@ -20,6 +20,7 @@ export class FrancLanguageDetector implements LanguageDetector {
     );
   }
 }
+export { toIso6391 } from "./iso639.ts";
 export { StreamingLanguageDetector } from "./streaming.ts";
 export { ReliableTranslator, RemoteTranslator, type ReliabilityOptions, type TranslationConfig, type TranslationProvider } from "./translate.ts";
 export { Cld3LanguageDetector } from "./cld3.ts";

@@ -153,7 +153,7 @@ async function dispatchEmbedded(
     contentTypeParams(entity.headers).get("name") ??
     dispositionParams(entity.headers).get("filename") ??
     `part-${depth}`;
-  partMetadata.set("resourceName", name);
+  partMetadata.set("tk:resource-name", name);
   const subject = headerValue(entity.headers, "subject");
   if (subject !== undefined) partMetadata.set("dc:title", decodeHeader(subject));
 
@@ -174,9 +174,9 @@ async function dispatchEmbedded(
     ) {
       throw error;
     }
-    partMetadata.set(
-      `X-TIKA:EXCEPTION:${error instanceof Error ? error.constructor.name : "Error"}`,
-      error instanceof Error ? error.message : String(error),
+    partMetadata.add(
+      "tk:exception:embedded-exception",
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     );
   } finally {
     await stream.close();
