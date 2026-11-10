@@ -15,17 +15,22 @@ about 5 MiB/s against MD5's 600), the rest are `node:crypto`'s. The settings rea
 (`IsolatedComponents.digest`, checked in the request header) and the in-process side of `createStandardIsolation`;
 `createRipstream` takes a `digest` option for a ripstream built beside a `detector`; `pipes` `NO_PARSE` digests and detects, as
 Tika's `ParseHandler.detectOnly` does (`PipesSettings.digest`, set by `loadConfig` as `unpack` is), and now also writes
-`tk:content-type-parser-override`. New core exports: `DIGEST_ALGORITHMS`, `DIGEST_ENCODINGS`, `digestKey`, `digestBytes` and the
+`tk:resource-name`, `Content-Length` and `tk:content-type-parser-override`; a pipes engine made from settings digests in every mode
+with the ripstream it builds from them. A plain `parse` no longer digests the embedded documents whose metadata it drops.
+`new Ripstream({ digest })` checks hand-built settings when it is made. New core exports: `DIGEST_ALGORITHMS`, `DIGEST_ENCODINGS`, `digestKey`, `digestBytes` and the
 `DigestDef`, `DigestSettings`, `DigestAlgorithm` and `DigestEncoding` types.
 
-Refused, as Tika refuses: an unknown setting, an unknown algorithm or encoding, SHA3 under the Commons factory (the message
-names the other factory), and both factories at once.
+Refused at load, as Tika's mapper refuses them: an unknown setting, an unknown algorithm or encoding, and both factories at
+once; and SHA3 under the Commons factory (the message names the other one), which Tika refuses later, on the first parse. Jackson's
+leniencies (a string or number for the boolean, a null encoding) are not reproduced, and Tika's example configurations carry an
+`auto-detect-parser` section that is refused here (`tikajs-68os.8.13`): drop it. See `docs/migration.md`.
 
 Verified against Tika's own `DigestConfigTest`: its `test_recursive_embedded.docx` (vendored unmodified, in `NOTICE`) gives the
 MD2, MD5, SHA1, SHA256, SHA384, SHA512, SHA3-512 and SHA1 BASE32 digests that test hard-codes, in-process and, for the CLI, under
-strict isolation. Not the same: Tika digests an embedded OLE2/`oleObject` document after POI re-writes it, and an email in a PST
-after `PSTEmailStreamTranslator`; ripstream digests the document it extracts, so those embedded digests can differ (read from
-source: there is no Java here to run Tika). `DigestSink` is not built. See `docs/migration.md`.
+strict isolation (`packages/cli/test/digest.test.ts`). Not the same: Tika digests an embedded OLE2/`oleObject` document after POI
+re-writes it, so those embedded digests can differ; and an email in a PST gets no digest and no `Content-Length` in Tika (the
+translator writes nothing and nothing is published), where ripstream digests the bytes it extracted (read from source: there is
+no Java here to run Tika). `DigestSink` is not built. See `docs/migration.md`.
 
 ### Pipes: S3, Elasticsearch and OpenSearch components, with no cloud or search SDK (`tikajs-68os.6.6`)
 

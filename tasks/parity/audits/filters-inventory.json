@@ -27,7 +27,7 @@
   "ripstream": "packages/core/src/digest-config.ts (parseDigesterFactory)",
   "status": "implemented",
   "evidence": "run: digest-config.test.ts: commons-digester-factory refuses SHA3_256/384/512 with the message that points to bouncy-castle-digester-factory, as CommonsDigester.checkSupported does; `ripstream metadata -c` with it exits 2",
-  "note": "MD2..SHA-512 on node:crypto and Md2."
+  "note": "MD2..SHA-512 on node:crypto and Md2. Timing differs: CommonsDigester throws UnsupportedOperationException when the factory builds it (the first parse); ripstream refuses the configuration when it is loaded."
  },
  {
   "id": "dig-bouncycastle-digester",
@@ -46,8 +46,8 @@
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/InputStreamDigester.java:105",
   "ripstream": "packages/core/src/digest.ts (digestStream, maybeDigest)",
   "status": "implemented",
-  "evidence": "run: digest.test.ts: one pass over every byte from the stream's position to its end whatever the chunks, the position put back, a temp-file-spooled document digested the same, Content-Length set only where blank, an abort stops it",
-  "note": "Not carried: digestSink (see dig-sinks) and CacheMemoryBudget/tryRetainInMemory, which are Java stream details; RipstreamInputStream spools to memory and then a temporary file."
+  "evidence": "run: digest.test.ts: one pass over every byte from the stream's position to its end whatever the chunks, the position put back, a temp-file-spooled document digested the same, Content-Length set only where blank (and a blank one replaced), the digest made before detection and on a document no parser reads and on an empty one (digest of nothing, Content-Length 0, as InputStreamDigester writes them), an abort stops it between chunks (a timer's abort during a large document is heard: measured 310 ms for MD2 over 30 MiB with a 300 ms timeout)",
+  "note": "Not carried: digestSink (see dig-sinks) and CacheMemoryBudget/tryRetainInMemory, which are Java stream details; RipstreamInputStream spools to memory and then a temporary file. A plain parse does not digest embedded documents (their metadata is dropped); recursive parses do."
  },
  {
   "id": "dig-composite-digester",
@@ -106,8 +106,8 @@
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/extractor/microsoft/MSEmbeddedStreamTranslator.java:42",
   "ripstream": "none",
   "status": "non-goal-candidate",
-  "evidence": "run: `ripstream -r -c <md5 config> test_recursive_embedded.docx` digests the embedded /oleObject1.bin (13,824 bytes) as it enters the parser; source: MSEmbeddedStreamTranslator re-serialises OLE2 through POI and PSTEmailStreamTranslator writes nothing, so Tika's digests of those documents are of bytes ripstream does not produce",
-  "note": "Deviation: an embedded OLE2 or oleObject document is digested as extracted, not as POI re-writes it, and an email in a PST gets the digest of nothing in Tika. Not reproducible here (no Java to run Tika). Tika's own test asserts only that embedded records have a digest, not its value."
+  "evidence": "run: `ripstream -r -c <md5 config> test_recursive_embedded.docx` digests the embedded /oleObject1.bin (13,824 bytes) as it enters the parser; source: DigestHelper.maybeDigest re-serialises OLE2 through POI (MSEmbeddedStreamTranslator) before digesting, and for a PST email PSTEmailStreamTranslator writes no bytes so nothing is committed (DigestHelper.java: `if (counted.getByteCount() > 0) sink.commit()`; DigestHelperTest asserts a null MD5 and a null Content-Length)",
+  "note": "Deviations: an embedded OLE2 or oleObject document is digested as extracted, not as POI re-writes it; and an email in a PST gets no digest and no Content-Length in Tika, where ripstream writes the digest of the bytes it extracted. Not reproducible here (no Java to run Tika). Tika's own test asserts only that embedded records have a digest, not its value."
  },
  {
   "id": "dig-metadata-keys",
@@ -126,8 +126,8 @@
   "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/ParseHandler.java:93",
   "ripstream": "packages/pipes/src/index.ts (NO_PARSE branch); packages/core/src/digest.ts (digestBytes)",
   "status": "implemented",
-  "evidence": "run: packages/pipes/test/modes.test.ts: NO_PARSE with a digester factory writes tk:digest:*, Content-Length, Content-Type and tk:content-type-parser-override (Tika's _preParse), no content; skipContainerDocumentDigest writes no digest; no factory writes only the two type keys; mutation checks on the forwarding, the skip rule and loadConfig's merge each fail a test",
-  "note": "digest, then detect, no parse. Digest settings reach it as PipesSettings.digest, set by loadConfig from `parse-context`, as `unpack` is."
+  "evidence": "run: packages/pipes/test/modes.test.ts: NO_PARSE with a digester factory writes tk:digest:*, Content-Length, tk:resource-name, Content-Type and tk:content-type-parser-override (Tika's _preParse), no content; skipContainerDocumentDigest writes no digest but still the name and length; no factory writes the name, length and the two type keys; RMETA and CONCATENATE through createEngineFromSettings digest with the ripstream the engine builds (and an AsyncProcessor in async-processor.test.ts); mutation checks on the forwarding, the skip rule, loadConfig's merge, the default ripstream's digest and the name/length each fail a test",
+  "note": "digest, then detect, no parse. Digest settings reach it as PipesSettings.digest, set by loadConfig from `parse-context`, as `unpack` is. Tika's pipes server logs a digest IOException and goes on; ripstream fails the document."
  },
  {
   "id": "ren-spi",

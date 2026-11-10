@@ -55,31 +55,60 @@ written.
 ```
 
 - **The settings are Tika's.** `algorithm` is `MD2`, `MD5`, `SHA1`, `SHA256`, `SHA384`, `SHA512` or, with
-  `bouncy-castle-digester-factory` only (as in Tika, where `CommonsDigester` refuses them), `SHA3_256`, `SHA3_384` or
-  `SHA3_512`. `encoding` is `HEX` (the default), `BASE32` or `BASE64`, in the RFC 4648 padded form. A factory with no
-  `digests` is MD5 in hex. A name is read in any case, an unknown setting is refused (Tika's mapper does both), and the two
-  factories together are refused, because a parse has one. The configuration fails with exit code 2 and says which setting.
+  `bouncy-castle-digester-factory` only, `SHA3_256`, `SHA3_384` or `SHA3_512`. `encoding` is `HEX` (the default), `BASE32` or
+  `BASE64`, in the RFC 4648 padded form. A factory with no `digests` is MD5 in hex. A name is read in any case and an unknown
+  setting is refused (Tika's mapper is set to do both), and the two factories together are refused, because a parse has
+  one. The configuration fails with exit code 2 and says which setting.
+  - *When SHA3 under the Commons factory is refused:* `CommonsDigester` has no SHA3 and throws
+    (`UnsupportedOperationException`) on the first parse that builds it; ripstream refuses the configuration when it is
+    loaded, and the message names `bouncy-castle-digester-factory`.
+  - *Where Jackson is more lenient than this:* it reads the string `"true"` or the number `1` as a boolean, which
+    `skipContainerDocumentDigest` refuses here, and it takes `"encoding": null` (which fails with a `NullPointerException` when Tika
+    builds the digester), which is HEX here. A name is upper-cased to match, so a few non-ASCII letters that fold to ASCII
+    (`ſha256`) are read as the name they fold to; nothing depends on it.
+  - *Tika's example configurations are not accepted whole.* The ones that go with these settings
+    (`tika-config-digests.json` and the others in `tika-parsers-standard-integration-tests`) also carry an
+    `"auto-detect-parser": {"throwOnZeroBytes": false}` section. That section is not read (`CFG-014`; its deferred
+    non-goal is `tikajs-68os.8.13`) and the configuration is refused for it: drop it, and keep `parse-context`. The tests here use
+    the `parse-context` part of those files.
 - **The key carries the algorithm and the encoding:** `tk:digest:MD5` for hex, `tk:digest:SHA-256:BASE32` for the others,
   the algorithm spelled as Java's `MessageDigest` spells it (`SHA-1`, `SHA3-512`).
 - **Every document is digested, the container and each embedded one,** before its type is detected, over all of its bytes
   whatever the parser reads; `Content-Length` is set from that length only where nothing has set it. With
   `skipContainerDocumentDigest` the container (depth 0) is left alone and what is embedded in it is digested. This holds in
-  the library, `ripstream -r`, `serve`, `pipes` and in an isolation child, which is handed the settings with the request.
-- **`pipes` `NO_PARSE` digests and detects.** Its metadata is the digests, `Content-Length`, `Content-Type` and
+  the library, `ripstream -r`, `serve` (`/meta` and `/rmeta`), `pipes` in every mode and in an isolation child, which is handed
+  the settings with the request; each has a test that runs it (`packages/cli/test/digest.test.ts`, `packages/pipes/test/modes.test.ts`,
+  `packages/bundle-standard/test/standard-isolation.test.ts`). A plain `parse` returns the container's metadata and not
+  an embedded document's, so it digests only the container (the embedded digest would be made and thrown away);
+  `parseRecursive`, `-r`, `/rmeta` and the `RMETA` and `UNPACK` modes digest each document. A `PipesEngine` made from
+  settings digests with the ripstream it builds from them; a `ripstream` passed in digests as it was built.
+- **`pipes` `NO_PARSE` digests and detects.** Its metadata is `tk:resource-name` and `Content-Length` (what Tika's fetcher stage
+  sets before anything runs, and so with no digester factory too), the digests, `Content-Type` and
   `tk:content-type-parser-override`, as Tika's `ParseHandler` makes it; with `skipContainerDocumentDigest` it has no digest.
 - **Checked against Tika's own test.** `packages/bundle-standard/test/digest-tika.test.ts` runs Tika's
   `test_recursive_embedded.docx` (vendored unmodified, see `NOTICE`) through the configurations of Tika's `DigestConfigTest`
   and gets the digests that test hard-codes: MD2, MD5, SHA1, SHA256, SHA384, SHA512, SHA3-512 and SHA1 in BASE32.
 - **MD2 is ripstream's own** (RFC 1319): OpenSSL 3, which Node uses, no longer has it. It runs at about 5 MiB/s where MD5
   runs at about 600 and SHA-256 at about 2,400 (measured on one machine), so a large document takes its time with MD2.
-  The other algorithms are `node:crypto`'s, and SHA3 needs no BouncyCastle.
+  A document is digested again at every level it is embedded at, so an archive nested 30 deep in 5 MB pieces costs MD2 about
+  45 s and MD5 about 1 s (measured by the adversarial review of this work, one machine); `maxNodeDepth`, `maxEmbeddedBytes`
+  and `maxParseMillis` bound it. The other algorithms are `node:crypto`'s, and SHA3 needs no BouncyCastle.
+- **A digest is a metadata value like any other.** `maxMetadataValueChars` (1,000,000 by default; a digest is at most 128
+  characters) cuts it to length if a caller sets that below the digest's, as Tika's `StandardMetadataLimiter` cuts a field longer than its
+  `maxFieldSize`; the cut value is no longer the digest. Settings built by hand and given to `new Ripstream({ digest })` or
+  `createRipstream({ digest })` are checked when it is made (an unknown algorithm or encoding is a `RangeError`).
+- **In `pipes`, a digest that fails fails the document.** Tika's pipes server logs a digest I/O error and goes on to parse;
+  here the failure is the document's, a failed parse like any other.
 
-Not the same: Tika re-writes an embedded OLE2 or `oleObject` document through POI (`MSEmbeddedStreamTranslator`) and writes
-nothing for an email in a PST before it digests it, so the digest of such an embedded document in Tika is of other bytes
-than the ones ripstream has; ripstream digests the document it extracts (`dig-embedded-translators` in
-`tasks/parity/audits/filters-inventory.json`). There is no Java here to run Tika and compare, so that difference is read
-from source, and Tika's test asserts only that an embedded document has a digest, not what it is. Tika's `DigestSink`, which
-digests an embedded stream as a parser writes it to save a second read, is not built: the values are the same.
+Not the same, and read from Tika's source (there is no Java here to run it and compare): Tika re-writes an embedded OLE2 or
+`oleObject` document through POI (`MSEmbeddedStreamTranslator`) before it digests it, so the digest of such a document in
+Tika is of other bytes than the ones ripstream has; ripstream digests the document it extracts. For an email in a PST Tika
+digests nothing and writes no `Content-Length`: `PSTEmailStreamTranslator` claims the stream and writes no bytes, and
+`DigestHelper` publishes only what a translator wrote (its own `DigestHelperTest` asserts the digest and the length are
+absent). Ripstream gives that email the digest of the bytes it extracted, and a `Content-Length`, so it has a digest where
+Tika's has none (`dig-embedded-translators` in `tasks/parity/audits/filters-inventory.json`). Tika's test asserts only that
+an embedded document has a digest, not what it is. Tika's `DigestSink`, which digests an embedded stream as a parser writes it
+to save a second read, is not built: the values are the same.
 
 ## A document that cannot be read
 
@@ -253,9 +282,9 @@ await engine.run();
 - **The parse modes are Tika's, per input** (`tikajs-68os.6.3`). RMETA emits the document and what is embedded in it.
   CONCATENATE emits one document per input, its content the text of all of it (it used to join the whole run into one
   `concatenated` document; join the output files if that is what you want). CONTENT_ONLY is the same for an emitter that
-  writes only the content. NO_PARSE detects the type and emits that (`Content-Type` and `tk:content-type-parser-override`) and, when a
-  digester factory is configured, the digests (see *Digests*), with no content and no copy of the input (it used to copy
-  the bytes). UNPACK is described in the next item.
+  writes only the content. NO_PARSE detects the type and emits that (`Content-Type` and `tk:content-type-parser-override`, with
+  `tk:resource-name` and `Content-Length`) and, when a digester factory is configured, the digests (see *Digests*), with no
+  content and no copy of the input (it used to copy the bytes). UNPACK is described in the next item.
 - **S3, Elasticsearch and OpenSearch components, with no cloud or search SDK** (`tikajs-68os.6.6`). The Tika settings
   `s3-fetcher`, `s3-emitter`, `s3-pipes-iterator`, `es-emitter` and `opensearch-emitter` are read and run. S3 is SigV4 over
   `fetch` and `node:crypto` (the signer reproduces the three examples AWS publishes), Elasticsearch and OpenSearch are the

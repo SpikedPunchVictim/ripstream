@@ -64,7 +64,7 @@ export type PipesStatus =
 | `RMETA` | The list of metadata, the document and then what is embedded in it (JSON) |
 | `CONCATENATE` | One document per input: one metadata whose `tk:content` is the text of the document and of everything embedded in it |
 | `CONTENT_ONLY` | As `CONCATENATE`, for an emitter that writes only the raw content |
-| `NO_PARSE` | Detection only: metadata with `Content-Type`, no content and no copy of the input |
+| `NO_PARSE` | Detection only: metadata with `tk:resource-name`, `Content-Length`, the digests when a digester factory is configured, `Content-Type` and `tk:content-type-parser-override`, no content and no copy of the input |
 | `UNPACK` | Tika's Frictionless package: one zip at `<emitKey>-frictionless.zip` of `datapackage.json`, `rmeta.json` and `unpacked/<id>` (`UnpackConfig` `outputFormat: REGULAR` is the `RMETA` list at the emit key and each embedded document's bytes at `<emitKey>-embed/<embedded id>`) |
 
 Implemented (`tikajs-68os.6.3`) from `ParseMode.java`, `ParseHandler` and `EmitHandler` in Tika 4.2.0. `FileSystemEmitter`
