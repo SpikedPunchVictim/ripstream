@@ -63,18 +63,20 @@ export function createInProcessRipstream(config?: RipstreamConfig, customMimeTyp
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
   });
   const inProcess = createInProcessParsers();
-  if (config?.parsers == null) return createRipstream({ parsers: inProcess, detector });
+  // `detector` is given, so the configuration is not: what it sets that a parse needs is passed on by name.
+  const digest = config?.digest ?? undefined;
+  if (config?.parsers == null) return createRipstream({ parsers: inProcess, detector, ...(digest === undefined ? {} : { digest }) });
   // The section is applied to the whole default list, as the child applies it, so a parser it names that only the
   // child has (pdf-parser) is a real entry and not an error here; what this ripstream keeps is what it already had.
   const names = new Set(inProcess.map((parser) => parser.name));
   const configured = createDefaultParser({ config, registry: detector.getMediaTypeRegistry() }).getParsers();
-  return createRipstream({ parsers: configured.filter((parser) => names.has(parser.name)), detector });
+  return createRipstream({ parsers: configured.filter((parser) => names.has(parser.name)), detector, ...(digest === undefined ? {} : { digest }) });
 }
 
 export interface StandardIsolationOptions
   extends Omit<NodeIsolatorOptions, "ripstream" | "inProcessRipstream" | "childModule" | "components"> {
   /**
-   * The configuration whose `parsers`, `detectors` and `parse-context` limits apply. The child, the routing detector,
+   * The configuration whose `parsers`, `detectors`, `parse-context` limits and digester factory apply. The child, the routing detector,
    * `detect()` and the in-process parsers all build from its `parsers` and `detectors` sections, so they agree on what is
    * parsed; its limits become the defaults of every parse (see `limits`).
    */
@@ -96,10 +98,13 @@ export interface StandardIsolation {
 
 /** The sections a child needs, or undefined when the configuration has neither (the child builds its defaults). */
 function componentsOf(config: RipstreamConfig | undefined, customMimeTypes: string | undefined): IsolatedComponents | undefined {
-  if (config === undefined || (config.parsers === null && config.detectors === null && customMimeTypes === undefined)) return undefined;
+  if (config === undefined || (config.parsers === null && config.detectors === null && config.digest === null && customMimeTypes === undefined)) {
+    return undefined;
+  }
   return {
     ...(config.parsers === null ? {} : { parsers: config.parsers }),
     ...(config.detectors === null ? {} : { detectors: config.detectors }),
+    ...(config.digest === null ? {} : { digest: config.digest }),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
   };
 }

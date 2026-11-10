@@ -8,8 +8,8 @@ import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
  * "@spikedpunch/ripstream-bundle-standard/isolation"). It parses ONE document with the standard pipeline in this
  * process and answers over fd 3. Importing it runs it, so nothing else imports it.
  *
- * The parent hands it the `parsers` and `detectors` sections of its configuration, and the text of its
- * custom-mimetypes file, in the request header. The child builds the pipeline from them once it has read the input, so
+ * The parent hands it the `parsers` and `detectors` sections of its configuration, the digests of its digester
+ * factory, and the text of its custom-mimetypes file, in the request header. The child builds the pipeline from them once it has read the input, so
  * it parses with the same parsers, detectors and media types as the parent's routing and in-process parsers. Without
  * a configuration it builds the default pipeline.
  *

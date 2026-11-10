@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { after, test, type TestContext } from "node:test";
 import { crc32 } from "node:zlib";
 import {
@@ -662,5 +663,71 @@ test("custom media types too large for the request header are refused when the i
   // Without isolation there is no header: the same file is read and used.
   await withStandard({ config: { mode: "off" }, ripstreamConfig: loadConfig({ "custom-mimetypes": path }) }, async ({ ripstream }) => {
     assert.equal((await ripstream.detect(new Uint8Array([0, 1, 2]), { filename: "a.t399" })).toString(), "application/x-t399");
+  });
+});
+
+// ---- digests (tikajs-68os.9.1) --------------------------------------------------------------------------------------
+
+const DIGESTS = loadConfig({ "parse-context": { "commons-digester-factory": { digests: [{ algorithm: "MD5" }, { algorithm: "SHA256", encoding: "BASE32" }] } } });
+const DIGESTS_SKIP_CONTAINER = loadConfig({
+  "parse-context": { "commons-digester-factory": { digests: [{ algorithm: "MD5" }], skipContainerDocumentDigest: true } },
+});
+const TIKA_DOCX = readFileSync(fileURLToPath(new URL("./fixtures/tika/test_recursive_embedded.docx", import.meta.url)));
+// Apache Tika's DigestConfigTest: the MD5 of that document.
+const TIKA_DOCX_MD5 = "59f626e09a8c16ab6dbc2800c685f772";
+
+test("the digests of a configuration cross the boundary: a child gives a zip's records the digests the pipeline gives in-process", async () => {
+  const archive = storedZip({ "a.txt": "first entry", "b.txt": "second entry" });
+  const expected = (await createRipstream({ config: DIGESTS }).parseRecursive(archive, { filename: "a.zip" })).map(comparable);
+  await withStandard({ ripstreamConfig: DIGESTS }, async ({ ripstream }) => {
+    const before = settled.length;
+    const records = await ripstream.parseRecursive(archive, { filename: "a.zip" });
+    assert.equal(settled.length - before, 1, "it was a child that parsed it");
+    assert.deepEqual(records.map(comparable), expected);
+    assert.equal(records.length, 3);
+    for (const record of records) {
+      assert.match(record.metadata.get("tk:digest:MD5") ?? "", /^[0-9a-f]{32}$/, record.embeddedResourcePath || "container");
+      assert.match(record.metadata.get("tk:digest:SHA-256:BASE32") ?? "", /^[A-Z2-7]{52}=*$/, record.embeddedResourcePath || "container");
+    }
+  });
+});
+
+test("a child digests Tika's own test document to Tika's MD5, and parse() carries it too", async () => {
+  await withStandard({ ripstreamConfig: DIGESTS }, async ({ ripstream }) => {
+    const before = settled.length;
+    const { metadata } = await ripstream.parse(TIKA_DOCX, { filename: "test_recursive_embedded.docx" });
+    assert.equal(settled.length - before, 1, "an office document is a child's");
+    assert.equal(metadata.get("tk:digest:MD5"), TIKA_DOCX_MD5);
+  });
+});
+
+test("skipContainerDocumentDigest crosses the boundary: the container has no digest and what is embedded has", async () => {
+  const archive = storedZip({ "a.txt": "first entry" });
+  await withStandard({ ripstreamConfig: DIGESTS_SKIP_CONTAINER }, async ({ ripstream }) => {
+    const [container, entry] = await ripstream.parseRecursive(archive, { filename: "a.zip" });
+    assert.equal(container?.metadata.get("tk:digest:MD5"), null);
+    assert.match(entry?.metadata.get("tk:digest:MD5") ?? "", /^[0-9a-f]{32}$/);
+  });
+});
+
+test("what stays in this process is digested too: text gets the digests the pipeline gives", async () => {
+  const text = encoder.encode("plain words");
+  const expected = await createRipstream({ config: DIGESTS }).parse(text, { filename: "a.txt" });
+  await withStandard({ ripstreamConfig: DIGESTS }, async ({ ripstream }) => {
+    const before = settled.length;
+    const answer = await ripstream.parse(text, { filename: "a.txt" });
+    assert.equal(settled.length - before, 0, "no child ran for text/plain");
+    assert.equal(answer.metadata.get("tk:digest:MD5"), expected.metadata.get("tk:digest:MD5"));
+    assert.match(answer.metadata.get("tk:digest:MD5") ?? "", /^[0-9a-f]{32}$/);
+  });
+});
+
+test("with isolation off the full pipeline digests, and without a digester factory nothing is written", async () => {
+  await withStandard({ config: { mode: "off" }, ripstreamConfig: DIGESTS }, async ({ ripstream }) => {
+    assert.equal((await ripstream.parse(TIKA_DOCX, { filename: "t.docx" })).metadata.get("tk:digest:MD5"), TIKA_DOCX_MD5);
+  });
+  await withStandard({}, async ({ ripstream }) => {
+    const { metadata } = await ripstream.parse(storedZip({ "a.txt": "x" }), { filename: "a.zip" });
+    assert.deepEqual(metadata.names().filter((name) => name.startsWith("tk:digest:")), []);
   });
 });

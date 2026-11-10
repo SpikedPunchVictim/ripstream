@@ -1,6 +1,6 @@
 import { writeSync } from "node:fs";
 import type { Writable } from "node:stream";
-import { HANDLER_TYPES, type HandlerType, type IsolatedComponents } from "@spikedpunch/ripstream-core";
+import { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, HANDLER_TYPES, type HandlerType, type IsolatedComponents } from "@spikedpunch/ripstream-core";
 
 /**
  * Child-side I/O shared by the real child entry (P3), the probe child and the
@@ -102,6 +102,30 @@ function requireBooleanRecord(value: unknown, where: string): void {
   }
 }
 
+/** The shape of `DigestSettings`: what the child will compute, so it is held to the names it has. */
+function checkDigest(value: unknown): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("input header: components.digest must be an object");
+  }
+  const settings = value as Record<string, unknown>;
+  if (typeof settings.skipContainerDocumentDigest !== "boolean") {
+    throw new TypeError("input header: components.digest skipContainerDocumentDigest must be a boolean");
+  }
+  if (!Array.isArray(settings.digests)) throw new TypeError("input header: components.digest digests must be an array");
+  for (const entry of settings.digests as unknown[]) {
+    const def = entry as Record<string, unknown> | null;
+    if (typeof def !== "object" || def === null || Array.isArray(def)) {
+      throw new TypeError("input header: a components.digest digests entry must be an object");
+    }
+    if (!(DIGEST_ALGORITHMS as readonly unknown[]).includes(def.algorithm)) {
+      throw new TypeError(`input header: components.digest algorithm must be one of ${DIGEST_ALGORITHMS.join(", ")}`);
+    }
+    if (!(DIGEST_ENCODINGS as readonly unknown[]).includes(def.encoding)) {
+      throw new TypeError(`input header: components.digest encoding must be one of ${DIGEST_ENCODINGS.join(", ")}`);
+    }
+  }
+}
+
 /** The shape of `ComponentEntry`. The names themselves were checked by the parent, which authored them. */
 function checkComponents(value: unknown): void {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -110,6 +134,10 @@ function checkComponents(value: unknown): void {
   for (const [section, entries] of Object.entries(value)) {
     if (section === "customMimeTypes") {
       if (typeof entries !== "string") throw new TypeError("input header: components.customMimeTypes must be a string");
+      continue;
+    }
+    if (section === "digest") {
+      checkDigest(entries);
       continue;
     }
     if (section !== "parsers" && section !== "detectors") {
