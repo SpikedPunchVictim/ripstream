@@ -4,13 +4,14 @@ Every one of the 117 gap and partial rows of config-inventory.json has a disposi
 The owner accepted every non-goal group and the CLI recommendation on 2026-11-09 (tikajs-68os.24): those rows have
 status `non-goal` and a `decision` field. The 22 rows of the original audit that were already `non-goal-candidate`
 (CFG-001 and others, not gap or partial) are still proposals in tikajs-68os.24.
-Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12 after the audit was taken; their `status` is updated.
+Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12, tikajs-68os.6.2 and tikajs-68os.6.3 after the audit was taken; their `status` is updated.
 
 | Disposition | Rows |
 | --- | --- |
-| implemented | 37 |
-| bead | 41 |
+| implemented | 43 |
+| bead | 32 |
 | non-goal (declared) | 39 |
+| non-goal-candidate (proposed, awaiting the owner) | 3 |
 
 ## Implemented since the audit
 
@@ -33,6 +34,8 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12 after the audi
 - CFG-017, CFG-088, CFG-089, CFG-098, CFG-100, CFG-102, CFG-105, CFG-106 (tikajs-68os.8.9: `serve --config` reads a `server` section: port, host, endpoints, cors, maxRequestSizeBytes, requestLogLevel, maxRequestReadMillis and idleTimeoutMillis are applied; serve takes Tika's `-h <host>` and `-p <port>`; every other server setting is refused by name. Read from Tika source, not run against a Tika.)
 - CFG-091, CFG-109 (tikajs-68os.8.9: `server.endpoints` selects the served endpoints by Tika's names, so `ripstream serve` serves /status and /async only when listed. Partial: /mime, /mime-types, /detectors, /parsers and /pipes are not served and are refused in `endpoints`; /health, /translate and /pipes are not governed by it.)
 - CFG-037, CFG-146 (tikajs-68os.8.11: the `custom-mimetypes` config key names a Tika custom-mimetypes.xml; same XML, merged into the registry, malformed definitions refused by name.)
+- CFG-126, CFG-129, CFG-136 (tikajs-68os.6.2: `pipes.numClients` and `pipes.queueSize` are read; component ids follow Tika's rules. The JVM-only knobs (CFG-024, CFG-131, CFG-132) and the emit-batching ones (CFG-128) are accepted with a notice that they change nothing.)
+- CFG-127 (tikajs-68os.6.3: every parse mode is Tika's per input: CONCATENATE one document per input, NO_PARSE detection only, UNPACK the RMETA list and the embedded bytes. The Frictionless default of UNPACK is tikajs-68os.6.7.)
 
 ## Merged into beads
 
@@ -40,15 +43,14 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12 after the audi
 - `tikajs-68os.9.4`: CFG-009, CFG-046, CFG-067. Renderers, pages block and the metadata limiter budgets.
 - `tikajs-68os.9.1`: CFG-043, CFG-118. Digesters and --digest.
 - `tikajs-68os.9.3`: CFG-051. Language detection selection by name.
-- `tikajs-68os.7.6`: CFG-008, CFG-044. Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown.
+- `tikajs-68os.7.6`: CFG-008, CFG-044 (done). Every handler type is a library option and a server route or `?handler=`; CFG-044 is implemented (partial: the default stays text where Tika's is Markdown, by the owner's decision) and CFG-008, a configured default type, is proposed as a non-goal (refused by name), awaiting the owner.
 - CFG-028 (tikajs-68os.8.10: a parsers entry sets the PDFParserConfig properties ripstream has an option for, sortByPosition and extractAnnotationText, as true or false; every other parser setting is refused by name. Partial: the rest of the properties have no ripstream counterpart.)
-- `tikajs-68os.7.5`: CFG-045. Write limit: ripstream throws (422) where Tika truncates and flags.
+- `tikajs-68os.7.5`: CFG-045. Write limit: reaching it truncates and flags, as Tika does (done; ParseOptions.onOutputLimit, and the server always truncates).
 - `tikajs-68os.7.2`: CFG-065. tk:exception:* bounding belongs with the failure semantics.
 - `tikajs-68os.7.4`: CFG-066. Unpack output layout (frictionless/regular, name strategy) belongs with /unpack.
-- `tikajs-68os.6.2`: CFG-019, CFG-021, CFG-126, CFG-129, CFG-136. Fetcher and emitter ids, id-keyed components, numClients and queue naming.
-- `tikajs-68os.6.1`: CFG-022, CFG-133. Reporters and the per-tuple failure policy keys.
-- `tikajs-68os.6.3`: CFG-127, CFG-128. parseMode and emit strategy semantics.
-- `tikajs-68os.6.6`: CFG-020, CFG-137, CFG-138, CFG-139, CFG-140. Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24.
+- `tikajs-68os.6.5`: CFG-133 (done). The server and CLI map results to statuses and Retry-After. maxTotalTaskTimeoutMillis, maxWaitForClientMillis and stopOnlyOnFatal tune a forked-client pool and a request-supplied timeout that ripstream does not have, so they are proposed as non-goals and stay refused by name, awaiting the owner.
+- `tikajs-68os.6.5`, with CFG-133: CFG-128 (done). emitStrategy EMIT_ALL and DYNAMIC and the batching knobs are accepted with a notice (the engine emits in-process). PASSBACK_ALL is refused by Tika on /pipes itself and a library user collects results with a reporter or MemoryEmitter, so it is proposed as a non-goal and stays refused by name, awaiting the owner.
+- `tikajs-68os.6.6`: CFG-019, CFG-020, CFG-021, CFG-022, CFG-137, CFG-138, CFG-139, CFG-140. Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24.
 - `tikajs-68os.6`: CFG-023. Pipes section: see the pipes rows.
 - `tikajs-68os.8.13`: CFG-014, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-063, CFG-064. Limits that need new engine behavior (stop-and-flag mode, XML depth, output:input ratio, stall timeout) and the auto-detect-parser section; refused by name meanwhile. A design reserve: built only if someone asks. The bead was closed as a deferred non-goal on 2026-11-10 (owner); each key stays refused by name and the bead is reopened if someone asks.
 - `tikajs-68os.9.1`, `.9.2`, `.7.6` and NG-5: CFG-015. The parse-context limit blocks are applied (tikajs-68os.8.8); the other parse-context components follow their own beads.

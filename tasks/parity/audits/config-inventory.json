@@ -109,15 +109,15 @@
     "area": "loader.top-level",
     "upstreamKey": "content-handler-factory",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133",
-    "ripstream": "config.contentHandlers validated, never consumed; server ?handler=meta|json only (packages/server/src/index.ts:421-475)",
-    "status": "gap",
-    "evidence": "J07,J25,S02",
-    "unknownKeyBehaviour": "unknown handler value silently ignored (S02)",
-    "note": "Tika handler types t,h,x,m,b,i (cli docs :338-340) vs ripstream meta/json.",
+    "ripstream": "not read: `content-handler-factory` is an unknown top-level key (refused by name) and parse-context `basic-content-handler-factory` is refused by name; the handler type is chosen per request (/tika/{text,html,xml,md,json}, ?handler=) or per call (ParseOptions.handlerType)",
+    "status": "non-goal-candidate",
+    "evidence": "packages/core/test/handler-type.test.ts,packages/server/test/routes.test.ts",
+    "unknownKeyBehaviour": "loud (RipstreamConfigError naming the key)",
+    "note": "A configuration that sets the server's default handler type would be a new server option; the default is text and a caller names another. Proposed by tikajs-68os.7.6, to be confirmed by the owner.",
     "triage": {
-      "disposition": "bead",
+      "disposition": "non-goal-candidate",
       "target": "tikajs-68os.7.6",
-      "why": "Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown."
+      "why": "Handler types are available on every route and per call, so a configured default adds little; it stays refused by name until someone asks."
     }
   },
   {
@@ -235,7 +235,7 @@
     "triage": {
       "disposition": "bead",
       "target": "tikajs-68os.9.1, tikajs-68os.9.2, tikajs-68os.7.6, NG-5",
-      "why": "The limit blocks (embedded-limits, output-limits, timeout-limits) are applied (tikajs-68os.8.8). The other parse-context components are digesters (.9.1), metadata filters (.9.2), content handler factories (.7.6) or classes instantiated from JSON (NG-5, a non-goal); each other key is refused by name."
+      "why": "The limit blocks (embedded-limits, output-limits, timeout-limits) are applied (tikajs-68os.8.8), and unpack-config is read for pipes' UNPACK mode (tikajs-68os.6.7). The other parse-context components are digesters (.9.1), metadata filters (.9.2), content handler factories (.7.6) or classes instantiated from JSON (NG-5, a non-goal); each other key is refused by name."
     }
   },
   {
@@ -294,15 +294,15 @@
     "area": "loader.top-level",
     "upstreamKey": "fetchers",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; docs/modules/ROOT/pages/pipes/fetchers.adoc",
-    "ripstream": "pipes Fetcher classes via programmatic PipesConfig.source only (packages/pipes/src/index.ts:428-459)",
+    "ripstream": "fetchers section read (packages/core/src/pipes-config.ts parsePipesSections): file-system-fetcher and http-fetcher by id; engine registry (packages/pipes/src/index.ts createEngineFromSettings)",
     "status": "partial",
     "evidence": "E01,S09",
-    "unknownKeyBehaviour": "Tika-shaped body rejected as 'Missing source' (S09) or TypeError (E01)",
-    "note": "Only filesystem + http fetchers; no id-keyed multi-fetcher map.",
+    "unknownKeyBehaviour": "loud (a type ripstream lacks, an unknown setting, a bad id are refused by name)",
+    "note": "Only the file-system and http fetchers exist; http-fetcher takes no settings (each one given is refused). The cloud fetchers are tikajs-68os.6.6.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.2",
-      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
     }
   },
   {
@@ -326,15 +326,15 @@
     "area": "loader.top-level",
     "upstreamKey": "pipes-iterator",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; docs/modules/ROOT/pages/pipes/iterators.adoc",
-    "ripstream": "none (PipesConfig.source.path walk)",
+    "ripstream": "pipes-iterator section read: file-system-pipes-iterator with fetcherId and emitterId (packages/core/src/pipes-config.ts; packages/pipes/src/components.ts FileSystemPipesIterator)",
     "status": "partial",
     "evidence": "S11",
-    "unknownKeyBehaviour": "Tika iterator name as source.type rejected loudly (S11)",
-    "note": "No iterator abstraction by name.",
+    "unknownKeyBehaviour": "loud (another iterator type or an unknown setting is refused by name)",
+    "note": "countTotal is accepted with a notice and counts nothing. csv/json/cloud iterators are not read from a configuration (tikajs-68os.6.6).",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.2",
-      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
     }
   },
   {
@@ -342,15 +342,15 @@
     "area": "loader.top-level",
     "upstreamKey": "pipes-reporters",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; docs/modules/ROOT/pages/pipes/reporters.adoc",
-    "ripstream": "Reporter classes programmatic (packages/pipes/src/adapters.ts: JsonlReporter, LoggingReporter)",
+    "ripstream": "pipes-reporters section read: file-system-jsonl-reporter with includes, excludes, onExists, maxMessageLength (packages/core/src/pipes-config.ts; packages/pipes/src/adapters.ts JsonlReporter)",
     "status": "partial",
     "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "No config form.",
+    "unknownKeyBehaviour": "loud (another reporter type or an unknown setting is refused by name)",
+    "note": "The JDBC, OpenSearch and Elasticsearch reporters are tikajs-68os.6.6.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.1",
-      "why": "Reporters and the per-tuple failure policy keys."
+      "target": "tikajs-68os.6.6",
+      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
     }
   },
   {
@@ -374,11 +374,11 @@
     "area": "loader.top-level",
     "upstreamKey": "plugin-roots",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133",
-    "ripstream": "none (loadPlugin(moduleUrl) programmatic: packages/core/src/plugins.ts:54)",
+    "ripstream": "plugin-roots (a string) is accepted with a notice (packages/core/src/config.ts); plugins are ES modules loaded by loadPlugin(moduleUrl) (packages/core/src/plugins.ts:54)",
     "status": "non-goal-candidate",
     "evidence": "R03",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "PF4J plugin zips are JVM-specific; ripstream uses ES module plugins."
+    "unknownKeyBehaviour": "notice (accepted, changes nothing)",
+    "note": "PF4J plugin zips are JVM-specific; ripstream uses ES module plugins. A configuration that names plugin-roots still loads (tikajs-68os.6.2)."
   },
   {
     "id": "CFG-025",
@@ -716,15 +716,15 @@
     "area": "content-handler",
     "upstreamKey": "content-handler-factory (BasicContentHandlerFactory types t,h,x,m,b,i)",
     "upstreamSource": "tika-core BasicContentHandlerFactory; cli/index.adoc:338-340",
-    "ripstream": "CLI -o text|json|jsonl; server ?handler= meta|json (main.ts:387-392; server index.ts:421-475)",
+    "ripstream": "server /tika/{text,html,xml,md,json}, /rmeta/{handler}, /tika?handler= (every Tika handler type); ParseOptions.handlerType and createOutputHandler (packages/core/src/handler-type.ts); CLI -o text|json|jsonl",
     "status": "partial",
-    "evidence": "S02",
-    "unknownKeyBehaviour": "unknown ?handler= silently ignored (S02); CLI --output validated",
-    "note": "Tika 4.x default is Markdown (migrating-to-4x.adoc:108).",
+    "evidence": "packages/core/test/handler-type.test.ts,packages/server/test/routes.test.ts",
+    "unknownKeyBehaviour": "loud: an unknown ?handler= or path handler is a 400 with Tika's message (Unrecognized handler type 'x'. Valid types: text, txt, html, xml, body, markdown, md, ignore); CLI --output validated",
+    "note": "Tika's types are text, body, html, xml, markdown and ignore (txt and md are spellings). ripstream's default stays text where Tika 4.x's is Markdown (owner decision); Markdown is best effort, html and xml are not byte for byte.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.7.6",
-      "why": "Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.7.6",
+      "why": "Every handler type is a library option and a server route or ?handler=; the default is text, by the owner's decision. Read from Tika source (BasicContentHandlerFactory) and its saved responses, not run against a live Tika."
     }
   },
   {
@@ -733,14 +733,14 @@
     "upstreamKey": "write limit on content handler (writeLimit/throwOnWriteLimit)",
     "upstreamSource": "tika-core OutputLimits.java:76-77",
     "ripstream": "ParseLimits.maxOutputChars (parse-context.ts:19)",
-    "status": "partial",
+    "status": "implemented",
     "evidence": "P10,P06,S05",
     "unknownKeyBehaviour": "loud (ripstream rejects) only for the output limit; other limits silent (P01-P05)",
-    "note": "Behaviour differs: ripstream throws LimitExceededError (422) when exceeded (P10,S05); Tika default (throwOnWriteLimit=false) truncates and flags. Unverified how Tika reports.",
+    "note": "tikajs-68os.7.5: ParseOptions.onOutputLimit 'truncate' stops at the limit, keeps the text and sets tk:exception:write-limit-reached, as Tika's default does; the library default stays 'throw' (LimitExceededError) and the server uses 'truncate'. The one total budget covers container and embedded documents; Tika's limit is per document handler.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.7.5",
-      "why": "Write limit: ripstream throws (422) where Tika truncates and flags."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.7.5",
+      "why": "Reaching the write limit truncates and flags (server: always; library: ParseOptions.onOutputLimit)."
     }
   },
   {
@@ -924,7 +924,7 @@
     "status": "partial",
     "evidence": "P10",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "Cannot opt into truncate-and-flag.",
+    "note": "Cannot opt into truncate-and-flag from a config file: a writeLimit is accepted only beside throwOnWriteLimit: true. The library has ParseOptions.onOutputLimit 'truncate' (tikajs-68os.7.5) and the server truncates by default; with throwOnWriteLimit: true in the file, serve fails at the limit (422), as the flag says.",
     "triage": {
       "disposition": "bead",
       "target": "tikajs-68os.8.13",
@@ -2169,15 +2169,15 @@
     "area": "pipes",
     "upstreamKey": "pipes.numClients",
     "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:133",
-    "ripstream": "concurrency (PipesConfig.concurrency, default 4)",
-    "status": "partial",
+    "ripstream": "pipes.numClients -> PipesSettings.concurrency -> PipesEngine concurrency (packages/core/src/pipes-config.ts; packages/pipes/src/index.ts createEngineFromSettings)",
+    "status": "implemented",
     "evidence": "E02,E04,E05,S10",
-    "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": "",
+    "unknownKeyBehaviour": "loud (not a whole number >= 1 is refused)",
+    "note": "Workers in one process, not forked servers. Absent: the engine's default of 4, where Tika's is derived from the CPU count.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.2",
-      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.6.2",
+      "why": "pipes.numClients is read and sets the number of inputs parsed at once."
     }
   },
   {
@@ -2185,15 +2185,15 @@
     "area": "pipes",
     "upstreamKey": "pipes.parseMode (RMETA/CONCATENATE/CONTENT_ONLY/NO_PARSE)",
     "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:164",
-    "ripstream": "mode: PipeMode (index.ts:40)",
-    "status": "partial",
+    "ripstream": "pipes.parseMode read in any case into PipesSettings.parseMode (packages/core/src/pipes-config.ts); each mode is Tika's (packages/pipes/src/index.ts:333,:354)",
+    "status": "implemented",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": "",
+    "note": "pipes.parseMode is read in any case and sets mode (RMETA when absent, as Tika's). RMETA, CONCATENATE, CONTENT_ONLY, NO_PARSE and UNPACK follow Tika's per-input semantics (tikajs-68os.6.3); UNPACK's default Frictionless package is tikajs-68os.6.7.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.3",
-      "why": "parseMode and emit strategy semantics."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.6.3",
+      "why": "Each parse mode follows Tika's per-input semantics; the file-system emitter writes what each mode emits."
     }
   },
   {
@@ -2201,15 +2201,15 @@
     "area": "pipes",
     "upstreamKey": "pipes.emitStrategy / emitWithinMillis / emitMaxEstimatedBytes / emitIntermediateResults",
     "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:107,144-148",
-    "ripstream": "none",
-    "status": "gap",
+    "ripstream": "packages/core/src/pipes-config.ts (EMIT_ALL and DYNAMIC accepted with a notice; PASSBACK_ALL and emitIntermediateResults true refused)",
+    "status": "non-goal-candidate",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": "",
+    "note": "emitStrategy EMIT_ALL and DYNAMIC, emitWithinMillis, emitMaxEstimatedBytes, numEmitters and emitIntermediateResults false are accepted with a notice that they change nothing: the in-process engine emits each input's documents itself, which is EMIT_ALL. PASSBACK_ALL and emitIntermediateResults true are refused by name. Tika refuses PASSBACK_ALL on /pipes itself (a request cannot hand its result back through an emitter-less run); ripstream's /pipes answers the tuple's status and the library collects results with a reporter or MemoryEmitter, so the strategy adds nothing. Proposed by tikajs-68os.6.5, to be confirmed by the owner. (tikajs-68os.6.2, tikajs-68os.6.3, tikajs-68os.6.5)",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.3",
-      "why": "parseMode and emit strategy semantics."
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.6.5",
+      "why": "PASSBACK_ALL is refused by Tika on /pipes and its use (the caller reads each result) is what a reporter or MemoryEmitter does here; it stays refused by name until someone asks."
     }
   },
   {
@@ -2217,15 +2217,15 @@
     "area": "pipes",
     "upstreamKey": "pipes.queueSize / numEmitters",
     "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:146-147",
-    "ripstream": "maxQueue",
-    "status": "partial",
+    "ripstream": "pipes.queueSize -> maxQueue (packages/core/src/pipes-config.ts; packages/pipes/src/index.ts); numEmitters accepted with a notice",
+    "status": "implemented",
     "evidence": "E02,E04,E05,S10",
-    "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": "",
+    "unknownKeyBehaviour": "loud for queueSize; numEmitters is accepted and changes nothing",
+    "note": "The queue holds tuples, not bytes (tasks/parity/audits/pipes-model-spike.md Q3). Absent: the engine's default of 64, where Tika's is 10000. Emits are made by the worker that parsed the input.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.2",
-      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.6.2",
+      "why": "pipes.queueSize is read; numEmitters changes nothing in an in-process engine and says so."
     }
   },
   {
@@ -2248,7 +2248,7 @@
     "status": "non-goal-candidate",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "forkedJvmArgs and javaPath are accepted with a notice that they change nothing (no forked JVM); isolation limits are separate. (tikajs-68os.6.2)"
   },
   {
     "id": "CFG-132",
@@ -2259,22 +2259,22 @@
     "status": "non-goal-candidate",
     "evidence": "E02,E04,E05,S10",
     "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": ""
+    "note": "socketTimeoutMillis, startupTimeoutMillis, heartbeatIntervalMillis and useSharedServer are accepted with a notice that they change nothing; maxIpcPayloadBytes and maxInlineBytes are refused by name. (tikajs-68os.6.2)"
   },
   {
     "id": "CFG-133",
     "area": "pipes",
     "upstreamKey": "pipes.maxTotalTaskTimeoutMillis / maxWaitForClientMillis / stopOnlyOnFatal / onParseException",
     "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/PipesConfig.java:129,135,158,169",
-    "ripstream": "none",
-    "status": "gap",
+    "ripstream": "pipes.onParseException read (EMIT or SKIP) and applied; a tuple's onParseException overrides it (packages/core/src/pipes-config.ts; packages/pipes/src/index.ts)",
+    "status": "non-goal-candidate",
     "evidence": "E02,E04,E05,S10",
-    "unknownKeyBehaviour": "silent-ignore (createEngine and POST /pipes accept unknown/typed-wrong keys)",
-    "note": "",
+    "unknownKeyBehaviour": "loud (maxTotalTaskTimeoutMillis, maxWaitForClientMillis, stopOnlyOnFatal are refused by name)",
+    "note": "onParseException is implemented. The other three stay refused by name and are proposed as non-goals by tikajs-68os.6.5: maxTotalTaskTimeoutMillis caps the TimeoutLimits a request supplies (Tika PipesServer.java:870) and ripstream refuses a request's parseContext, so there is nothing to cap (the per-document ceiling is the isolation maxTaskMillis); maxWaitForClientMillis is how long PipesParser waits for a free forked client (PipesParser.java:139) and the Retry-After of a 429, and ripstream has no client pool (/pipes sends 60, Tika's default; /async waits asyncMaxWaitMs); stopOnlyOnFatal decides whether AsyncProcessor stops on initialization and not-found failures (AsyncProcessor.java:558), while /async here checks every component before it queues and a missing one in a run is that tuple's result. To be confirmed by the owner.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.1",
-      "why": "Reporters and the per-tuple failure policy keys."
+      "disposition": "non-goal-candidate",
+      "target": "tikajs-68os.6.5",
+      "why": "maxTotalTaskTimeoutMillis, maxWaitForClientMillis and stopOnlyOnFatal tune a forked-client pool and a request-supplied timeout that ripstream does not have; they stay refused by name until someone asks."
     }
   },
   {
@@ -2304,15 +2304,15 @@
     "area": "pipes",
     "upstreamKey": "fetcher ids: charset [A-Za-z0-9._-], reserved '__' prefix",
     "upstreamSource": "docs/modules/ROOT/pages/pipes/fetchers.adoc (Reserved IDs)",
-    "ripstream": "none (no ids)",
-    "status": "gap",
+    "ripstream": "componentIdIssue (packages/pipes/src/tuple.ts); COMPONENT_ID_PATTERN, SYSTEM_COMPONENT_PREFIX (packages/core/src/pipes-config.ts)",
+    "status": "implemented",
     "evidence": "S09",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "",
+    "unknownKeyBehaviour": "loud (an id outside the charset or starting with __ is refused by name)",
+    "note": "Ids are checked in configuration sections and in the registries an engine is given.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.6.2",
-      "why": "Fetcher and emitter ids, id-keyed components, numClients and queue naming."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.6.2",
+      "why": "Component ids follow Tika's rules where a configuration or an engine takes them."
     }
   },
   {
@@ -2320,15 +2320,15 @@
     "area": "pipes",
     "upstreamKey": "fetchers: file-system, s3, gcs, az-blob, http",
     "upstreamSource": "docs/modules/ROOT/pages/pipes/fetchers.adoc (Available Fetchers)",
-    "ripstream": "FileSystemFetcher, HttpFetcher (pipes/src/index.ts:308,377); CsvFetcher/JsonFetcher/ModuleFetcher (adapters.ts)",
+    "ripstream": "FileSystemFetcher, HttpFetcher (packages/pipes/src/components.ts); CsvSource, JsonSource, ModuleFetcher (adapters.ts); S3Fetcher (packages/pipes/src/s3/components.ts, tikajs-68os.6.6)",
     "status": "partial",
     "evidence": "S11",
     "unknownKeyBehaviour": "unsupported source.type: createEngine silently falls back to filesystem (E03); server returns 400 (S11)",
-    "note": "s3/gcs/az-blob are cloud-SDK dependent: non-goal-candidate for the core package, config shape could still exist.",
+    "note": "S3 done in tikajs-68os.6.6 with no cloud SDK (SigV4 over fetch). gcs and az-blob follow the same shape and are tracked.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.6",
-      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+      "target": "tikajs-68os.31, tikajs-68os.32",
+      "why": "S3 is built (tikajs-68os.6.6). GCS is tikajs-68os.31 and Azure Blob is tikajs-68os.32, both zero-dependency clients over fetch."
     }
   },
   {
@@ -2336,15 +2336,15 @@
     "area": "pipes",
     "upstreamKey": "emitters: file-system, s3, gcs, az-blob, opensearch",
     "upstreamSource": "docs/modules/ROOT/pages/pipes/emitters.adoc",
-    "ripstream": "FileSystemEmitter, MemoryEmitter, HttpEmitter, JsonlEmitter, StdoutEmitter, ModuleEmitter",
+    "ripstream": "FileSystemEmitter, MemoryEmitter, HttpEmitter, JsonlEmitter, StdoutEmitter, ModuleEmitter; S3Emitter (packages/pipes/src/s3/components.ts), BulkSearchEmitter for es-emitter and opensearch-emitter (packages/pipes/src/search/bulk-emitter.ts), all tikajs-68os.6.6",
     "status": "partial",
     "evidence": "E06",
     "unknownKeyBehaviour": "sink.type != filesystem silently coerced (E06)",
-    "note": "",
+    "note": "S3, Elasticsearch and OpenSearch are built with no client library. gcs, az-blob and solr are tracked; jdbc and kafka are proposed non-goals (pipes-inventory).",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.6",
-      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+      "target": "tikajs-68os.31, tikajs-68os.32, tikajs-68os.33",
+      "why": "S3, es and opensearch are built (tikajs-68os.6.6). GCS is tikajs-68os.31, Azure Blob tikajs-68os.32, Solr over HTTP tikajs-68os.33. jdbc and kafka are proposed non-goals awaiting the owner."
     }
   },
   {
@@ -2352,15 +2352,15 @@
     "area": "pipes",
     "upstreamKey": "iterators: file-system, s3, gcs, az-blob, solr, csv, json, jdbc, kafka, google-drive, microsoft-graph",
     "upstreamSource": "docs/modules/ROOT/pages/pipes/iterators.adoc; pipes/plugins/",
-    "ripstream": "walk of source.path only",
+    "ripstream": "walk of source.path only; S3PipesIterator (packages/pipes/src/s3/components.ts, tikajs-68os.6.6)",
     "status": "partial",
     "evidence": "S11",
     "unknownKeyBehaviour": "n/a",
-    "note": "kafka/jdbc/solr/graph: JVM client libraries, non-goal-candidate.",
+    "note": "s3 is built. gcs, az-blob and solr (solrUrls) are tracked; kafka/jdbc/graph are JVM client libraries, non-goal-candidate.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.6",
-      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+      "target": "tikajs-68os.31, tikajs-68os.32, tikajs-68os.33",
+      "why": "S3 is built (tikajs-68os.6.6). GCS is tikajs-68os.31, Azure Blob tikajs-68os.32, Solr over HTTP tikajs-68os.33. The JVM-client-only iterators (kafka, jdbc, graph) are proposed non-goals in tikajs-68os.24."
     }
   },
   {
@@ -2368,15 +2368,15 @@
     "area": "pipes",
     "upstreamKey": "reporters: file-system, file-system-jsonl, jdbc, opensearch, es",
     "upstreamSource": "docs/modules/ROOT/pages/pipes/reporters.adoc",
-    "ripstream": "JsonlReporter, LoggingReporter, CompositeReporter (adapters.ts)",
+    "ripstream": "JsonlReporter, LoggingReporter, CompositeReporter (adapters.ts); nothing new: the es, opensearch and jdbc reporters are not built",
     "status": "partial",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "",
+    "note": "The jsonl reporter covers the audit trail; the es and opensearch reporters are tracked at P4, jdbc is a proposed non-goal.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.6.6",
-      "why": "Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24."
+      "target": "tikajs-68os.34",
+      "why": "The es and opensearch reporters are tikajs-68os.34 (P4). The jdbc reporter is a proposed non-goal awaiting the owner."
     }
   },
   {

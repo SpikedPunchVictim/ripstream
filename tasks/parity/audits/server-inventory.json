@@ -3,21 +3,23 @@
   "id": "U01",
   "upstream": "GET /",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaWelcome.java:47,141,189",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (GET and HEAD /)",
+  "status": null,
   "evidence": "r001,r002,r003,r004",
-  "divergence": "Welcome page (html and text/plain) absent; rip 404. HEAD / also 404.",
-  "note": "Low severity; spec/04 2.1 lists '/ (HEAD/GET) greeting/health'."
+  "divergence": "Served: HTML by default, text/plain by Accept, 406 for application/json (r001-r004 same status and type). The page names Ripstream and lists the routes the server serves, where Tika's names Tika and lists its own.",
+  "note": "Low severity; spec/04 2.1 lists '/ (HEAD/GET) greeting/health'. tikajs-68os.7.6: implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U02",
   "upstream": "GET /tika",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:548",
-  "ripstream": "none (405 Method not allowed)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (GET /tika)",
+  "status": null,
   "evidence": "r010,r011",
-  "divergence": "Oracle 200 'This is Tika Server (Apache Tika 4.2.0). Please PUT'; rip 405.",
-  "note": "Often used as a liveness probe by clients."
+  "divergence": "Served: 200 text/plain, 'This is Ripstream Server (ripstream 0.0.0). Please PUT' (Tika: 'This is Tika Server (Apache Tika 4.2.0). Please PUT'). Accept: application/json is still 200 where Tika answers 406 (r011): tikajs-68os.7.8.",
+  "note": "Often used as a liveness probe by clients. tikajs-68os.7.6: implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U03",
@@ -26,178 +28,195 @@
   "ripstream": "packages/server/src/index.ts:467-482 (also accepts POST)",
   "status": "partial",
   "evidence": "r031,r036-r041,r049,r050,r053,r055-r057,r059,r197,r198,r215",
-  "divergence": "Default body is plain text, not Markdown (docx: oracle 112B vs rip 62B; csv r199 tab-joined vs 'a,b,c'). Accept: application/json returns {text,metadata} (oracle 406). Accept text/html: rip 200 (oracle 406). Empty body: rip 415 vs oracle 422 empty. Garbage: rip 415 vs oracle 200 empty. Corrupt docx: rip 422 vs oracle 200 partial text. 100000-char default cap gives rip 422 where oracle returns 200001B/3MB. POST accepted (oracle 405).",
-  "note": "Happy path works for text, pdf, docx, zip, png, html; output formatting is not byte-compatible."
+  "divergence": "Default body is plain text, not Markdown (owner decision, tikajs-68os.7.6: text stays the default; /tika/md and ?handler=md give Markdown). Accept: application/json returns {text,metadata} (oracle 406). Accept text/html: rip 200 (oracle 406). (Empty body, garbage and corrupt input now follow the oracle: 422 empty, 200 empty, and a failure with the partial text as 422. The oracle salvages the text of the corrupt docx r057; ripstream does not.) The oracle has no write limit and returns 200001B/3MB; ripstream's 100000-char default cuts the text and answers 200 with X-Ripstream-Write-Limit-Reached. POST accepted (oracle 405).",
+  "note": "Happy path works for text, pdf, docx, zip, png, html; output formatting is not byte-compatible. tikajs-68os.7.2: a document that cannot be read is an answer (JSON routes 200 with tk:exception:container-exception, text routes 422 with the partial text and X-Ripstream-Error, unknown binary 200 empty, zero bytes 422 on /tika, 200 with the failure on /meta and /rmeta). Read from Tika source and the saved responses, not run against a Tika. tikajs-68os.7.5: reaching the output limit is an answer, not a failure: the text up to it, 200, and tk:exception:write-limit-reached on the metadata (text routes: an X-Ripstream-Write-Limit-Reached header). The oracle's server has no write limit, so ripstream's 100000-character default (kept by the owner) still differs from it. tikajs-68os.7.6: ?handler= takes every handler type (text, txt, html, xml, body, markdown, md, ignore) as well as meta and json, in any case; a bogus one is a 400 with Tika's message."
  },
  {
   "id": "U04",
   "upstream": "PUT /tika/{text,html,xml,md}",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:588-621",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (resolveTarget: /tika/text, /tika/html, /tika/xml, /tika/md; ?handler=)",
+  "status": null,
   "evidence": "r032,r033,r034,r035,r038,r051,r054,r071,r073-r081",
-  "divergence": "All four handler-suffix routes 404 in rip. ?handler=html on /tika is ignored by rip (r075 hit the missing route; no html/xml/md/text handler selection exists in index.ts:421).",
-  "note": "Only ?handler=json|meta are honoured by rip (r205,r206), and those are rip inventions."
+  "divergence": "Served. /tika/text is the body's text (r032 identical text; r038 pdf differs by whitespace the pdf parser writes: 24B vs 26B). /tika/html and /tika/xml carry the metadata in the head but not Tika's xmlns on <html>, its key set, or ' />' for empty xml elements (r033/r034: 568B vs 972B). /tika/md is best-effort Markdown (r035: identical but for the '![](embedded:image1.png)' line, which the docx parser does not emit). Content types match (text/plain, text/html, text/xml). Accept: application/json on a fixed route is still 200 where Tika answers 406 (r051): tikajs-68os.7.8.",
+  "note": "Only ?handler=json|meta are honoured by rip (r205,r206), and those are rip inventions. tikajs-68os.7.6: implemented; byte identity of html, xml and markdown is not promised (owner decision). Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U05",
   "upstream": "PUT /tika/json and /tika/json/{handler}",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:628-645",
-  "ripstream": "none (404); closest is Accept: application/json or ?handler=json on /tika",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (/tika/json[/{handler}])",
+  "status": null,
   "evidence": "r042-r047,r052,r058,r065-r070,r072,r082,r205",
-  "divergence": "Upstream returns a single Metadata JSON object with tk:content; rip returns {text, metadata:{k:[v]}} only when asked via Accept/query. Handler path variants (text|html|xml|body|markdown|ignore) absent; bogus handler is 400 upstream.",
-  "note": "Corrupt docx: upstream 200 with embedded exception metadata (5702B), rip 422."
+  "divergence": "Served: one flat object, the metadata plus tk:content (when not blank) plus tk:content-handler-type (r042-r047 same status, type and body kind); /tika/json/bogus is 400 with Tika's message (r047). A document that cannot be read is 200 with tk:exception:container-exception in the object. Key sets differ with the per-format metadata (tikajs-68os.10.5). The older {text, metadata} object is still answered for Accept: application/json or ?handler=json on /tika until tikajs-68os.7.8.",
+  "note": "Corrupt docx: upstream 200 with embedded exception metadata (5702B), rip 422. tikajs-68os.7.2: the failure semantics are in place for the JSON shape ripstream has (Accept/handler=json on /tika, 200 with the exception in the metadata); the /tika/json route itself is tikajs-68os.7.6. tikajs-68os.7.6: implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U06",
   "upstream": "PUT /tika/preset/{presetName}[/text|html|xml|md|json|json/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:691-761",
   "ripstream": "packages/server/src/index.ts:409-421 (?preset=name query param; presets option)",
-  "status": "partial",
+  "status": "non-goal-candidate",
   "evidence": "r064,r207,i008,i009",
   "divergence": "Different surface: rip selects presets by ?preset= and the programmatic `presets` option (handler + limits only); upstream uses path routes and a ParseContext fragment. Unknown preset is silently ignored by rip (r207 200). Not reachable from the CLI (`ripstream serve` exposes only maxOutputChars).",
-  "note": "Oracle 404 for an unconfigured preset, so upstream configured-preset behaviour is unverified."
+  "note": "Oracle 404 for an unconfigured preset, so upstream configured-preset behaviour is unverified. tikajs-68os.7.6 proposes that the path routes (/tika/preset/...) are not served, to be confirmed by the owner: ripstream's presets are ?preset= and a presets option, and Tika answers 403 for per-request configuration unless it is switched on, which ripstream does not offer (NG-5).",
+  "decision": "proposed 2026-11-10 (tikajs-68os.7.6); awaiting the owner"
  },
  {
   "id": "U07",
   "upstream": "POST /tika/config[/text|html|xml|md|json|json/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:822-891; tika-server-core/src/main/java/org/apache/tika/server/core/ConfigEndpointSecurityFilter.java:31-42",
   "ripstream": "none (404)",
-  "status": "gap",
+  "status": "non-goal-candidate",
   "evidence": "r062,r063",
   "divergence": "Oracle 403 (allowPerRequestConfig off by default); rip 404. spec/04 2.1 lists these with the same 403 default.",
-  "note": "Per-request ParseContext JSON is Java-class-shaped; a JS config shape would be new design. Low priority while default-off."
+  "note": "Per-request ParseContext JSON is Java-class-shaped; a JS config shape would be new design. Low priority while default-off. tikajs-68os.7.6 proposes that the path routes (/tika/config/...) are not served, to be confirmed by the owner: ripstream's presets are ?preset= and a presets option, and Tika answers 403 for per-request configuration unless it is switched on, which ripstream does not offer (NG-5).",
+  "decision": "proposed 2026-11-10 (tikajs-68os.7.6); awaiting the owner"
  },
  {
   "id": "U08",
   "upstream": "PUT /rmeta",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/RecursiveMetadataResource.java:244-246",
   "ripstream": "packages/server/src/index.ts:459-465 (also accepts POST)",
-  "status": "partial",
+  "status": null,
   "evidence": "r084,r093-r106,r108,r164,r195,r200-r204,r210,r216,r219,r221-r223",
-  "divergence": "Returns a JSON array like upstream, but: keys are X-TIKA:* plus legacy names with always-array values (upstream tk:* scalar-or-array); content is plain text in X-TIKA:content (upstream Markdown tk:content); far fewer metadata keys (docx 941B vs 2199B, pdf 438B vs 1627B, zip 1144B vs 3557B); embedded path '/document/image1.png' vs '/image1.png'. Failures: upstream returns 200 with the exception recorded in metadata for empty/garbage/corrupt input (r097-r100) where rip returns 415/422 and loses all records. Output cap: rip 422 on 3MB text (r216), zip entries over the ratio limit 422 (r218,r219) where oracle returns 200. Content-Type hint ignored (r204).",
-  "note": "See f1.txt for a docx side by side."
+  "divergence": "Returns a JSON array like upstream, but: keys are X-TIKA:* plus legacy names with always-array values (upstream tk:* scalar-or-array); content is plain text in X-TIKA:content (upstream Markdown tk:content); far fewer metadata keys (docx 941B vs 2199B, pdf 438B vs 1627B, zip 1144B vs 3557B); embedded path '/document/image1.png' vs '/image1.png'. Failures: now as upstream, 200 with the exception in tk:exception:container-exception for empty and corrupt input and an empty record for garbage (r097-r100); the exception is Name: message, not a stack trace, and the oracle salvages the corrupt docx (r099) where rip records the failure. Output cap: rip 200 on 3MB text, cut at the 100000-char default with tk:exception:write-limit-reached on the container and the document that was cut (r216; oracle uncut), zip entries over the ratio limit 422 (r218,r219) where oracle returns 200. Content-Type hint ignored (r204).",
+  "note": "See f1.txt for a docx side by side. tikajs-68os.7.3: keys and value shape now follow Tika (tk:*, scalar unless repeated, container without an embedded path, ids and final path). Content is still plain text, not Markdown (tikajs-68os.7.6). tikajs-68os.7.2: a document that cannot be read is an answer (JSON routes 200 with tk:exception:container-exception, text routes 422 with the partial text and X-Ripstream-Error, unknown binary 200 empty, zero bytes 422 on /tika, 200 with the failure on /meta and /rmeta). Read from Tika source and the saved responses, not run against a Tika. tikajs-68os.7.5: reaching the output limit is an answer, not a failure: the text up to it, 200, and tk:exception:write-limit-reached on the metadata (text routes: an X-Ripstream-Write-Limit-Reached header). The oracle's server has no write limit, so ripstream's 100000-character default (kept by the owner) still differs from it. The budget is one total across the container and everything embedded; Tika's write limit is per document handler.",
+  "resolvedBy": "tikajs-68os.7.3, tikajs-68os.7.2, tikajs-68os.7.5"
  },
  {
   "id": "U09",
   "upstream": "PUT /rmeta/{text,html,xml,ignore,md,markdown,body}",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/RecursiveMetadataResource.java:244-246",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (/rmeta/{handler}); packages/core/src/handler-type.ts",
+  "status": null,
   "evidence": "r085-r092,r107,r103",
-  "divergence": "Handler-suffix routes 404 in rip; bogus handler is 400 upstream (r092). Trailing slash /rmeta/ also 404 (r103).",
-  "note": ""
+  "divergence": "Served for text, txt, html, xml, body, markdown, md and ignore, in any case; a bogus handler is 400 with Tika's message; a trailing slash is the same route (r085-r092, r103 same status and type). Each record's tk:content-handler-type names its handler; ignore writes no content and no key.",
+  "note": "tikajs-68os.7.6: implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U10",
   "upstream": "POST /rmeta/form[/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/RecursiveMetadataResource.java:103-125",
-  "ripstream": "none (404); multipart accepted on POST /rmeta instead",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (POST /rmeta/form[/{handler}])",
+  "status": null,
   "evidence": "r109,r108",
-  "divergence": "Upstream multipart lives under /form; rip 404. rip accepts multipart on the bare route but corrupts binary parts (X10).",
-  "note": ""
+  "divergence": "Served: POST only (PUT is 405 with Allow: POST); a non-multipart body is 415. The bare /rmeta still accepts multipart too.",
+  "note": "tikajs-68os.7.6: implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U11",
   "upstream": "POST /rmeta/config[/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/RecursiveMetadataResource.java:129-152",
   "ripstream": "none (404)",
-  "status": "gap",
+  "status": "non-goal-candidate",
   "evidence": "r110",
   "divergence": "Oracle 403 by default; rip 404.",
-  "note": "Same as U07."
+  "note": "Same as U07. tikajs-68os.7.6 proposes that the path routes (/rmeta/config) are not served, to be confirmed by the owner: ripstream's presets are ?preset= and a presets option, and Tika answers 403 for per-request configuration unless it is switched on, which ripstream does not offer (NG-5).",
+  "decision": "proposed 2026-11-10 (tikajs-68os.7.6); awaiting the owner"
  },
  {
   "id": "U12",
   "upstream": "PUT /rmeta/preset/{presetName}[/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/RecursiveMetadataResource.java:173-190",
   "ripstream": "packages/server/src/index.ts:409-421 (?preset= on /rmeta)",
-  "status": "partial",
+  "status": "non-goal-candidate",
   "evidence": "r111,r176,i008",
   "divergence": "Same surface difference as U06; rip applies preset limits to /rmeta.",
-  "note": ""
+  "note": "tikajs-68os.7.6 proposes that the path routes (/rmeta/preset/...) are not served, to be confirmed by the owner: ripstream's presets are ?preset= and a presets option, and Tika answers 403 for per-request configuration unless it is switched on, which ripstream does not offer (NG-5).",
+  "decision": "proposed 2026-11-10 (tikajs-68os.7.6); awaiting the owner"
  },
  {
   "id": "U13",
   "upstream": "PUT /meta",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/MetadataResource.java:105-111",
   "ripstream": "packages/server/src/index.ts:471-474 (also accepts POST)",
-  "status": "partial",
+  "status": null,
   "evidence": "r113-r122,r130,r229,r231,r232,r217",
-  "divergence": "JSON only. Accept: text/csv not honoured (r116,r229 rip JSON vs oracle CSV). Accept text/plain: rip 200 vs oracle 406 (r118). Far fewer keys (txt 109B vs 611B, pdf 248B vs 1532B). Metadata object has array values only. Empty body 415 vs oracle 200 with detection metadata (r121); corrupt docx 422 vs oracle 200 (r122). 3MB text 422 (cap) vs oracle 200 (r217).",
-  "note": "The 3.x 'default CSV' mentioned in spec/04 2.1 does not apply to 4.2.0 (oracle default JSON)."
+  "divergence": "JSON by default and CSV by Accept: text/csv (r113-r116, r229, r231, r232 same status and type); Accept: text/plain is 406 (r118). /meta writes no content, so it has no output limit and never sets the write-limit flag (Tika's ignore handler). Key sets are smaller (tikajs-68os.10.5). POST /meta is accepted where Tika answers 405 (r130).",
+  "note": "The 3.x 'default CSV' mentioned in spec/04 2.1 does not apply to 4.2.0 (oracle default JSON). tikajs-68os.7.3: metadata values are a string unless repeated, keys are Tika 4.x names. Accept negotiation and CSV are tikajs-68os.7.8. tikajs-68os.7.2: a document that cannot be read is an answer (JSON routes 200 with tk:exception:container-exception, text routes 422 with the partial text and X-Ripstream-Error, unknown binary 200 empty, zero bytes 422 on /tika, 200 with the failure on /meta and /rmeta). Read from Tika source and the saved responses, not run against a Tika. tikajs-68os.7.5: reaching the output limit is an answer, not a failure: the text up to it, 200, and tk:exception:write-limit-reached on the metadata (text routes: an X-Ripstream-Write-Limit-Reached header). The oracle's server has no write limit, so ripstream's 100000-character default (kept by the owner) still differs from it. tikajs-68os.7.6: Accept negotiation and CSV implemented; /meta is metadata only.",
+  "resolvedBy": "tikajs-68os.7.3, tikajs-68os.7.2, tikajs-68os.7.5, tikajs-68os.7.6"
  },
  {
   "id": "U14",
   "upstream": "PUT /meta/{field}",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/MetadataResource.java:142-143",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (/meta/{field}, sendMetadata)",
+  "status": null,
   "evidence": "r123-r129",
-  "divergence": "Oracle returns one field as JSON/CSV/text (Accept-negotiated), 404 JSON for unknown field, 405 for GET. spec/04 2.1 wrongly lists this as GET.",
-  "note": ""
+  "divergence": "Served: JSON, CSV or plain text by Accept; 404 for a missing field (text/plain 'Failed to get metadata field X', where Tika labels it application/json: r128); 422 when the container failed (a bare value has no envelope to carry it); 406 for an Accept it cannot meet; GET is 405 (r129 same).",
+  "note": "tikajs-68os.7.6: implemented. spec/04 2.1 now lists the route as PUT, as upstream. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U15",
   "upstream": "POST /meta/form, POST /meta/config",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/MetadataResource.java:73-76,90-93",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (POST /meta/form)",
+  "status": null,
   "evidence": "r131,r132,r133",
-  "divergence": "Multipart form route 404 in rip; /config 403 upstream.",
-  "note": ""
+  "divergence": "Served: POST /meta/form takes a multipart form (r131, r132 same status and type). POST /meta/config stays unserved: 404 here, 403 upstream (r133); the config routes are a declared non-goal candidate with U07.",
+  "note": "tikajs-68os.7.6: /meta/form implemented. Checked structurally against the saved Tika 4.2.0 responses (status, content type, body kind and, for text, the text itself); not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U16",
   "upstream": "PUT /meta and /meta/{field}, POST /meta/form with Accept: application/rdf+xml (XMP via SPI)",
   "upstreamSource": "tika-server-standard/src/main/java/org/apache/tika/server/standard/resource/XMPMetadataResource.java:61-62,69-72,82",
-  "ripstream": "none (JSON returned for any Accept)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (406 for Accept: application/rdf+xml on /meta and /meta/{field})",
+  "status": "non-goal-candidate",
   "evidence": "r117,r127,r230",
-  "divergence": "Oracle returns RDF/XMP (566-617B) for Accept application/rdf+xml; rip returns JSON.",
-  "note": "Tied to U13/U14."
+  "divergence": "Tika answers application/rdf+xml with XMP (566-617B); ripstream answers 406 (r117, r127, r230).",
+  "note": "tikajs-68os.7.6 proposes a deferred non-goal, to be confirmed by the owner: Tika serializes through Adobe's XMPCore and its tika-xmp schema mapping, which ripstream has no equivalent of, and the library's writeXmpPacket is not valid RDF. Built only if someone asks.",
+  "decision": "proposed 2026-11-10 (tikajs-68os.7.6); awaiting the owner"
  },
  {
   "id": "U17",
   "upstream": "PUT /unpack",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/UnpackerResource.java:123,153-156",
-  "ripstream": "packages/server/src/index.ts:422,459 (aliased to /rmeta)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts, packages/server/src/unpack.ts (PUT /unpack)",
+  "status": null,
   "evidence": "r164-r167,r169,r224,r225",
-  "divergence": "Oracle returns a Frictionless data-package zip (datapackage.json, rmeta.json, unpacked/N.ext); rip returns the /rmeta JSON array: embedded bytes are never delivered. evilnames.zip and many.zip likewise (r224,r225).",
-  "note": "Important functional gap: no way to get embedded resource bytes over HTTP."
+  "divergence": "r164, r167, r168, r170, r171 and r175 match the oracle, and r165, r166 and r225 match in ids, resource names, media types, byte counts and sha256 of every document (checked document by document) and in manifest layout, but for difference (1). Differences: (1) The extension of a text or HTML embedded document: Tika's Content-Type carries a charset ('text/plain; charset=windows-1252'), which its registry lookup does not find, so the file is unpacked/N.bin; ripstream's has none, so N.txt / N.html (tikajs-68os.29). (2) rmeta.json is ripstream's /rmeta, so its keys differ as /rmeta's do. (3) A zip entry named '../x' or '/abs/x' is skipped by parser-archive with an embedded-stream-exception on the container (r224: 1 of 3 documents unpacked, and ok.txt is id 1 where Tika numbers it 3); Tika unpacks all three, naming them by id so the names are only data. Corrupt docx (r169): the oracle salvages the truncated zip and answers 200 with one document; ripstream records the failure, so an unreadable container is 422 with the failure as the body (as the oracle's r168 empty body) instead of a package. The oracle gzips its zip; ripstream does not.",
+  "note": "Resolved: /unpack answers Tika's data package, a zip of datapackage.json, rmeta.json and unpacked/<id><ext> (datapackage.json pretty-printed as Jackson does, hash sha256, tk:embedded-id and tk:resource-name; entries deflated with a data descriptor). The embedded bytes ride the parse as ParseRecord.bytes within ParseOptions.unpackBytes (server option maxUnpackBytes, default 100 MiB, never above the isolation children's unpackCeiling); a document that would pass the budget is left out of the package and stays in rmeta.json. The package is written one file at a time.",
+  "resolvedBy": "tikajs-68os.7.4"
  },
  {
   "id": "U18",
   "upstream": "POST /unpack (multipart)",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/UnpackerResource.java:175-178",
-  "ripstream": "packages/server/src/index.ts:440-448 (multipart on /unpack alias)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (POST /unpack multipart)",
+  "status": null,
   "evidence": "r173,r174",
-  "divergence": "Oracle 200 zip; rip 422 'Unable to inflate' (multipart corruption, X10). POST raw: oracle 415, rip 200 JSON.",
-  "note": ""
+  "divergence": "POST multipart on /unpack, /unpack/all and /unpack/all/{handler} answers the zip, the package named after the form file's name (r173 matches the oracle). Raw POST is 415 (r174: the oracle 415; the status matches, the body is ripstream's text).",
+  "note": "Resolved: /unpack answers Tika's data package, a zip of datapackage.json, rmeta.json and unpacked/<id><ext> (datapackage.json pretty-printed as Jackson does, hash sha256, tk:embedded-id and tk:resource-name; entries deflated with a data descriptor). ",
+  "resolvedBy": "tikajs-68os.7.4"
  },
  {
   "id": "U19",
   "upstream": "PUT/POST /unpack/all[/{handler}], POST /unpack/all/config[/{handler}]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/UnpackerResource.java:199-270",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (PUT/POST /unpack/all[/{handler}])",
+  "status": null,
   "evidence": "r170,r171,r172",
-  "divergence": "Oracle 200 zip (container text/metadata plus embedded); bogus handler 400. rip 404.",
-  "note": ""
+  "divergence": "PUT/POST /unpack/all adds the request's own bytes as unpacked/0<ext>, tk:embedded-id 0, no resource name (r170, r171 match the oracle). A bogus handler is 400 'Unrecognized handler type ...' before the body is read (r172). /unpack/all/config is not served (the handler name 'config' is a 400, as Tika's {handler} reads it).",
+  "note": "Resolved: /unpack answers Tika's data package, a zip of datapackage.json, rmeta.json and unpacked/<id><ext> (datapackage.json pretty-printed as Jackson does, hash sha256, tk:embedded-id and tk:resource-name; entries deflated with a data descriptor). ",
+  "resolvedBy": "tikajs-68os.7.4"
  },
  {
   "id": "U20",
   "upstream": "PUT /unpack/preset/{presetName}[/all]",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/UnpackerResource.java:288-310",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "none (404, not served by decision)",
+  "status": null,
   "evidence": "r176",
-  "divergence": "Oracle 404 for an unconfigured preset; rip 404 (same status, different reason).",
-  "note": "Unverified with a configured preset."
+  "divergence": "Not served: spec/04 2.1 marks /unpack/preset/{name}[/all] not served (tikajs-68os.7.9). r176 matches the oracle's 404 for an unconfigured preset; a configured preset was never measurable without a Tika configuration.",
+  "note": "Resolved as a non-goal: no preset configuration to differ on. Rows U17-U19 are the served routes.",
+  "resolvedBy": "tikajs-68os.7.4"
  },
  {
   "id": "U21",
@@ -214,10 +233,11 @@
   "upstream": "PUT/POST /language",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/LanguageResource.java:39,44,51",
   "ripstream": "packages/server/src/index.ts:378-390",
-  "status": "partial",
+  "status": null,
   "evidence": "r153-r158,r227,r228",
-  "divergence": "Contract differs: oracle returns bare ISO 639-1 text ('en','de'); rip returns JSON {language:'eng'|'deu'|'und', confidence, isReasonablyCertain} with ISO 639-3 codes. confidence observed 0.9 for en (r227,r228) and de (r155). Empty/short input: oracle empty/'ts', rip 'und'. Clients expecting 'en' break.",
-  "note": "Language detector differs too (r157 oracle guesses 'ts' for 2 chars)."
+  "divergence": "PUT and POST /language answer the bare ISO 639-1 code as text/plain with no newline, as the oracle does (r153, r154, r155, r227, r228 identical bodies 'en', 'de'; r156 an empty body is an empty 200; r159 GET is 405). Differences: Content-Type charset (utf-8, oracle iso-8859-1); franc is the detector, so the answer for other text can differ, and a body under 10 characters is an empty answer where the oracle guesses (r157 'ts'); franc's `cmn` is `zh` where Tika's profile says `zh-CN`; a language with no two-letter code keeps its three-letter one (Tika's toIso1 does the same). Reads the first 100,000 characters, as Tika does. `Accept: application/json` is the detector's whole answer where the oracle answers 406 (r158), by the owner's decision.",
+  "note": "tikajs-68os.7.8: packages/language/src/iso639.ts (182 two-letter languages, checked against ICU, plus the macrolanguage codes franc names); packages/server/test/routes.test.ts. Replayed against the saved responses on the CLI server; not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8"
  },
  {
   "id": "U23",
@@ -243,11 +263,12 @@
   "id": "U25",
   "upstream": "GET /mime-types, GET /mime-types/{type}/{subtype}",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaMimeTypes.java:51,70,163-164,248,272-273,325",
-  "ripstream": "none (404)",
-  "status": "gap",
+  "ripstream": "packages/server/src/index.ts (serveMimeTypes); packages/server/src/mime-types.ts; packages/cli/src/mime-types.ts",
+  "status": null,
   "evidence": "r015-r021",
-  "divergence": "Oracle: html (341KB), text/plain (81KB), JSON (138KB) listings and per-type detail; 404 for unknown type.",
-  "note": "GET /mime is 404 in both (not a route)."
+  "divergence": "Served: HTML by default, JSON and (the list) text/plain by Accept, one type as HTML or JSON, 404 for an unknown type (r015-r019 same status and type; r020 404 with a text body where Tika's is empty). 'mime-types' is a server endpoint (default on) and 'mime' names it too. The server has no registry of its own: createRipstreamServer({ mimeTypes }) gives it one (404 until then) and ripstream serve passes the standard registry with custom-mimetypes merged in. The entries carry type, aliases, supertype, description and the extensions the globs name, but not Tika's parser class names, acronym, UTI or links.",
+  "note": "GET /mime is 404 in both (not a route). tikajs-68os.7.6: implemented. GET /mime is 404 here as upstream (r021).",
+  "resolvedBy": "tikajs-68os.7.6"
  },
  {
   "id": "U26",
@@ -277,7 +298,7 @@
   "status": "partial",
   "evidence": "r178,r179,i013-i021,i023-i027",
   "divergence": "Oracle 404 (opt-in), so upstream behaviour is source-only. Different contracts: upstream takes one FetchEmitTuple; rip takes a batch {source:{type,path|urls}, sink, concurrency, mode}. Verified on a second rip instance: JSON-only (415 otherwise), path traversal and absolute paths 403, http source 403 unless allowHttp, sink without sinkRoot refused, bad JSON 400. A single failing document aborts the whole run (i025 corrupt pdf in a 2-file dir -> 422 'Unable to read PDF', no per-document result; i014 a zip bomb in the dir -> 422) and the sink keeps files written before the failure (i018 left sink/out1/bundle.zip.txt). Per-document status is not returned although stats.failed exists in the success shape (i023).",
-  "note": "Upstream maps per-document results to HTTP statuses (resource/PipesParsingHelper.java:469-507)."
+  "note": "Upstream maps per-document results to HTTP statuses (resource/PipesParsingHelper.java:469-507). tikajs-68os.7.8: the whole-run abort and the partial sink output are the engine's fail-fast (tikajs-68os.6.1, per-tuple status); the HTTP route changes with it, so they are not changed here."
  },
  {
   "id": "U29",
@@ -304,10 +325,11 @@
   "upstream": "Accept negotiation: @Produces mismatch -> 406",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/ProduceTypeResourceComparator.java:35; tika-server-core/src/main/java/org/apache/tika/server/core/resource/*.java @Produces",
   "ripstream": "packages/server/src/index.ts:278,475 (Accept consulted only for 'application/json')",
-  "status": "gap",
+  "status": null,
   "evidence": "r003,r006,r011,r049-r052,r101,r118,r147,r158,r175,r213,r214",
-  "divergence": "Oracle 406 with empty body on any unsatisfiable Accept (8 requests rip answered 200, 2 answered 415/422). rip ignores Accept except 'application/json' on /tika and for error bodies. Accept: */*, */*;q=0.1 and q-lists fine (r231-r233).",
-  "note": ""
+  "divergence": "A route writes one type and an Accept that names none of it is a 406 with no body, before the document is read: /tika, /tika/text, /tika/md (text/plain), /tika/html, /tika/xml (text/xml), /tika/json, /rmeta, /detect, GET /version, GET /tika, / , /mime-types, /meta (json, csv; a field also text/plain), /language. Replayed on the CLI server: r003, r006, r011, r049-r052, r101, r118, r147, r213, r214 all 406 as the oracle. Not matched: /unpack answers JSON for any Accept until it answers Tika's zip (tikajs-68os.7.4; r175); /meta with application/rdf+xml is a 406 where the oracle writes XMP (U16, a proposed non-goal); /language with application/json is ripstream's own (r158).",
+  "note": "tikajs-68os.7.8. `/tika` with `Accept: application/json` no longer answers the older { text, metadata } object (`?handler=json` still does): breaking, in CHANGELOG. Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8"
  },
  {
   "id": "X03",
@@ -323,51 +345,56 @@
   "id": "X04",
   "upstream": "Parse-failure semantics (partial output vs hard error)",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java:920-996; tika-server-core/src/main/java/org/apache/tika/server/core/resource/PipesParsingHelper.java:465-507",
-  "ripstream": "packages/core/src/errors.ts:162-199; packages/server/src/index.ts:274-284",
-  "status": "gap",
+  "ripstream": "packages/core/src/failure.ts; packages/core/src/ripstream.ts (onDocumentFailure); packages/server/src/index.ts",
+  "status": null,
   "evidence": "r053,r055,r056,r057,r058,r097-r100,r121,r122,r168,r169,r220",
-  "divergence": "Upstream degrades: JSON endpoints return 200 with the exception stored in metadata plus whatever was extracted (corrupt docx rmeta 6847B, corrupt pdf 2692B, garbage 354B, empty 1518B); text endpoints return 422 with the partial body (r220) or 200 with partial text (r057); unknown binary is 200 with empty text. rip fails the whole request: 415 for no parser, 422 for malformed/encrypted/limit, with no partial records. Embedded-document failures lose the whole recursion.",
-  "note": "Largest behavioural divergence for batch ingestion clients."
+  "divergence": "Upstream degrades: JSON endpoints return 200 with the exception stored in metadata; text endpoints return 422 with the partial body (r220) or 200 with partial text (r057); unknown binary is 200 with empty text. Now matched, except that the oracle salvages what it can of a corrupt docx (r057, r099, r122) where rip records the failure, and an embedded document with no parser still notes an embedded-exception where Tika's EmptyParser notes none.",
+  "note": "Largest behavioural divergence for batch ingestion clients, resolved for the server by tikajs-68os.7.2 (ParseOptions.onDocumentFailure, ZeroByteFileError, recordFailures across isolation). /pipes and the CLI keep throwing (tikajs-68os.6). Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.2"
  },
  {
   "id": "X05",
   "upstream": "Output size limit",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/(none in server; tika-server-core/src/main/java/org/apache/tika/server/core/BasicContentHandlerFactory unlimited)",
   "ripstream": "packages/server/src/index.ts:409-420; packages/cli/src/main.ts:238-286",
-  "status": "gap",
+  "status": null,
   "evidence": "r197,r208,r210,r215,r216,r217,r219,r073,r074",
-  "divergence": "rip CLI default 100000 chars; exceeding gives a hard 422 'Output exceeds N characters', not truncation. Oracle returned 200001B and 3.2MB text with no limit, and ignores ?maxOutputChars and the writeLimit header (r073,r074,r208-r210). spec/04 7 calls 100000 'upstream-compatible' but the server has no such cap.",
-  "note": "rip-only ?maxOutputChars with 400 on bad values (r209)."
+  "divergence": "Oracle returned 200001B and 3.2MB text with no limit and ignores ?maxOutputChars and the writeLimit header (r073,r074,r208-r210). ripstream keeps a 100000-char default (owner decision, tikajs-68os.7.5: a server that answers any caller needs a bound), so a larger document is cut where the oracle returns it whole. spec/04 7 no longer calls the default 'upstream-compatible'.",
+  "note": "tikajs-68os.7.5: reaching the limit now truncates and flags as Tika's write limit does (tk:exception:write-limit-reached; text routes also send X-Ripstream-Write-Limit-Reached) instead of a hard 422. Every other limit (embedded count, per-document output, depth) is still an error. rip-only ?maxOutputChars with 400 on bad values (r209); -1 lifts the cap up to the server ceiling. /async and /pipes keep the hard limit.",
+  "resolvedBy": "tikajs-68os.7.5"
  },
  {
   "id": "X06",
   "upstream": "Request body size cap",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/MaxRequestSizeFilter.java:46-92; tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:67",
   "ripstream": "packages/server/src/index.ts:173,720-735",
-  "status": "partial",
+  "status": null,
   "evidence": "r152,r227",
-  "divergence": "413 in both. Default 100 MiB in rip vs 1 GiB upstream (spec/04 7 says 1 GiB). A declared Content-Length over the cap with a tiny body is not rejected early by either (both waited out the probe).",
-  "note": ""
+  "divergence": "413 in both. Default 100 MiB in rip vs 1 GiB upstream (spec/04 said 1 GiB; corrected). A declared Content-Length over the cap is now refused without being read when it is more than 16 MiB over the cap (413, Connection: close); upstream waited out the probe.",
+  "note": "tikajs-68os.7.7: the 100 MiB default is kept on purpose (the isolation reservation is sized for it: docs/isolation.md) and documented in docs/parsing.md; server.maxRequestSizeBytes sets it. Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.7"
  },
  {
   "id": "X07",
   "upstream": "Connection reuse after an oversize 413",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/(Jetty)",
   "ripstream": "packages/server/src/index.ts:720-735",
-  "status": "gap",
+  "status": null,
   "evidence": "r153,series.keepAliveAfter413",
-  "divergence": "After a 413 on a 105 MiB body, the next request on the same keep-alive connection fails with ECONNRESET in rip (sequence 413,200,ECONNRESET,200,200); oracle 200 x5. Reproduced twice.",
-  "note": "Cause (undrained request body) not verified."
+  "divergence": "After a 413, the connection carries the next request. A body up to 16 MiB over the cap is read and thrown away (at most 5 s) and the 413 is answered keep-alive; a body announced as more than that is refused unread with Connection: close, and the next request opens a new connection. Cause was readBody leaving its for-await loop, which destroys the request and the socket after the 413 had been advertised keep-alive. Measured against the CLI server: 105 MiB then 413 200 200 200 200 (was 413 200 ECONNRESET 200 200); oracle 200 x5.",
+  "note": "tikajs-68os.7.7: packages/server/test/body-limit.test.ts. Upstream (Jetty) behaviour for a body far over its cap not measured.",
+  "resolvedBy": "tikajs-68os.7.7"
  },
  {
   "id": "X08",
   "upstream": "Concurrency and backpressure",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/AsyncResource.java:190-205; tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:82",
   "ripstream": "packages/server/src/index.ts:198-223,274-284",
-  "status": "partial",
+  "status": null,
   "evidence": "series.burst40,r008",
-  "divergence": "40 simultaneous /rmeta pdf: oracle 40x200; rip 21x200 + 19x503 (Retry-After 1) under the CLI's memory-derived gate. /detect burst: both 40x200. Upstream /tika never returns 429/503 under this load; its only 429 is the /async queue. spec/04 says 429.",
-  "note": "Defensible design difference; document it."
+  "divergence": "40 simultaneous /rmeta pdf under the CLI's memory-derived gate: 40x200 in 3.1 s (oracle 40x200 in 1.3 s; was 21x200 + 19x503); 100 simultaneous: 100x200. /detect burst: 40x200 in both. What the queue cannot hold (21 slots + 100 waiting here) is a 503 with Retry-After 1 where upstream /tika never refuses under this load; its only 429 is the /async queue. spec/04 said 429; the server sends none.",
+  "note": "tikajs-68os.7.7: the derived gate now queues like the plain one (maxQueue 100, waiting requests have not read their body); maxQueue 0 restores refuse-at-once. docs/isolation.md and spec/04 corrected.",
+  "resolvedBy": "tikajs-68os.7.7"
  },
  {
   "id": "X09",
@@ -404,10 +431,11 @@
   "upstream": "HTTP gzip: request Content-Encoding, response Accept-Encoding",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerProcess.java:334-335 (GZIPInInterceptor/GZIPOutInterceptor)",
   "ripstream": "(no compression code in index.ts)",
-  "status": "gap",
+  "status": null,
   "evidence": "r194,r195,r078,r079,r197",
-  "divergence": "Oracle gzips responses when asked (Content-Encoding: gzip, Vary: Accept-Encoding) and inflates gzip request bodies. rip never sets Content-Encoding. A gzip request body parses in rip (r194,r195 equal text) only because the parser unwraps the gzip format, not because of Content-Encoding handling. Response compression not observable on rip (r197 hit the output cap) - static only.",
-  "note": ""
+  "divergence": "Response: text, JSON and XML bodies of 32 bytes or more are gzipped when Accept-Encoding allows gzip (named, or *, not q=0), with Content-Encoding: gzip and Vary: Accept-Encoding; smaller bodies and other types are sent as they are (oracle r079, r197, r104 gzipped; r074, r007 small and not). Request: Content-Encoding: gzip (or x-gzip) is inflated before the document is read, held to the body limit once inflated (413) with 400 for bytes that are not gzip; the oracle's r194, r195 results are reproduced (equal text). Only gzip: no deflate, br or compress, in either direction.",
+  "note": "tikajs-68os.7.8: the 32-byte minimum is Jetty's default, not measured on the oracle. Compression is off the event loop (zlib.gzip). Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8"
  },
  {
   "id": "X13",
@@ -424,20 +452,22 @@
   "upstream": "Method matrix: HEAD, OPTIONS, POST on PUT-only routes",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/(CXF routing)",
   "ripstream": "packages/server/src/index.ts:241-245,427-431",
-  "status": "partial",
+  "status": null,
   "evidence": "r004,r059,r108,r130,r148,r174,r184,r185,r187,r188,r234,r235",
-  "divergence": "HEAD: oracle 200, rip 404/405. OPTIONS: oracle 200 + Allow header, rip 204 with no Allow. POST on /tika,/rmeta,/meta,/detect,/unpack: oracle 405/415, rip 200 (more permissive). PUT/GET/DELETE/PATCH 405 behaviours align (r013,r014,r112,r149,r159,r177).",
-  "note": ""
+  "divergence": "HEAD answers a GET route's headers without its body (r004, r187, r188 200 as the oracle); a route with no GET has no HEAD (405). OPTIONS is a 200 with Allow: POST, GET, PUT, OPTIONS, HEAD and no body on any path (r184, r185, r234, r235 as the oracle; was 204). PUT / is 405 with Allow (r190; was 404). Not matched, deliberately: POST with a raw body is accepted on /tika, /rmeta, /meta and /detect where the oracle answers 405 (r059, r108, r130, r148), and /unpack takes it where the oracle answers 415 (r174); the 405 Allow header names that route's own methods, where the oracle's is one list for every route.",
+  "note": "tikajs-68os.7.8: more permissive than Tika, no Tika client is affected; documented in docs/migration.md. Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8"
  },
  {
   "id": "X15",
   "upstream": "Path matching: trailing slash, dot segments, case",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/(CXF/Jetty)",
   "ripstream": "packages/server/src/index.ts:307,423",
-  "status": "gap",
+  "status": null,
   "evidence": "r007,r083,r103,r191,r192,r193",
-  "divergence": "Oracle accepts trailing slash on /version, /tika/, /rmeta/ (200); rip 404. /tika/../version: oracle 404 (no normalisation), rip 200 (WHATWG URL normalises). //tika/text: oracle 400, rip 404. Uppercase path 404 in both.",
-  "note": ""
+  "divergence": "A trailing slash is ignored on every route (r007, r083, r103 200 as the oracle). A path that starts with // is a 400 (r192, as the oracle; new URL had taken it for a host and answered 404). A path with a . or .. segment (raw or %2e) is a 404 and is not folded into another route (oracle 404; rip had folded /tika/../version to /version). Uppercase paths are 404 in both (r193).",
+  "note": "tikajs-68os.7.8: parseTarget in packages/server/src/index.ts. Not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8"
  },
  {
   "id": "X16",
@@ -446,7 +476,7 @@
   "ripstream": "packages/server/src/index.ts:288-299",
   "status": "partial",
   "evidence": "robust.out (12 raw-socket probes)",
-  "divergence": "rip survived all probes. Differences: invalid %zz in path: oracle 400 html vs rip 404; invalid %zz in query: oracle 500 stacktrace vs rip 200; 20KB URI: oracle 414 vs rip 431; absolute-form, HTTP/1.0, no Host, garbage line, Expect: 100-continue: equivalent. Declared Content-Length of 2 GiB/1 GiB+1/200 MiB with 3 bytes sent: both stall (no early reject).",
+  "divergence": "rip survived all probes. Differences: invalid %zz in path: oracle 400 html vs rip 404; invalid %zz in query: oracle 500 stacktrace vs rip 200; 20KB URI: oracle 414 vs rip 431; absolute-form, HTTP/1.0, no Host, garbage line, Expect: 100-continue: equivalent. Declared Content-Length of 2 GiB/1 GiB+1/200 MiB with 3 bytes sent: upstream stalls; rip refuses at once with 413 and Connection: close (tikajs-68os.7.7), as it does for any declared length more than 16 MiB over the cap.",
   "note": ""
  },
  {
@@ -493,11 +523,12 @@
   "id": "X21",
   "upstream": "Metadata key schema and value shape",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/TikaResource.java; tika-server-core/src/main/java/org/apache/tika/server/core/MetadataList.java; tika-server-core/src/main/java/org/apache/tika/server/core/writer/*",
-  "ripstream": "packages/server/src/index.ts:462-464,471-474,762-766 (metadataObject; serializeRmeta is imported from core, line 4)",
-  "status": "gap",
+  "ripstream": "packages/core/src/rmeta.ts (rmetaObject, rmetaObjects, metadataJson), packages/core/src/tika-keys.ts",
+  "status": "partial",
   "evidence": "r084,r093,r113,r114,r119,r120,f1.txt",
   "divergence": "Upstream 4.x: tk:* keys, scalar values unless repeated, tk:content-handler-type, tk:parsed-by, tk:parse-time-millis, tk:embedded-* paths. rip: X-TIKA:* and legacy names, every value an array, responses are 27-45% of the oracle's byte size (r084,r093,r094,r095), with no Content-Length/parsed-by keys. Any client reading tk:content or tk:parsed-by gets nothing.",
-  "note": "Compatibility mode 3.3.3 (spec/README.md:6) has no switch in the server."
+  "note": "Compatibility mode 3.3.3 (spec/README.md:6) has no switch in the server. tikajs-68os.7.3: the framework keys are Tika 4.x tk:* names and values are a string unless repeated (/rmeta, /meta, /tika JSON, CLI, pipes). Still different: per-format keys (tikajs-68os.10.5), tk:embedded-resource-type/internal-path/embedded-relationship-id are not written, tk:parsed-by holds ripstream parser names, failures are \"Name: message\" not stack traces. Read from Tika source and the saved oracle responses, not run against a Tika.",
+  "resolvedBy": "tikajs-68os.7.3"
  },
  {
   "id": "X22",
@@ -546,7 +577,7 @@
   "ripstream": "packages/server/src/index.ts:409-421",
   "status": "implemented",
   "evidence": "r104,r105,r205,r206,r208-r210,i008,i010",
-  "divergence": "rip-only knobs. maxLimits ceiling verified (i010: 5000 requested, 1000 enforced -> 422). Over-limit is a hard 422, bad value 400.",
+  "divergence": "rip-only knobs. maxLimits ceiling verified (i010: 5000 requested, 1000 enforced -> 422). Over the output limit the text is cut and flagged (200, tikajs-68os.7.5); over the embedded-resource limit is a hard 422; a bad value is 400.",
   "note": "Extension."
  },
  {
@@ -554,10 +585,11 @@
   "upstream": "spec/04 2.1 lists PUT /detect/stream, PUT|POST /language/stream",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/(absent in 4.2.0; tika-server-core/src/main/java/org/apache/tika/server/core/oracle 404)",
   "ripstream": "none (404)",
-  "status": "non-goal-candidate",
-  "evidence": "r150,r160,r161",
+  "status": null,
+  "evidence": "r061,r150,r160,r161,r162,r163",
   "divergence": "Routes do not exist in Tika 4.2.0 (oracle 404 on both); rip also 404.",
-  "note": "Spec drift: remove from spec/04 2.1 or gate behind a 3.x compat mode. Not a parity gap against 4.2.0."
+  "note": "Resolved: spec/04 2.1 now matches 4.2.0. /tika/form and /detect/stream are marked absent (oracle and ripstream both 404), /language/stream is /language (tikajs-68os.7.8), /translate/all/... is replaced by the ripstream extension /translate?target= (oracle 404 on both forms), and /tika/config, /tika/preset, /rmeta/config, /rmeta/preset and /unpack/preset are marked not served.",
+  "resolvedBy": "tikajs-68os.7.9"
  },
  {
   "id": "S02",
