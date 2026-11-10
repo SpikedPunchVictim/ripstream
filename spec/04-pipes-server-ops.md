@@ -61,11 +61,15 @@ export type PipesStatus =
 
 | Mode | Output |
 |---|---|
-| `RMETA` | Full recursive metadata + content per document (JSON) |
-| `CONCATENATE` | Single text blob, embedded documents concatenated |
-| `CONTENT_ONLY` | Top-level content only, no embedded |
-| `NO_PARSE` | No parsing; fetch → emit (copy/route mode) |
-| `UNPACK` | Extracted embedded resources written as files |
+| `RMETA` | The list of metadata, the document and then what is embedded in it (JSON) |
+| `CONCATENATE` | One document per input: one metadata whose `tk:content` is the text of the document and of everything embedded in it |
+| `CONTENT_ONLY` | As `CONCATENATE`, for an emitter that writes only the raw content |
+| `NO_PARSE` | Detection only: metadata with `Content-Type`, no content and no copy of the input |
+| `UNPACK` | Tika's Frictionless package: one zip at `<emitKey>-frictionless.zip` of `datapackage.json`, `rmeta.json` and `unpacked/<id>` (`UnpackConfig` `outputFormat: REGULAR` is the `RMETA` list at the emit key and each embedded document's bytes at `<emitKey>-embed/<embedded id>`) |
+
+Implemented (`tikajs-68os.6.3`) from `ParseMode.java`, `ParseHandler` and `EmitHandler` in Tika 4.2.0. `FileSystemEmitter`
+is Tika's: `basePath/emitKey`, `onExists` `EXCEPTION` (default) / `SKIP` / `REPLACE`, atomic writes, `GZIP`, `fileExtension`,
+`prettyPrint`.
 
 ### 1.3 Engine
 
@@ -84,7 +88,29 @@ PipesIterator ──► bounded work queue ──► worker pool ──► Emitt
 - Idempotency: optional checkpoint file of completed tuple IDs; safe to point emitters at keyed sinks.
 - Graceful shutdown: stop iterator, drain queue up to `shutdownGraceMillis`, flush emitters, report summary.
 - Reporting: one `PipesResult` per tuple: status, ID, parse millis, fetch millis, emit millis, byte count, exception class/message, worker ID.
+  Implemented (`tikajs-68os.6.1`): `{ id, status, category, message?, elapsedMs }`, status one of Tika's 21 (not the eight
+  of `PipesStatus` above, which predates the port's reading of 4.2.0), and the run goes on after any result that is not
+  in the FATAL category.
 - Backpressure: bounded queue; a stalled emitter blocks fetching, not memory growth.
+
+As built (`tikajs-68os.6.4`): the retry and the idempotency lines above are the engine options `retry` and `checkpoint`.
+`retry` is `{ attempts (3), baseDelayMs (50), maxDelayMs (2000), retryIf }`, applied to the fetch and to each document's emit
+and by default only to `isTransientError` failures, never to a parse; the wait doubles, carries jitter (half to all) and ends
+on abort. `checkpoint` is `has(id)`/`mark(id)` over tuple ids (`CheckpointStore`: an appended journal, one JSON string a
+line). An input is left out when its id is held, and recorded last: after it succeeded (a SUCCESS result) and its result was
+reported, so a run that stops earlier does it again and reports it again. The window between emit and record makes the
+emitter's second write of a key a requirement, `onExists` `REPLACE` or `SKIP`. Tika has no checkpoint (its idempotent rerun
+is `onExists` on the emitter and the reporter); its restarts are of a forked server, which an engine that parses in-process or
+in a child per document does not have: a crash is that input's result and the next input gets a fresh child.
+
+As built (`tikajs-68os.6.2`): the engine takes `FetchEmitTuple`s (`id`, `fetcher`, `fetchKey`, `emitter?`, `emitKey?`,
+`onParseException?`; the `metadata` field and `'pass' | 'fail'` above are not read: `skip` and `emit` are Tika's two) from a
+`PipesIterator` and resolves them through fetchers and emitters registered by id, inside the worker. A fetcher is
+`fetch(key, { signal }) -> Uint8Array` and an emitter is `emit(document)`; neither has `initialize`, which an in-process
+engine does not need (a component that cannot be built throws when the engine is made). A tuple naming a fetcher or emitter
+that is not registered is `FETCHER_NOT_FOUND` or `EMITTER_NOT_FOUND` for that tuple. Tika's pipes configuration loads
+through `loadConfig(...).pipes` and `createEngineFromSettings`; docs/migration.md lists what loads, what is accepted with a
+notice and what is refused. The evidence for the model is `tasks/parity/audits/pipes-model-spike.md`.
 
 ### 1.4 Built-in components
 
@@ -121,6 +147,12 @@ Iterators:
 | `csv-pipes-iterator`, `json-pipes-iterator` | File lists with optional metadata columns |
 | `s3-pipes-iterator`, `az-blob-pipes-iterator` | Object listings |
 | `solr-pipes-iterator`, `jdbc-pipes-iterator`, `kafka-pipes-iterator` | Query/stream driven |
+
+Built (`tikajs-68os.6.6`), with no cloud or search SDK: `s3-fetcher`, `s3-emitter` and `s3-pipes-iterator` (SigV4 over `fetch`, so
+the "optional AWS SDK peer" above was not needed) and `es-emitter` and `opensearch-emitter` (the `_bulk` request over `fetch`).
+Tracked: GCS (`tikajs-68os.31`), Azure Blob (`tikajs-68os.32`), Solr over HTTP (`tikajs-68os.33`) and the search reporters
+(`tikajs-68os.34`). Proposed non-goals awaiting the owner: the JDBC components, Kafka and the other connectors
+(`tikajs-68os.24`). `docs/migration.md` says what each built component does and does not do.
 
 Reporters:
 
@@ -169,35 +201,37 @@ Built entirely on the library; request handlers are exported so any framework (F
 
 | Endpoint | Methods | Notes |
 |---|---|---|
-| `/tika`, `/tika/{text,html,xml,md,json}` | PUT, POST multipart | Extract content; 4.x bare `/tika` defaults to Markdown |
-| `/tika/form` | POST multipart | 3.x compatibility |
-| `/tika/config`, `/tika/config/{handler}` | POST multipart | Requires `allowPerRequestConfig` (default off → 403) |
-| `/tika/preset/{name}` and handler variants | PUT, POST | Named server-side config presets |
-| `/rmeta`, `/rmeta/config`, `/rmeta/preset/{name}` | PUT, POST | Recursive metadata JSON array |
-| `/meta` | PUT, POST | Metadata only; default CSV in 3.x, JSON/XML by `Accept` |
-| `/meta/{key}` | GET | Fetch a metadata value from the last response? Upstream behavior pinned by tests |
-| `/detect/stream` | PUT | Media type of body |
+| `/tika`, `/tika/{text,html,xml,md}`, `/tika/json[/{handler}]` | PUT, POST multipart | Extract content. Tika 4.x's bare `/tika` is Markdown; here it is text (`/tika/md` and `?handler=md` give Markdown, best effort). `/tika/json` is one object: the metadata, `tk:content`, `tk:content-handler-type` (`tikajs-68os.7.6`) |
+| `/tika/form` | POST multipart | A 3.x route: tika-server 4.2.0 answers 404 for it (saved response r061) and so does ripstream. Not served |
+| `/tika/config`, `/tika/config/{handler}` | POST multipart | A 4.2.0 route that needs `allowPerRequestConfig` (off → 403). Not served: ripstream answers 404 |
+| `/tika/preset/{name}` and handler variants | PUT, POST | A 4.2.0 route for named server-side config presets. Not served: ripstream's presets are `?preset=` |
+| `/rmeta[/{handler}]`, `/rmeta/form[/{handler}]`, `/rmeta/config`, `/rmeta/preset/{name}` | PUT, POST (`form`: POST multipart) | Recursive metadata JSON array, each document's content in the handler's shape. `config` and `preset` are not served (ripstream's presets are `?preset=`) |
+| `/meta`, `/meta/form` | PUT, POST (`form`: POST multipart) | Metadata only, no content and so no output limit: JSON by default, CSV by `Accept: text/csv`; `application/rdf+xml` (XMP) is a 406, a deferred non-goal |
+| `/meta/{field}` | PUT, POST | One metadata field of the uploaded document, as JSON, CSV or plain text by `Accept`; 404 when it has none (upstream is PUT, not GET) |
+| `/mime-types`, `/mime-types/{type}/{subtype}` | GET | The media types the server was given (`ripstream serve` passes the standard registry and the configured custom types): HTML by default, JSON or (the list) text by `Accept`; 404 for an unknown type |
+| `/detect/stream` | PUT | Not in tika-server 4.2.0 (404, saved response r150) and not served here: `/detect` is the route |
 | `/detect` | PUT | Media type |
-| `/unpack` | PUT | Write embedded resources; 4.x variant `/unpack/preset/{name}` |
-| `/language/stream` | PUT, POST | Language detection |
-| `/translate/all/{translator}/{src}/{dest}` | PUT, POST | Translation |
-| `/translate/all/{translator}/{dest}` | PUT, POST | Source auto-detected |
-| `/pipes`, `/async` | POST | Requires `allowPipes` (4.x) / `enableUnsecureFeatures` (3.x) |
+| `/unpack` | PUT, POST multipart | The embedded resources as Tika's data package: a zip of `datapackage.json`, `rmeta.json` and `unpacked/<id><ext>` (`Accept: application/zip` only; `/unpack/all[/{handler}]` adds the request's own bytes as `unpacked/0`; raw POST 415). Bytes kept are held to `maxUnpackBytes` (`tikajs-68os.7.4`); `/unpack/preset/{name}` is a 4.2.0 variant that is not served |
+| `/language` | PUT, POST | Language detection: the ISO 639-1 code as `text/plain` (Tika's answer; `und` is an empty body); `Accept: application/json` is the detector's whole answer. Reads the first 100,000 characters (`tikajs-68os.7.8`). Tika has no `/language/stream` |
+| `/translate?target=` | PUT, POST | A ripstream extension: tika-server 4.2.0 has no translate routes (404 for `/translate/all/...`, which were 3.x). Translates the body into `target` (default `en`); 501 until a translator is configured |
+| `/pipes`, `/async` | POST | Requires `allowPipes` (4.x) / `enableUnsecureFeatures` (3.x). Here: off unless `pipes` is given, and `pipes` needs `authenticate`. With `pipes.settings` they are Tika's: `/pipes` takes one `FetchEmitTuple` and answers `{status, message?}` with Tika's HTTP status; `/async` takes `{"tuples": [...]}` and queues them for a background run (`tikajs-68os.6.5`, below) |
 | `/status` | GET | Engine status; same gating |
 | `/version` | GET | Version |
-| `/` (HEAD/GET) | GET | Greeting/health |
+| `/` (HEAD/GET), `GET /tika` | GET, HEAD | Welcome page (HTML or text by `Accept`, 406 otherwise) listing the served routes; `GET /tika` is the one-line greeting. Both name ripstream |
 
 ### 2.2 Protocol behavior
 
 - Binary input: PUT with raw body. Multipart: `file` part plus optional `config`, `metadata`, `filename`.
 - Filename for name-based detection from `Content-Disposition` or multipart filename.
-- Output negotiation: path suffix wins over `Accept`; default handler follows the configured Tika generation (4.x Markdown, 3.x text).
+- Output negotiation: the route fixes what it writes (path suffix), and an `Accept` that does not name it is a 406 with no body, answered before the document is read (`tikajs-68os.7.8`); default handler follows the configured Tika generation (4.x Markdown, 3.x text; here text, see docs/migration.md).
+- Compression: a text, JSON or XML response of 32 bytes or more is gzipped for `Accept-Encoding: gzip`; a request body with `Content-Encoding: gzip` is inflated, bounded by the body limit (`tikajs-68os.7.8`).
 - Response headers: `Content-Type` with charset, `Content-Length` when buffered, `X-TIKA:…` digests when configured; streaming/chunked for large output.
 - Per-request headers: `X-Tika-OCR*`, `X-Tika-PDF*`, `X-Tika-ContentHandler`-style knobs accepted only when `allowPerRequestConfig` or header overrides are enabled.
 - Errors: 4.x JSON error body `{ "status": n, "message": "...", "exception": "..." }`; 3.x plain text. Configurable compat mode.
-- Status mapping: 200 success; 204 empty body; 400 malformed request; 403 gated feature; 408 parse timeout; 413 request too large; 422 unsupported/encrypted/malformed document; 429 concurrency limit; 500 internal; 503 shutting down.
+- Status mapping: 200 success; 204 empty body; 400 malformed request; 403 gated feature; 408 parse timeout; 413 request too large; 422 a limit other than the output limit (reaching `maxOutputChars` is a 200 with the text up to it, flagged by `tk:exception:write-limit-reached`, and on text routes by `X-Ripstream-Write-Limit-Reached`; `tikajs-68os.7.5`), and (text routes only) a malformed, encrypted or empty document, whose body is the text extracted before the failure; 500 internal; 503 the queue is full or isolation is unavailable (`Retry-After`), or shutting down. As Tika does, `/rmeta`, `/meta` and the JSON form of `/tika` answer 200 for a document they could not read, with `tk:exception:container-exception` in the metadata, and a format no parser takes is an empty 200 (`tikajs-68os.7.2`; Tika's own semantics read from its source, not a live server).
 - Streaming request bodies are allowed when the selected parser does not require random access; otherwise the server spools to disk with the same limits.
-- Concurrency: request pool sized independently; `/async` has its own pool; queue overflow → 429 with `Retry-After`.
+- Concurrency: request pool sized independently; `/async` has its own pool; a request beyond the slots waits, body unread, in a queue of `maxQueue` (default 100) for up to `requestTimeoutMs` (408); beyond the queue it is a 503 with `Retry-After`. The server answers 429 only on Tika's tuple routes (below).
+- Tika's tuple routes (`tikajs-68os.6.5`; `pipes.settings`, behind `authenticate`): a `/pipes` body without `source` is one tuple, a `/async` body that is a JSON object with a `tuples` key is a batch (a body of any other kind is the old raw-document job, `202 {id}`). A request names fetchers and emitters of the settings, never paths; an id that starts with `__`, and a `parseContext`, `preset`, `metadata` or range field, are a 400. `/pipes` maps the result to Tika's HTTP status: 200 for every success category (a recorded parse exception included), 400 for a fetcher, emitter or preset that is not there, 413 `PAYLOAD_LIMIT_EXCEEDED`, 429 `CLIENT_UNAVAILABLE_WITHIN_MS` with `Retry-After: 60`, 503 with `Retry-After: 5` for `TIMEOUT` and `UNSPECIFIED_CRASH`, 500 for the rest. `/async` answers 200 `{status:"ok", added}` once every tuple of the batch is queued (the batch is checked whole first: 400 for a component that is not configured, or a batch larger than `pipes.queueSize`), 429 `{status:"throttled", message, capacity}` with `Retry-After` when the queue stays full for `asyncMaxWaitMs` (default 5000; Tika's is 60 000), and `close()` finishes what was accepted. `ripstream serve` leaves both off: `authenticate` is code.
 - Server never enables CORS by default; TLS termination is the deployer's job; bind localhost by default.
 - No auth implementation beyond optional bearer/HMAC hook documented for reverse proxies.
 
@@ -312,14 +346,14 @@ Documents are hostile. Assume malformed structures, decompression bombs, XML ent
 | Setting | Default |
 |---|---|
 | Parse timeout | 60 s per document (configurable) |
-| Output chars | 100,000 (upstream-compatible) |
+| Output chars | 100,000 (a ripstream bound: Tika's server has no write limit by default). Reaching it truncates and flags |
 | Embedded resources | 10,000 |
 | Total embedded bytes | 1 GiB |
 | Decompression ratio | 100× |
 | Zip entries | 10,000 |
 | Node/nesting depth | 100 |
 | Worker memory cap | 512 MiB |
-| Request body cap (server) | 1 GiB |
+| Request body cap (server) | 100 MiB (`maxRequestSizeBytes`; Tika's default is 1 GiB) |
 | Temp dir | OS temp, per-process subdir, cleaned on exit |
 
 All defaults are documented with the upstream value they mirror, and every one is overridable per parse and per server.

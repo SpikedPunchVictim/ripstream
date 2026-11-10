@@ -158,7 +158,7 @@ Namespaces shipped and generated from `tika-metadata-schema`:
 
 | Prefix | Namespace URI | Examples |
 |---|---|---|
-| `X-TIKA` | internal | `X-TIKA:content`, `X-TIKA:embedded_resource_path`, `X-TIKA:embedded_depth`, `X-TIKA:parse_time_millis`, `X-TIKA:EXCEPTION:*` |
+| `tk` | internal (Tika 4.x; was `X-TIKA` in 3.x) | `tk:content`, `tk:embedded-resource-path`, `tk:embedded-depth`, `tk:parse-time-millis`, `tk:exception:*` |
 | `dc` | `http://purl.org/dc/elements/1.1/` | title, creator, description, subject, language |
 | `dcterms` | `http://purl.org/dc/terms/` | modified, created, issuer |
 | `xmp` | `http://ns.adobe.com/xap/1.0/` | CreateDate, ModifyDate, CreatorTool |
@@ -215,16 +215,16 @@ Applied at serialization and at the server boundary, never inside parsers, so pa
 [
   {
     "Content-Type": "application/pdf",
-    "X-TIKA:content": "…",
-    "X-TIKA:embedded_resource_path": "/doc.pdf",
-    "X-TIKA:embedded_depth": "0",
+    "tk:content": "…",
+    "tk:embedded-resource-path": "/doc.pdf",
+    "tk:embedded-depth": "0",
     "pdf:PDFVersion": "1.7"
   }
 ]
 ```
 
 - Numbers/dates may be emitted as strings exactly like upstream; `typedMetadata: true` opts into native JSON types.
-- `X-TIKA:content` is the handler output for that record.
+- `tk:content` is the handler output for that record.
 - Embedded records follow depth-first, pre-order.
 - Exception records carry `X-TIKA:EXCEPTION:<simple class>` and `X-TIKA:EXCEPTION_MESSAGE`.
 

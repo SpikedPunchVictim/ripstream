@@ -202,22 +202,22 @@ How it differs from Tika:
 | Key | Effect |
 | --- | --- |
 | `port`, `host` | Where to listen (default 9998 and `127.0.0.1`; Tika's default host is `localhost`). `*` is every interface. `--port`/`-p` and `--host`/`-h` win over the file. |
-| `endpoints` | Exactly the endpoints served, by Tika's names: `tika rmeta meta unpack detect language version status async`. Naming one does not add it to a default. An empty list is the default. `/health` is always served. `/status/<job>` belongs to `async`. A disabled endpoint answers 404. |
+| `endpoints` | Exactly the endpoints served, by Tika's names: `tika rmeta meta unpack detect language mime-types version status async` (`mime` is Tika's other name for `mime-types` and is taken as it). Naming one does not add it to a default. An empty list is the default. `/health` is always served. `/status/<job>` belongs to `async`. A disabled endpoint answers 404. |
 | `cors` | `Access-Control-Allow-Origin` (`createRipstreamServer({ corsOrigin })`). |
-| `maxRequestSizeBytes` | The request body limit (413 over it). Positive: ripstream always bounds a body, where Tika lets a negative value lift the limit. |
+| `maxRequestSizeBytes` | The request body limit (413 over it). Default 100 MiB, where Tika's is 1 GiB. Positive: ripstream always bounds a body, where Tika lets a negative value lift the limit. A body up to 16 MiB over the limit is read and thrown away, so the 413 comes on a connection that carries the next request; a body announced as larger than that is refused unread, with `Connection: close`. |
 | `requestLogLevel` | `debug` or `info`: each request's method and URI go to stderr. The server's own info lines (the concurrency gate) are shown with them. |
 | `maxRequestReadMillis` | How long receiving a whole request may take (408 after); negative: no deadline; not zero. Node's `requestTimeout`. |
 | `idleTimeoutMillis` | Closes a connection with no bytes moving for this long. A request whose body is in and whose response has not begun is waiting on its parse and is not closed (as in Jetty's idle timeout). |
 
 Without `endpoints`, `serve` answers Tika's default set less what ripstream lacks (`tika rmeta meta unpack detect language
-version`): **`/status` and `/async` are off unless listed**, as in Tika. The programmatic `createRipstreamServer` serves every
+mime-types version`): **`/status` and `/async` are off unless listed**, as in Tika. The programmatic `createRipstreamServer` serves every
 endpoint unless `endpoints` is passed.
 
 Refused, naming the setting and the reason: `maxQueuePauseMillis` (ripstream answers 503 at once when its queue is full),
 `maxResponseWriteMillis`, `maxInFlightRequestBytes` (requests are bounded by number, not bytes in flight), `id`, `tlsConfig`
 (terminate TLS in front), `metricsPort`, and, when `true`, `allowPipes` (`/pipes` needs an `authenticate` function and path
 roots that only code can give), `allowPerRequestConfig` and `allowHttp2`; `false` is accepted, as it is what ripstream does.
-An endpoint Tika has and ripstream does not serve (`mime`, `mime-types`, `detectors`, `parsers`, `pipes`) and any other name are
+An endpoint Tika has and ripstream does not serve (`detectors`, `parsers`, `pipes`) and any other name are
 refused in `endpoints`, as Tika refuses an unrecognized one. An unknown setting is refused with the list of the applied ones.
 
 The CLI's flags follow Tika's for `serve`: `-h <host>` and `-p <port>`. Everywhere else `-h` is help and `-p` the password;

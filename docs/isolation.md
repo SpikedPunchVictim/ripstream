@@ -209,7 +209,8 @@ raise the limit, or lower `perChildMb` and `heapMb` and accept a smaller budget 
 Between 2708 and 3056 MiB the pool runs text requests (`/tika`, `/meta`) but cannot hold a recursive one (`/rmeta`,
 `/unpack`, `--recursive`): those that reach a child are refused with 422 ("more than the whole memory pool"), which
 describes the deployment and not the document. The isolator logs a WARN at startup when that is the case. Size the
-pool to at least 3056 MiB to serve recursive requests.
+pool to at least 3056 MiB to serve recursive requests; `/unpack` reserves a little more for the bytes it carries
+(see its budget, below).
 
 The number of requests that run at once is `floor(pool / reservation)`. The server's own gate is derived from it
 (below), and `/status` shows both: `isolation.pool.poolMb` against `isolation.defaultReservationMb`. Both reservations
@@ -222,17 +223,22 @@ are computed for a request at the server's output ceiling.
 and reaped before the process exits.
 
 **One gate.** When isolating, and unless you set `maxConcurrent` / `maxQueue` yourself, the server admits
-`floor(poolMb / max(text, records reservation)) + pool.maxQueue` requests at once and queues none of its own. The slot
-is taken before the request body is read, so a flood is refused with `503` before its bytes are buffered. The gate
+`floor(poolMb / max(text, records reservation)) + pool.maxQueue` requests at once and holds the next 100 (`maxQueue`)
+waiting for a slot, as it does without isolation. The slot is taken before the request body is read, so a request that
+waits has not buffered a byte: a burst costs sockets, not memory. A waiting request that gets no slot within
+`requestTimeoutMs` (60 s) is a `408`; one that finds the queue full is refused with `503` and `Retry-After: 1`. The gate
 keeps the number of bodies held in memory near what the pool can run and queue; it is not an exact bound. A request
 that reserves more than the default (a larger ceiling is in the reservation already) can still be refused by the pool
 with `queue_full` after its body was read, and `/pipes` spends one slot on a run that parses several documents at once.
+`maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
 
 **Errors.** Isolation failures keep their meaning across the boundary:
 
 | Condition | Status | `Retry-After` |
 | --- | --- | --- |
-| Document over a limit, malformed, encrypted | 422 | |
+| Document over a limit other than the output limit | 422 | |
+| Text reaches the output limit | 200: the text up to it, `tk:exception:write-limit-reached` in the metadata (`X-Ripstream-Write-Limit-Reached` on text routes) | |
+| Document malformed, encrypted or empty | 422 on a text route and on `/unpack` (the failure is the body); 200 with `tk:exception:container-exception` on `/rmeta`, `/meta` and JSON | |
 | Child ran out of memory, output budget or temporary disk budget | 422 | |
 | Parse timed out | 408 | |
 | Server or memory-pool queue full (`queue_full`) | 503 | 1 |
@@ -244,6 +250,19 @@ An `unavailable` or `queue_full` answer is for that request only. The server nev
 A PDF whose parser faults inside the child is a `crash` (500). Before isolation the same fault surfaced as a
 malformed document (422). A clearly malformed PDF is still a 422.
 
+**`/unpack` and its byte budget.** `/unpack` answers a zip of the embedded documents, so the parse keeps their bytes
+until the package is written. `maxUnpackBytes` (a server option; default 100 MiB; `ripstream serve` cannot set it yet,
+`tikajs-68os.28`) is the most it keeps per request. A document that would take the total past it is left out of the zip
+and still has its record in `rmeta.json`; there is no query parameter, so a client cannot raise it. With isolation the
+bytes cross the boundary as `bytes` frames after their record, counted against `maxResultBytes`, and the budget may not
+exceed what a child can hold: `min(256 MiB, perChildMb / 4)`, shown in `/status` as `isolation.limits.unpackCeiling`. A
+`maxUnpackBytes` above it is refused when the server is built, with both numbers in the message, and the default is
+held under it. The request reserves twice its budget in the pool on top of the usual result room. Measured on macOS
+arm64, Node 24, with a real child: the parent's heap and external memory peaked at +78 MiB for 64 MiB of stored entries
+(1.2x), +82 MiB for the same deflated (1.3x) and +275 MiB for 256 MiB (1.07x); the child's RSS was about 140 MiB plus
+twice the bytes (640 MiB at 256 MiB). The parent writes the zip one file at a time. The archive parser's own
+decompression-ratio and size limits still apply to the container, whatever the budget.
+
 **`/status`** (outside the gate, and behind `authenticate` only if the embedder configured one; `ripstream serve` has
 none, binds `127.0.0.1` unless `--host` or `server.host` says otherwise, and serves `/status` only when the configuration's
 `server.endpoints` lists it, as Tika does) reports the gate, the running and waiting counts and the
@@ -251,9 +270,10 @@ isolator's own status: `mode`, `configuredMode`, `degraded` and `degradedReason`
 `unreapedChildren` (should be 0), `limits`, `defaultReservationMb` and the in-process types.
 
 **`/async` and `/pipes`** parse under the server's output ceiling like any other request. `/pipes` runs through the
-same isolated engine; before this release it built its own in-process pipeline. Two limits remain: a `queue_full`
-answer for one document aborts the whole `/pipes` run, and a file source is read whole in the server process before
-it is handed to a child, so a large file costs parent memory that the pool does not account for.
+same isolated engine; before this release it built its own in-process pipeline. A `queue_full` or `unavailable` answer
+for one document is `CLIENT_UNAVAILABLE_WITHIN_MS` for it, listed in the answer's `failures`, and the run goes on. One
+limit remains: a file source is read whole in the server process before it is handed to a child, so a large file costs
+parent memory that the pool does not account for.
 
 ## Limits of the design
 

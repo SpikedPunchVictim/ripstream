@@ -91,10 +91,19 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
 - `authenticate(request)`: optional gate applied to every request.
 - `maxLimits: { maxOutputChars, maxEmbeddedResources }`: server-side ceilings. Client query
   parameters of the same names (and preset values) are clamped to these.
+- `maxUnpackBytes` (default 100 MiB): the most embedded-document bytes `/unpack` keeps for one request, so the zip it
+  answers cannot outgrow it; a document past it is left out of the zip and stays in `rmeta.json`. A client cannot set
+  it. With isolation it may not exceed the children's `unpackCeiling` (see `docs/isolation.md`). Entry names in the zip
+  are `unpacked/<id><extension>`, never a name from the document, so a hostile name cannot become a path; the name
+  only appears as data in the manifest and `rmeta.json`. Pipes' UNPACK (`tikajs-68os.6.7`) keeps that: a file's key is the
+  container's emit key, the embedded id and a suffix, and the suffix is the registry's extension or, with `EXISTING`, 1 to 4
+  ASCII letters or digits taken from the document's name (never a path). `packageRoot`, `emitKeyBase` and `packageName`
+  are the operator's, and an emitter still refuses a key that leaves its `basePath`.
 - A request can set only what its route reads, and anything else is a 400 that names it, not a 200 that drops it:
   an unknown or repeated query parameter (`/tika` reads `filename`, `preset`, `handler`, `maxOutputChars` and
   `maxEmbeddedResources`; `/meta`, `/rmeta` and `/unpack` the same without `handler`; `/detect` and `/async` only
-  `filename`), an unknown `?preset=` or `?handler=` (`meta`, `json`), any `X-Tika-*` header, and a multipart part
+  `filename`; `/language` and `/mime-types` none), an unknown `?preset=` or `?handler=` (`meta`, `json`, or a content type: `text`,
+  `txt`, `html`, `xml`, `body`, `markdown`, `md`, `ignore`), any `X-Tika-*` header, and a multipart part
   other than the one file (Tika's per-request parse context is not accepted).
 - `maxJobs` (default 1000): maximum retained `/async` jobs. Finished jobs are evicted first; new
   jobs get 503 when all retained jobs are still running.
@@ -112,14 +121,74 @@ before anything runs: an unknown key, a `mode` other than `CONTENT_ONLY`, `CONCA
 
 | Option | Meaning |
 | --- | --- |
-| `sourceRoot` (required) | Directory that client `source.path` values resolve against |
+| `sourceRoot` | Directory that client `source.path` values resolve against. Without it the batch body is refused (400) |
 | `sinkRoot` | Directory for client `sink.path`; sinks are refused (403) when omitted |
 | `allowHttp` | Allow `source.type: "http"` (SSRF-guarded); default `false` |
 | `maxConcurrency` | Upper bound for client `concurrency` (default 4) |
 | `maxQueue` | Upper bound for client `maxQueue` (default 64) |
+| `settings` | Tika's pipes sections (`loadConfig(...).pipes`): turns on Tika's tuple form of `/pipes` and `/async`, below |
+| `asyncMaxWaitMs` | How long a `/async` request waits for room in the queue before it is answered 429 (default 5000) |
+
+`pipes` needs `sourceRoot`, `settings` or both, or the server throws at construction.
 
 Breaking change: earlier versions exposed `/pipes` without these options; it now returns 404 until
 configured.
+
+### Tika's tuples: `POST /pipes` and `POST /async` with `pipes.settings`
+
+With `pipes.settings`, a `/pipes` body without a `source` is one Tika `FetchEmitTuple` and a `/async` body with a `tuples`
+array is a list of them (a `/async` body that is not JSON typed `application/json`, or has no `tuples`, is still a document
+for the old job). Every route is behind `authenticate`, as above, and `/pipes` still needs `application/json`.
+
+- **A request names components, not places.** `fetcher` and `emitter` are ids from the settings; `fetchKey` and `emitKey` resolve
+  under that component's `basePath` and may not leave it. Symlinks that leave the fetcher's `basePath` are refused (the
+  default). That holds only while the settings say so: a fetcher or emitter with `allowAbsolutePaths: true` lets a client name any
+  file the process can read or write, so leave it `false` for anything a client can reach. A client chooses `emitKey`, so give the
+  emitter a directory of its own, and keep `onExists` at Tika's `EXCEPTION` unless overwriting is wanted: `REPLACE` lets a client
+  replace any file under that directory.
+- **What the server keeps for itself is refused.** A fetcher or emitter id that starts with `__` is a 400 (Tika's
+  `rejectReservedComponentIds`). A tuple field ripstream does not act on is a 400 that names it: `parseContext`, `preset`,
+  `metadata`, `fetchRangeStart`, `fetchRangeEnd`. A client cannot choose parser settings, an emit strategy or a Frictionless
+  unpack target.
+- **`/async` checks the whole batch before it queues any of it.** An id that is not in the settings is a 400 (`can't find fetcher
+  for X`, `can't find emitter for X`) and a tuple that names no emitter, where there is not exactly one configured, is a 400.
+  A batch bigger than the queue (`pipes.queueSize`, 10 000 by default) is a 400 because waiting would never make room.
+- **The queue is bounded and a full one says so.** A request waits up to `asyncMaxWaitMs` for room, then gets `429` with
+  `{status: "throttled", message, capacity}` and a `Retry-After` of that wait in whole seconds, at least 1. Tika's wait is 60 s; a
+  request held that long would meet `requestTimeoutMs` (also 60 s), so the default here is 5 s. Parsing a queued tuple is not held
+  to `maxConcurrent` (the settings' `numClients` bounds it) but does go through the server's isolation and output ceilings.
+- **A tuple that was taken is owed its result.** `/async` answers 200 once a tuple is queued, and `close()` finishes every queued
+  tuple before it returns, so a server that is stopped does not drop work it said yes to. What became of each is in the settings'
+  reporters and emitters, not in the answer. A run that cannot go on (a reporter that throws) fails the next `/async` with its error.
+- **`/pipes` runs no reporter** from the settings: its answer is the report, and a reporter that writes a file would fail the second request.
+- **The answer is Tika's.** `{status, message?}`: 200 for a success (a parse exception that was recorded is one), 400 for a
+  fetcher, emitter or preset that is not there, 413 for a document over a limit, 429 with `Retry-After` for a full client pool, 500
+  for a fetch or emit that failed, and 503 with `Retry-After: 5` for a timeout or a crash. `message` carries the exception text
+  of the document the client sent, which can name a path under its `basePath`.
+
+`ripstream serve` does not turn this on: `authenticate` is code, and there is no flag for it that is not a way to expose `/pipes`
+without one. Embed `createRipstreamServer` with `pipes.settings` and your own `authenticate` (`tikajs-68os.6.5`).
+
+### Cloud and search components
+
+The S3, Elasticsearch and OpenSearch components (`tikajs-68os.6.6`) talk to an address the **operator** sets in the
+configuration: `endpointConfigurationService`, `esUrl`, `openSearchUrl`. That address is not put through the SSRF guard that
+`http-fetcher` and `/parse` use, so a configuration an untrusted party can write can point a run at any host. A client of
+`/pipes` or `/async` still names a component by id and a key, never an endpoint or a credential.
+
+- **Secrets are in the configuration.** `accessKey`, `secretKey`, `apiKey` and `password` are read from it as Tika reads them.
+  No message ripstream builds repeats one (a refused value is named by its key, never quoted), and an error from the service
+  carries the service's own text and not the request. Keep the file readable by the operator only, or use the instance role
+  or a profile, which keep the keys out of it.
+- **A redirect is an error.** Requests are sent with `redirect: "error"`, so a signature or an `Authorization` header is never
+  sent to a host the service redirected to; a bucket in another region is a setting to fix.
+- **Certificates are checked.** `verifySsl: false` and a proxy are refused rather than honoured one connection at a time. A
+  server with a private CA is trusted with `NODE_EXTRA_CA_CERTS`. A configuration that sends credentials over plain `http` is
+  accepted and said so.
+- **An emit key is a key, not a path.** The S3 emitter and the search emitters put the key in a URL or a JSON string, so it
+  cannot leave a directory, but a client that chooses `emitKey` chooses which object or document is written: give a component
+  that a client can reach a prefix or an index of its own, as with a file-system emitter's directory. The S3 emitter and the
+  fetcher's `prefix` are the operator's, and the fetcher's is put in front of the key as it is, with no slash.
 
 ## PDF limits
 

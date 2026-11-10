@@ -118,10 +118,10 @@ export class Metadata implements Iterable<[string, string]> {
 }
 
 export const TIKA: {
-  CONTENT: Property;               // "X-TIKA:content"
-  EMBEDDED_RESOURCE_PATH: Property;// "X-TIKA:embedded_resource_path"
-  EMBEDDED_DEPTH: Property;        // "X-TIKA:embedded_depth"
-  PARSE_TIME_MS: Property;         // "X-TIKA:parse_time_millis"
+  CONTENT: Property;               // "tk:content"
+  EMBEDDED_RESOURCE_PATH: Property;// "tk:embedded-resource-path"
+  EMBEDDED_DEPTH: Property;        // "tk:embedded-depth"
+  PARSE_TIME_MS: Property;         // "tk:parse-time-millis"
   EXCEPTION: Property;             // "X-TIKA:EXCEPTION:<class>"
   EXCEPTION_MESSAGE: Property;
   EXCEPTION_STACK: Property;
@@ -348,7 +348,7 @@ Selection and error rules:
 
 - Exact-type match beats wildcard; multiple matches all run, output concatenated in registration order.
 - `ParserDeclinedError` (internal) moves to the next candidate. Any other parser error propagates unless `ctx.get(EXCEPTION_HANDLER)` swallows it.
-- Unsupported type with no parser: `UnsupportedFormatError` carrying the media type. Empty input: `EmptyDocumentError` only when upstream does; otherwise successful empty parse.
+- Unsupported type with no parser: `UnsupportedFormatError` carrying the media type. Empty input: `AutoDetectParser` throws `ZeroByteFileError` (a `MalformedDocumentError`, Tika's `ZeroByteFileException`) once the type is recorded; `EmptyDocumentError` is not thrown by any parser. `ParseOptions.onDocumentFailure: "record"` (`parse`, `parseRecursive`) turns a malformed, encrypted or empty document into an answer carrying `tk:exception:container-exception` and a format no parser takes into an empty document named for the EmptyParser, as Tika does; timeouts, limits, aborts and parser faults still throw. Default `"throw"`.
 - `getSupportedTypes` results are cached per `(parser, configGeneration)`.
 
 ## 8. Detector SPI
@@ -390,7 +390,7 @@ All build on `WriteOutContentHandler`. Upstream behavior: default limit 100,000 
 | `ToXMLContentHandler` | Raw XML with declaration and configured encoding. No wrapper. |
 | `ToHTMLContentHandler` | XHTML serialized as HTML5-ish (`<br>`, void elements); used by `/tika/html`. |
 | `MarkdownContentHandler` | **Tika 4 default.** Streaming event stream → CommonMark/GFM: headings, emphasis, lists, tables, fenced code, blockquotes, links, images, page breaks as `\n---\n`. No DOM; incremental writer keeps a bounded stack of open blocks. |
-| `JSONContentHandler` | Emits a JSON document with `content` plus metadata map; server wrapper adds `X-TIKA:content`. |
+| `JSONContentHandler` | Emits a JSON document with `content` plus metadata map; server wrapper adds `tk:content`. |
 | `BodyContentHandler` | Captures body text only, with optional inner handler; upstream-compatible constructor semantics. |
 | `LinkExtractor` | Collects `href`/`src`; exposes `links: string[]`. |
 | `XHTMLBalancingHandler` | Repairs mismatched tags from sloppy parsers. |
@@ -415,7 +415,7 @@ ripstream.parseToStream(source, { handler: 'markdown' })
 ```ts
 export interface ParseRecord {
   metadata: Metadata;
-  content: string;                    // "X-TIKA:content"
+  content: string;                    // "tk:content"
   embeddedResourcePath: string;       // "/document.docx/word/media/image1.png"
   depth: number;
   mediaType: MediaType;

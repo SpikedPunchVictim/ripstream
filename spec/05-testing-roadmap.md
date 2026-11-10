@@ -32,7 +32,7 @@ Corpus is content-addressed, with a manifest mapping fixture → expected type �
 ### 1.3 Comparator rules
 
 - Media type: exact match on type/subtype; charset compared when upstream reports it.
-- Metadata: upstream keys must all be present; extra keys allowed only if listed in `documented-additions.txt`. Values compared exactly for scalars, setwise for multi-valued. Known-noise keys (`X-TIKA:parse_time_millis`, digests) excluded.
+- Metadata: upstream keys must all be present; extra keys allowed only if listed in `documented-additions.txt`. Values compared exactly for scalars, setwise for multi-valued. Known-noise keys (`tk:parse-time-millis`, digests) excluded.
 - Content: Unicode normalize (NFKC), strip zero-width, collapse whitespace runs, trim, lowercase optional. Similarity ≥ 0.98; plain text/CSV/XML require ≥ 0.995. Diff artifacts stored for every failure.
 - Embedded tree: paths, depth, media types compared as multisets; ordering differences reported separately.
 - Errors: mapped class compared (unsupported/encrypted/malformed/timeout/limit), not message text.
