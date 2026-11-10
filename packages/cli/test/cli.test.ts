@@ -393,3 +393,69 @@ test("a config file with a repeated key, or deep nesting, is a usage error", asy
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+// A `parsers` section is Tika's (tikajs-68os.8.6). `-c` used to take it and parse with every parser anyway.
+function withConfig(config: unknown, run: (file: string) => Promise<void>): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-parsers-"));
+  const file = join(directory, "config.json");
+  writeFileSync(file, JSON.stringify(config));
+  return run(file).finally(() => rmSync(directory, { recursive: true, force: true }));
+}
+
+const WITHOUT_PDF = { parsers: [{ "default-parser": { exclude: ["pdf-parser"] } }], isolation: { mode: "off" } };
+
+test("a parsers section in --config is applied: an excluded parser's type is refused, the rest still parse", async () => {
+  await withConfig(WITHOUT_PDF, async (file) => {
+    const pdf = io("%PDF-1.4\n%%EOF\n");
+    assert.equal(await main(["--config", file, "-"], pdf, { env: {} }), 3);
+    assert.match(pdf.err.join(""), /application\/pdf/);
+    const text = io("Hello parsers");
+    assert.equal(await main(["--config", file, "-"], text, { env: {} }), 0);
+    assert.match(text.out.join(""), /Hello parsers/);
+  });
+});
+
+test("a parsers section with isolation on is a usage error that names the gap, not a silent full parse", async () => {
+  await withConfig({ parsers: ["pdf-parser"] }, async (file) => {
+    for (const args of [
+      ["--config", file, "--isolation", "strict", "-"],
+      ["metadata", "--config", file, "--isolation", "lenient", "-"],
+    ]) {
+      const { log, createIsolation } = fakeIsolation();
+      const sink = io("x");
+      assert.equal(await main(args, sink, { env: {}, createIsolation }), 2, args.join(" "));
+      assert.match(sink.err.join(""), /parsers.*isolation|isolation.*parsers/s);
+      assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
+      assert.match(sink.err.join(""), /--isolation off/);
+      assert.equal(log.created.length, 0, "no isolation is built for a refused invocation");
+    }
+    // serve isolates by default, so it refuses too, before it listens.
+    const sink = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
+    assert.equal(sink.out.join(""), "", "the server never started");
+  });
+});
+
+test("a parsers section naming a parser ripstream does not implement is a usage error", async () => {
+  await withConfig({ parsers: ["bpg-parser"], isolation: { mode: "off" } }, async (file) => {
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "-"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /parser "bpg-parser" is not implemented/);
+  });
+});
+
+test("detect and language do not run a parser, so a parsers section changes nothing for them", async () => {
+  await withConfig({ parsers: ["pdf-parser"] }, async (file) => {
+    assert.equal(await main(["detect", "--config", file, "-"], io("plain"), { env: {} }), 0);
+    assert.equal(await main(["language", "--config", file, "-"], io("plain text here"), { env: {} }), 0);
+  });
+});
+
+test("a config with no parsers section still isolates", async () => {
+  await withConfig({ isolation: { mode: "strict" } }, async (file) => {
+    const { log, createIsolation } = fakeIsolation();
+    assert.equal(await main(["--config", file, "-"], io("x"), { env: {}, createIsolation }), 0);
+    assert.equal(log.created.length, 1);
+  });
+});

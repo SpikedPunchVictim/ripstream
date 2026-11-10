@@ -2,8 +2,10 @@ import {
   AutoDetectParser,
   CompositeParser,
   Ripstream,
+  RipstreamConfigError,
   type MediaTypeRegistry,
   type Parser,
+  type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
 import { DefaultDetector, MimeTypes } from "@spikedpunch/ripstream-mime";
 import { TextParser } from "./text.ts";
@@ -36,6 +38,7 @@ import { IccParser } from "./icc.ts";
 import { AnpaParser } from "./anpa.ts";
 import { ScienceMetadataParser } from "./science.ts";
 import { RtfParser } from "./rtf.ts";
+import { applyParserConfig } from "./parser-config.ts";
 
 export { TextParser } from "./text.ts";
 export { HtmlDocumentParser, DEFAULT_MAX_HTML_DEPTH, type HtmlParserOptions } from "./html.ts";
@@ -79,15 +82,27 @@ export interface DefaultParserOptions {
    * built with custom types.
    */
   readonly registry?: MediaTypeRegistry;
+  /**
+   * The `parsers` section of a loaded configuration, applied to the default parsers by Tika's component names
+   * (`default-parser`, its `exclude` list, `_mime-include` / `_mime-exclude`). It names Tika's parsers, so it cannot be
+   * combined with `parsers`, a list of parser objects.
+   */
+  readonly config?: RipstreamConfig;
 }
 
 let bundledRegistry: MediaTypeRegistry | undefined;
 
 export function createDefaultParser(options: DefaultParserOptions = {}): CompositeParser {
   bundledRegistry ??= new MimeTypes().getMediaTypeRegistry();
-  return new CompositeParser({
-    registry: options.registry ?? bundledRegistry,
-    parsers: options.parsers ?? [
+  const registry = options.registry ?? bundledRegistry;
+  const section = options.config?.parsers ?? null;
+  if (section !== null && options.parsers !== undefined) {
+    throw new RipstreamConfigError([
+      "the configuration's `parsers` section cannot be combined with `parsers`, a list of parser objects: " +
+        "its names refer to the default parsers",
+    ]);
+  }
+  const parsers = options.parsers ?? [
       new TextParser(),
       new CsvParser(options.csv),
       new HtmlDocumentParser(),
@@ -157,8 +172,8 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new AnpaParser(),
       new ScienceMetadataParser(),
       new RtfParser(),
-    ],
-  });
+    ];
+  return new CompositeParser({ registry, parsers: section === null ? parsers : applyParserConfig(parsers, section, registry) });
 }
 
 export interface CreateRipstreamOptions extends DefaultParserOptions {

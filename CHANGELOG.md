@@ -6,10 +6,11 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ### Configuration (`tikajs-68os.8.1`, `tikajs-68os.8.2`, `tikajs-68os.8.3`)
 
-Changed: configuration no longer accepts what it would ignore. Only `version` and `isolation` are read.
+Changed: configuration no longer accepts what it would ignore. Only `version`, `isolation` and (since
+`tikajs-68os.8.6`, below) `parsers` are read.
 
-- `loadConfig` and `validateConfig` refuse `parsers`, `detectors`, `contentHandlers`, `metadataFilters` and
-  `encodingDetector` by name (`"parsers" is not supported: ripstream would ignore it`). They used to be validated and
+- `loadConfig` and `validateConfig` refuse `detectors`, `contentHandlers`, `metadataFilters` and
+  `encodingDetector` by name (and refused `parsers` until `tikajs-68os.8.6`) (`"parsers" is not supported: ripstream would ignore it`). They used to be validated and
   dropped, so a config naming a nonexistent class loaded cleanly. Compose parsers and detectors in code with
   `createRipstream`.
 - Removed `loadXmlConfig`, `ComponentConfig`, and the `parsers`/`detectors`/`contentHandlers`/`metadataFilters`/
@@ -39,6 +40,25 @@ Changed: the CLI and `loadConfig` no longer take what they would misread (`tikaj
   are usage errors. They used to mean "no config", "no password", port 9998 and host 127.0.0.1. `--port` takes digits
   only (`--port ""` was port 0).
 - `loadConfig` refuses an object with a repeated key (`JSON.parse` kept the last) and nesting deeper than 64 levels.
+
+Added: the `parsers` section of a Tika configuration is applied (`tikajs-68os.8.6`,
+[docs/parsing.md](docs/parsing.md#the-parsers-section)).
+
+- `createRipstream({ config })` and `createDefaultParser({ config })` apply it, and so does the CLI's `--config`:
+  `default-parser` with its `exclude` list, parsers named by their Tika name (`pdf-parser`), and `_mime-include` /
+  `_mime-exclude` on either. A name that is not a Tika parser, or one ripstream has no parser for, is an error
+  (`RipstreamConfigError`; exit 2 in the CLI) rather than a parser that quietly does nothing.
+- Ripstream's parsers do not line up with Tika's one to one (`ImageParser` serves what Tika splits across eight
+  classes), so the section is applied to media types: a ripstream parser keeps the types some enabled Tika parser
+  claims. The types come from `packages/parsers/src/generated/tika-parser-types.ts`, generated from the oracle
+  inventory by `scripts/parity-matrix.ts` and checked by `parity:matrix:check`.
+- Refused, where Tika reads silently: an entry with more than one key (Tika uses the first), a parser setting other
+  than the media type filters, an `exclude` item that is not a string, and the retired `image/ocr-*` types.
+- With `parsers` set the CLI requires isolation off. The isolation child builds its own ripstream and cannot yet be
+  given the section, so `serve` (strict by default) and `--isolation strict|lenient` refuse it with a usage error that
+  names `tikajs-68os.8.7`, instead of parsing with every parser.
+- `RipstreamConfig.parsers` is the parsed section (`null` when absent); `parseComponentSection` and `ComponentEntry`
+  are exported from `@spikedpunch/ripstream-core`.
 
 ### Parse isolation (epic `tikajs-zgg2`)
 

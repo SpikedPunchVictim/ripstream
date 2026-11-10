@@ -6,6 +6,7 @@ import {
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
+  RipstreamConfigError,
   RipstreamError,
   UnsupportedFormatError,
   loadConfig,
@@ -13,6 +14,7 @@ import {
   serializeRmeta,
   type Metadata,
   type ParseRecord,
+  type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
 import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
@@ -74,7 +76,8 @@ function exitCodeFor(error: unknown): number {
   ) {
     return EXIT_DATA;
   }
-  if (error instanceof IsolationSettingsError) return EXIT_USAGE;
+  // A configuration that names what ripstream cannot apply is the operator's mistake, like a bad flag.
+  if (error instanceof IsolationSettingsError || error instanceof RipstreamConfigError) return EXIT_USAGE;
   if (error instanceof MissingDependencyError) return EXIT_ENVIRONMENT;
   if (error instanceof IsolationError) {
     // queue_full/unavailable are infrastructure conditions; an unexplained
@@ -144,9 +147,10 @@ export async function main(
         : new Uint8Array(await readFile(options.file));
     const filename =
       options.file === null || options.file === "-" ? undefined : options.file;
-    const inProcess = createRipstream(
-      options.password === null ? {} : { pdfPassword: options.password },
-    );
+    const inProcess = createRipstream({
+      ...(options.password === null ? {} : { pdfPassword: options.password }),
+      ...(settings.config === null ? {} : { config: settings.config }),
+    });
     // Only the commands that run a parser are isolated; detection and language stay in this process.
     isolation =
       settings.isolation.config.mode !== "off" && (options.command === "parse" || options.command === "metadata")
@@ -245,7 +249,10 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
     const maxOutputChars = settings.maxOutputChars ?? (isolating ? DEFAULT_LIMITS.maxOutputChars : null);
     if (isolating) isolation = await openIsolation(settings, deps, io, maxOutputChars ?? undefined);
     const instance = createRipstreamServer({
-      ripstream: isolation === null ? createRipstream() : isolation.ripstream,
+      ripstream:
+        isolation === null
+          ? createRipstream(settings.config === null ? {} : { config: settings.config })
+          : isolation.ripstream,
       ...(isolation === null ? {} : { isolation: isolation.isolator }),
       ...(maxOutputChars === null ? {} : { maxLimits: { maxOutputChars } }),
       log: (level, message) => {
@@ -276,7 +283,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
     }
     return 0;
   } catch (error) {
-    if (error instanceof IsolationError || error instanceof IsolationSettingsError) {
+    if (error instanceof IsolationError || error instanceof IsolationSettingsError || error instanceof RipstreamConfigError) {
       io.stderr(`ripstream: ${error.message}\n`);
       return exitCodeFor(error);
     }
@@ -328,6 +335,8 @@ async function openIsolation(
 
 interface CliSettings {
   readonly isolation: ResolvedIsolation;
+  /** The loaded `--config` file, or null. Its `parsers` section is applied by `createRipstream`. */
+  readonly config: RipstreamConfig | null;
   /** The server-side output ceiling from `--max-output-chars` / RIPSTREAM_MAX_OUTPUT_CHARS, or null. */
   readonly maxOutputChars: number | null;
 }
@@ -340,21 +349,33 @@ async function resolveSettings(
   options: Options,
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<CliSettings> {
-  const fileIsolation = options.config === null ? null : loadConfig(await readFile(options.config, "utf8")).isolation;
-  // detect and language run in this process whatever is set, so what is set cannot make them fail.
+  const config = options.config === null ? null : loadConfig(await readFile(options.config, "utf8"));
+  const fileIsolation = config === null ? null : config.isolation;
+  // detect and language run in this process whatever is set, so what is set cannot make them fail. They run no parser,
+  // so a `parsers` section has nothing to change for them either.
   if (options.command === "detect" || options.command === "language") {
-    return { isolation: { config: { mode: "off" }, modeSource: "default" }, maxOutputChars: null };
+    return { isolation: { config: { mode: "off" }, modeSource: "default" }, config: null, maxOutputChars: null };
   }
   try {
     // After detect and language, which read no setting: a misspelling there changes nothing.
     assertKnownVariables(env);
+    const isolation = resolveIsolationConfig({
+      defaultMode: options.command === "serve" ? "strict" : "off",
+      flagMode: options.isolation,
+      env,
+      fileIsolation,
+    });
+    if (config !== null && config.parsers !== null && isolation.config.mode !== "off") {
+      // The isolation child builds its own ripstream and is never handed the section, so it would parse with every
+      // parser. Refuse rather than report success while the section changes nothing (tikajs-68os.8.7).
+      throw new IsolationSettingsError(
+        `the configuration has a "parsers" section, which an isolated parse cannot yet receive (tikajs-68os.8.7): ` +
+          `isolation is ${isolation.config.mode} (${isolation.modeSource}); pass --isolation off to apply the section in this process`,
+      );
+    }
     return {
-      isolation: resolveIsolationConfig({
-        defaultMode: options.command === "serve" ? "strict" : "off",
-        flagMode: options.isolation,
-        env,
-        fileIsolation,
-      }),
+      isolation,
+      config,
       // Only the server has an output ceiling; a one-shot command ignores it.
       maxOutputChars: options.command === "serve" ? resolveMaxOutputChars({ flag: options.maxOutputChars, env }) : null,
     };

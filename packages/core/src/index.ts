@@ -24,6 +24,7 @@ export {
   validateConfig,
   type RipstreamConfigShape,
 } from "./config.ts";
+export { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 export {
   METADATA_FIELDS,
   METADATA_KEYS,

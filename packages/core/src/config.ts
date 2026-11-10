@@ -1,19 +1,21 @@
+import { parseComponentSection, type ComponentEntry } from "./component-config.ts";
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 
 export interface RipstreamConfigShape {
   readonly version?: number;
   readonly isolation?: IsolationConfig;
+  /** The `parsers` section, already read into entries by `loadConfig`. */
+  readonly parsers?: readonly ComponentEntry[];
 }
 
-const ALLOWED_ROOT_KEYS = new Set(["version", "isolation"]);
+const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers"]);
 
 /**
  * Sections Tika's configuration has and ripstream does not apply. They are refused by name rather than accepted and
  * ignored, which would report success while changing nothing.
  */
 const UNAPPLIED_SECTIONS = new Set([
-  "parsers",
   "detectors",
   "contentHandlers",
   "metadataFilters",
@@ -65,12 +67,18 @@ export class RipstreamConfig {
   readonly version: number;
   /** null means unconfigured: the caller decides (library default is no isolation). */
   readonly isolation: IsolationConfig | null;
+  /** null means no `parsers` section: every default parser. `createRipstream({ config })` applies it. */
+  readonly parsers: readonly ComponentEntry[] | null;
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
     this.version = shape.version ?? 1;
     this.isolation =
       shape.isolation === undefined ? null : Object.freeze({ ...shape.isolation });
+    this.parsers =
+      shape.parsers === undefined
+        ? null
+        : Object.freeze(shape.parsers.map((entry) => Object.freeze({ ...entry })));
   }
 
   get current(): boolean {
@@ -98,12 +106,16 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
-  // Build from the validated isolation copy, never from the caller's object.
-  const { isolation: _unvalidated, ...rest } = value as RipstreamConfigShape;
-  return new RipstreamConfig(isolation === undefined ? rest : { ...rest, isolation });
+  // Build from the validated copies, never from the caller's object.
+  const { version } = value as RipstreamConfigShape;
+  return new RipstreamConfig({
+    ...(version === undefined ? {} : { version }),
+    ...(isolation === undefined ? {} : { isolation }),
+    ...(parsers === undefined ? {} : { parsers }),
+  });
 }
 
 export function validateConfig(value: unknown): string[] {
@@ -113,6 +125,7 @@ export function validateConfig(value: unknown): string[] {
 interface InspectedConfig {
   readonly issues: string[];
   readonly isolation?: IsolationConfig;
+  readonly parsers?: readonly ComponentEntry[];
 }
 
 function inspectConfig(value: unknown): InspectedConfig {
@@ -147,7 +160,18 @@ function inspectConfig(value: unknown): InspectedConfig {
     issues.push(...result.issues);
     if (result.issues.length === 0) isolation = result.isolation;
   }
-  return isolation === undefined ? { issues } : { issues, isolation };
+
+  let parsers: readonly ComponentEntry[] | undefined;
+  if (record.parsers !== undefined) {
+    const result = parseComponentSection("parsers", record.parsers);
+    issues.push(...result.issues);
+    if (result.issues.length === 0) parsers = result.entries;
+  }
+  return {
+    issues,
+    ...(isolation === undefined ? {} : { isolation }),
+    ...(parsers === undefined ? {} : { parsers }),
+  };
 }
 
 /**
