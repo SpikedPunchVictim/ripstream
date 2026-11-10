@@ -30,6 +30,33 @@ test("maxParseMillis round trips, including 0 (no in-child parse timer)", async 
   assert.equal((await readInput(stream(wire(header())))).header.maxParseMillis, undefined);
 });
 
+test("maxNodeDepth round trips, including 0", async () => {
+  for (const maxNodeDepth of [0, 1, 500]) {
+    const got = await readInput(stream(wire(header({ maxNodeDepth }))));
+    assert.equal(got.header.maxNodeDepth, maxNodeDepth);
+  }
+  assert.equal((await readInput(stream(wire(header())))).header.maxNodeDepth, undefined);
+});
+
+const entry = (name: string, overrides: Record<string, unknown> = {}) => ({
+  name,
+  marker: false,
+  exclude: [],
+  mimeInclude: [],
+  mimeExclude: [],
+  ...overrides,
+});
+
+test("components (the parsers and detectors sections) round trip", async () => {
+  const components = {
+    parsers: [entry("default-parser", { marker: true, exclude: ["pdf-parser"] }), entry("zip-parser", { mimeExclude: ["application/zip"] })],
+    detectors: [entry("default-detector", { marker: true })],
+  };
+  const got = await readInput(stream(wire(header({ components }))));
+  assert.deepEqual(got.header.components, components);
+  assert.equal((await readInput(stream(wire(header({ components: {} }))))).header.components?.parsers, undefined);
+});
+
 test("round trip across arbitrary chunk boundaries (1 byte at a time)", async () => {
   const body = Buffer.from("0123456789");
   const all = wire(header({ byteLength: body.length }), body);
@@ -75,6 +102,24 @@ for (const [label, json] of [
   ["negative maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":-1}'],
   ["string maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":"50"}'],
   ["null maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":null}'],
+  ["negative maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":-1}'],
+  ["string maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":"3"}'],
+  ["components that is not an object", '{"v":1,"output":"text","byteLength":0,"components":[]}'],
+  ["components with an unknown section", '{"v":1,"output":"text","byteLength":0,"components":{"encoders":[]}}'],
+  ["parsers that is not an array", '{"v":1,"output":"text","byteLength":0,"components":{"parsers":{}}}'],
+  ["a parsers entry that is not an object", '{"v":1,"output":"text","byteLength":0,"components":{"parsers":["pdf-parser"]}}'],
+  [
+    "a parsers entry without a name",
+    '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"marker":false,"exclude":[],"mimeInclude":[],"mimeExclude":[]}]}}',
+  ],
+  [
+    "a parsers entry whose exclude holds a number",
+    '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"name":"a","marker":false,"exclude":[1],"mimeInclude":[],"mimeExclude":[]}]}}',
+  ],
+  [
+    "a parsers entry whose marker is not a boolean",
+    '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"name":"a","marker":"yes","exclude":[],"mimeInclude":[],"mimeExclude":[]}]}}',
+  ],
 ] as const) {
   test(`malformed header rejects: ${label}`, async () => {
     const body = Buffer.from(json);

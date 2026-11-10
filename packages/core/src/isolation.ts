@@ -5,6 +5,18 @@
  * (errors.ts).
  */
 
+import type { ComponentEntry } from "./component-config.ts";
+
+/**
+ * The `parsers` and `detectors` sections of a configuration, as `loadConfig` read them (plain data, so it crosses a
+ * process boundary as JSON). The isolation child builds its parsers and detectors from them, and applies the same
+ * names the parent applied to its own routing detector and in-process parsers.
+ */
+export interface IsolatedComponents {
+  readonly parsers?: readonly ComponentEntry[];
+  readonly detectors?: readonly ComponentEntry[];
+}
+
 /**
  * strict: isolate everything not on the in-process allowlist; fail closed
  * (IsolationError) when isolation is unavailable.
@@ -74,6 +86,14 @@ export interface IsolatedParseRequest {
   readonly filename?: string;
   readonly maxOutputChars?: number;
   readonly maxEmbeddedResources?: number;
+  /** Deepest embedded document the child parses (ParseLimits.maxNodeDepth). Omitted: core's default. */
+  readonly maxNodeDepth?: number;
+  /**
+   * The child's own parse timer in ms (ParseLimits.maxParseMillis). It cannot exceed what the isolation allows a
+   * task (its `maxTaskMillis` less the margin the parent keeps), and a larger value is refused. Omitted: the most
+   * the isolation allows.
+   */
+  readonly maxParseMillis?: number;
   /**
    * "text" (default): parse the top-level document and answer with
    * `kind: "text"`. "records": also parse embedded documents and answer with

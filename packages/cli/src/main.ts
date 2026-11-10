@@ -327,6 +327,10 @@ async function openIsolation(
   try {
     return await create({
       config: settings.isolation.config,
+      // The child, the routing detector and the in-process parsers all build from the configuration's sections; its
+      // limits, with the flags laid over them, are the defaults of every parse.
+      ...(settings.config === null ? {} : { ripstreamConfig: settings.config }),
+      ...(settings.limits === null ? {} : { limits: settings.limits }),
       ...(defaultMaxOutputChars === undefined ? {} : { defaultMaxOutputChars }),
       log: (level, message) => {
         if (level === "warn") io.stderr(`ripstream: WARN: ${message}\n`);
@@ -340,7 +344,7 @@ async function openIsolation(
 
 interface CliSettings {
   readonly isolation: ResolvedIsolation;
-  /** The loaded `--config` file, or null. `createRipstream` applies its `parsers` and `detectors` sections. */
+  /** The loaded `--config` file, or null. Its `parsers`, `detectors` and `parse-context` sections apply in this process and in the isolation child. */
   readonly config: RipstreamConfig | null;
   /** The server-side output ceiling from `--max-output-chars` / RIPSTREAM_MAX_OUTPUT_CHARS, or null. */
   readonly maxOutputChars: number | null;
@@ -408,27 +412,6 @@ async function resolveSettings(
       env,
       fileIsolation,
     });
-    const sections: string[] =
-      config === null
-        ? []
-        : [
-            ...(["parsers", "detectors"] as const).filter((name) => config[name] !== null),
-            ...(config.limits === null ? [] : ["parse-context"]),
-          ];
-    if (sections.length + flagged.length > 0 && isolation.config.mode !== "off") {
-      // The isolation child builds its own ripstream and is never handed these sections or limits, so it would parse with
-      // every parser and detector and the default limits. Refuse rather than report success while they change nothing
-      // (tikajs-68os.8.7).
-      const unreceived = [
-        ...(sections.length === 0 ? [] : [`the configuration sets ${sections.map((name) => `"${name}"`).join(" and ")}`]),
-        ...(flagged.length === 0 ? [] : [`${flagged.join(" and ")} ${flagged.length > 1 ? "are" : "is"} set`]),
-      ];
-      throw new IsolationSettingsError(
-        `${unreceived.join(", and ")}, which an isolated parse cannot yet receive ` +
-          `(tikajs-68os.8.7): isolation is ${isolation.config.mode} (${isolation.modeSource}); ` +
-          `pass --isolation off to apply ${sections.length + flagged.length > 1 ? "them" : "it"} in this process`,
-      );
-    }
     return {
       isolation,
       config,

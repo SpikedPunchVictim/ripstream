@@ -15,6 +15,7 @@ import {
   ParseContext,
   UnsupportedFormatError,
   createRipstream,
+  loadConfig,
   type Metadata,
   type ParseRecord,
 } from "../src/index.ts";
@@ -421,4 +422,113 @@ test("a zip whose stored PDF entry makes the child spool past the disk budget is
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+// ---- 5. a configuration crosses the boundary --------------------------------------------------------------------------
+
+/** What a parse comes to, so that a refusal can be compared with a refusal: the text and type, or the name of the error. */
+async function outcomeOf(
+  run: () => Promise<{ readonly text: string; readonly metadata: Metadata }>,
+): Promise<{ text: string; type: string | null } | { error: string }> {
+  try {
+    const { text, metadata } = await run();
+    return { text, type: metadata.get("Content-Type") ?? null };
+  } catch (error) {
+    return { error: error instanceof Error ? error.name : String(error) };
+  }
+}
+
+const NO_ZIP = loadConfig({ parsers: [{ "default-parser": { exclude: ["zip-parser"] } }] });
+const NO_ZIP_CONTAINER = loadConfig({ detectors: [{ "default-detector": { exclude: ["default-zip-container-detector"] } }] });
+const NO_MARKDOWN = loadConfig({ parsers: [{ "default-parser": { exclude: ["markdown-parser"] } }] });
+
+test("a parsers section reaches the child: a zip parses as the in-process pipeline parses it under the same section", async () => {
+  const archive = storedZip({ "x.txt": "inside the archive" });
+  assert.match((await referenceText(archive, "a.zip")).text, /inside the archive/, "without the section the entry is read");
+  const configured = createRipstream({ config: NO_ZIP });
+  const expected = await outcomeOf(() => configured.parse(archive, { filename: "a.zip" }));
+  assert.ok(!("text" in expected) || !/inside the archive/.test(expected.text), "the section changes the in-process answer");
+
+  await withStandard({ ripstreamConfig: NO_ZIP }, async ({ ripstream }) => {
+    const before = settled.length;
+    assert.deepEqual(await outcomeOf(() => ripstream.parse(archive, { filename: "a.zip" })), expected);
+    assert.equal(settled.length - before, 1, "it was the child that parsed it");
+  });
+});
+
+test("a detectors section reaches the router, detect() and the child", async () => {
+  // No filename: the zip container detector is what tells a DOCX from any other zip.
+  const input = docx(["Isolated DOCX paragraph"]);
+  const configured = createRipstream({ config: NO_ZIP_CONTAINER });
+  const expectedType = (await configured.detect(input)).toString();
+  const defaultType = (await reference.detect(input)).toString();
+  assert.notEqual(expectedType, defaultType, "the section changes what the detector says");
+  const expected = await outcomeOf(() => configured.parse(input));
+  assert.notDeepEqual(expected, await outcomeOf(() => reference.parse(input)), "and the type the parse reports");
+
+  await withStandard({ ripstreamConfig: NO_ZIP_CONTAINER }, async ({ ripstream }) => {
+    assert.equal((await ripstream.detect(input)).toString(), expectedType);
+    const before = settled.length;
+    assert.deepEqual(await outcomeOf(() => ripstream.parse(input)), expected);
+    assert.equal(settled.length - before, 1);
+  });
+});
+
+test("the in-process parsers honour a parsers section: with markdown turned off, markdown is read as the pipeline reads it then", async () => {
+  const markdown = encoder.encode("# Title\n\nhello *markdown*\n");
+  const rendered = await outcomeOf(() => reference.parse(markdown, { filename: "a.md" }));
+  const expected = await outcomeOf(() => createRipstream({ config: NO_MARKDOWN }).parse(markdown, { filename: "a.md" }));
+  assert.notDeepEqual(expected, rendered, "the section changes the answer: the markup is no longer rendered");
+
+  await withStandard({ ripstreamConfig: NO_MARKDOWN }, async ({ ripstream }) => {
+    const before = settled.length;
+    assert.deepEqual(await outcomeOf(() => ripstream.parse(markdown, { filename: "a.md" })), expected);
+    assert.equal(settled.length - before, 0, "markdown stays in this process");
+    // Text is still parsed here: only what the section names is off.
+    assert.match((await ripstream.parse(encoder.encode("plain"), { filename: "a.txt" })).text, /plain/);
+  });
+});
+
+test("the restriction survives a configuration: the in-process parsers still never own a container", async () => {
+  // default-parser with nothing excluded is the whole default set, which must not widen what runs here.
+  const config = loadConfig({ parsers: [{ "default-parser": {} }] });
+  const archive = storedZip({ "x.txt": "inside the archive" });
+  await withStandard({ ripstreamConfig: config }, async ({ ripstream }) => {
+    const before = settled.length;
+    assert.match((await ripstream.parse(archive, { filename: "a.zip" })).text, /inside the archive/);
+    assert.equal(settled.length - before, 1, "a zip still goes to a child");
+  });
+});
+
+test("limits are the defaults of every parse: a nested zip is refused at maxNodeDepth, and parses one level deeper", async () => {
+  const nested = storedZip({ "inner.zip": storedZip({ "deep.txt": "deepest text" }) });
+  await withStandard({ limits: { maxNodeDepth: 1 } }, async ({ ripstream }) => {
+    await assert.rejects(ripstream.parse(nested, { filename: "outer.zip" }), (error: unknown) => error instanceof LimitExceededError && /depth/i.test(error.message));
+    // A limit the call names itself wins over the default.
+    assert.match((await ripstream.parse(nested, { filename: "outer.zip", limits: { maxNodeDepth: 3 } })).text, /deepest text/);
+  });
+  await withStandard({ limits: { maxNodeDepth: 3 } }, async ({ ripstream }) => {
+    assert.match((await ripstream.parse(nested, { filename: "outer.zip" })).text, /deepest text/);
+  });
+});
+
+test("a configured parse timer below the isolation's own crosses; one above it is refused when the isolation is built", async () => {
+  await withStandard({ limits: { maxParseMillis: 5000 } }, async ({ ripstream }) => {
+    assert.match((await ripstream.parse(storedZip({ "x.txt": "inside" }), { filename: "a.zip" })).text, /inside/);
+  });
+  await assert.rejects(
+    createStandardIsolation({ config: { mode: "strict", maxTaskMillis: 10_000 }, pool, limits: { maxParseMillis: 10_000 } }),
+    (error: unknown) => error instanceof RangeError && /maxTaskMillis/.test(error.message),
+  );
+});
+
+test("limits that cannot be isolated are refused when the isolation is built, not at the first parse", async () => {
+  await assert.rejects(
+    createStandardIsolation({ config: { mode: "strict" }, pool, limits: { maxOutputChars: -1 } }),
+    (error: unknown) => error instanceof RangeError && /maxOutputChars -1 \(unlimited\) cannot be isolated/.test(error.message),
+  );
+  await assert.rejects(createStandardIsolation({ config: { mode: "strict" }, pool, limits: { maxZipEntries: 5 } }), /maxZipEntries/);
+  // With isolation off there is no child to size, so the same limits are fine.
+  const off = await createStandardIsolation({ config: { mode: "off" }, pool, limits: { maxOutputChars: -1 } });
+  await off.isolator.dispose();
 });

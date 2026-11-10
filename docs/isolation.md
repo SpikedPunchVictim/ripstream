@@ -51,10 +51,14 @@ levels, is refused the same way, and so is a flag that takes a value (`-c`, `-p`
 is missing or is another flag.
 
 A config file with a `parsers`, `detectors` or `parse-context` section ([parsing.md](parsing.md#the-parsers-section)),
-or the `--maxEmbeddedDepth` / `--maxEmbeddedCount` flags, need `--isolation off` to parse: the isolation child builds
-its own ripstream and cannot yet receive them (`tikajs-68os.8.7`), so `--isolation strict|lenient` refuses them with a
-usage error instead of parsing with every parser and detector and the default limits. `serve` isolates by default, so it
-refuses `parsers` and `detectors` unless isolation is off, and refuses `parse-context` always (`tikajs-68os.8.9`).
+and the `--maxEmbeddedDepth` / `--maxEmbeddedCount` flags, apply with isolation on as they do with it off
+(`tikajs-68os.8.7`). The `parsers` and `detectors` sections reach the child in the header of each request, and the
+routing detector, `detect()` and the parsers that stay in this process are built from them too, so all of them agree on
+what a document is and what parses it; the in-process parsers are narrowed by the section and never widened. Limits are
+the defaults of every isolated parse. Two things the isolation cannot carry are refused when it starts, as usage errors:
+a parse timer above `maxTaskMillis` less the parent's margin, and an unlimited output (`writeLimit: -1`). `serve`
+isolates by default and applies `parsers` and `detectors` the same way; it refuses `parse-context` always
+(`tikajs-68os.8.9`).
 
 `detect` and `language` run in this process whatever is set, so they do not read these settings and a bad value cannot
 make them fail. `--max-output-chars` and `RIPSTREAM_MAX_OUTPUT_CHARS` belong to `serve`; one-shot commands ignore them.

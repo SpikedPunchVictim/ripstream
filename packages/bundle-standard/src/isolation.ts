@@ -1,13 +1,31 @@
 import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createIsolatedRipstream, type IsolatedRipstream, type Parser, type Ripstream } from "@spikedpunch/ripstream-core";
+import {
+  createIsolatedRipstream,
+  type IsolatedComponents,
+  type IsolatedRipstream,
+  type ParseLimits,
+  type Parser,
+  type Ripstream,
+  type RipstreamConfig,
+} from "@spikedpunch/ripstream-core";
 import {
   createNodeIsolator,
+  deriveLimits,
   type IsolatorRipstream,
   type NodeIsolator,
   type NodeIsolatorOptions,
 } from "@spikedpunch/ripstream-isolation-node";
-import { CsvParser, HtmlDocumentParser, MarkdownParser, TextParser, XmlParser, createRipstream } from "@spikedpunch/ripstream-parsers";
+import { DefaultDetector } from "@spikedpunch/ripstream-mime";
+import {
+  CsvParser,
+  HtmlDocumentParser,
+  MarkdownParser,
+  TextParser,
+  XmlParser,
+  applyParserConfig,
+  createRipstream,
+} from "@spikedpunch/ripstream-parsers";
 
 /**
  * Absolute path of the standard isolation child entry, for `ChildRunnerOptions.childScript`.
@@ -34,18 +52,48 @@ export function createInProcessParsers(): Parser[] {
   return [new TextParser(), new CsvParser(), new HtmlDocumentParser(), new MarkdownParser(), new XmlParser()];
 }
 
-/** A ripstream that can parse only what the isolation routing allowlist lets through. */
-export function createInProcessRipstream(): Ripstream {
-  return createRipstream({ parsers: createInProcessParsers() });
+/**
+ * A ripstream that can parse only what the isolation routing allowlist lets through. A configuration narrows it
+ * further: the `parsers` section switches off what it names, and the `detectors` section shapes the type it detects
+ * (the section never adds a parser, so the restriction holds).
+ */
+export function createInProcessRipstream(config?: RipstreamConfig): Ripstream {
+  const detector = new DefaultDetector(config === undefined ? {} : { config });
+  const section = config?.parsers ?? null;
+  const parsers = section === null ? createInProcessParsers() : applyParserConfig(createInProcessParsers(), section, detector.getMediaTypeRegistry());
+  return createRipstream({ parsers, detector });
 }
 
-export interface StandardIsolationOptions extends Omit<NodeIsolatorOptions, "ripstream" | "inProcessRipstream" | "childModule"> {}
+export interface StandardIsolationOptions
+  extends Omit<NodeIsolatorOptions, "ripstream" | "inProcessRipstream" | "childModule" | "components"> {
+  /**
+   * The configuration whose `parsers`, `detectors` and `parse-context` limits apply. The child, the routing detector,
+   * `detect()` and the in-process parsers all build from its `parsers` and `detectors` sections, so they agree on what is
+   * parsed; its limits become the defaults of every parse (see `limits`).
+   */
+  readonly ripstreamConfig?: RipstreamConfig;
+  /**
+   * Limits every parse starts from, laid over the configuration's; a limit a call names itself wins. Only what can
+   * cross the boundary is accepted (maxOutputChars, maxEmbeddedResources, maxNodeDepth, maxParseMillis), and not
+   * `maxOutputChars: -1`, since a child's memory is sized from the output cap.
+   */
+  readonly limits?: Partial<ParseLimits>;
+}
 
 export interface StandardIsolation {
   /** Owns the children and the memory pool it created; the caller disposes it. */
   readonly isolator: NodeIsolator;
   /** `parse` and `parseRecursive` go through the isolator; `detect` is answered in this process. */
   readonly ripstream: IsolatedRipstream;
+}
+
+/** The sections a child needs, or undefined when the configuration has neither (the child builds its defaults). */
+function componentsOf(config: RipstreamConfig | undefined): IsolatedComponents | undefined {
+  if (config === undefined || (config.parsers === null && config.detectors === null)) return undefined;
+  return {
+    ...(config.parsers === null ? {} : { parsers: config.parsers }),
+    ...(config.detectors === null ? {} : { detectors: config.detectors }),
+  };
 }
 
 /**
@@ -58,8 +106,26 @@ export interface StandardIsolation {
  * parses instead. That adds no exposure: there is no boundary to protect.
  */
 export async function createStandardIsolation(options: StandardIsolationOptions): Promise<StandardIsolation> {
-  const full = createRipstream();
-  const restricted = createInProcessRipstream();
+  const { ripstreamConfig, limits: callerLimits, ...isolatorOptions } = options;
+  const limits: Record<string, number> = {};
+  for (const [name, value] of Object.entries({ ...ripstreamConfig?.limits, ...callerLimits })) {
+    if (value !== undefined) limits[name] = value;
+  }
+  const defaults = limits as Partial<ParseLimits>;
+  // What a request cannot carry is refused now, not at the first parse; so is a parse timer the isolation would refuse.
+  const facade = (isolator: NodeIsolator, detector: Ripstream): IsolatedRipstream =>
+    createIsolatedRipstream({ isolator, detector, limits: defaults });
+  if (isolatorOptions.config.mode !== "off") {
+    deriveLimits(isolatorOptions.config, {
+      ...(defaults.maxOutputChars === undefined ? {} : { maxOutputChars: defaults.maxOutputChars }),
+      ...(defaults.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: defaults.maxEmbeddedResources }),
+      ...(defaults.maxParseMillis === undefined ? {} : { maxParseMillis: defaults.maxParseMillis }),
+    });
+  }
+
+  const full = createRipstream(ripstreamConfig === undefined ? {} : { config: ripstreamConfig });
+  const restricted = createInProcessRipstream(ripstreamConfig);
+  const components = componentsOf(ripstreamConfig);
 
   // Set before the first request can arrive; the isolator only reads this when a request is parsed in-process.
   let isolator: NodeIsolator | undefined;
@@ -71,10 +137,20 @@ export async function createStandardIsolation(options: StandardIsolationOptions)
   };
 
   isolator = await createNodeIsolator({
-    ...options,
+    ...isolatorOptions,
+    // The default output cap sizes the pool and is checked now: a configured maxOutputChars no child could hold fails here.
+    ...(isolatorOptions.defaultMaxOutputChars === undefined && defaults.maxOutputChars !== undefined && isolatorOptions.config.mode !== "off"
+      ? { defaultMaxOutputChars: defaults.maxOutputChars }
+      : {}),
     ripstream: full,
     inProcessRipstream,
     childModule: isolationChildPath(),
+    ...(components === undefined ? {} : { components }),
   });
-  return { isolator, ripstream: createIsolatedRipstream({ isolator, detector: full }) };
+  try {
+    return { isolator, ripstream: facade(isolator, full) };
+  } catch (error) {
+    await isolator.dispose();
+    throw error;
+  }
 }

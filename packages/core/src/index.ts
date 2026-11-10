@@ -79,6 +79,7 @@ export {
 } from "./url-security.ts";
 export {
   type IsolatedParseRecord,
+  type IsolatedComponents,
   type IsolatedParseRequest,
   type IsolatedParseResult,
   type IsolationConfig,

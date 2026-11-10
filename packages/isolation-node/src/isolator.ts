@@ -9,6 +9,7 @@ import {
   ParseTimeoutError,
   validateConfig,
   type IsolatedParseRecord,
+  type IsolatedComponents,
   type IsolatedParseRequest,
   type IsolatedParseResult,
   type IsolationConfig,
@@ -21,6 +22,7 @@ import {
   type Ripstream,
 } from "@spikedpunch/ripstream-core";
 import { defaultPoolMb, readCgroupLimits, validatePoolAgainstCgroup } from "./cgroup.ts";
+import { MAX_HEADER_BYTES } from "./child-io.ts";
 import type { Containment } from "./containment.ts";
 import { requireTempDir } from "./disk.ts";
 import { deriveLimits, type DerivedLimits } from "./limits.ts";
@@ -113,6 +115,12 @@ export interface NodeIsolatorOptions {
    * not on every request, that the pool is too small for it. Default: core's `DEFAULT_LIMITS.maxOutputChars`.
    */
   readonly defaultMaxOutputChars?: number;
+  /**
+   * The `parsers` and `detectors` sections the child builds its ripstream from, sent in the header of every request.
+   * Apply the same sections to `ripstream` and `inProcessRipstream`, which are built by the caller: the child, the
+   * routing detector and the in-process parsers must agree on what is parsed.
+   */
+  readonly components?: IsolatedComponents;
   /** Default: warnings go to console.warn, the rest is dropped. */
   readonly log?: (level: IsolatorLogLevel, message: string) => void;
   /** @internal Test seam: replaces the availability probe. */
@@ -157,6 +165,9 @@ export interface NodeIsolator extends ParseIsolator {
 
 /** Tasks that may wait for a free child when neither the config nor a given pool says otherwise. */
 export const DEFAULT_MAX_QUEUE = 16;
+
+/** What the request header leaves for `components`: the rest of its 64 KiB is the filename, a path and the limits. */
+const MAX_COMPONENTS_BYTES = MAX_HEADER_BYTES / 4;
 
 const CONFIG_KEYS = [
   "mode",
@@ -220,6 +231,10 @@ function checkRequest(request: IsolatedParseRequest): void {
   }
   if (filename !== undefined && typeof filename !== "string") {
     throw new TypeError("isolate: request.filename must be a string");
+  }
+  const { maxNodeDepth } = request;
+  if (maxNodeDepth !== undefined && (!Number.isSafeInteger(maxNodeDepth) || maxNodeDepth < 0)) {
+    throw new RangeError(`isolate: request.maxNodeDepth must be a non-negative safe integer, got ${String(maxNodeDepth)}`);
   }
 }
 
@@ -389,6 +404,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       output: limits.output,
       maxOutputChars: limits.maxOutputChars,
       maxEmbeddedResources: limits.maxEmbeddedResources,
+      ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
     };
     return isolating.runner.run(effective, {
       ...(signal === undefined ? {} : { signal }),
@@ -403,9 +419,10 @@ class NodeIsolatorImpl implements NodeIsolator {
 
   async #parseInProcess(request: IsolatedParseRequest, signal: AbortSignal | undefined): Promise<IsolatedParseResult> {
     const limits: Partial<ParseLimits> = {
-      maxParseMillis: this.#maxTaskMillis,
+      maxParseMillis: request.maxParseMillis ?? this.#maxTaskMillis,
       ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
       ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
+      ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
     };
     const parseOptions: ParseOptions = {
       limits,
@@ -599,6 +616,15 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     }
   }
 
+  if (options.components !== undefined) {
+    const bytes = Buffer.byteLength(JSON.stringify(options.components), "utf8");
+    if (bytes > MAX_COMPONENTS_BYTES) {
+      throw new RangeError(
+        `components are ${bytes} bytes as JSON, more than the ${MAX_COMPONENTS_BYTES} the request header leaves for them ` +
+          `(the header is ${MAX_HEADER_BYTES} bytes at most and is sent with every request): shorten the parsers and detectors sections`,
+      );
+    }
+  }
   const runner = new ChildRunner({
     pool: chosen.pool,
     childScript: options.childModule,
@@ -616,6 +642,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }),
     ...(options.childArgs === undefined ? {} : { childArgs: options.childArgs }),
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
+    ...(options.components === undefined ? {} : { components: options.components }),
     ...options.runner,
   });
   return new NodeIsolatorImpl({

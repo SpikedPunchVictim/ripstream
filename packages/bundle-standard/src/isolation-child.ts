@@ -1,3 +1,4 @@
+import { RipstreamConfig } from "@spikedpunch/ripstream-core";
 import { runChildMain } from "@spikedpunch/ripstream-isolation-node";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
@@ -7,6 +8,10 @@ import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
  * "@spikedpunch/ripstream-bundle-standard/isolation"). It parses ONE document with the standard pipeline in this
  * process and answers over fd 3. Importing it runs it, so nothing else imports it.
  *
+ * The parent hands it the `parsers` and `detectors` sections of its configuration in the request header, and the
+ * child builds the pipeline from them once it has read the input, so it parses with the same parsers and detectors
+ * as the parent's routing and in-process parsers. Without a configuration it builds the default pipeline.
+ *
  * The PDF parser always runs pdf.js on the calling thread, which here is this child's main thread. The child
  * process is the containment (heap cap, RSS kill, process-group kill, ulimit); there is no nested worker_thread
  * whose memory the parent's per-child accounting would not see.
@@ -15,4 +20,6 @@ import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
  * looks for `@napi-rs/canvas` (see block-pdfjs-canvas.ts for why the child does not load it).
  */
 blockPdfjsCanvas();
-await runChildMain({ ripstream: createRipstream() });
+await runChildMain({
+  ripstream: (components) => createRipstream(components === undefined ? {} : { config: new RipstreamConfig(components) }),
+});

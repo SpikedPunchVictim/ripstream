@@ -726,6 +726,76 @@ test("the child gets the derived heap, the effective caps and a parse timer belo
   assert.ok(second.execArgv.includes(`--max-old-space-size=${bigger.heapMb}`), second.execArgv.join(" "));
 });
 
+test("the child is told the request's depth and parse timer, and the components of the isolator", async () => {
+  const components = {
+    parsers: [{ name: "default-parser", marker: true, exclude: ["pdf-parser"], mimeInclude: [], mimeExclude: [] }],
+    detectors: [{ name: "default-detector", marker: true, exclude: [], mimeInclude: [], mimeExclude: [] }],
+  };
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"], config: { mode: "strict", maxTaskMillis: 20_000 }, components });
+  const isolator = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await isolator.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+
+  const plain = await header({ input: bytes("x") });
+  assert.equal(plain.maxNodeDepth, undefined);
+  assert.equal(plain.maxParseMillis, deriveLimits({ mode: "strict", maxTaskMillis: 20_000 }).maxParseMillis);
+  assert.deepEqual(plain.components, components);
+
+  const named = await header({ input: bytes("x"), maxNodeDepth: 3, maxParseMillis: 5000 });
+  assert.equal(named.maxNodeDepth, 3);
+  assert.equal(named.maxParseMillis, 5000);
+  assert.deepEqual(named.components, components);
+});
+
+test("components too large for the request header are refused when the isolator is built, not on every request", async () => {
+  const huge = { parsers: [{ name: "default-parser", marker: true, exclude: [], mimeInclude: Array.from({ length: 2000 }, (_, i) => `application/x-type-${i}`), mimeExclude: [] }] };
+  await assert.rejects(
+    setup({ components: huge }).create(),
+    (error: unknown) => error instanceof RangeError && /components/.test(error.message) && /header/.test(error.message),
+  );
+  // Off mode sends no header, so there is nothing to bound.
+  await setup({ config: { mode: "off" }, components: huge }).create();
+});
+
+test("an isolator with no components sends none", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const result = await (await h.create()).isolate({ input: bytes("x") });
+  assert.equal("components" in (JSON.parse((result as { text: string }).text) as { header: object }).header, false);
+});
+
+test("a maxParseMillis above what the isolation allows is refused for every route, in-process included", async () => {
+  const config = { mode: "strict", maxTaskMillis: 10_000 } as const;
+  const allowed = deriveLimits(config).maxParseMillis;
+  const child = await setup({ config, ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  const inProcess = await setup({ config, ripstream: fakeRipstream({ type: "text/plain" }) }).create();
+  for (const isolator of [child, inProcess]) {
+    await assert.rejects(
+      isolator.isolate({ input: bytes("x"), maxParseMillis: allowed + 1 }),
+      (error: unknown) => error instanceof RangeError && /maxTaskMillis/.test(error.message),
+    );
+    await isolator.isolate({ input: bytes("x"), maxParseMillis: allowed });
+  }
+});
+
+test("an allowlisted type is parsed in-process with the request's depth and parse timer", async () => {
+  const h = setup({ config: { ...STRICT, maxTaskMillis: 5000 }, ripstream: fakeRipstream({ type: "text/plain" }) });
+  await (await h.create()).isolate({ input: bytes("plain"), maxNodeDepth: 2, maxParseMillis: 1500 });
+  assert.deepEqual(h.ripstream.parseCalls[0]?.options.limits, { maxParseMillis: 1500, maxNodeDepth: 2 });
+});
+
+test("off: the request's depth and parse timer reach the parse unchanged", async () => {
+  const h = setup({ config: { mode: "off", maxTaskMillis: 7000 } });
+  await (await h.create()).isolate({ input: bytes("hi"), maxNodeDepth: 4, maxParseMillis: 99_000 });
+  assert.deepEqual(h.ripstream.parseCalls[0]?.options.limits, { maxParseMillis: 99_000, maxNodeDepth: 4 });
+});
+
+test("a request with an invalid maxNodeDepth is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  for (const bad of [-1, 1.5, Number.NaN]) {
+    await assert.rejects(isolator.isolate({ input: bytes("x"), maxNodeDepth: bad }), /maxNodeDepth/, String(bad));
+  }
+});
+
 test("a configured heapMb is used as given", async () => {
   const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"], config: { mode: "strict", perChildMb: 1024, heapMb: 300 } });
   const result = await (await h.create()).isolate({ input: bytes("x"), maxOutputChars: 5_000_000 });

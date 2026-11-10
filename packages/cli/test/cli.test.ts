@@ -469,7 +469,13 @@ test("a parsers section in --config is applied: an excluded parser's type is ref
   });
 });
 
-test("a parsers section with isolation on is a usage error that names the gap, not a silent full parse", async () => {
+/** What `createStandardIsolation` was given: a fake that records its options. */
+interface Given {
+  readonly ripstreamConfig?: { readonly parsers: ReadonlyArray<{ name: string }> | null; readonly detectors: ReadonlyArray<{ name: string }> | null; readonly limits: unknown };
+  readonly limits?: unknown;
+}
+
+test("a parsers section with isolation on is handed to the isolation, and no isolation is refused for it", async () => {
   await withConfig({ parsers: ["pdf-parser"] }, async (file) => {
     for (const args of [
       ["--config", file, "--isolation", "strict", "-"],
@@ -477,16 +483,28 @@ test("a parsers section with isolation on is a usage error that names the gap, n
     ]) {
       const { log, createIsolation } = fakeIsolation();
       const sink = io("x");
-      assert.equal(await main(args, sink, { env: {}, createIsolation }), 2, args.join(" "));
-      assert.match(sink.err.join(""), /parsers.*isolation|isolation.*parsers/s);
-      assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
-      assert.match(sink.err.join(""), /--isolation off/);
-      assert.equal(log.created.length, 0, "no isolation is built for a refused invocation");
+      assert.equal(await main(args, sink, { env: {}, createIsolation }), 0, `${args.join(" ")}: ${sink.err.join("")}`);
+      assert.equal(log.created.length, 1, "the isolation is built, and parsed through");
+      const given = log.created[0] as Given;
+      assert.deepEqual(given.ripstreamConfig?.parsers?.map((entry) => entry.name), ["pdf-parser"]);
+      assert.equal(given.ripstreamConfig?.detectors, null);
+      assert.equal(given.limits, undefined, "no flag, so no limits beyond the configuration's");
     }
-    // serve isolates by default, so it refuses too, before it listens.
+  });
+});
+
+test("serve hands the configuration's sections to its isolation, before it listens", async () => {
+  await withConfig({ parsers: ["pdf-parser"], detectors: ["mime-types"] }, async (file) => {
+    const seen: Given[] = [];
+    const createIsolation = (async (options: Given) => {
+      seen.push(options);
+      throw new IsolationError("unavailable", "stop before listening");
+    }) as unknown as NonNullable<CliDeps["createIsolation"]>;
     const sink = io();
-    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2);
-    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
+    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {}, createIsolation }), 4);
+    assert.equal(seen.length, 1);
+    assert.deepEqual(seen[0]?.ripstreamConfig?.parsers?.map((entry) => entry.name), ["pdf-parser"]);
+    assert.deepEqual(seen[0]?.ripstreamConfig?.detectors?.map((entry) => entry.name), ["mime-types"]);
     assert.equal(sink.out.join(""), "", "the server never started");
   });
 });
@@ -540,17 +558,14 @@ test("detect applies detectors even when isolation settings are set, since it ne
   });
 });
 
-test("a detectors section with isolation on is a usage error that names the gap", async () => {
+test("a detectors section with isolation on is handed to the isolation", async () => {
   await withConfig({ detectors: ["mime-types"] }, async (file) => {
     const { log, createIsolation } = fakeIsolation();
     const sink = io("x");
-    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 2);
-    assert.match(sink.err.join(""), /sets "detectors"/);
-    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
-    assert.equal(log.created.length, 0);
-    const served = io();
-    assert.equal(await main(["serve", "--port", "0", "--config", file], served, { env: {} }), 2);
-    assert.equal(served.out.join(""), "", "the server never started");
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 0, sink.err.join(""));
+    const given = log.created[0] as Given;
+    assert.deepEqual(given.ripstreamConfig?.detectors?.map((entry) => entry.name), ["mime-types"]);
+    assert.equal(given.ripstreamConfig?.parsers, null);
   });
 });
 
@@ -687,20 +702,42 @@ test("--maxEmbeddedCount is a parse and metadata option: detect, language and se
   }
 });
 
-test("limits with isolation on are a usage error that names the gap, as the other sections are", async () => {
+test("limits with isolation on are handed to the isolation: the configuration's inside it, the flags beside it", async () => {
   await withConfig(MAX_TWO, async (file) => {
     const { log, createIsolation } = fakeIsolation();
     const sink = io("x");
-    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 2);
-    assert.match(sink.err.join(""), /sets "parse-context"/);
-    assert.match(sink.err.join(""), /tikajs-68os\.8\.7/);
-    assert.equal(log.created.length, 0);
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 0, sink.err.join(""));
+    const given = log.created[0] as Given;
+    assert.deepEqual(given.ripstreamConfig?.limits, { maxEmbeddedResources: 2 });
+    assert.equal(given.limits, undefined);
+
+    // The flags are laid over the configuration's by the isolation, as they are by createRipstream in this process.
+    const flagged = fakeIsolation();
+    const withFlags = io("x");
+    const argv = ["--config", file, "--maxEmbeddedCount=5", "--maxEmbeddedDepth", "3", "--isolation", "lenient", "-"];
+    assert.equal(await main(argv, withFlags, { env: {}, createIsolation: flagged.createIsolation }), 0, withFlags.err.join(""));
+    const given2 = flagged.log.created[0] as Given;
+    assert.deepEqual(given2.limits, { maxNodeDepth: 3, maxEmbeddedResources: 5 });
+    assert.deepEqual(given2.ripstreamConfig?.limits, { maxEmbeddedResources: 2 });
   });
   const { log, createIsolation } = fakeIsolation();
-  const flagged = io("x");
-  assert.equal(await main(["--maxEmbeddedCount=5", "--isolation", "lenient", "-"], flagged, { env: {}, createIsolation }), 2);
-  assert.match(flagged.err.join(""), /--maxEmbeddedCount is set, which an isolated parse cannot yet receive \(tikajs-68os\.8\.7\)/);
-  assert.equal(log.created.length, 0);
+  const flagOnly = io("x");
+  assert.equal(await main(["--maxEmbeddedCount=5", "--isolation", "lenient", "-"], flagOnly, { env: {}, createIsolation }), 0, flagOnly.err.join(""));
+  const given = log.created[0] as Given;
+  assert.deepEqual(given.limits, { maxEmbeddedResources: 5 });
+  assert.equal(given.ripstreamConfig, undefined);
+});
+
+test("limits the isolation cannot carry are a usage error that names the setting", async () => {
+  const { createStandardIsolation } = await import("@spikedpunch/ripstream-bundle-standard/isolation");
+  // The real isolation refuses an unlimited output (the child's memory is sized from the cap): that is the operator's
+  // setting, so it is a usage error, not a crash.
+  await withConfig({ "parse-context": { "output-limits": { writeLimit: -1 } } }, async (file) => {
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation: createStandardIsolation }), 2);
+    assert.match(sink.err.join(""), /maxOutputChars -1 \(unlimited\) cannot be isolated/);
+    assert.equal(sink.out.join(""), "");
+  });
 });
 
 test("serve does not apply a parse-context section yet, and says so instead of half applying it", async () => {

@@ -73,10 +73,8 @@ Added: the `detectors` section is applied too (`tikajs-68os.8.6`, [docs/parsing.
   A detector takes no `_mime-include` / `_mime-exclude` (Tika drops them on a named detector and refuses them on the
   marker).
 - `createRipstream({ detector, config })` with a `detectors` section is an error (`RipstreamConfigError`).
-- With `parsers` or `detectors` set, `parse`, `metadata` and `serve` require isolation off. The isolation child
-  builds its own ripstream and cannot yet be given the sections, so `serve` (strict by default) and
-  `--isolation strict|lenient` refuse them with a usage error that names `tikajs-68os.8.7`, instead of parsing with
-  every parser and detector. `detect` never isolates and applies `detectors` whatever the isolation settings.
+- With isolation on, both sections cross the boundary (`tikajs-68os.8.7`, below); `detect` never isolates and applies
+  `detectors` whatever the isolation settings.
 
 Added: the `parse-context` section sets limits (`tikajs-68os.8.8`, [docs/parsing.md](docs/parsing.md#the-parse-context-section)).
 
@@ -88,8 +86,21 @@ Added: the `parse-context` section sets limits (`tikajs-68os.8.8`, [docs/parsing
 - `new Ripstream({ limits })` and `createRipstream({ config, limits })` take limits that every parse starts from; a limit
   a call names wins. An invalid one throws when the ripstream is built.
 - CLI: `--maxEmbeddedDepth` and `--maxEmbeddedCount` (tika-app's flag names) limit one `parse` or `metadata`. `parse` and
-  `metadata` apply the section in this process and refuse it with isolation on (`tikajs-68os.8.7`); `serve` refuses it
+  `metadata` apply the section, in this process or with isolation on (`tikajs-68os.8.7`); `serve` refuses it
   (`tikajs-68os.8.9`).
+
+Added: a configuration crosses the isolation boundary (`tikajs-68os.8.7`, [docs/isolation.md](docs/isolation.md)).
+
+- `createStandardIsolation({ ripstreamConfig, limits })`: the `parsers` and `detectors` sections build the child's
+  pipeline (sent in the request header), the routing detector, `detect()` and the in-process parsers, which the
+  `parsers` section narrows and never widens. `parse-context` limits, with `limits` laid over them, are the defaults of
+  every isolated parse. The CLI passes both, so `--isolation strict|lenient` with `--config` or `--maxEmbeddedDepth` /
+  `--maxEmbeddedCount` no longer refuses; `serve` applies `parsers` and `detectors` under isolation.
+- `IsolatedParseRequest` takes `maxNodeDepth` and `maxParseMillis`; `createIsolatedRipstream({ limits })` takes defaults;
+  `IsolatedComponents` is the section pair a child receives; `applyParserConfig` narrows a parser list by a `parsers`
+  section; `runChildMain` takes a function that builds the ripstream from the header's components.
+- Refused when the isolation is built, as a usage error: a `maxParseMillis` above what the isolation allows (its
+  `maxTaskMillis` less the parent's margin; the message says so) and `maxOutputChars: -1`, which no child can hold.
 
 Added: the CLI accepts `--name=value` as well as `--name value` for every long option that takes a value
 (`--config=ripstream.json`, `--output=json`, `--port=8080`) (`tikajs-68os.8.12`). An empty value (`--config=`), a value on

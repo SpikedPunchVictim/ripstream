@@ -70,6 +70,11 @@ function filterOf(entry: ComponentEntry, canonical: (value: string) => string): 
   return (key) => (include.size === 0 || include.has(key)) && !exclude.has(key);
 }
 
+/**
+ * Narrows `parsers` by a `parsers` section (its entries as `loadConfig` read them): a parser keeps the media types that
+ * some enabled Tika parser claims, and one left with none is dropped. It never adds a parser, so a restricted list stays
+ * as restricted as it was. `registry` is the one the parsers' types are compared in (the detector's).
+ */
 export function applyParserConfig(
   parsers: readonly Parser[],
   entries: readonly ComponentEntry[],

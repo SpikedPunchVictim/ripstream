@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { AbortError, IsolationError, LimitExceededError, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
+import { AbortError, IsolationError, LimitExceededError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { requireTempDir } from "./disk.ts";
 import { DEFAULT_MAX_DISK_MB } from "./limits.ts";
 import type { MemoryPool } from "./pool.ts";
@@ -134,6 +134,8 @@ export interface ChildRunnerOptions {
   readonly disposeWaitMs?: number;
   readonly platform?: NodeJS.Platform;
   readonly parentEnv?: Readonly<Record<string, string | undefined>>;
+  /** The `parsers` and `detectors` sections every child builds its ripstream from (InputHeader.components). */
+  readonly components?: IsolatedComponents;
   /** Called with each run's observations. Never throws into the run. */
   readonly onRunSettled?: (diagnostics: RunDiagnostics) => void;
   /** @internal Test seams, passed to the supervisor unchanged. */
@@ -288,6 +290,7 @@ export class ChildRunner {
         ...(o.onTempCleanupError === undefined ? {} : { onTempCleanupError: o.onTempCleanupError }),
         ...(o.platform === undefined ? {} : { platform: o.platform }),
         ...(o.parentEnv === undefined ? {} : { parentEnv: o.parentEnv }),
+        ...(o.components === undefined ? {} : { components: o.components }),
         ...(o.onRunSettled === undefined ? {} : { onSettled: o.onRunSettled }),
         ...(o.spawnFn === undefined ? {} : { spawnFn: o.spawnFn }),
         ...(o.reapWaitMs === undefined ? {} : { reapWaitMs: o.reapWaitMs }),

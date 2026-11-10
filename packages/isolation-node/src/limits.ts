@@ -98,6 +98,8 @@ export interface LimitsRequest {
   readonly output?: "text" | "records";
   readonly maxOutputChars?: number;
   readonly maxEmbeddedResources?: number;
+  /** The child's parse timer. At most what the isolation allows (`DerivedLimits.maxParseMillis` of a request without one). */
+  readonly maxParseMillis?: number;
 }
 
 export interface DerivedLimits {
@@ -204,6 +206,19 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
   }
 
   const maxTaskMillis = config.maxTaskMillis ?? DEFAULT_LIMITS.maxTaskMillis;
+  const maxParseMillis = parseMillisFor(maxTaskMillis);
+  const requestedParseMillis = request.maxParseMillis;
+  if (requestedParseMillis !== undefined) {
+    if (!Number.isSafeInteger(requestedParseMillis) || requestedParseMillis < 1) {
+      throw new RangeError(`maxParseMillis must be a positive safe integer, got ${String(requestedParseMillis)}`);
+    }
+    if (requestedParseMillis > maxParseMillis) {
+      throw new RangeError(
+        `maxParseMillis ${requestedParseMillis} is more than the isolation allows (${maxParseMillis} ms: its ` +
+          `maxTaskMillis of ${maxTaskMillis} ms less the margin the parent keeps). Lower it or raise maxTaskMillis`,
+      );
+    }
+  }
   const maxResultBytes =
     maxOutputChars * WIRE_BYTES_PER_OUTPUT_CHAR +
     metadataAllowanceBytes(output, maxEmbeddedResources) +
@@ -221,7 +236,7 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     heapMb,
     cpuSecs: cpuSecsFor(maxTaskMillis),
     maxTaskMillis,
-    maxParseMillis: parseMillisFor(maxTaskMillis),
+    maxParseMillis: requestedParseMillis ?? maxParseMillis,
     maxInputBytes: config.maxInputBytes ?? DEFAULT_MAX_INPUT_BYTES,
     maxDiskMb: config.maxDiskMb ?? DEFAULT_MAX_DISK_MB,
     maxOutputChars,

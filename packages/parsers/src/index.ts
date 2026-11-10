@@ -41,6 +41,7 @@ import { ScienceMetadataParser } from "./science.ts";
 import { RtfParser } from "./rtf.ts";
 import { applyParserConfig } from "./parser-config.ts";
 
+export { applyParserConfig } from "./parser-config.ts";
 export { TextParser } from "./text.ts";
 export { HtmlDocumentParser, DEFAULT_MAX_HTML_DEPTH, type HtmlParserOptions } from "./html.ts";
 export { XmlParser } from "./xml.ts";

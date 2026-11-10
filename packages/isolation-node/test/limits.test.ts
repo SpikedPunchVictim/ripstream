@@ -197,3 +197,22 @@ test("the result is plain data and the config is not touched", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(limits)), limits);
   assert.deepEqual(config, { mode: "strict", perChildMb: 1024 });
 });
+
+test("a request's maxParseMillis is the child's parse timer, up to what the isolation allows", () => {
+  assert.equal(deriveLimits(strict).maxParseMillis, 58_000);
+  assert.equal(deriveLimits(strict, { maxParseMillis: 1 }).maxParseMillis, 1);
+  assert.equal(deriveLimits(strict, { maxParseMillis: 30_000 }).maxParseMillis, 30_000);
+  assert.equal(deriveLimits(strict, { maxParseMillis: 58_000 }).maxParseMillis, 58_000);
+  // The wall deadline is not touched by it.
+  assert.equal(deriveLimits(strict, { maxParseMillis: 30_000 }).maxTaskMillis, 60_000);
+});
+
+test("a maxParseMillis the isolation cannot honour is refused, naming what to change", () => {
+  assert.throws(
+    () => deriveLimits(strict, { maxParseMillis: 58_001 }),
+    (error: unknown) => error instanceof RangeError && /58001/.test(error.message) && /58000/.test(error.message) && /maxTaskMillis/.test(error.message),
+  );
+  for (const bad of [0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => deriveLimits(strict, { maxParseMillis: bad }), RangeError, String(bad));
+  }
+});

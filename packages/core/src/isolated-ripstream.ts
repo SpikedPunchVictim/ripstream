@@ -3,7 +3,7 @@ import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
 import type { IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
 import type { ParseRecord } from "./recursive.ts";
-import { assertValidLimits } from "./parse-context.ts";
+import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
 import type { MediaTypeResult, ParseOptions, ParseResult } from "./ripstream.ts";
 
 /** The part of a Ripstream that servers, pipes and the CLI call. */
@@ -20,10 +20,31 @@ export interface IsolatedRipstreamOptions {
    * routing detects on a bounded prefix. Pass a Ripstream (it satisfies this).
    */
   readonly detector: Pick<IsolatedRipstream, "detect">;
+  /**
+   * Limits every parse starts from; a limit a call names in its own `limits` wins. Only the limits a request can
+   * carry are accepted, so a default that would be silently dropped is refused here, not at the first parse.
+   */
+  readonly limits?: Partial<ParseLimits>;
 }
 
 /** The limits an isolated request can carry. Everything else is the child's (core's default) or the isolator's. */
-const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbeddedResources"]);
+const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbeddedResources", "maxNodeDepth", "maxParseMillis"]);
+
+/** The limits `options` names (an `undefined` names none), all of which must be able to cross. */
+function crossingLimits(options: Partial<ParseLimits> | undefined): Partial<ParseLimits> {
+  assertValidLimits(options);
+  const limits: Record<string, number> = {};
+  for (const [name, value] of Object.entries(options ?? {})) {
+    if (value === undefined) continue;
+    if (!CROSSING_LIMITS.has(name)) {
+      throw new RangeError(
+        `Limit "${name}" cannot cross the isolation boundary (only ${[...CROSSING_LIMITS].join(", ")} can)`,
+      );
+    }
+    limits[name] = value as number;
+  }
+  return limits as Partial<ParseLimits>;
+}
 
 /**
  * A Ripstream-shaped front over a ParseIsolator, so code written against `parse` / `parseRecursive` (the server,
@@ -34,9 +55,10 @@ const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbe
  */
 export function createIsolatedRipstream(options: IsolatedRipstreamOptions): IsolatedRipstream {
   const { isolator, detector } = options;
+  const defaults = crossingLimits(options.limits);
 
   async function isolate(source: InputSource, parseOptions: ParseOptions, output: "text" | "records") {
-    const request = toRequest(source, parseOptions, output);
+    const request = toRequest(source, parseOptions, output, defaults);
     return isolator.isolate(request, parseOptions.signal === undefined ? {} : { signal: parseOptions.signal });
   }
 
@@ -55,24 +77,23 @@ export function createIsolatedRipstream(options: IsolatedRipstreamOptions): Isol
   };
 }
 
-function toRequest(source: InputSource, options: ParseOptions, output: "text" | "records"): IsolatedParseRequest {
+function toRequest(
+  source: InputSource,
+  options: ParseOptions,
+  output: "text" | "records",
+  defaults: Partial<ParseLimits>,
+): IsolatedParseRequest {
   if (options.contentType !== undefined) {
     throw new TypeError("ParseOptions.contentType cannot cross the isolation boundary; the child detects the type itself");
   }
-  assertValidLimits(options.limits);
-  const limits = options.limits ?? {};
-  for (const [name, value] of Object.entries(limits)) {
-    if (value !== undefined && !CROSSING_LIMITS.has(name)) {
-      throw new RangeError(
-        `Limit "${name}" cannot cross the isolation boundary (only maxOutputChars and maxEmbeddedResources can)`,
-      );
-    }
-  }
+  const limits = { ...defaults, ...crossingLimits(options.limits) };
   return {
     input: toInput(source),
     ...(options.filename === undefined ? {} : { filename: options.filename }),
     ...(limits.maxOutputChars === undefined ? {} : { maxOutputChars: limits.maxOutputChars }),
     ...(limits.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: limits.maxEmbeddedResources }),
+    ...(limits.maxNodeDepth === undefined ? {} : { maxNodeDepth: limits.maxNodeDepth }),
+    ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
     output,
   };
 }

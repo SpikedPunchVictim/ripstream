@@ -21,6 +21,7 @@ import {
   runChildMain,
   textChunks,
   type ChildMainIo,
+  type ChildMainOptions,
   type ChildRipstream,
   type FatalOrigin,
 } from "../src/child-main.ts";
@@ -46,7 +47,7 @@ interface Run {
 
 /** Runs runChildMain with the given input and ripstream; `sendFailsAfter` makes sendFrame throw from that frame on. */
 function run(
-  ripstream: ChildRipstream,
+  ripstream: ChildMainOptions["ripstream"],
   given: ChildInput | Error,
   options: { sendFailsAfter?: number; initThrows?: boolean } = {},
 ): Run {
@@ -311,6 +312,34 @@ test("limits and filename come from the header; unset limits are not passed at a
   const bare = recording();
   await run(bare.ripstream, input(header())).outcome;
   assert.deepEqual(bare.seen.options, { limits: {} });
+});
+
+test("maxNodeDepth comes from the header", async () => {
+  const { ripstream, seen } = recording();
+  await run(ripstream, input(header({ maxNodeDepth: 3 }))).outcome;
+  assert.deepEqual(seen.options, { limits: { maxNodeDepth: 3 } });
+});
+
+test("a ripstream factory is called with the header's components, and its ripstream parses", async () => {
+  const { ripstream, seen } = recording();
+  const given: unknown[] = [];
+  const components = { parsers: [{ name: "zip-parser", marker: false, exclude: [], mimeInclude: [], mimeExclude: [] }] };
+  const done = run((received) => (given.push(received), ripstream), input(header({ components })));
+  await done.outcome;
+  assert.deepEqual(given, [components]);
+  assert.ok(seen.options !== undefined, "the built ripstream parsed");
+  const bare: unknown[] = [];
+  await run((received) => (bare.push(received), ripstream), input(header())).outcome;
+  assert.deepEqual(bare, [undefined]);
+});
+
+test("a factory that throws is answered as an error frame, never silently", async () => {
+  const r = run(() => {
+    throw new Error("cannot build the parsers");
+  }, input(header()));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "error"]);
+  assert.match(String(r.frames[1]?.message), /cannot build the parsers/);
 });
 
 test("a maxParseMillis of 0 is passed on (0 means no timer in core)", async () => {

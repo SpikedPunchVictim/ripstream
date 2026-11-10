@@ -1,6 +1,7 @@
 import {
   DEFAULT_LIMITS,
   ParseTimeoutError,
+  type IsolatedComponents,
   type IsolatedParseRecord,
   type Metadata,
   type ParseLimits,
@@ -76,7 +77,12 @@ const PROCESS_IO: ChildMainIo = {
 };
 
 export interface ChildMainOptions {
-  readonly ripstream: ChildRipstream;
+  /**
+   * The ripstream that parses, or a function that builds it from the header's `components` (undefined when the
+   * parent sent none). The child parses one document, so the function runs once. It runs after the input is read,
+   * inside the parse: a configuration it cannot build is an error frame, not a crash before the parent is told.
+   */
+  readonly ripstream: ChildRipstream | ((components: IsolatedComponents | undefined) => ChildRipstream);
   /** Passed to initChildProcess: JS-level stderr bytes let through before the rest is dropped. */
   readonly stderrBudgetBytes?: number;
   /**
@@ -148,6 +154,7 @@ function parseOptionsFor(header: InputHeader): ParseOptions {
   const limits: Partial<ParseLimits> = {
     ...(header.maxOutputChars === undefined ? {} : { maxOutputChars: header.maxOutputChars }),
     ...(header.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: header.maxEmbeddedResources }),
+    ...(header.maxNodeDepth === undefined ? {} : { maxNodeDepth: header.maxNodeDepth }),
     ...(header.maxParseMillis === undefined ? {} : { maxParseMillis: header.maxParseMillis }),
   };
   return { ...(header.filename === undefined ? {} : { filename: header.filename }), limits };
@@ -237,11 +244,12 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
 
     const watchdog = armParseWatchdog(input.header.maxParseMillis);
     try {
+      const ripstream = typeof options.ripstream === "function" ? options.ripstream(input.header.components) : options.ripstream;
       if (input.header.output === "records") {
-        const records = await Promise.race([options.ripstream.parseRecursive(source, parseOptions), watchdog.expired]);
+        const records = await Promise.race([ripstream.parseRecursive(source, parseOptions), watchdog.expired]);
         for (const record of records) send({ t: "record", record: toWireRecord(record) });
       } else {
-        const result = await Promise.race([options.ripstream.parse(source, parseOptions), watchdog.expired]);
+        const result = await Promise.race([ripstream.parse(source, parseOptions), watchdog.expired]);
         send({ t: "meta", metadata: metadataToRecord(result.metadata) });
         for (const chunk of textChunks(result.text)) send({ t: "text", chunk });
       }

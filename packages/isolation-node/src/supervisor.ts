@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 import { tmpdir } from "node:os";
 import type { Readable } from "node:stream";
-import { IsolationError, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
+import { IsolationError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { encodeInputPrefix, type InputHeader } from "./child-io.ts";
 import {
   classifyExit,
@@ -129,6 +129,8 @@ export interface RunChildOptions {
   /** Coarse RLIMIT_AS in KB (L4), Linux only. */
   readonly vmemKb?: number;
   readonly parentEnv?: Readonly<Record<string, string | undefined>>;
+  /** Sent in the input header (InputHeader.components). Omitted: the child builds the default parsers and detectors. */
+  readonly components?: IsolatedComponents;
   readonly platform?: NodeJS.Platform;
 
   readonly request: IsolatedParseRequest;
@@ -441,6 +443,8 @@ class Supervision {
       ...(request.filename === undefined ? {} : { filename: request.filename }),
       ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
       ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
+      ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+      ...(this.#options.components === undefined ? {} : { components: this.#options.components }),
       ...(this.#options.maxParseMillis === undefined ? {} : { maxParseMillis: this.#options.maxParseMillis }),
     };
   }

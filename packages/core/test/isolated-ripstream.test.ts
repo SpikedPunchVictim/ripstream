@@ -101,6 +101,40 @@ test("parse: a limit set to undefined is not a limit", async () => {
   assert.deepEqual(calls[0]?.request, { input: new Uint8Array(1), output: "text" });
 });
 
+test("parse: maxNodeDepth and maxParseMillis cross too", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1), { limits: { maxNodeDepth: 4, maxParseMillis: 9000 } });
+  assert.deepEqual(calls[0]?.request, { input: new Uint8Array(1), maxNodeDepth: 4, maxParseMillis: 9000, output: "text" });
+});
+
+test("limits: the defaults of every parse, under what a call names itself", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  const ripstream = createIsolatedRipstream({
+    isolator,
+    detector,
+    limits: { maxOutputChars: 100, maxEmbeddedResources: 5, maxNodeDepth: 2 },
+  });
+  await ripstream.parse(new Uint8Array(1));
+  await ripstream.parse(new Uint8Array(1), { limits: { maxEmbeddedResources: 9 } });
+  // A limit a call sets to undefined names none: the default still applies.
+  await ripstream.parse(new Uint8Array(1), { limits: { maxOutputChars: undefined } as never });
+  assert.deepEqual(
+    calls.map((call) => [call.request.maxOutputChars, call.request.maxEmbeddedResources, call.request.maxNodeDepth]),
+    [
+      [100, 5, 2],
+      [100, 9, 2],
+      [100, 5, 2],
+    ],
+  );
+});
+
+test("limits: a default that cannot cross, or is invalid, is refused when the facade is built", () => {
+  const { isolator } = fakeIsolator(TEXT);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxZipEntries: 5 } }), /maxZipEntries/);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxEmbeddedResources: -5 } }), RangeError);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxBogus: 1 } as never }), RangeError);
+});
+
 const RECORDS: IsolatedParseResult = {
   kind: "records",
   records: [

@@ -1,5 +1,6 @@
 import { writeSync } from "node:fs";
 import type { Writable } from "node:stream";
+import type { IsolatedComponents } from "@spikedpunch/ripstream-core";
 
 /**
  * Child-side I/O shared by the real child entry (P3), the probe child and the
@@ -34,6 +35,13 @@ export interface InputHeader {
   readonly filename?: string;
   readonly maxOutputChars?: number;
   readonly maxEmbeddedResources?: number;
+  /** Deepest embedded document the child parses (ParseLimits.maxNodeDepth). Omitted: core's default. */
+  readonly maxNodeDepth?: number;
+  /**
+   * The `parsers` and `detectors` sections the child builds its ripstream from. Parent-authored and the same for
+   * every request of an isolator. Omitted: the default parsers and detectors.
+   */
+  readonly components?: IsolatedComponents;
   /**
    * The child's own parse timer, in ms (0 = none). The parent sets it a little below its kill deadline, so a parse
    * that is merely slow ends with a typed ParseTimeoutError frame instead of a SIGKILL. Omitted: core's default.
@@ -69,6 +77,38 @@ function optionalNonNegativeInteger(header: Record<string, unknown>, name: strin
   }
 }
 
+function requireStringArray(value: unknown, where: string): void {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new TypeError(`input header: ${where} must be an array of strings`);
+  }
+}
+
+/** The shape of `ComponentEntry`. The names themselves were checked by the parent, which authored them. */
+function checkComponents(value: unknown): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("input header: components must be an object");
+  }
+  for (const [section, entries] of Object.entries(value)) {
+    if (section !== "parsers" && section !== "detectors") {
+      throw new TypeError(`input header: components has an unknown section ${JSON.stringify(section)}`);
+    }
+    if (!Array.isArray(entries)) throw new TypeError(`input header: components.${section} must be an array`);
+    for (const entry of entries as unknown[]) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+        throw new TypeError(`input header: a components.${section} entry must be an object`);
+      }
+      const fields = entry as Record<string, unknown>;
+      if (typeof fields.name !== "string" || fields.name.length === 0) {
+        throw new TypeError(`input header: a components.${section} entry needs a name`);
+      }
+      if (typeof fields.marker !== "boolean") throw new TypeError(`input header: components.${section} marker must be a boolean`);
+      requireStringArray(fields.exclude, `components.${section} exclude`);
+      requireStringArray(fields.mimeInclude, `components.${section} mimeInclude`);
+      requireStringArray(fields.mimeExclude, `components.${section} mimeExclude`);
+    }
+  }
+}
+
 function parseHeader(json: string): InputHeader {
   let value: unknown;
   try {
@@ -99,6 +139,8 @@ function parseHeader(json: string): InputHeader {
   optionalNonNegativeInteger(header, "maxOutputChars");
   optionalNonNegativeInteger(header, "maxEmbeddedResources");
   optionalNonNegativeInteger(header, "maxParseMillis");
+  optionalNonNegativeInteger(header, "maxNodeDepth");
+  if (header.components !== undefined) checkComponents(header.components);
   return header as unknown as InputHeader;
 }
 

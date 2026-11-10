@@ -73,8 +73,10 @@ How it differs from Tika, because ripstream's parsers are not Tika's parsers:
   an error. Excluding either is fine: it is already not loaded.
 - Refused where Tika is silent: an entry with more than one key (Tika uses the first and drops the rest), a setting
   other than the media type filters and `exclude`, a non-string `exclude` item, an `image/ocr-*` type.
-- It is applied in this process. The CLI refuses `--config` with `parsers` unless isolation is off (`--isolation
-  off`), because the isolation child cannot yet receive it (`tikajs-68os.8.7`).
+- It is applied by `createRipstream({ config })` and by the CLI. With isolation on, `createStandardIsolation({ ripstreamConfig })`
+  builds the child's parsers from it (the child gets the section in the header of each request), and narrows the
+  parsers that stay in this process by it too: the section switches parsers off, it never adds one, so the in-process set
+  stays as restricted as it was (`tikajs-68os.8.7`).
 - The semantics were read from Tika's source; they were not checked against a running Tika 4.2.0.
 
 ### The `detectors` section
@@ -111,8 +113,9 @@ How it differs from Tika:
   it is already not loaded.
 - A detector takes no settings and no `_mime-include` / `_mime-exclude`; Tika drops those on a named detector without
   a word, so ripstream refuses them.
-- Like `parsers`, it is applied in this process and refused with isolation on (`tikajs-68os.8.7`). `ripstream detect`
-  never isolates, so it applies the section whatever the isolation settings are.
+- Like `parsers`, it is applied by `createRipstream({ config })` and by the CLI, and with isolation on the routing
+  detector, `detect()` and the child's detector are all built from it, so they agree on a document's type
+  (`tikajs-68os.8.7`). `ripstream detect` never isolates, so it applies the section whatever the isolation settings are.
 - Read from Tika's source, not checked against a running Tika 4.2.0.
 
 ### The `parse-context` section
@@ -156,10 +159,16 @@ How it differs from Tika:
   not an integer in range are refused too; Tika's loader would coerce a string or a fraction.
 - **The defaults are ripstream's, not Tika's.** A limit the section does not set keeps ripstream's default (for
   instance 10000 embedded documents where Tika has none, and 100000 output characters where Tika has none).
-- **Where it applies.** `createRipstream({ config })` and the CLI's `parse` and `metadata`, in this process. `serve` refuses a
-  `parse-context` section (`tikajs-68os.8.9`): the server sets the limits of each request itself, so a default set here
-  would reach some limits and not others. With isolation on the CLI refuses it, as it refuses `parsers` and `detectors`
-  (`tikajs-68os.8.7`), because only `maxOutputChars` and `maxEmbeddedResources` can cross the isolation boundary.
+- **Where it applies.** `createRipstream({ config })` and the CLI's `parse` and `metadata`, in this process or with
+  isolation on. `serve` refuses a `parse-context` section (`tikajs-68os.8.9`): the server sets the limits of each request
+  itself, so a default set here would reach some limits and not others.
+- **With isolation on** the limits are the defaults of every isolated parse (`createStandardIsolation({ ripstreamConfig,
+  limits })`; a limit a call names wins). `maxDepth`, `maxCount` and `writeLimit` cross to the child as the request's
+  `maxNodeDepth`, `maxEmbeddedResources` and `maxOutputChars`. `totalTaskTimeoutMillis` becomes the child's parse
+  timer, and the isolation refuses one above what it allows a task: its `maxTaskMillis` less the margin the parent keeps
+  (2 s, or a tenth of it when that is less), so a `totalTaskTimeoutMillis` of 9500 under a `maxTaskMillis` of 10000 is
+  a usage error that names `maxTaskMillis`. `writeLimit: -1` (unlimited) is refused too: a child's memory is sized from
+  the output cap. With isolation off neither applies.
 - The CLI flags `--maxEmbeddedDepth` and `--maxEmbeddedCount` (tika-app's names) set `maxNodeDepth` and
   `maxEmbeddedResources` for one `parse` or `metadata`, and win over the configuration. They fail the parse at the
   limit, like the section.
