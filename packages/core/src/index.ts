@@ -21,9 +21,7 @@ export {
   RipstreamConfigError,
   configGeneration,
   loadConfig,
-  loadXmlConfig,
   validateConfig,
-  type ComponentConfig,
   type RipstreamConfigShape,
 } from "./config.ts";
 export {

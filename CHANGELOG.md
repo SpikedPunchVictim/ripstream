@@ -4,6 +4,18 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Configuration (`tikajs-68os.8.1`, `tikajs-68os.8.2`)
+
+Changed: configuration no longer accepts what it would ignore. Only `version` and `isolation` are read.
+
+- `loadConfig` and `validateConfig` refuse `parsers`, `detectors`, `contentHandlers`, `metadataFilters` and
+  `encodingDetector` by name (`"parsers" is not supported: ripstream would ignore it`). They used to be validated and
+  dropped, so a config naming a nonexistent class loaded cleanly. Compose parsers and detectors in code with
+  `createRipstream`.
+- Removed `loadXmlConfig`, `ComponentConfig`, and the `parsers`/`detectors`/`contentHandlers`/`metadataFilters`/
+  `encodingDetector` fields of `RipstreamConfig`. The XML loader was a regex scan that turned `<parser-exclude>` and
+  commented-out entries into included parsers; Tika 4.x does not read XML configuration at runtime either.
+
 ### Parse isolation (epic `tikajs-zgg2`)
 
 Added: per-document child-process isolation with a host memory budget (`@spikedpunch/ripstream-isolation-node`,

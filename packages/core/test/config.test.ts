@@ -10,21 +10,30 @@ import {
 
 test("loads a valid JSON configuration", () => {
   const before = configGeneration();
-  const config = loadConfig(
-    JSON.stringify({
-      version: 1,
-      parsers: [{ class: "org.example.Parser", maxDepth: 4 }],
-      detectors: [{ class: "org.example.Detector" }],
-      encodingDetector: { class: "org.example.Encoding" },
-    }),
-  );
+  const config = loadConfig(JSON.stringify({ version: 2, isolation: { mode: "off" } }));
   assert.ok(config.generation > before);
-  assert.equal(config.parsers.length, 1);
-  assert.equal(config.parsers[0]?.class, "org.example.Parser");
-  assert.equal(config.detectors.length, 1);
-  assert.equal(config.encodingDetector?.class, "org.example.Encoding");
+  assert.equal(config.version, 2);
+  assert.equal(config.isolation?.mode, "off");
   assert.equal(RipstreamConfig.prototype.isPrototypeOf(config), true);
 });
+
+// Sections Tika's configuration has and ripstream does not apply. Accepting one would report success while changing
+// nothing (measured: tasks/parity/audits/config-inventory.json), so each is refused by name.
+const UNAPPLIED_SECTIONS: ReadonlyArray<readonly [string, unknown]> = [
+  ["parsers", [{ class: "org.example.Parser" }]],
+  ["detectors", [{ class: "org.example.Detector" }]],
+  ["contentHandlers", [{ class: "org.example.Handler" }]],
+  ["metadataFilters", [{ class: "org.example.Filter" }]],
+  ["encodingDetector", { class: "org.example.Encoding" }],
+];
+for (const [section, value] of UNAPPLIED_SECTIONS) {
+  test(`the ${section} section is refused, not silently ignored`, () => {
+    for (const config of [{ [section]: value }, { [section]: [] }, { [section]: "nope" }]) {
+      assert.deepEqual(validateConfig(config), [`"${section}" is not supported: ripstream would ignore it`]);
+      assert.throws(() => loadConfig(config), RipstreamConfigError);
+    }
+  });
+}
 
 test("fails fast with all validation issues", () => {
   const issues = validateConfig({
@@ -47,17 +56,6 @@ test("new configurations invalidate previous generations", () => {
   const second = loadConfig({});
   assert.equal(first.current, false);
   assert.equal(second.current, true);
-});
-
-test("loads legacy XML component lists", async () => {
-  const { loadXmlConfig } = await import("../src/index.ts");
-  const config = loadXmlConfig(
-    '<properties><parsers><parser class="a.Parser"/></parsers><detectors><detector class="b.Detector"/></detectors><encodingDetector class="c.Encoding"/></properties>',
-  );
-  assert.equal(config.parsers[0]?.class, "a.Parser");
-  assert.equal(config.detectors[0]?.class, "b.Detector");
-  assert.equal(config.encodingDetector?.class, "c.Encoding");
-  assert.throws(() => loadXmlConfig("<bad/>"), RipstreamConfigError);
 });
 
 test("isolation is null when unconfigured", () => {
@@ -204,14 +202,4 @@ test("isolation rejects prototype-related and negative-zero keys", () => {
     validateConfig({ isolation: { mode: "off", constructor: 1 } }).join(";"),
     /unknown key "constructor" in isolation/,
   );
-});
-
-test("XML configuration rejects <isolation> instead of ignoring it", async () => {
-  const { loadXmlConfig } = await import("../src/index.ts");
-  assert.throws(
-    () => loadXmlConfig('<properties><isolation mode="strict"/></properties>'),
-    (error: unknown) =>
-      error instanceof RipstreamConfigError && /isolation.*JSON/.test(error.issues.join(";")),
-  );
-  assert.equal(loadXmlConfig("<properties></properties>").isolation, null);
 });
