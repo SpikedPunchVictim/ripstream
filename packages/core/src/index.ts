@@ -26,6 +26,41 @@ export {
 } from "./config.ts";
 export { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 export {
+  COMPONENT_ID_PATTERN,
+  PIPES_PARSE_MODES,
+  PIPES_RESULT_STATUSES,
+  PIPES_SECTION_KEYS,
+  SYSTEM_COMPONENT_PREFIX,
+  parsePipesSections,
+  type FileSystemEmitterSettings,
+  type FileSystemIteratorSettings,
+  type PipesEmitterSettings,
+  type PipesFetcherSettings,
+  type PipesIteratorSettings,
+  type PipesOnParseException,
+  type PipesParseMode,
+  type PipesReporterSettings,
+  type PipesResultCategory,
+  type PipesResultStatus,
+  type PipesSettings,
+} from "./pipes-config.ts";
+export { type SearchEmitterSettings, type SearchEmitterType } from "./pipes-search-config.ts";
+export {
+  S3_CREDENTIAL_PROVIDERS,
+  type S3ConnectionSettings,
+  type S3EmitterSettings,
+  type S3FetcherSettings,
+  type S3IteratorSettings,
+} from "./pipes-s3-config.ts";
+export {
+  UNPACK_KEY_BASE_STRATEGIES,
+  UNPACK_OUTPUT_FORMATS,
+  UNPACK_OUTPUT_MODES,
+  UNPACK_SUFFIX_STRATEGIES,
+  parseUnpackConfig,
+  type UnpackSettings,
+} from "./unpack-config.ts";
+export {
   DEFAULT_SERVER_ENDPOINTS,
   SERVER_ENDPOINTS,
   parseServerSection,
@@ -85,6 +120,7 @@ export {
   type SafeFetchOptions,
 } from "./url-security.ts";
 export {
+  type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedComponents,
   type IsolatedParseRequest,
@@ -173,6 +209,15 @@ export { XmpContentHandler } from "./handlers/xmp.ts";
 export { OutputLimitContentHandler } from "./handlers/limits.ts";
 export { MarkdownContentHandler } from "./handlers/markdown.ts";
 export {
+  HANDLER_TYPES,
+  HANDLER_TYPE_NAMES,
+  createOutputHandler,
+  handlerTypeName,
+  parseHandlerType,
+  type HandlerType,
+  type OutputContentHandler,
+} from "./handler-type.ts";
+export {
   ToHTMLContentHandler,
   ToXMLContentHandler,
 } from "./handlers/xml.ts";
@@ -209,11 +254,15 @@ export {
   RecursiveParserWrapper,
   type ParseRecord,
 } from "./recursive.ts";
+export { CONTENT_LENGTH, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
 export {
   markParseTiming,
+  metadataJson,
   rmetaObject,
+  rmetaObjects,
   serializeRmeta,
   type RmetaOptions,
+  type RmetaValue,
 } from "./rmeta.ts";
 export {
   Ripstream,

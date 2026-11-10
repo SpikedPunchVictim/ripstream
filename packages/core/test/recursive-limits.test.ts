@@ -43,7 +43,7 @@ function embeddingParser(children: number, nest: number, text = "x"): Parser {
       const count = depth === 0 ? children : depth < nest ? 1 : 0;
       for (let i = 0; i < count; i++) {
         const metadata = new Metadata();
-        metadata.set("resourceName", `c${i}`);
+        metadata.set("tk:resource-name", `c${i}`);
         await extractor.parseEmbedded(
           await RipstreamInputStream.from(new Uint8Array([1])),
           handler,

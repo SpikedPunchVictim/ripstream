@@ -49,6 +49,16 @@ export class MalformedDocumentError extends RipstreamError {
   }
 }
 
+/**
+ * An input of zero bytes. Tika's AutoDetectParser refuses it with a ZeroByteFileException, which is a TikaException:
+ * a document that cannot be read, not a parser that is missing.
+ */
+export class ZeroByteFileError extends MalformedDocumentError {
+  constructor() {
+    super("InputStream must have > 0 bytes");
+  }
+}
+
 export class WriteLimitReachedError extends RipstreamError {
   readonly limit: number;
 

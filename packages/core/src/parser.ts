@@ -4,11 +4,13 @@ import {
   ParserDeclinedError,
   RipstreamError,
   UnsupportedFormatError,
+  ZeroByteFileError,
 } from "./errors.ts";
 import { MediaType } from "./media-type.ts";
 import type { MediaTypeRegistry } from "./media-type-registry.ts";
 import { Metadata } from "./metadata.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
+import { TIKA_KEYS } from "./tika-keys.ts";
 import type { RipstreamInputStream } from "./ripstream-input-stream.ts";
 
 export interface ParserCapabilities {
@@ -195,11 +197,19 @@ export class CompositeParser implements Parser {
     const start = stream.position;
     for (const [index, { parser }] of candidates.entries()) {
       if (index > 0) await stream.seek(start);
+      const parsedBy = metadata.getAll(TIKA_KEYS.PARSED_BY);
       try {
+        // Tika records the parser that handled the document once, however many wrap it.
+        if (!parsedBy.includes(parser.name)) metadata.add(TIKA_KEYS.PARSED_BY, parser.name);
         await parser.parse(stream, handler, metadata, ctx);
         return;
       } catch (error) {
-        if (error instanceof ParserDeclinedError) continue;
+        if (error instanceof ParserDeclinedError) {
+          // A parser that declined did not parse the document.
+          if (parsedBy.length === 0) metadata.remove(TIKA_KEYS.PARSED_BY);
+          else metadata.setAll(TIKA_KEYS.PARSED_BY, parsedBy);
+          continue;
+        }
         if (error instanceof RipstreamError) throw error;
         // Backstop (#21): a parser leaked a raw library/runtime error. These are
         // overwhelmingly malformed-input failures, so map them to a 422-class
@@ -258,9 +268,12 @@ export class AutoDetectParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     const type = await this.detector.detect(stream, metadata, ctx);
-    metadata.set("tk:content-type-magic-detected", type.toString());
+    metadata.set(TIKA_KEYS.CONTENT_TYPE_MAGIC_DETECTED, type.toString());
+    metadata.set(TIKA_KEYS.CONTENT_TYPE_PARSER_OVERRIDE, type.toString());
     metadata.set("Content-Type", type.toString());
     ctx.set(CONTEXT_KEYS.CONTENT_TYPE, type);
+    // After the type is recorded, as Tika does: an empty document still reports what it was detected as.
+    if ((await stream.peek(1)).length === 0) throw new ZeroByteFileError();
     await this.parser.parse(stream, handler, metadata, ctx);
   }
 }

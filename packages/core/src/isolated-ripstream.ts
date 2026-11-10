@@ -1,7 +1,8 @@
 import type { InputSource } from "./content-handler.ts";
 import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
-import type { IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
+import type { IsolatedException, IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
+import type { HandlerType } from "./handler-type.ts";
 import type { ParseRecord } from "./recursive.ts";
 import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
 import type { MediaTypeResult, ParseOptions, ParseResult } from "./ripstream.ts";
@@ -67,12 +68,16 @@ export function createIsolatedRipstream(options: IsolatedRipstreamOptions): Isol
     async parse(source, parseOptions = {}) {
       const answer = await isolate(source, parseOptions, "text");
       if (answer.kind !== "text") throw new TypeError(`The isolator answered a text request with "${answer.kind}"`);
-      return { metadata: toMetadata(answer.metadata), text: answer.text };
+      return {
+        metadata: toMetadata(answer.metadata),
+        text: answer.text,
+        ...(answer.exception === undefined ? {} : { exception: toException(answer.exception) }),
+      };
     },
     async parseRecursive(source, parseOptions = {}) {
       const answer = await isolate(source, parseOptions, "records");
       if (answer.kind !== "records") throw new TypeError(`The isolator answered a records request with "${answer.kind}"`);
-      return answer.records.map(toParseRecord);
+      return answer.records.map((record) => toParseRecord(record, parseOptions.handlerType));
     },
   };
 }
@@ -94,6 +99,11 @@ function toRequest(
     ...(limits.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: limits.maxEmbeddedResources }),
     ...(limits.maxNodeDepth === undefined ? {} : { maxNodeDepth: limits.maxNodeDepth }),
     ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
+    ...(options.onDocumentFailure === "record" ? { recordFailures: true } : {}),
+    ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
+    ...(options.handlerType === undefined ? {} : { handlerType: options.handlerType }),
+    // Only a records answer has records to hang bytes on.
+    ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),
     output,
   };
 }
@@ -122,14 +132,16 @@ function toMetadata(values: Readonly<Record<string, readonly string[]>>): Metada
   return metadata;
 }
 
-function toParseRecord(record: IsolatedParseRecord): ParseRecord {
+function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | undefined): ParseRecord {
   return {
+    ...(handlerType === undefined ? {} : { handlerType }),
     metadata: toMetadata(record.metadata),
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
     depth: record.depth,
     mediaType: MediaType.parse(record.mediaType) ?? MediaType.OCTET_STREAM,
     exception: record.exception === null ? null : toException(record.exception),
+    ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
   };
 }
 
@@ -137,7 +149,7 @@ function toParseRecord(record: IsolatedParseRecord): ParseRecord {
  * The child's exception text is untrusted display data. It becomes a plain `Error` (never one of our classes), so
  * nothing downstream can mistake a document's own words for an infrastructure verdict.
  */
-function toException(exception: NonNullable<IsolatedParseRecord["exception"]>): Error {
+function toException(exception: IsolatedException): Error {
   const error = new Error(exception.message);
   error.name = exception.name;
   return error;

@@ -8,10 +8,13 @@ import {
   type ParseLimits,
 } from "./parse-context.ts";
 import type { Detector, Parser } from "./parser.ts";
-import { TextContentHandler, BodyContentHandler } from "./handlers/text.ts";
+import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
+import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
 import { ParseTimeoutError } from "./errors.ts";
-import { RecursiveParserWrapper, type ParseRecord } from "./recursive.ts";
+import { classifyFailure, isWriteLimitReached } from "./failure.ts";
+import { noteEmptyParser, recordFailure, RecursiveParserWrapper, type ParseRecord } from "./recursive.ts";
+import { TIKA_KEYS } from "./tika-keys.ts";
 import type { EventSink } from "./events.ts";
 import { RipstreamInputStream } from "./ripstream-input-stream.ts";
 import type { InputSource } from "./content-handler.ts";
@@ -32,11 +35,44 @@ export interface ParseOptions {
   readonly contentType?: string;
   readonly limits?: Partial<ParseLimits>;
   readonly signal?: AbortSignal;
+  /**
+   * What `parse` and `parseRecursive` do with a document that cannot be read (malformed, encrypted, empty). "throw"
+   * (default): the call rejects. "record": as Tika does, the failure is noted on the document's metadata
+   * (`tk:exception:container-exception`) and the call resolves with what was extracted before it, the failure
+   * itself on `ParseResult.exception` / `ParseRecord.exception`. A format no parser takes is not a failure there
+   * either: Tika's EmptyParser answers an empty document. A timeout, a limit, an abort or a parser fault still
+   * rejects in both modes. The other parse methods always throw.
+   */
+  readonly onDocumentFailure?: "throw" | "record";
+  /**
+   * What `parse` and `parseRecursive` do when the output reaches `limits.maxOutputChars`. "throw" (default): the
+   * call rejects with a LimitExceededError. "truncate": as Tika's server does with its write limit, the text up to
+   * the limit is the answer and `tk:exception:write-limit-reached` = "true" is set on the metadata of the document
+   * (`parseRecursive`: of the container, and of the embedded document whose text was cut). The limit is one budget
+   * for the container and everything embedded in it. Every other limit still rejects. The other parse methods
+   * always throw.
+   */
+  readonly onOutputLimit?: "throw" | "truncate";
+  /**
+   * The shape the content of `parse` (`ParseResult.text`) and of each `parseRecursive` record is written in; see
+   * HandlerType. Default "text". `maxOutputChars` counts the characters a handler is given, as Tika's write limit does
+   * for its handler of the same type: for "text" and "body" the characters of the body, for "html", "xml" and
+   * "markdown" every character the parsers write (markup excluded), for "ignore" nothing (no output, no limit).
+   */
+  readonly handlerType?: HandlerType;
+  /**
+   * `parseRecursive` only: keep the bytes of the embedded documents, on `ParseRecord.bytes`, up to this many in all
+   * (a whole number, 0 for none but the empty ones). A document that would take the total past it keeps none and is
+   * parsed all the same. Default: no bytes kept. This is what `/unpack` answers from.
+   */
+  readonly unpackBytes?: number;
 }
 
 export interface ParseResult {
   readonly metadata: Metadata;
   readonly text: string;
+  /** The failure of a document that could not be read; only under `onDocumentFailure: "record"`. */
+  readonly exception?: Error;
 }
 
 /** Facade over detector + parser, mirroring org.apache.tika.Tika. */
@@ -75,13 +111,17 @@ export class Ripstream {
   }
 
   async parse(source: InputSource, options: ParseOptions = {}): Promise<ParseResult> {
-    const handler = new BodyContentHandler();
-    const metadata = await this.parseToHandler(source, handler, options);
-    return { metadata, text: handler.toString() };
+    const type = options.handlerType ?? "text";
+    // `parse` filters to the body before the handler (see parseNoting), so a text handler gives a body handler's output
+    // and a body handler would never see the body begin.
+    const handler = createOutputHandler(type === "body" ? "text" : type);
+    const counting = type === "ignore" ? "none" : type === "text" || type === "body" ? "body" : "all";
+    const { metadata, exception } = await this.parseNoting(source, handler, options, counting);
+    return { metadata, text: handler.toString(), ...(exception === null ? {} : { exception }) };
   }
 
   async parseToString(source: InputSource, options: ParseOptions = {}): Promise<string> {
-    return (await this.parse(source, options)).text;
+    return (await this.parse(source, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw" })).text;
   }
 
   /**
@@ -183,6 +223,20 @@ export class Ripstream {
     handler: ContentHandler,
     options: ParseOptions = {},
   ): Promise<Metadata> {
+    return (await this.parseNoting(source, handler, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw" })).metadata;
+  }
+
+  /**
+   * `parseToHandler`; under `onDocumentFailure: "record"` also the failure of a document that could not be read, and
+   * under `onOutputLimit: "truncate"` a parse that ends where the output limit was reached.
+   */
+  private async parseNoting(
+    source: InputSource,
+    handler: ContentHandler,
+    options: ParseOptions,
+    counting: "all" | "body" | "none" = "all",
+  ): Promise<{ readonly metadata: Metadata; readonly exception: Error | null }> {
+    const recording = options.onDocumentFailure === "record";
     return this.withStream(source, options, async (stream, metadata, ctx) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
@@ -191,20 +245,44 @@ export class Ripstream {
         type: "start",
         ...(options.filename === undefined ? {} : { resourceName: options.filename }),
       });
-      const limited = new OutputLimitContentHandler(
-        handler,
-        ctx.limits.maxOutputChars,
-      );
+      // Only a limit this call's own handler reached is a truncation: a WriteOutContentHandler of the caller's that
+      // throws its own WriteLimitReachedError is the caller's to deal with.
+      const truncator =
+        options.onOutputLimit === "truncate" && counting !== "none"
+          ? new WriteOutContentHandler(handler, { writeLimit: ctx.limits.maxOutputChars })
+          : null;
+      const counted = truncator ?? new OutputLimitContentHandler(handler, ctx.limits.maxOutputChars);
+      // `counting`: "body" counts the text of the body, as Tika's limit does for its body handler (BodyContentHandler in
+      // front of the WriteOutContentHandler), not the markup whitespace and the title around it; "none" is the ignore
+      // handler, which has no limit.
+      const limited =
+        counting === "none"
+          ? handler
+          : counting === "body"
+            ? new BodyContentHandler((text) => counted.characters?.(text, 0, text.length))
+            : counted;
       try {
         await this.parser.parse(stream, limited, metadata, ctx);
       } catch (error) {
-        this.eventSink?.emit({
-          type: "error",
-          ...(options.filename === undefined ? {} : { resourceName: options.filename }),
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
+        const cut = truncator?.isWriteLimitReached === true && isWriteLimitReached(error);
+        const failure = recording && !ctx.signal.aborted ? classifyFailure(error) : "fatal";
+        if (cut) {
+          // The output ended the parse early, by design: what was written is the answer.
+        } else if (failure === "unsupported") {
+          noteEmptyParser(metadata);
+        } else {
+          this.eventSink?.emit({
+            type: "error",
+            ...(options.filename === undefined ? {} : { resourceName: options.filename }),
+            error: error instanceof Error ? error.message : String(error),
+          });
+          if (failure !== "document") throw error;
+          const exception = error instanceof Error ? error : new Error(String(error));
+          recordFailure(metadata, TIKA_KEYS.CONTAINER_EXCEPTION, exception);
+          return { metadata, exception };
+        }
       }
+      if (truncator?.isWriteLimitReached === true) metadata.set(TIKA_KEYS.WRITE_LIMIT_REACHED, "true");
       this.eventSink?.emit({
         type: "end",
         ...(options.filename === undefined ? {} : { resourceName: options.filename }),
@@ -213,7 +291,7 @@ export class Ripstream {
           : { mediaType: metadata.get("Content-Type")! }),
         durationMs: performance.now() - started,
       });
-      return metadata;
+      return { metadata, exception: null };
     });
   }
 
@@ -221,11 +299,25 @@ export class Ripstream {
     source: InputSource,
     options: ParseOptions = {},
   ): Promise<readonly ParseRecord[]> {
+    if (options.unpackBytes !== undefined && !(Number.isSafeInteger(options.unpackBytes) && options.unpackBytes >= 0)) {
+      throw new RangeError(`unpackBytes must be a non-negative whole number, got ${String(options.unpackBytes)}`);
+    }
     return this.withStream(source, options, async (stream, metadata, ctx) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
-      const wrapper = new RecursiveParserWrapper(this.parser);
-      await wrapper.parse(stream, new TextContentHandler(), metadata, ctx);
+      const recording = options.onDocumentFailure === "record";
+      const wrapper = new RecursiveParserWrapper(this.parser, {
+        recordFailures: recording,
+        truncateOutput: options.onOutputLimit === "truncate",
+        handlerType: options.handlerType ?? "text",
+        ...(options.unpackBytes === undefined ? {} : { unpackBytes: options.unpackBytes }),
+      });
+      try {
+        await wrapper.parse(stream, createOutputHandler("ignore"), metadata, ctx);
+      } catch (error) {
+        // The wrapper has noted the failure on the container's record; what is kept is the answer.
+        if (!recording || ctx.signal.aborted || classifyFailure(error) !== "document") throw error;
+      }
       return wrapper.getRecords();
     });
   }
@@ -283,6 +375,6 @@ export type MediaTypeResult = Awaited<ReturnType<Detector["detect"]>>;
 
 function metadataFor(filename: string | undefined): Metadata {
   const metadata = new Metadata();
-  if (filename !== undefined) metadata.set("resourceName", filename);
+  if (filename !== undefined) metadata.set("tk:resource-name", filename);
   return metadata;
 }

@@ -40,6 +40,16 @@ test("each applied key becomes the ripstream limit that means the same", () => {
   );
 });
 
+test("throwOnWriteLimit is read: true only when the section sets it true, so serve fails at the limit instead of truncating", () => {
+  const flag = (parseContext: unknown): boolean => loadConfig({ "parse-context": parseContext }).throwOnWriteLimit;
+  assert.equal(loadConfig({}).throwOnWriteLimit, false);
+  assert.equal(new RipstreamConfig().throwOnWriteLimit, false);
+  assert.equal(flag({ "output-limits": { writeLimit: 2000, throwOnWriteLimit: true } }), true);
+  assert.equal(flag({ "output-limits": { throwOnWriteLimit: true } }), true);
+  assert.equal(flag({ "output-limits": { writeLimit: -1, throwOnWriteLimit: false } }), false);
+  assert.equal(flag({ "embedded-limits": { maxCount: 3, throwOnMaxCount: true } }), false, "another block's flag is not this one");
+});
+
 test("the loaded limits are a frozen copy", () => {
   const section = { "embedded-limits": { maxCount: 3, throwOnMaxCount: true } };
   const limits = limitsOf(section);
@@ -112,7 +122,7 @@ test("an unknown setting, an unknown block and a wrong shape are refused", () =>
   assert.match(issuesOf({ "embedded-limits": { throwOnWriteLimit: true } }).join(";"), /embedded-limits: unknown setting "throwOnWriteLimit"/);
   assert.match(
     issuesOf({ "digester-factory": {} }).join(";"),
-    /parse-context: "digester-factory" is not supported: ripstream reads only embedded-limits, output-limits and timeout-limits/,
+    /parse-context: "digester-factory" is not supported: ripstream reads only embedded-limits, output-limits, timeout-limits and unpack-config/,
   );
   for (const section of ["limits", [], null, 3]) {
     assert.match(issuesOf(section).join(";"), /parse-context must be an object/, JSON.stringify(section));

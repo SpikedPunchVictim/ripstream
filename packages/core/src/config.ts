@@ -3,7 +3,9 @@ import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 import type { ParseLimits } from "./parse-context.ts";
 import { parseParseContextSection } from "./parse-context-config.ts";
+import { parsePipesSections, PIPES_SECTION_KEYS, type PipesSettings } from "./pipes-config.ts";
 import { parseServerSection, type ServerSettings } from "./server-config.ts";
+import type { UnpackSettings } from "./unpack-config.ts";
 
 export interface RipstreamConfigShape {
   readonly version?: number;
@@ -14,13 +16,29 @@ export interface RipstreamConfigShape {
   readonly detectors?: readonly ComponentEntry[];
   /** The limits of the `parse-context` section, already read by `loadConfig`. */
   readonly limits?: Readonly<Partial<ParseLimits>>;
+  /** `parse-context` `output-limits.throwOnWriteLimit` is true. */
+  readonly throwOnWriteLimit?: boolean;
   /** The path the `custom-mimetypes` key names. */
   readonly customMimeTypes?: string;
   /** The `server` section, already read by `loadConfig`. */
   readonly server?: ServerSettings;
+  /** The pipes sections (`fetchers`, `emitters`, `pipes-iterator`, `pipes-reporters`, `pipes`), already read by `loadConfig`. */
+  readonly pipes?: PipesSettings;
+  /** Settings the configuration had that were accepted and change nothing, each with why. */
+  readonly notices?: readonly string[];
 }
 
-const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors", "parse-context", "custom-mimetypes", "server"]);
+const ALLOWED_ROOT_KEYS = new Set([
+  "version",
+  "isolation",
+  "parsers",
+  "detectors",
+  "parse-context",
+  "custom-mimetypes",
+  "server",
+  "plugin-roots",
+  ...PIPES_SECTION_KEYS,
+]);
 
 /**
  * Sections Tika's configuration has and ripstream does not apply. They are refused by name rather than accepted and
@@ -87,7 +105,13 @@ export class RipstreamConfig {
    */
   readonly limits: Readonly<Partial<ParseLimits>> | null;
   /**
-   * The path of a `custom-mimetypes.xml` (Tika's file, whose property is `tika.custom-mimetypes`), or null when the
+   * `output-limits.throwOnWriteLimit` of the `parse-context` section: true when it is set true, so reaching the output
+   * limit fails the parse. Everything that applies the limits already fails there; `ripstream serve` is the one that
+   * otherwise answers with the text up to the limit, and it fails instead when this is true.
+   */
+  readonly throwOnWriteLimit: boolean;
+  /**
+   * The path of a `custom-mimetypes.xml' (Tika's file, whose property is `tika.custom-mimetypes`), or null when the
    * configuration names none. `createRipstream({ config })` reads it, relative to the working directory, and adds its
    * media types to the registry that names, magic and aliases are resolved with.
    */
@@ -97,6 +121,13 @@ export class RipstreamConfig {
    * `createRipstream` ignores it.
    */
   readonly server: ServerSettings | null;
+  /**
+   * What the pipes sections set, or null when there are none. Only the pipes package reads it; `createRipstream`
+   * ignores it.
+   */
+  readonly pipes: PipesSettings | null;
+  /** Settings the configuration had that were accepted and change nothing here, each with why; empty when none. */
+  readonly notices: readonly string[];
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
@@ -106,8 +137,11 @@ export class RipstreamConfig {
     this.parsers = freezeEntries(shape.parsers);
     this.detectors = freezeEntries(shape.detectors);
     this.limits = shape.limits === undefined || Object.keys(shape.limits).length === 0 ? null : Object.freeze({ ...shape.limits });
+    this.throwOnWriteLimit = shape.throwOnWriteLimit ?? false;
     this.customMimeTypes = shape.customMimeTypes ?? null;
     this.server = shape.server === undefined || Object.keys(shape.server).length === 0 ? null : Object.freeze({ ...shape.server });
+    this.pipes = shape.pipes === undefined ? null : shape.pipes;
+    this.notices = Object.freeze([...(shape.notices ?? [])]);
   }
 
   get current(): boolean {
@@ -148,7 +182,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers, detectors, limits, customMimeTypes, server } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers, detectors, limits, throwOnWriteLimit, customMimeTypes, server, pipes, notices } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -159,8 +193,11 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(parsers === undefined ? {} : { parsers }),
     ...(detectors === undefined ? {} : { detectors }),
     ...(limits === undefined ? {} : { limits }),
+    ...(throwOnWriteLimit === true ? { throwOnWriteLimit } : {}),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
+    ...(pipes === undefined ? {} : { pipes }),
+    ...(notices.length === 0 ? {} : { notices }),
   });
 }
 
@@ -174,14 +211,17 @@ interface InspectedConfig {
   readonly parsers?: readonly ComponentEntry[];
   readonly detectors?: readonly ComponentEntry[];
   readonly limits?: Partial<ParseLimits>;
+  readonly throwOnWriteLimit?: boolean;
   readonly customMimeTypes?: string;
   readonly server?: ServerSettings;
+  readonly pipes?: PipesSettings;
+  readonly notices: readonly string[];
 }
 
 function inspectConfig(value: unknown): InspectedConfig {
   const issues: string[] = [];
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return { issues: ["configuration root must be a JSON object"] };
+    return { issues: ["configuration root must be a JSON object"], notices: [] };
   }
   const record = value as Record<string, unknown>;
 
@@ -221,10 +261,16 @@ function inspectConfig(value: unknown): InspectedConfig {
   }
 
   let limits: Partial<ParseLimits> | undefined;
+  let throwOnWriteLimit = false;
+  let unpack: UnpackSettings | undefined;
   if (record["parse-context"] !== undefined) {
     const result = parseParseContextSection(record["parse-context"]);
     issues.push(...result.issues);
-    if (result.issues.length === 0) limits = result.limits;
+    if (result.issues.length === 0) {
+      limits = result.limits;
+      throwOnWriteLimit = result.throwOnWriteLimit;
+      unpack = result.unpack;
+    }
   }
   let customMimeTypes: string | undefined;
   const rawCustom = record["custom-mimetypes"];
@@ -238,14 +284,33 @@ function inspectConfig(value: unknown): InspectedConfig {
     issues.push(...result.issues);
     if (result.issues.length === 0) server = result.settings;
   }
+  const notices: string[] = [];
+  if (record["plugin-roots"] !== undefined) {
+    if (typeof record["plugin-roots"] === "string") {
+      notices.push('"plugin-roots" names where Tika finds its PF4J plugins; ripstream\'s components are built in, so it changes nothing');
+    } else issues.push('"plugin-roots" must be a string');
+  }
+  let pipes: PipesSettings | undefined;
+  const pipesResult = parsePipesSections(record);
+  issues.push(...pipesResult.issues);
+  if (pipesResult.issues.length === 0 && pipesResult.settings !== undefined) {
+    // UNPACK mode's settings live in the parse-context section but only pipes uses them.
+    pipes = unpack === undefined ? pipesResult.settings : { ...pipesResult.settings, unpack };
+    notices.push(...pipes.notices);
+  } else if (unpack !== undefined && pipesResult.issues.length === 0) {
+    notices.push('"parse-context" unpack-config says what pipes\' UNPACK mode emits; the configuration has no pipes sections, so it changes nothing');
+  }
   return {
     issues,
+    notices,
     ...(isolation === undefined ? {} : { isolation }),
     ...(sections.parsers === undefined ? {} : { parsers: sections.parsers }),
     ...(sections.detectors === undefined ? {} : { detectors: sections.detectors }),
     ...(limits === undefined ? {} : { limits }),
+    ...(throwOnWriteLimit ? { throwOnWriteLimit } : {}),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
+    ...(pipes === undefined ? {} : { pipes }),
   };
 }
 

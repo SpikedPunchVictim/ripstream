@@ -43,9 +43,16 @@ test("what Tika reads as unset is unset: * for all hosts, an empty cors, an empt
 });
 
 test("the endpoints ripstream serves, and the default set Tika serves without an endpoints key", () => {
-  assert.deepEqual([...SERVER_ENDPOINTS].sort(), ["async", "detect", "language", "meta", "rmeta", "status", "tika", "unpack", "version"]);
+  assert.deepEqual([...SERVER_ENDPOINTS].sort(), ["async", "detect", "language", "meta", "mime-types", "rmeta", "status", "tika", "unpack", "version"]);
   // Tika: tika rmeta meta unpack detect language mime mime-types detectors parsers version; status, pipes and async are opt-in.
-  assert.deepEqual([...DEFAULT_SERVER_ENDPOINTS].sort(), ["detect", "language", "meta", "rmeta", "tika", "unpack", "version"]);
+  // ripstream serves all but `detectors` and `parsers` (and `pipes`, which is opt-in there).
+  assert.deepEqual([...DEFAULT_SERVER_ENDPOINTS].sort(), ["detect", "language", "meta", "mime-types", "rmeta", "tika", "unpack", "version"]);
+});
+
+test("Tika's `mime` and `mime-types` are one endpoint: either serves /mime-types", () => {
+  assert.deepEqual(section({ endpoints: ["mime"] }).settings, { endpoints: ["mime-types"] });
+  assert.deepEqual(section({ endpoints: ["mime-types"] }).settings, { endpoints: ["mime-types"] });
+  assert.deepEqual(section({ endpoints: ["mime", "detect", "mime-types"] }).settings, { endpoints: ["mime-types", "detect"] });
 });
 
 test("a port, host or endpoint that is not one is refused", () => {
@@ -60,7 +67,7 @@ test("a port, host or endpoint that is not one is refused", () => {
 test("an endpoint Tika does not know is unrecognized; one Tika has and ripstream does not serve is said so", () => {
   const [unknown] = issuesOf({ endpoints: ["tika", "detct"] });
   assert.match(unknown ?? "", /^server\.endpoints\[1\] "detct" is not an endpoint; ripstream serves /);
-  for (const name of ["mime", "mime-types", "detectors", "parsers", "pipes"]) {
+  for (const name of ["detectors", "parsers", "pipes"]) {
     const [issue] = issuesOf({ endpoints: [name] });
     assert.match(issue ?? "", new RegExp(`^server\\.endpoints\\[0\\] "${name}" is a Tika endpoint that ripstream does not serve`), name);
   }
@@ -103,7 +110,7 @@ test("a setting with no ripstream counterpart is refused by name, with the reaso
 test("the section must be an object, and loadConfig reports every problem at once", () => {
   for (const value of [[], "x", 1, null]) assert.deepEqual(issuesOf(value), ["server must be an object"], String(value));
   assert.throws(
-    () => loadConfig({ server: { port: -1, endpoints: ["mime"], id: "a" } }),
+    () => loadConfig({ server: { port: -1, endpoints: ["pipes"], id: "a" } }),
     (error) => error instanceof RipstreamConfigError && error.issues.length === 3,
   );
   assert.equal(validateConfig({ server: { port: 8080 } }).length, 0);

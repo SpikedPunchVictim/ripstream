@@ -1,6 +1,8 @@
 import { metadataKeyDefinition } from "./generated/metadata-schema.ts";
 import type { Metadata } from "./metadata.ts";
 import type { ParseRecord } from "./recursive.ts";
+import { handlerTypeName } from "./handler-type.ts";
+import { TIKA_KEYS } from "./tika-keys.ts";
 
 export interface RmetaOptions {
   /** Coerce values using the upstream metadata schema value types. */
@@ -10,18 +12,19 @@ export interface RmetaOptions {
   readonly includeContent?: boolean;
 }
 
-type RmetaValue = string | number | boolean | readonly (string | number | boolean)[];
+export type RmetaValue = string | number | boolean | readonly (string | number | boolean)[];
 
 /**
- * Serializes parse records into the recursive-metadata JSON shape used by
- * Ripstream. Metadata values are arrays unless typedMetadata collapses singletons.
+ * Serializes parse records into the recursive-metadata JSON shape of Tika's /rmeta: one object per document, the
+ * container first. A key with one value is a string; a key with several is an array (Tika's MetadataSerializer).
+ * typedMetadata additionally turns integers, reals and booleans into JSON numbers and booleans.
  */
 export function serializeRmeta(
   records: readonly ParseRecord[],
   options: RmetaOptions = {},
 ): string {
   const shape = options.jsonShape ?? "records";
-  const objects = records.map((record) => rmetaObject(record, options));
+  const objects = rmetaObjects(records, options);
   if (shape === "document") {
     return JSON.stringify(objects[0] ?? {});
   }
@@ -36,27 +39,66 @@ export function rmetaObject(
   const typed = options.typedMetadata ?? false;
   const result: Record<string, RmetaValue> = {};
 
-  for (const name of record.metadata.names()) {
-    const values = record.metadata.getAll(name);
-    if (values.length === 0) continue;
-    if (typed) {
-      result[name] = typedValue(name, values);
-    } else {
-      result[name] = [...values];
-    }
-  }
+  Object.assign(result, metadataJson(record.metadata, { typedMetadata: typed }));
 
-  result["X-TIKA:embedded_resource_path"] = [record.embeddedResourcePath];
-  result["X-TIKA:embedded_depth"] = [String(record.depth)];
-  if (includeContent) result["X-TIKA:content"] = record.content;
-  if (record.exception !== null) {
-    const name =
-      record.exception instanceof Error
-        ? record.exception.name
-        : "Error";
-    result[`X-TIKA:EXCEPTION:${name}`] = [record.exception.message];
+  result[TIKA_KEYS.EMBEDDED_DEPTH] ??= String(record.depth);
+  // A failure the wrapper did not note on the metadata (a record built by hand) is noted here, as Tika's container
+  // and embedded keys.
+  const failureKey = record.depth === 0 ? TIKA_KEYS.CONTAINER_EXCEPTION : TIKA_KEYS.EMBEDDED_EXCEPTION;
+  if (record.exception !== null && result[failureKey] === undefined) {
+    result[failureKey] = `${record.exception.name}: ${record.exception.message}`;
+  }
+  // Tika adds content only when it is not blank, with the handler that made it.
+  if (includeContent && record.content.trim() !== "") {
+    result[TIKA_KEYS.CONTENT] = record.content;
+    result[TIKA_KEYS.CONTENT_HANDLER_TYPE] = handlerTypeName(record.handlerType ?? "text");
   }
   return result;
+}
+
+/** One document's metadata as Tika writes it: a key with one value is a string, a key with several is an array. */
+export function metadataJson(
+  metadata: Metadata,
+  options: Pick<RmetaOptions, "typedMetadata"> = {},
+): Record<string, RmetaValue> {
+  const result: Record<string, RmetaValue> = {};
+  for (const name of metadata.names()) {
+    const values = metadata.getAll(name);
+    if (values.length === 0) continue;
+    result[name] = options.typedMetadata === true ? typedValue(name, values) : values.length === 1 ? values[0]! : [...values];
+  }
+  return result;
+}
+
+/**
+ * The record objects of one parse, with the two keys that need the whole list: the container's
+ * `tk:parsed-by-full-set` (every parser that ran anywhere in the file) and each embedded document's
+ * `tk:final-embedded-resource-path` (its path by names, worked out once every name is known).
+ */
+export function rmetaObjects(
+  records: readonly ParseRecord[],
+  options: RmetaOptions = {},
+): Record<string, RmetaValue>[] {
+  const objects = records.map((record) => rmetaObject(record, options));
+  const nameOfId = new Map<string, string>();
+  let unknown = 0;
+  for (const record of records) {
+    const id = record.metadata.get(TIKA_KEYS.EMBEDDED_ID);
+    if (id === null) continue;
+    const name = record.metadata.get(TIKA_KEYS.RESOURCE_NAME) ?? `embedded-${++unknown}`;
+    nameOfId.set(id, name.slice(name.lastIndexOf("/") + 1));
+  }
+  const parsedBy = new Set<string>();
+  records.forEach((record, index) => {
+    for (const parser of record.metadata.getAll(TIKA_KEYS.PARSED_BY)) parsedBy.add(parser);
+    const idPath = record.metadata.get(TIKA_KEYS.EMBEDDED_ID_PATH);
+    if (idPath === null) return;
+    const names = idPath.split("/").filter((id) => id !== "").map((id) => nameOfId.get(id) ?? id);
+    objects[index]![TIKA_KEYS.FINAL_EMBEDDED_RESOURCE_PATH] = `/${names.join("/")}`;
+  });
+  const container = objects[0];
+  if (container !== undefined && parsedBy.size > 0) container[TIKA_KEYS.PARSED_BY_FULL_SET] = [...parsedBy];
+  return objects;
 }
 
 function typedValue(
@@ -93,7 +135,7 @@ function coerce(
 /** Adds standard timing fields to a record's metadata. */
 export function markParseTiming(metadata: Metadata, startedAt: number): void {
   metadata.set(
-    "X-TIKA:parse_time_millis",
+    TIKA_KEYS.PARSE_TIME_MILLIS,
     String(Math.max(0, Math.round(performance.now() - startedAt))),
   );
 }

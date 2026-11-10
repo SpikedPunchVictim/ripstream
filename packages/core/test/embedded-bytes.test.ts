@@ -16,7 +16,7 @@ test("buffers embedded documents with paths and URIs", async () => {
   const context = new ParseContext();
   context.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, "/doc");
   const metadata = new Metadata();
-  metadata.set("resourceName", "a.txt");
+  metadata.set("tk:resource-name", "a.txt");
   const stream = await RipstreamInputStream.from(new TextEncoder().encode("hello"));
   await handler.parseEmbedded(
     stream,
@@ -29,7 +29,7 @@ test("buffers embedded documents with paths and URIs", async () => {
   assert.equal(handler.resources[0]?.path, "/doc/a.txt");
   assert.equal(handler.resources[0]?.uri, "embedded:/doc/a.txt");
   assert.equal(new TextDecoder().decode(handler.resources[0]?.bytes), "hello");
-  assert.equal(metadata.get("X-TIKA:embedded_resource_uri"), "embedded:/doc/a.txt");
+  assert.equal(metadata.get("ripstream:embedded-resource-uri"), "embedded:/doc/a.txt");
 });
 
 test("default extractor aborts an unknown-size child as soon as the byte budget is crossed", async () => {

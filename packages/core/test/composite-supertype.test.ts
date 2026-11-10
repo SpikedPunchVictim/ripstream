@@ -187,3 +187,19 @@ test("a type with parameters follows its own supertype entry, not its base type'
   assert.deepEqual(calls, ["ole2"]);
   await assert.rejects(run(parser, "image/vnd.dgn"), UnsupportedFormatError);
 });
+
+test("tk:parsed-by names the parser that handled the document, not one that declined it", async () => {
+  const declining: Parser = {
+    name: "declines",
+    getSupportedTypes: () => new Set([type(XLSX)]),
+    async parse() {
+      throw new ParserDeclinedError("not mine");
+    },
+  };
+  const parser = new CompositeParser({ parsers: [declining, named("takes", [XLSX])] });
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.CONTENT_TYPE, type(XLSX));
+  const metadata = new Metadata();
+  await parser.parse(await RipstreamInputStream.from(new TextEncoder().encode("abc")), new BodyContentHandler(), metadata, context);
+  assert.deepEqual(metadata.getAll("tk:parsed-by"), ["takes"]);
+});

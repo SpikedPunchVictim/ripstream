@@ -6,6 +6,7 @@
  */
 
 import type { ComponentEntry } from "./component-config.ts";
+import type { HandlerType } from "./handler-type.ts";
 
 /**
  * What a configuration sets that the isolation child must apply too (plain data, so it crosses a process boundary as
@@ -57,6 +58,16 @@ export interface IsolationConfig {
   readonly maxDiskMb?: number;
 }
 
+/**
+ * A document's failure in plain form. The values come from the isolation child, which parsed hostile input: treat
+ * `name` and `message` as untrusted text (do not use `name` to select a class or code path).
+ */
+export interface IsolatedException {
+  readonly name: string;
+  readonly message: string;
+  readonly code?: string;
+}
+
 /** One parsed document (top-level or embedded) in plain, serializable form. */
 export interface IsolatedParseRecord {
   readonly metadata: Record<string, readonly string[]>;
@@ -65,17 +76,10 @@ export interface IsolatedParseRecord {
   readonly depth: number;
   /** Media type as a string, e.g. "application/pdf". */
   readonly mediaType: string;
-  /**
-   * Per-document failure; request-fatal failures are thrown instead. The
-   * values come from the isolation child, which parsed hostile input: treat
-   * `name` and `message` as untrusted text (do not use `name` to select a
-   * class or code path).
-   */
-  readonly exception: {
-    readonly name: string;
-    readonly message: string;
-    readonly code?: string;
-  } | null;
+  /** Per-document failure; request-fatal failures are thrown instead. */
+  readonly exception: IsolatedException | null;
+  /** The embedded document's own bytes; only for a request with `unpackBytes`, and only when the document fit its budget. */
+  readonly bytes?: Uint8Array;
 }
 
 export interface IsolatedParseRequest {
@@ -103,6 +107,29 @@ export interface IsolatedParseRequest {
    * `kind: "records"`.
    */
   readonly output?: "text" | "records";
+  /**
+   * `ParseOptions.onDocumentFailure: "record"`: a document that cannot be read is an answer carrying its failure
+   * (`exception` of the text arm, of the first record of the records arm), not a thrown error. Timeouts, limits and
+   * infrastructure faults are thrown either way. Omitted: false.
+   */
+  readonly recordFailures?: boolean;
+  /**
+   * `ParseOptions.onOutputLimit: "truncate"`: reaching `maxOutputChars` ends the parse with the text up to the limit
+   * as the answer, and `tk:exception:write-limit-reached` on the metadata, instead of a thrown LimitExceededError.
+   * Omitted: false.
+   */
+  readonly truncateOutput?: boolean;
+  /**
+   * `ParseOptions.handlerType`: the shape the content of the answer is written in (`text` of the text arm, `content` of
+   * each record). Omitted: "text".
+   */
+  readonly handlerType?: HandlerType;
+  /**
+   * `ParseOptions.unpackBytes`: keep the bytes of the embedded documents, on `IsolatedParseRecord.bytes`, up to this
+   * many in all. Only for `output: "records"`. They cross the boundary like the rest of the result, so the isolation's
+   * result cap, its memory reservation and its own ceiling on this number all apply. Omitted: none.
+   */
+  readonly unpackBytes?: number;
 }
 
 /** Narrow on `kind`; the arm always matches the request's `output`. */
@@ -111,6 +138,8 @@ export type IsolatedParseResult =
       readonly kind: "text";
       readonly metadata: Record<string, readonly string[]>;
       readonly text: string;
+      /** The failure of a document that could not be read; only for a request with `recordFailures`. */
+      readonly exception?: IsolatedException;
     }
   | { readonly kind: "records"; readonly records: readonly IsolatedParseRecord[] };
 

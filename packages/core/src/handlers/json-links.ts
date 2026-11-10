@@ -14,7 +14,7 @@ export class JsonContentHandler extends TextContentHandler {
   toObject(): Record<string, unknown> {
     return {
       ...this.metadata.toObject(),
-      "X-TIKA:content": super.toString(),
+      "tk:content": super.toString(),
     };
   }
 

@@ -122,14 +122,14 @@ export class ParsingEmbeddedDocumentExtractor
     const source = stream.length !== null ? stream : await meterEmbeddedStream(stream, ctx);
 
     const parent =
-      metadata.get("X-TIKA:embedded_resource_path") ??
+      metadata.get("tk:embedded-resource-path") ??
       ctx.get(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH) ??
       "";
-    const name = metadata.get("resourceName") ?? "embedded";
+    const name = metadata.get("tk:resource-name") ?? "embedded";
     const path = `${parent}/${name}`;
 
-    metadata.set("X-TIKA:embedded_resource_path", path);
-    metadata.set("X-TIKA:embedded_depth", depth);
+    metadata.set("tk:embedded-resource-path", path);
+    metadata.set("tk:embedded-depth", depth);
 
     const child = ctx.createChild({
       limits: { ...ctx.limits, maxNodeDepth: ctx.limits.maxNodeDepth },
@@ -199,12 +199,12 @@ export class EmbeddedDocumentBytesHandler implements EmbeddedDocumentExtractor {
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    const name = metadata.get("resourceName") ?? `embedded-${this.resources.length}`;
+    const name = metadata.get("tk:resource-name") ?? `embedded-${this.resources.length}`;
     const parent = ctx.get(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH) ?? "";
     const path = `${parent}/${name}`.replace(/\/+/g, "/");
     const uri = `embedded:${path}`;
-    metadata.set("X-TIKA:embedded_resource_path", path);
-    metadata.set("X-TIKA:embedded_resource_uri", uri);
+    metadata.set("tk:embedded-resource-path", path);
+    metadata.set("ripstream:embedded-resource-uri", uri);
     this.resources.push({ path, uri, metadata, bytes });
   }
 }

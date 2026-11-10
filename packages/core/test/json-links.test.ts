@@ -12,7 +12,7 @@ test("JSON handler merges metadata and content", () => {
   handler.characters("hello", 0, 5);
   assert.deepEqual(JSON.parse(handler.toString()), {
     "Content-Type": "text/plain",
-    "X-TIKA:content": "hello",
+    "tk:content": "hello",
   });
 });
 

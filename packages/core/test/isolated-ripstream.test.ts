@@ -61,6 +61,77 @@ test("parse: bytes and options cross as an isolated text request, and the answer
   assert.equal(calls[0]?.signal, signal);
 });
 
+test("parse: onDocumentFailure record crosses as recordFailures, and the failure comes back as a plain Error", async () => {
+  const unreadable: IsolatedParseResult = {
+    ...TEXT,
+    exception: { name: "ZeroByteFileError", message: "InputStream must have > 0 bytes", code: "MALFORMED_DOCUMENT" },
+  };
+  const { isolator, calls } = fakeIsolator(unreadable);
+  const result = await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1), { onDocumentFailure: "record" });
+  assert.equal(calls[0]?.request.recordFailures, true);
+  assert.equal(result.text, "hello");
+  assert.equal(result.exception?.constructor, Error, "the child's words are data, never one of our classes");
+  assert.equal(result.exception?.name, "ZeroByteFileError");
+  assert.equal(result.exception?.message, "InputStream must have > 0 bytes");
+});
+
+test("parse and parseRecursive: throw is the default and sends nothing about failures", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1), { onDocumentFailure: "throw" });
+  assert.equal("recordFailures" in (calls[0]?.request ?? {}), false);
+  const records = fakeIsolator(RECORDS_ANSWER);
+  await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { onDocumentFailure: "record" });
+  assert.equal(records.calls[0]?.request.recordFailures, true);
+});
+
+test("parse and parseRecursive: onOutputLimit truncate crosses as truncateOutput, and throw sends nothing", async () => {
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { onOutputLimit: "truncate" });
+  assert.equal(text.calls[0]?.request.truncateOutput, true);
+  const records = fakeIsolator(RECORDS_ANSWER);
+  await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { onOutputLimit: "truncate" });
+  assert.equal(records.calls[0]?.request.truncateOutput, true);
+  const plain = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { onOutputLimit: "throw" });
+  assert.equal("truncateOutput" in (plain.calls[0]?.request ?? {}), false);
+});
+
+test("parse and parseRecursive: handlerType crosses in the request, and the records come back stamped with it", async () => {
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { handlerType: "markdown" });
+  assert.equal(text.calls[0]?.request.handlerType, "markdown");
+  const records = fakeIsolator(RECORDS_ANSWER);
+  const answered = await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), {
+    handlerType: "html",
+  });
+  assert.equal(records.calls[0]?.request.handlerType, "html");
+  assert.ok(answered.every((record) => record.handlerType === "html"));
+  const plain = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1));
+  assert.equal("handlerType" in (plain.calls[0]?.request ?? {}), false);
+});
+
+test("parseRecursive: unpackBytes crosses in a records request only, and each record's bytes come back", async () => {
+  const withBytes: IsolatedParseResult = {
+    kind: "records",
+    records: [
+      { metadata: {}, content: "", embeddedResourcePath: "/a", depth: 0, mediaType: "text/plain", exception: null },
+      { metadata: {}, content: "", embeddedResourcePath: "/a/b", depth: 1, mediaType: "text/plain", exception: null, bytes: Uint8Array.of(1, 2, 3) },
+    ],
+  };
+  const records = fakeIsolator(withBytes);
+  const answered = await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { unpackBytes: 4096 });
+  assert.equal(records.calls[0]?.request.unpackBytes, 4096);
+  assert.equal(answered[0]?.bytes, undefined);
+  assert.deepEqual([...(answered[1]?.bytes ?? [])], [1, 2, 3]);
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { unpackBytes: 4096 });
+  assert.equal("unpackBytes" in (text.calls[0]?.request ?? {}), false, "a text answer has no records to hang bytes on");
+  const plain = fakeIsolator(RECORDS_ANSWER);
+  await createIsolatedRipstream({ isolator: plain.isolator, detector }).parseRecursive(new Uint8Array(1));
+  assert.equal("unpackBytes" in (plain.calls[0]?.request ?? {}), false);
+});
+
 test("parse: absent options add nothing to the request", async () => {
   const { isolator, calls } = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1));
@@ -135,6 +206,8 @@ test("limits: a default that cannot cross, or is invalid, is refused when the fa
   assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxBogus: 1 } as never }), RangeError);
 });
 
+const RECORDS_ANSWER: IsolatedParseResult = { kind: "records", records: [] };
+
 const RECORDS: IsolatedParseResult = {
   kind: "records",
   records: [
@@ -170,11 +243,11 @@ test("parseRecursive: records become ParseRecords that serialise like in-process
   assert.equal(records[1]?.embeddedResourcePath, "/a.txt");
   assert.equal(records[1]?.mediaType.toString(), "text/plain; charset=UTF-8");
   assert.deepEqual(rmetaObject(records[1]!), {
-    "Content-Type": ["text/plain"],
-    "X-TIKA:embedded_resource_path": ["/a.txt"],
-    "X-TIKA:embedded_depth": ["1"],
-    "X-TIKA:content": "inside",
-    "X-TIKA:EXCEPTION:MalformedDocumentError": ["bad entry"],
+    "Content-Type": "text/plain",
+    "tk:embedded-depth": "1",
+    "tk:exception:embedded-exception": "MalformedDocumentError: bad entry",
+    "tk:content": "inside",
+    "tk:content-handler-type": "TEXT",
   });
   assert.equal(records[0]?.exception, null);
 });

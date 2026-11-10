@@ -247,6 +247,8 @@ export const CONTEXT_KEYS = {
     "embedded-document-extractor",
   ),
   EMBEDDED_COUNT: new ParseContextKey<number>("embedded-count"),
+  /** The `tk:embedded-id-path` of the document being parsed ("" for the container). */
+  EMBEDDED_ID_PATH: new ParseContextKey<string>("embedded-id-path"),
   /** Mutable budget shared by a context and all of its descendants. */
   EMBEDDED_BUDGET: new ParseContextKey<{ count: number; bytes: number }>(
     "embedded-budget",

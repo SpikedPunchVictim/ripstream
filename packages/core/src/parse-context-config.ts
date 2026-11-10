@@ -1,4 +1,5 @@
 import type { ParseLimits } from "./parse-context.ts";
+import { parseUnpackConfig, type UnpackSettings } from "./unpack-config.ts";
 
 /*
  * The `parse-context` section of a Tika configuration (tika-core 4.2.0: EmbeddedLimits, OutputLimits, TimeoutLimits).
@@ -16,6 +17,8 @@ import type { ParseLimits } from "./parse-context.ts";
  * with the flag true. A limit is therefore accepted only beside its flag set to true: accepting `maxCount: 1000` alone
  * would turn Tika's truncated 200 into a 422 without a word. Every key with no ripstream counterpart is refused by
  * name, with the reason.
+ *
+ * `unpack-config` is not a limit: it says what pipes' UNPACK mode emits (unpack-config.ts) and is passed on as `unpack`.
  */
 
 type Block = "embedded-limits" | "output-limits" | "timeout-limits";
@@ -79,14 +82,31 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  * Reads a `parse-context` section into the ripstream limits it applies and reports everything Tika would accept and
  * ripstream cannot honor. It reads each value of the caller's object once, and returns a copy.
  */
-export function parseParseContextSection(value: unknown): { limits: Partial<ParseLimits>; issues: string[] } {
+export function parseParseContextSection(value: unknown): {
+  limits: Partial<ParseLimits>;
+  /** `output-limits.throwOnWriteLimit` was set to true: reaching the output limit must fail, even where it would truncate. */
+  throwOnWriteLimit: boolean;
+  /** The `unpack-config` component, when the section has one. */
+  unpack?: UnpackSettings;
+  issues: string[];
+} {
   const issues: string[] = [];
   const limits: { -readonly [Key in keyof ParseLimits]?: number } = {};
-  if (!isObject(value)) return { limits, issues: ["parse-context must be an object"] };
+  let throwOnWriteLimit = false;
+  let unpack: UnpackSettings | undefined;
+  if (!isObject(value)) return { limits, throwOnWriteLimit, issues: ["parse-context must be an object"] };
 
   for (const [name, raw] of Object.entries(value)) {
+    if (name === "unpack-config") {
+      const result = parseUnpackConfig(raw);
+      issues.push(...result.issues);
+      if (result.issues.length === 0) unpack = result.settings;
+      continue;
+    }
     if (!(BLOCKS as readonly string[]).includes(name)) {
-      issues.push(`parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${BLOCKS.join(", ").replace(/, ([^,]*)$/, " and $1")}`);
+      issues.push(
+        `parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${[...BLOCKS, "unpack-config"].join(", ").replace(/, ([^,]*)$/, " and $1")}`,
+      );
       continue;
     }
     const block = name as Block;
@@ -108,6 +128,7 @@ export function parseParseContextSection(value: unknown): { limits: Partial<Pars
     for (const flag of FLAGS[block]) {
       const flagValue = get(flag);
       if (flagValue !== undefined && typeof flagValue !== "boolean") issues.push(`${where}: ${flag} must be a boolean`);
+      if (flag === "throwOnWriteLimit" && flagValue === true) throwOnWriteLimit = true;
     }
     for (const [key, rule] of Object.entries(APPLIED[block])) {
       const number = get(key);
@@ -130,5 +151,5 @@ export function parseParseContextSection(value: unknown): { limits: Partial<Pars
       limits[rule.limit] = number;
     }
   }
-  return { limits, issues };
+  return { limits, throwOnWriteLimit, ...(unpack === undefined ? {} : { unpack }), issues };
 }

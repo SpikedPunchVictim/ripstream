@@ -18,8 +18,10 @@ export class MarkdownContentHandler implements ContentHandler {
   private linkText = "";
   private tableRow = 0;
   private tableCell = 0;
-  private atLineStart = true;
-  private lastWasBlank = true;
+  /** The newlines that end what has been written (capped at 2): two is a blank line, and the document start counts as one. */
+  private trailingNewlines = 2;
+  private inTitle = false;
+  private title = "";
 
   constructor(sink?: Sink) {
     this.sink = sink ?? null;
@@ -40,7 +42,12 @@ export class MarkdownContentHandler implements ContentHandler {
       this.inHead = true;
       return;
     }
-    if (name === "title" || name === "meta" || name === "link" || name === "base") return;
+    if (name === "title") {
+      this.inTitle = true;
+      this.title = "";
+      return;
+    }
+    if (name === "meta" || name === "link" || name === "base") return;
     if (this.inHead) return;
 
     switch (name) {
@@ -135,6 +142,12 @@ export class MarkdownContentHandler implements ContentHandler {
   async endElement(uri: string, localName: string, qName: string): Promise<void> {
     const name = (qName || localName).toLowerCase();
 
+    if (name === "title") {
+      this.inTitle = false;
+      // The title leads the document as its own paragraph; the two spaces are Markdown's hard line break, as Tika writes it.
+      if (this.title.trim() !== "") await this.write(`${this.title.trim()}  \n\n`);
+      return;
+    }
     if (name === "head") {
       this.inHead = false;
       return;
@@ -197,7 +210,12 @@ export class MarkdownContentHandler implements ContentHandler {
 
   async characters(ch: string, start: number, length: number): Promise<void> {
     const text = ch.slice(start, start + length);
-    if (this.href !== null) this.linkText += text;
+    if (this.inTitle) this.title += text;
+    else if (this.inHead) return;
+    else if (this.href !== null) this.linkText += text;
+    // Whitespace between blocks is the parsers' layout, not content: Tika drops it, and so does this (a line start is
+    // between blocks). Inside a run of text, or a preformatted block, it stays.
+    else if (this.preDepth === 0 && this.trailingNewlines > 0 && text.trim() === "") return;
     else await this.write(text);
   }
 
@@ -216,14 +234,12 @@ export class MarkdownContentHandler implements ContentHandler {
     } else {
       await this.sink(text);
     }
-    this.atLineStart = text.endsWith("\n");
-    this.lastWasBlank = /^\n+$/.test(text);
+    const trailing = /\n*$/.exec(text)?.[0].length ?? 0;
+    this.trailingNewlines = Math.min(2, trailing === text.length ? this.trailingNewlines + trailing : trailing);
   }
 
+  /** Ends the current block: enough newlines for a blank line to follow what has been written. */
   private async blankLine(): Promise<void> {
-    if (this.lastWasBlank) return;
-    if (!this.atLineStart) await this.write("\n");
-    await this.write("\n");
-    this.lastWasBlank = true;
+    if (this.trailingNewlines < 2) await this.write("\n".repeat(2 - this.trailingNewlines));
   }
 }

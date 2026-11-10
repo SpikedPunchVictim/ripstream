@@ -1,5 +1,5 @@
 /** The endpoints of Tika's server that `ripstream serve` serves, by Tika's names. */
-export const SERVER_ENDPOINTS = ["tika", "rmeta", "meta", "unpack", "detect", "language", "version", "status", "async"] as const;
+export const SERVER_ENDPOINTS = ["tika", "rmeta", "meta", "unpack", "detect", "language", "mime-types", "version", "status", "async"] as const;
 
 export type ServerEndpoint = (typeof SERVER_ENDPOINTS)[number];
 
@@ -7,7 +7,7 @@ export type ServerEndpoint = (typeof SERVER_ENDPOINTS)[number];
  * What the server serves when no endpoints are named: Tika's default set, less the endpoints ripstream does not serve.
  * `status` and `async` are opt-in, as `status`, `pipes` and `async` are in Tika (TikaServerProcess.DEFAULT_ENDPOINTS).
  */
-export const DEFAULT_SERVER_ENDPOINTS: readonly ServerEndpoint[] = ["tika", "rmeta", "meta", "unpack", "detect", "language", "version"];
+export const DEFAULT_SERVER_ENDPOINTS: readonly ServerEndpoint[] = ["tika", "rmeta", "meta", "unpack", "detect", "language", "mime-types", "version"];
 
 /** The `server` section as ripstream applies it. A key the section leaves out is absent here. */
 export interface ServerSettings {
@@ -27,7 +27,7 @@ export interface ServerSettings {
 const INT_MAX = 2 ** 31 - 1;
 
 /** Tika endpoints (TikaServerProcess.VALID_ENDPOINTS) that ripstream does not serve from a configuration. */
-const NOT_SERVED = new Set(["mime", "mime-types", "detectors", "parsers", "pipes"]);
+const NOT_SERVED = new Set(["detectors", "parsers", "pipes"]);
 
 /** Switches that open a Tika feature ripstream does not have. Off is what ripstream does, so off is accepted. */
 const SWITCHES: Readonly<Record<string, string>> = {
@@ -64,7 +64,10 @@ function endpointList(value: unknown, issues: string[]): ServerEndpoint[] | unde
   value.forEach((item: unknown, index) => {
     const where = `server.endpoints[${index}]`;
     if (typeof item !== "string") issues.push(`${where} must be an endpoint name`);
-    else if (NOT_SERVED.has(item)) {
+    else if (item === "mime") {
+      // Tika's `mime` and `mime-types` are the one resource (TikaServerProcess), so naming either serves it.
+      if (!names.includes("mime-types")) names.push("mime-types");
+    } else if (NOT_SERVED.has(item)) {
       issues.push(`${where} ${JSON.stringify(item)} is a Tika endpoint that ripstream does not serve (it serves ${SERVER_ENDPOINTS.join(", ")})`);
     } else if (!(SERVER_ENDPOINTS as readonly string[]).includes(item)) {
       issues.push(`${where} ${JSON.stringify(item)} is not an endpoint; ripstream serves ${SERVER_ENDPOINTS.join(", ")}`);
