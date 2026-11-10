@@ -185,9 +185,10 @@ export interface PipesEngineOptions {
    */
   readonly unpack?: UnpackSettings;
   /**
-   * NO_PARSE only: the digests an input gets (Tika's `parse-context` digester factory; `pipes` settings carry it from a
-   * configuration). NO_PARSE digests and detects without a parse, so the parser's own digesting never runs. The other
-   * modes digest in the parser, from the ripstream's own configuration. Default: none.
+   * The digests an input gets (Tika's `parse-context` digester factory; `pipes` settings carry it from a configuration).
+   * NO_PARSE digests and detects without a parse, so the parser's own digesting never runs: it uses these. The other
+   * modes digest in the parser, so the ripstream made here is given them; a `ripstream` passed in digests as it was
+   * built, and these do not reach it. Default: none.
    */
   readonly digest?: DigestSettings;
   /**
@@ -266,9 +267,10 @@ export class PipesEngine {
     const unpackBytes = this.#options.unpackBytes ?? this.#options.unpack?.maxUnpackBytes ?? DEFAULT_UNPACK_BYTES;
     const unpack = resolveUnpack(this.#options.unpack);
     const extensionOf = this.#options.extensionOf ?? (() => ".bin");
-    const ripstream = this.#options.ripstream ?? createRipstream();
-    const limits = this.#options.limits;
     const digest = this.#options.digest;
+    // A ripstream the caller passes digests as it was built; the one made here digests as the run's settings say, in every mode.
+    const ripstream = this.#options.ripstream ?? createRipstream(digest === undefined ? {} : { digest });
+    const limits = this.#options.limits;
     const checkpoint = options.checkpoint;
     const retry = options.retry;
     // A try again of a fetch or an emit, when the run asked for them; only failures that may not repeat are tried again.
@@ -419,12 +421,15 @@ export class PipesEngine {
       const skipFailed = (tuple.onParseException ?? onParseException) === "SKIP";
       try {
         if (mode === "NO_PARSE") {
-          // Tika's detectOnly (ParseHandler._preParse): the digests, then the type, with no parse. With
-          // skipContainerDocumentDigest the container is not digested here, and no parser runs to digest it.
-          const metadata: Record<string, string> = {};
+          // Tika's detectOnly (ParseHandler._preParse): what the fetcher stage knows (the name and the length), the digests,
+          // then the type, with no parse. With skipContainerDocumentDigest the container is not digested here, and no
+          // parser runs to digest it.
+          const metadata: Record<string, string> = {
+            [TIKA_KEYS.RESOURCE_NAME]: tuple.id,
+            [CONTENT_LENGTH]: String(bytes.length),
+          };
           if (digest !== undefined && !digest.skipContainerDocumentDigest && digest.digests.length > 0) {
             for (const [key, value] of await digestBytes(bytes, digest.digests, signal)) metadata[key] = value;
-            metadata[CONTENT_LENGTH] = String(bytes.length);
           }
           const detected = String(await ripstream.detect(bytes, { filename: tuple.id, signal }));
           metadata["Content-Type"] = detected;

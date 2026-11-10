@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -87,6 +88,27 @@ test("a tuple offered to an idle processor is processed at once, and so is each 
     } finally {
       await processor.close();
     }
+  }));
+
+test("a processor with a digester factory in its settings digests what it parses, as the engine does", () =>
+  scratch(async (paths) => {
+    const content = "content digested by an async processor";
+    writeFileSync(join(paths.input, "d.txt"), content);
+    const settings = loadConfig({
+      fetchers: { fsf: { "file-system-fetcher": { basePath: paths.input } } },
+      emitters: { fse: { "file-system-emitter": { basePath: paths.output, fileExtension: "json", onExists: "REPLACE" } } },
+      pipes: { parseMode: "RMETA" },
+      "parse-context": { "commons-digester-factory": { digests: [{ algorithm: "MD5" }] } },
+    }).pipes!;
+    const processor = new AsyncProcessor(settings);
+    try {
+      assert.equal(await processor.offer([tuple("d.txt")], 1_000), true);
+      await until(() => existsSync(join(paths.output, "d.txt.json")), "d.txt to be emitted");
+    } finally {
+      await processor.close();
+    }
+    const [record] = JSON.parse(readFileSync(join(paths.output, "d.txt.json"), "utf8")) as Array<Record<string, unknown>>;
+    assert.equal(record?.["tk:digest:MD5"], createHash("md5").update(content).digest("hex"));
   }));
 
 test("a batch is taken whole and every tuple in it is processed", () =>

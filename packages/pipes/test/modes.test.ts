@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { loadConfig, type UnpackSettings } from "@spikedpunch/ripstream-core";
+import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import {
   FileSystemEmitter,
   MemoryEmitter,
@@ -87,20 +88,24 @@ test("NO_PARSE says what it detected twice: the type, and the type a parser is t
   });
 });
 
-/** Tika's NO_PARSE with a digester factory: `_preParse` digests the container, then detects. No parser runs. */
-async function noParse(directory: string, parseContext: unknown): Promise<Record<string, unknown>> {
+/** What a run of `createEngineFromSettings` writes for `doc.txt`, with no ripstream passed: the engine builds its own from the settings. */
+async function piped(directory: string, parseMode: PipeMode, parseContext: unknown): Promise<Record<string, unknown>[]> {
   const output = join(directory, "out");
   const input = join(directory, "in");
   const config = {
     fetchers: { fsf: { "file-system-fetcher": { basePath: input } } },
     emitters: { fse: { "file-system-emitter": { basePath: output, fileExtension: "json" } } },
     "pipes-iterator": { "file-system-pipes-iterator": { basePath: input, fetcherId: "fsf", emitterId: "fse" } },
-    pipes: { parseMode: "NO_PARSE" },
+    pipes: { parseMode },
     "parse-context": parseContext,
   };
   assert.equal(await createEngineFromSettings(loadConfig(config).pipes!).run(), 1);
-  const [record] = JSON.parse(readFileSync(join(output, "doc.txt.json"), "utf8")) as Array<Record<string, unknown>>;
-  return record ?? {};
+  return JSON.parse(readFileSync(join(output, "doc.txt.json"), "utf8")) as Array<Record<string, unknown>>;
+}
+
+/** Tika's NO_PARSE with a digester factory: `_preParse` digests the container, then detects. No parser runs. */
+async function noParse(directory: string, parseContext: unknown): Promise<Record<string, unknown>> {
+  return (await piped(directory, "NO_PARSE", parseContext))[0] ?? {};
 }
 
 test("NO_PARSE with a digester factory digests the document without parsing it, as Tika's _preParse does", async () => {
@@ -119,22 +124,64 @@ test("NO_PARSE with a digester factory digests the document without parsing it, 
   });
 });
 
-test("NO_PARSE with skipContainerDocumentDigest digests nothing: the container is skipped and no parser runs", async () => {
+test("NO_PARSE with skipContainerDocumentDigest digests nothing, and still says what the fetcher stage knows", async () => {
   await scratch(async (directory) => {
     mkdirSync(join(directory, "in"));
     writeFileSync(join(directory, "in", "doc.txt"), "alpha text");
     const metadata = await noParse(directory, { "commons-digester-factory": { digests: [{ algorithm: "MD5" }], skipContainerDocumentDigest: true } });
     assert.deepEqual(Object.keys(metadata).filter((key) => key.startsWith("tk:digest:")), []);
     assert.equal(metadata["Content-Type"], "text/plain");
+    assert.equal(metadata["Content-Length"], "10");
+    assert.equal(metadata["tk:resource-name"], "doc.txt");
   });
 });
 
-test("NO_PARSE without a digester factory writes no digest, and no Content-Length", async () => {
+test("NO_PARSE without a digester factory has the name and length the fetcher stage knows, and the type, and no digest", async () => {
   await scratch(async (directory) => {
     mkdirSync(join(directory, "in"));
     writeFileSync(join(directory, "in", "doc.txt"), "alpha text");
     const metadata = await noParse(directory, {});
-    assert.deepEqual(Object.keys(metadata).sort(), ["Content-Type", "tk:content-type-parser-override"]);
+    assert.deepEqual(metadata, {
+      "tk:resource-name": "doc.txt",
+      "Content-Length": "10",
+      "Content-Type": "text/plain",
+      "tk:content-type-parser-override": "text/plain",
+    });
+  });
+});
+
+// RMETA is the recursive parse, CONCATENATE the plain one: the two paths a ripstream digests on (CONTENT_ONLY and UNPACK write other layouts).
+for (const mode of ["RMETA", "CONCATENATE"] as const) {
+  test(`${mode} with a digester factory digests, with the ripstream the engine builds from its settings`, async () => {
+    await scratch(async (directory) => {
+      const content = "alpha text, digested by the parser";
+      mkdirSync(join(directory, "in"));
+      writeFileSync(join(directory, "in", "doc.txt"), content);
+      const records = await piped(directory, mode, { "commons-digester-factory": { digests: [{ algorithm: "MD5" }, { algorithm: "SHA256", encoding: "BASE32" }] } });
+      const container = records[0] ?? {};
+      assert.equal(container["tk:digest:MD5"], createHash("md5").update(content).digest("hex"), mode);
+      assert.match(String(container["tk:digest:SHA-256:BASE32"]), /^[A-Z2-7]{52}=*$/, mode);
+    });
+  });
+}
+
+test("a ripstream the caller passes digests as it was built: the settings' digest is for the one the engine makes", async () => {
+  await scratch(async (directory) => {
+    mkdirSync(join(directory, "in"));
+    writeFileSync(join(directory, "in", "doc.txt"), "alpha text");
+    const output = join(directory, "out");
+    const input = join(directory, "in");
+    const config = {
+      fetchers: { fsf: { "file-system-fetcher": { basePath: input } } },
+      emitters: { fse: { "file-system-emitter": { basePath: output, fileExtension: "json" } } },
+      "pipes-iterator": { "file-system-pipes-iterator": { basePath: input, fetcherId: "fsf", emitterId: "fse" } },
+      pipes: { parseMode: "RMETA" },
+      "parse-context": { "commons-digester-factory": { digests: [{ algorithm: "MD5" }] } },
+    };
+    const plain = createRipstream();
+    assert.equal(await createEngineFromSettings(loadConfig(config).pipes!, { ripstream: plain }).run(), 1);
+    const [record] = JSON.parse(readFileSync(join(output, "doc.txt.json"), "utf8")) as Array<Record<string, unknown>>;
+    assert.equal(record?.["tk:digest:MD5"], undefined);
   });
 });
 
