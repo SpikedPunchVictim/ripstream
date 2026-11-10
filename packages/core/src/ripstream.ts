@@ -1,5 +1,5 @@
 import type { ContentHandler } from "./content-handler.ts";
-import type { DigestSettings } from "./digest.ts";
+import { assertValidDigestSettings, type DigestSettings } from "./digest.ts";
 import { Metadata } from "./metadata.ts";
 import {
   DEFAULT_LIMITS,
@@ -92,6 +92,7 @@ export class Ripstream {
 
   constructor(options: RipstreamOptions) {
     assertValidLimits(options.limits);
+    if (options.digest !== undefined) assertValidDigestSettings(options.digest);
     this.digest = options.digest;
     this.detector = options.detector;
     this.parser = options.parser;

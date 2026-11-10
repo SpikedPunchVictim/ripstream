@@ -46,6 +46,21 @@ const JAVA_NAMES: Readonly<Record<DigestAlgorithm, string>> = {
   SHA3_512: "SHA3-512",
 };
 
+/**
+ * Refuses settings a configuration could not have made, from a caller that built them by hand: left alone, an algorithm
+ * that is not one of ours fails at the first parse, inside the hasher, with node's own wording.
+ */
+export function assertValidDigestSettings(settings: DigestSettings): void {
+  for (const { algorithm, encoding } of settings.digests) {
+    if (!(DIGEST_ALGORITHMS as readonly string[]).includes(algorithm)) {
+      throw new RangeError(`digest algorithm ${JSON.stringify(algorithm)} is not one of ${DIGEST_ALGORITHMS.join(", ")}`);
+    }
+    if (!(DIGEST_ENCODINGS as readonly string[]).includes(encoding)) {
+      throw new RangeError(`digest encoding ${JSON.stringify(encoding)} is not one of ${DIGEST_ENCODINGS.join(", ")}`);
+    }
+  }
+}
+
 /** `tk:digest:MD5` for hex, `tk:digest:SHA-256:BASE32` for the others (DigestDef.metadataKey). */
 export function digestKey(def: DigestDef): string {
   return `tk:digest:${JAVA_NAMES[def.algorithm]}${def.encoding === "HEX" ? "" : `:${def.encoding}`}`;

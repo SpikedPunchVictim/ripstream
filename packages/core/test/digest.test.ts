@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { createHasher, digestBytes, digestKey, digestStream, encodeDigest, maybeDigest } from "../src/digest.ts";
-import { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, Metadata, ParseContext, CONTEXT_KEYS, RipstreamInputStream, metadataKeyDefinition, type DigestAlgorithm, type DigestSettings } from "../src/index.ts";
+import { AutoDetectParser, BodyContentHandler, Ripstream, MediaType, UnsupportedFormatError, ZeroByteFileError, DIGEST_ALGORITHMS, DIGEST_ENCODINGS, Metadata, ParsingEmbeddedDocumentExtractor, ParseContext, CONTEXT_KEYS, RipstreamInputStream, metadataKeyDefinition, type DigestAlgorithm, type DigestSettings } from "../src/index.ts";
 
 /*
  * Tika's digesters (tikajs-68os.9.1). The expected values are not computed by the code under test: the NIST/RFC answers
@@ -254,4 +255,154 @@ test("digestBytes stops at an abort, between slices", async () => {
   const controller = new AbortController();
   controller.abort(new Error("stop"));
   await assert.rejects(() => digestBytes(new Uint8Array(10), [{ algorithm: "MD5", encoding: "HEX" }], controller.signal), /stop/);
+});
+
+test("a plain parse does not digest what is embedded: its metadata is not kept, so the digest would be made for nothing", async () => {
+  const parent = contextWith(MD5_ONLY, 0);
+  const seen: Array<DigestSettings | undefined> = [];
+  parent.set(CONTEXT_KEYS.PARSER, {
+    getSupportedTypes: () => new Set(),
+    async parse(_stream: RipstreamInputStream, _handler: unknown, _metadata: Metadata, ctx: ParseContext): Promise<void> {
+      seen.push(ctx.get(CONTEXT_KEYS.DIGESTS));
+    },
+  });
+  const stream = await streamOf([text("abc")]);
+  try {
+    await new ParsingEmbeddedDocumentExtractor().parseEmbedded(stream, new BodyContentHandler(), new Metadata(), parent);
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(seen, [undefined], "the embedded document's parse is not told to digest");
+  assert.equal(parent.get(CONTEXT_KEYS.DIGESTS), MD5_ONLY, "the container's context still has them");
+});
+
+test("base32 uses every symbol of its alphabet, in order", () => {
+  // The 5-bit groups 0, 1, 2 ... 31 are 160 bits, which is these 20 bytes; base32 of them is the alphabet itself
+  // (Python's base64.b32encode gives the same).
+  const bytes = Buffer.from("00443214c74254b635cf84653a56d7c675be77df", "hex");
+  assert.equal(encodeDigest(bytes, "BASE32"), "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567");
+});
+
+test("each algorithm is written under its own key, with its own value", async () => {
+  // "message digest" is RFC 1319's own MD2 input. The keys are Tika's, spelled out here and not taken from the code.
+  const data = text("message digest");
+  const keys: Record<DigestAlgorithm, string> = {
+    MD2: "tk:digest:MD2",
+    MD5: "tk:digest:MD5",
+    SHA1: "tk:digest:SHA-1",
+    SHA256: "tk:digest:SHA-256",
+    SHA384: "tk:digest:SHA-384",
+    SHA512: "tk:digest:SHA-512",
+    SHA3_256: "tk:digest:SHA3-256",
+    SHA3_384: "tk:digest:SHA3-384",
+    SHA3_512: "tk:digest:SHA3-512",
+  };
+  const openssl = { MD5: "md5", SHA1: "sha1", SHA256: "sha256", SHA384: "sha384", SHA512: "sha512", SHA3_256: "sha3-256", SHA3_384: "sha3-384", SHA3_512: "sha3-512" } as const;
+  const settings: DigestSettings = { digests: DIGEST_ALGORITHMS.map((algorithm) => ({ algorithm, encoding: "HEX" as const })), skipContainerDocumentDigest: false };
+  const stream = await streamOf([data]);
+  const metadata = new Metadata();
+  try {
+    await maybeDigest(stream, metadata, contextWith(settings));
+  } finally {
+    await stream.close();
+  }
+  for (const algorithm of DIGEST_ALGORITHMS) {
+    const expected = algorithm === "MD2" ? "ab4f496bfb2a530b219ff33031fe06b0" : createHash(openssl[algorithm]).update(data).digest("hex");
+    assert.equal(metadata.get(keys[algorithm]), expected, algorithm);
+  }
+  assert.equal(metadata.names().filter((name) => name.startsWith("tk:digest:")).length, 9);
+});
+
+/** An AutoDetectParser whose detector notes what the metadata and the stream were like when it was asked. */
+function detecting(parse: () => Promise<void>): { parser: AutoDetectParser; seen: Array<{ md5: string | null; length: string | null; position: number }> } {
+  const seen: Array<{ md5: string | null; length: string | null; position: number }> = [];
+  const detector = {
+    detect(stream: RipstreamInputStream | null, metadata: Metadata): Promise<MediaType> {
+      seen.push({ md5: metadata.get("tk:digest:MD5"), length: metadata.get("Content-Length"), position: stream?.position ?? -1 });
+      return Promise.resolve(MediaType.OCTET_STREAM);
+    },
+  };
+  return { parser: new AutoDetectParser({ detector, parser: { name: "stub", getSupportedTypes: () => new Set(), parse } }), seen };
+}
+
+test("the digest is made before the type is detected, and the stream is back at its start for the detector", async () => {
+  const { parser, seen } = detecting(() => Promise.resolve());
+  const stream = await streamOf([text("abc")]);
+  try {
+    await parser.parse(stream, new BodyContentHandler(), new Metadata(), contextWith(MD5_ONLY));
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(seen, [{ md5: "900150983cd24fb0d6963f7d28e17f72", length: "3", position: 0 }]);
+});
+
+test("a document no parser reads still has its digest: it is made before the parse can fail", async () => {
+  const { parser } = detecting(() => Promise.reject(new UnsupportedFormatError("no parser")));
+  const stream = await streamOf([text("abc")]);
+  const metadata = new Metadata();
+  try {
+    await assert.rejects(parser.parse(stream, new BodyContentHandler(), metadata, contextWith(MD5_ONLY)), UnsupportedFormatError);
+  } finally {
+    await stream.close();
+  }
+  assert.equal(metadata.get("tk:digest:MD5"), "900150983cd24fb0d6963f7d28e17f72");
+  assert.equal(metadata.get("Content-Length"), "3");
+});
+
+test("an empty document has the digest of nothing and a Content-Length of 0, as Tika's InputStreamDigester writes them", async () => {
+  const { parser } = detecting(() => Promise.resolve());
+  const stream = await streamOf([]);
+  const metadata = new Metadata();
+  try {
+    await assert.rejects(parser.parse(stream, new BodyContentHandler(), metadata, contextWith(MD5_ONLY)), ZeroByteFileError);
+  } finally {
+    await stream.close();
+  }
+  assert.equal(metadata.get("tk:digest:MD5"), "d41d8cd98f00b204e9800998ecf8427e");
+  assert.equal(metadata.get("Content-Length"), "0");
+});
+
+test("an abort that comes while the document is being read stops the digest at the next chunk, and the stream is back at its start", async () => {
+  const controller = new AbortController();
+  let pulled = 0;
+  async function* chunks(): AsyncGenerator<Uint8Array> {
+    for (let index = 0; index < 100; index++) {
+      pulled++;
+      if (index === 1) controller.abort(new Error("stop"));
+      yield new Uint8Array(64 * 1024);
+    }
+  }
+  const stream = await RipstreamInputStream.from(chunks());
+  try {
+    await assert.rejects(digestStream(stream, MD5_ONLY.digests, new ParseContext({ signal: controller.signal })), /stop/);
+    assert.ok(pulled <= 3, `the document was read to its end: ${pulled} chunks`);
+    assert.equal(stream.position, 0);
+  } finally {
+    await stream.close();
+  }
+});
+
+test("an abort that a timer delivers while a large document is read stops the digest before the end", async () => {
+  // Past the 1 MiB a stream holds in memory the reads are the file's, which is what gives the loop the turn the abort needs
+  // (measured: MD2 over 30 MiB with a 300 ms timeout is aborted at 310 ms). The abort is queued first and runs at the first turn.
+  const controller = new AbortController();
+  setImmediate(() => controller.abort(new Error("stop")));
+  const stream = await RipstreamInputStream.from(new Uint8Array(8 * 1024 * 1024));
+  try {
+    await assert.rejects(digestStream(stream, [{ algorithm: "SHA256", encoding: "HEX" }], new ParseContext({ signal: controller.signal })), /stop/);
+    assert.equal(stream.position, 0);
+  } finally {
+    await stream.close();
+  }
+});
+
+test("digest settings built by hand are checked when the Ripstream is made, not at its first parse", () => {
+  const detector = { detect: () => Promise.resolve(MediaType.OCTET_STREAM) };
+  const parser = { name: "stub", getSupportedTypes: () => new Set<MediaType>(), parse: () => Promise.resolve() };
+  const settings = (algorithm: string, encoding: string) =>
+    ({ digests: [{ algorithm, encoding }], skipContainerDocumentDigest: false }) as unknown as DigestSettings;
+  assert.throws(() => new Ripstream({ detector, parser, digest: settings("SHA-256", "HEX") }), /digest algorithm "SHA-256" is not one of MD2, MD5, SHA1/);
+  assert.throws(() => new Ripstream({ detector, parser, digest: settings("MD5", "BASE16") }), /digest encoding "BASE16" is not one of HEX, BASE32, BASE64/);
+  assert.doesNotThrow(() => new Ripstream({ detector, parser, digest: settings("SHA3_512", "BASE32") }));
+  assert.doesNotThrow(() => new Ripstream({ detector, parser }));
 });

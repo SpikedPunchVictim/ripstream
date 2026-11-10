@@ -136,6 +136,10 @@ export class ParsingEmbeddedDocumentExtractor
     });
     child.set(CONTEXT_KEYS.EMBEDDED_DEPTH, depth);
     child.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
+    // A plain parse returns the container's metadata and text, and this embedded document's metadata is dropped with
+    // it: its digest would be made and thrown away (MD2 of a nested archive costs seconds). A recursive parse keeps
+    // each document's metadata and digests it in its own extractor.
+    child.remove(CONTEXT_KEYS.DIGESTS);
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     // Forward each chunk as it is produced so the enclosing handler's output

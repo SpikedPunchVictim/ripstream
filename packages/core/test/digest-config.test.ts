@@ -5,14 +5,15 @@ import { loadConfig, validateConfig } from "../src/index.ts";
 /*
  * The digester factories of a `parse-context` section (tikajs-68os.9.1), by the shapes Tika's own configurations use
  * (tika-parsers-standard-integration-tests: tika-config-digests.json, -skip-container.json, -bc-digests-*.json) and by
- * what Tika's CommonsDigester and Jackson refuse.
+ * what Tika's CommonsDigester and Jackson refuse. Those files also have an `auto-detect-parser` section, which is not
+ * supported (CFG-014): the tests below take their `parse-context` part, and one says what the whole file gets.
  */
 
 const commons = (config: unknown) => ({ "parse-context": { "commons-digester-factory": config } });
 const bouncy = (config: unknown) => ({ "parse-context": { "bouncy-castle-digester-factory": config } });
 const issues = (config: unknown): string[] => validateConfig(config);
 
-test("Tika's tika-config-digests.json: SHA256 as base32 and MD5", () => {
+test("the parse-context of Tika's tika-config-digests.json: SHA256 as base32 and MD5", () => {
   const config = loadConfig(commons({ digests: [{ algorithm: "SHA256", encoding: "BASE32" }, { algorithm: "MD5" }] }));
   assert.deepEqual(config.digest, {
     digests: [{ algorithm: "SHA256", encoding: "BASE32" }, { algorithm: "MD5", encoding: "HEX" }],
@@ -20,14 +21,25 @@ test("Tika's tika-config-digests.json: SHA256 as base32 and MD5", () => {
   });
 });
 
-test("Tika's tika-config-digests-skip-container.json", () => {
+test("the parse-context of Tika's tika-config-digests-skip-container.json", () => {
   const config = loadConfig(commons({ digests: [{ algorithm: "MD5" }], skipContainerDocumentDigest: true }));
   assert.equal(config.digest?.skipContainerDocumentDigest, true);
 });
 
-test("Tika's tika-config-bc-digests-multiple.json: the BouncyCastle factory has SHA3", () => {
+test("the parse-context of Tika's tika-config-bc-digests-multiple.json: the BouncyCastle factory has SHA3", () => {
   const config = loadConfig(bouncy({ digests: [{ algorithm: "MD5" }, { algorithm: "SHA256" }, { algorithm: "SHA3_512" }] }));
   assert.deepEqual(config.digest?.digests.map((def) => def.algorithm), ["MD5", "SHA256", "SHA3_512"]);
+});
+
+test("Tika's tika-config-digests.json whole is refused for its auto-detect-parser section; without it, it loads", () => {
+  const file = {
+    "auto-detect-parser": { throwOnZeroBytes: false },
+    "parse-context": { "commons-digester-factory": { digests: [{ algorithm: "SHA256", encoding: "BASE32" }, { algorithm: "MD5" }] } },
+  };
+  assert.match(issues(file)[0] ?? "", /unknown top-level key "auto-detect-parser"/);
+  const { "auto-detect-parser": _dropped, ...rest } = file;
+  assert.deepEqual(issues(rest), []);
+  assert.equal(loadConfig(rest).digest?.digests.length, 2);
 });
 
 test("an empty factory is MD5 in hex, as Tika's factory is until it is told otherwise", () => {
