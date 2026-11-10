@@ -4,6 +4,7 @@ import {
   DEFAULT_LIMITS,
   ParseContext,
   CONTEXT_KEYS,
+  assertValidLimits,
   type ParseLimits,
 } from "./parse-context.ts";
 import type { Detector, Parser } from "./parser.ts";
@@ -83,6 +84,7 @@ export class Ripstream {
         : AbortSignal.any([options.signal, abort.signal]);
     // The consumer-wait below must observe the parse timeout too, so the
     // timeout is armed here on the same controller instead of only in withStream.
+    assertValidLimits(options.limits);
     const timeout = options.limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timer =
       timeout > 0 ? setTimeout(() => abort.abort(new ParseTimeoutError()), timeout) : null;
@@ -221,6 +223,7 @@ export class Ripstream {
       ctx: ParseContext,
     ) => Promise<T>,
   ): Promise<T> {
+    assertValidLimits(options.limits);
     const timeout = options.limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timeoutController = new AbortController();
     const timer =

@@ -698,24 +698,19 @@ test("request parameters cannot change the isolation settings or the engine used
     "requireStrictContainment=false",
     "inProcess=true",
     "handler=not-a-handler",
-  ].join("&");
+  ];
   await withServer(
     { ripstream: engine, isolation: fakeIsolation(), maxLimits: { maxOutputChars: 500 } },
     async (base) => {
       const before = await readStatus(base);
       for (const path of ["/tika", "/meta", "/rmeta", "/unpack", "/detect"]) {
-        const plain = await fetch(`${base}${path}?filename=a.txt`, { method: "PUT", body: "hello" });
-        const plainBody = await plain.text();
-        const plainCall = engine.calls.at(-1);
-
-        const extra = await fetch(`${base}${path}?filename=a.txt&${hostile}`, { method: "PUT", body: "hello" });
-        const extraBody = await extra.text();
-        const extraCall = engine.calls.at(-1);
-
-        assert.equal(extra.status, plain.status, path);
-        assert.equal(extraBody, plainBody, path);
-        assert.notEqual(extraCall, plainCall, `${path}: the second request reached the engine`);
-        assert.deepEqual(extraCall, plainCall, `${path}: the engine saw the same request`);
+        for (const parameter of hostile) {
+          // Refused outright (400), never read as a setting and never passed on: the engine sees no request.
+          const calls = engine.calls.length;
+          const response = await fetch(`${base}${path}?filename=a.txt&${parameter}`, { method: "PUT", body: "hello" });
+          assert.equal(response.status, 400, `${path}?${parameter}`);
+          assert.equal(engine.calls.length, calls, `${path}?${parameter}: the request reached the engine`);
+        }
       }
       assert.deepEqual(await readStatus(base), before);
     },

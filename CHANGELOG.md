@@ -4,7 +4,7 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
-### Configuration (`tikajs-68os.8.1`, `tikajs-68os.8.2`)
+### Configuration (`tikajs-68os.8.1`, `tikajs-68os.8.2`, `tikajs-68os.8.3`)
 
 Changed: configuration no longer accepts what it would ignore. Only `version` and `isolation` are read.
 
@@ -15,6 +15,20 @@ Changed: configuration no longer accepts what it would ignore. Only `version` an
 - Removed `loadXmlConfig`, `ComponentConfig`, and the `parsers`/`detectors`/`contentHandlers`/`metadataFilters`/
   `encodingDetector` fields of `RipstreamConfig`. The XML loader was a regex scan that turned `<parser-exclude>` and
   commented-out entries into included parsers; Tika 4.x does not read XML configuration at runtime either.
+
+Changed: input that used to be accepted and ignored is refused, naming what was wrong (`tikajs-68os.8.3`).
+
+- `ParseLimits` are checked (`assertValidLimits`, also run by `ParseContext`, `Ripstream.parse*` and the isolated
+  ripstream): an unknown limit, NaN, a string, a negative or fractional count, `Infinity`, and a timer over 2^31-1 ms
+  (which fired at once) throw a `RangeError`. A limit set to `undefined` keeps its default instead of replacing it.
+  `maxParseMillis: 0` still means no parse timer.
+- `createEngine`, `PipesClient` and `PipesEngine` refuse an unknown key, a `mode` that is not one of the five, a
+  `source.type` or `sink.type` other than the ones implemented (it used to fall back to the filesystem), and a
+  `concurrency`, `maxQueue` or `maxBuffered` that is not a positive integer (`validatePipesConfig` lists the
+  problems; `createEngine` throws a `RipstreamConfigError`).
+- The server answers 400 for an unknown or repeated query parameter, an unknown `?preset=` or `?handler=`, any
+  `X-Tika-*` header, a multipart part other than the one file, and an invalid `POST /pipes` body (unknown key, bad
+  `mode`, `followSymlinks: true`). A preset with an invalid limit or handler fails `createRipstreamServer`.
 
 ### Parse isolation (epic `tikajs-zgg2`)
 

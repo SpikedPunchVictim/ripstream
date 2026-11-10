@@ -91,6 +91,11 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
 - `authenticate(request)`: optional gate applied to every request.
 - `maxLimits: { maxOutputChars, maxEmbeddedResources }`: server-side ceilings. Client query
   parameters of the same names (and preset values) are clamped to these.
+- A request can set only what its route reads, and anything else is a 400 that names it, not a 200 that drops it:
+  an unknown or repeated query parameter (`/tika` reads `filename`, `preset`, `handler`, `maxOutputChars` and
+  `maxEmbeddedResources`; `/meta`, `/rmeta` and `/unpack` the same without `handler`; `/detect` and `/async` only
+  `filename`), an unknown `?preset=` or `?handler=` (`meta`, `json`), any `X-Tika-*` header, and a multipart part
+  other than the one file (Tika's per-request parse context is not accepted).
 - `maxJobs` (default 1000): maximum retained `/async` jobs. Finished jobs are evicted first; new
   jobs get 503 when all retained jobs are still running.
 - `jobTtlMs` (default 10 minutes): how long finished `/async` jobs are retained.
@@ -101,7 +106,9 @@ Disabled (404) unless `options.pipes` is set, and `createRipstreamServer` throws
 `pipes` is set without `authenticate`. Requests must use `Content-Type: application/json`
 (otherwise 415), which blocks cross-site "simple" POSTs that skip CORS preflight. Clients name
 paths only relative to server-configured roots; absolute paths, `..` and symlinks are rejected
-(403) and `followSymlinks` is always false.
+(403) and `followSymlinks` is always false (a client that sends `true` gets a 400). The body is checked
+before anything runs: an unknown key, a `mode` other than `CONTENT_ONLY`, `CONCATENATE`, `RMETA`, `NO_PARSE` or
+`UNPACK`, a `source.type` or `sink.type` the engine does not implement, and a value of the wrong type are each a 400.
 
 | Option | Meaning |
 | --- | --- |

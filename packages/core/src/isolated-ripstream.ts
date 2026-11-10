@@ -3,6 +3,7 @@ import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
 import type { IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
 import type { ParseRecord } from "./recursive.ts";
+import { assertValidLimits } from "./parse-context.ts";
 import type { MediaTypeResult, ParseOptions, ParseResult } from "./ripstream.ts";
 
 /** The part of a Ripstream that servers, pipes and the CLI call. */
@@ -58,6 +59,7 @@ function toRequest(source: InputSource, options: ParseOptions, output: "text" | 
   if (options.contentType !== undefined) {
     throw new TypeError("ParseOptions.contentType cannot cross the isolation boundary; the child detects the type itself");
   }
+  assertValidLimits(options.limits);
   const limits = options.limits ?? {};
   for (const [name, value] of Object.entries(limits)) {
     if (value !== undefined && !CROSSING_LIMITS.has(name)) {

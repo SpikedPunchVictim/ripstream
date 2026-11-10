@@ -148,6 +148,7 @@ export {
   ParseContext,
   ParseContextKey,
   TemporaryResources,
+  assertValidLimits,
   type AsyncClosable,
   type ParseContextOptions,
   type ParseLimits,

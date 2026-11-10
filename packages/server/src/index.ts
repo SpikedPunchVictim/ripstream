@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
+  assertValidLimits,
   httpStatusForError,
   serializeRmeta,
   IsolationError,
@@ -7,7 +8,13 @@ import {
   type Metadata,
 } from "@spikedpunch/ripstream-core";
 import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
-import { PipesClient, PipesPathError, resolveWithinRoot, type PipesConfig } from "@spikedpunch/ripstream-pipes";
+import {
+  PipesClient,
+  PipesPathError,
+  resolveWithinRoot,
+  validatePipesConfig,
+  type PipesConfig,
+} from "@spikedpunch/ripstream-pipes";
 import { randomUUID } from "node:crypto";
 import type { ParseOptions, Ripstream, Translator } from "@spikedpunch/ripstream-core";
 
@@ -122,6 +129,60 @@ const RETRY_AFTER_FULL = "1";
 /** Seconds a client should wait before retrying when isolation itself is unavailable. */
 const RETRY_AFTER_UNAVAILABLE = "5";
 
+/** The handlers `?handler=` and a preset's `handler` can name. */
+const HANDLERS: readonly string[] = ["meta", "json"];
+
+const LIMIT_PARAMS = ["maxOutputChars", "maxEmbeddedResources"] as const;
+/**
+ * The query parameters each route reads. Any other is refused: a parameter the server does not act on would be
+ * dropped with a 200, and the client would believe it had set a limit, a handler or a preset.
+ */
+const QUERY_PARAMS: Readonly<Record<string, readonly string[]>> = {
+  "/detect": ["filename"],
+  "/tika": ["filename", "preset", "handler", ...LIMIT_PARAMS],
+  "/meta": ["filename", "preset", ...LIMIT_PARAMS],
+  "/rmeta": ["filename", "preset", ...LIMIT_PARAMS],
+  "/unpack": ["filename", "preset", ...LIMIT_PARAMS],
+  "/async": ["filename"],
+  "/language": [],
+  "/translate": ["target"],
+  "/pipes": [],
+};
+
+function rejectUnreadRequestInput(request: IncomingMessage, url: URL): void {
+  for (const name of Object.keys(request.headers)) {
+    // Tika's per-request knobs (OCR language, skip-embedded, PDF options...). None is implemented: ignoring one
+    // would parse the document under settings the client did not ask for.
+    if (name.startsWith("x-tika-")) throw new HttpError(400, `Header ${name} is not supported`);
+  }
+  const allowed = Object.hasOwn(QUERY_PARAMS, url.pathname) ? QUERY_PARAMS[url.pathname] : undefined;
+  if (allowed === undefined) return;
+  for (const name of new Set(url.searchParams.keys())) {
+    if (!allowed.includes(name)) {
+      throw new HttpError(400, `Unknown query parameter "${name}"; ${url.pathname} reads: ${allowed.join(", ") || "none"}`);
+    }
+    if (url.searchParams.getAll(name).length > 1) {
+      throw new HttpError(400, `Query parameter "${name}" was given more than once`);
+    }
+  }
+}
+
+/** A preset the server could not apply is a construction error, not a surprise on the first request that names it. */
+function requireValidPresets(presets: RipstreamServerOptions["presets"]): void {
+  for (const [name, preset] of Object.entries(presets ?? {})) {
+    if (preset.handler !== undefined && !HANDLERS.includes(preset.handler)) {
+      throw new Error(
+        `createRipstreamServer: preset "${name}" has handler ${JSON.stringify(preset.handler)}; handlers are: ${HANDLERS.join(", ")}`,
+      );
+    }
+    try {
+      assertValidLimits(preset.limits);
+    } catch (error) {
+      throw new Error(`createRipstreamServer: preset "${name}": ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
 /** The one place an error becomes an HTTP answer. */
 function errorResponse(error: unknown): {
   readonly status: number;
@@ -160,6 +221,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     throw new Error("createRipstreamServer: the `pipes` option requires `authenticate`");
   }
   requireValidGateOptions(options);
+  requireValidPresets(options.presets);
   const ripstream: ServerRipstream = options.ripstream ?? refuseToStartWithoutRipstream();
   const log = options.log ?? defaultLog;
   const isolation = options.isolation;
@@ -306,6 +368,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   ): Promise<void> {
     const url = new URL(request.url ?? "/", "http://localhost");
     const method = request.method ?? "GET";
+    rejectUnreadRequestInput(request, url);
     if (method === "GET" && url.pathname.startsWith("/status/")) {
       pruneJobs();
       const job = jobs.get(url.pathname.slice("/status/".length));
@@ -408,6 +471,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     }
     const presets = options.presets ?? {};
     const presetName = url.searchParams.get("preset");
+    if (presetName !== null && !Object.hasOwn(presets, presetName)) {
+      throw new HttpError(400, `Unknown preset ${JSON.stringify(presetName)}`);
+    }
     const preset = presetName === null ? undefined : presets[presetName];
     const presetHandler = preset?.handler;
     const limits: Record<string, number> = { ...(preset?.limits ?? {}) };
@@ -418,7 +484,11 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       if (ceiling !== undefined) limits[key] = Math.min(value ?? ceiling, ceiling);
       else if (value !== undefined) limits[key] = value;
     }
-    const handlerOverride = url.searchParams.get("handler") ?? presetHandler;
+    const requestedHandler = url.searchParams.get("handler");
+    if (requestedHandler !== null && !HANDLERS.includes(requestedHandler)) {
+      throw new HttpError(400, `Unknown handler ${JSON.stringify(requestedHandler)}; handlers are: ${HANDLERS.join(", ")}`);
+    }
+    const handlerOverride = requestedHandler ?? presetHandler;
     const endpoint = url.pathname === "/unpack" ? "/rmeta" : url.pathname;
     if (!["/detect", "/tika", "/meta", "/rmeta", "/unpack"].includes(url.pathname)) {
       send(response, 404, "text/plain", "Not found");
@@ -677,7 +747,11 @@ async function buildPipesConfig(
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new HttpError(400, "Pipes config must be a JSON object");
   }
+  const issues = validatePipesConfig(input);
+  if (issues.length > 0) throw new HttpError(400, issues.join("; "));
   const client = input as Partial<PipesConfig>;
+  // The server always walks without following symlinks; a client asking for them would be answered with the opposite.
+  if (client.followSymlinks === true) throw new HttpError(400, "followSymlinks cannot be set by a client");
   const source = client.source;
   if (typeof source !== "object" || source === null) throw new HttpError(400, "Missing source");
   try {
@@ -742,22 +816,26 @@ function extractMultipart(
   if (boundary === undefined) return null;
   // Buffer's "latin1" is ISO-8859-1 and round-trips all 256 byte values; TextDecoder("latin1") is windows-1252.
   const text = Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString("latin1");
-  const parts = text.split(`--${boundary}`);
+  // The first piece is the preamble and a piece starting "--" is the closing delimiter.
+  const parts = text.split(`--${boundary}`).slice(1);
+  let file: { bytes: Uint8Array; filename: string } | null = null;
   for (const part of parts) {
     if (part.startsWith("--")) continue;
     const separator = part.indexOf("\r\n\r\n");
     if (separator === -1) continue;
     const headers = part.slice(0, separator);
     const filename = /filename="([^"]+)"/i.exec(headers)?.[1];
-    if (filename === undefined) continue;
+    if (filename === undefined) {
+      // Tika reads a per-request parse context from a part like this; ignoring it would parse under other settings.
+      const name = /[;\s]name="([^"]*)"/i.exec(headers)?.[1] ?? "";
+      throw new HttpError(400, `multipart part ${JSON.stringify(name)} is not supported: send the document as the only part`);
+    }
+    if (file !== null) throw new HttpError(400, "multipart request has more than one file part: only one file part is supported");
     const content = part.slice(separator + 4);
     const end = content.endsWith("\r\n") ? content.length - 2 : content.length;
-    return {
-      filename,
-      bytes: Uint8Array.from(Buffer.from(content.slice(0, end), "latin1")),
-    };
+    file = { filename, bytes: Uint8Array.from(Buffer.from(content.slice(0, end), "latin1")) };
   }
-  return null;
+  return file;
 }
 
 function metadataObject(metadata: Metadata): Record<string, readonly string[]> {

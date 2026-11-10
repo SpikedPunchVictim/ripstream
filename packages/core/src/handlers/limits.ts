@@ -5,16 +5,20 @@ import {
 import { LimitExceededError } from "../errors.ts";
 
 /**
- * Validates an output-character limit. `-1` is the documented "unlimited"
- * sentinel; NaN and any other negative value would silently disable the cap
- * (`written > NaN` is never true), so they fail fast.
+ * The problem with an output-character limit, or null when it is valid. `-1` is the documented "unlimited" sentinel;
+ * NaN and any other negative value would silently disable the cap (`written > NaN` is never true), so they fail fast.
  */
-export function assertValidOutputLimit(name: string, value: number): void {
+export function outputLimitIssue(name: string, value: unknown): string | null {
   if (typeof value !== "number" || Number.isNaN(value) || (value < 0 && value !== -1)) {
-    throw new RangeError(
-      `${name} must be a non-negative number or -1 (unlimited), got ${String(value)}`,
-    );
+    return `${name} must be a non-negative number or -1 (unlimited), got ${String(value)}`;
   }
+  return null;
+}
+
+/** Validates an output-character limit; see {@link outputLimitIssue}. */
+export function assertValidOutputLimit(name: string, value: number): void {
+  const issue = outputLimitIssue(name, value);
+  if (issue !== null) throw new RangeError(issue);
 }
 
 /** Throws once more than the configured number of output characters is written. */

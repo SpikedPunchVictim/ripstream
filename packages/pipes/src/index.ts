@@ -10,6 +10,9 @@ import {
   type Ripstream,
 } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
+import { PIPE_MODES, assertValidEngineOptions, assertValidPipesConfig } from "./config.ts";
+
+export { PIPE_MODES, assertValidPipesConfig, validatePipesConfig } from "./config.ts";
 
 export interface PipeDocument {
   readonly id: string;
@@ -37,12 +40,7 @@ export interface Emitter {
 /** What the engine calls to parse. A core Ripstream satisfies it, and so does an isolated one. */
 export type PipesRipstream = Pick<Ripstream, "parse" | "parseRecursive">;
 
-export type PipeMode =
-  | "CONTENT_ONLY"
-  | "CONCATENATE"
-  | "RMETA"
-  | "NO_PARSE"
-  | "UNPACK";
+export type PipeMode = (typeof PIPE_MODES)[number];
 
 export interface PipesEngineOptions {
   readonly fetcher: Fetcher;
@@ -77,6 +75,7 @@ export class PipesEngine {
   #stats: PipesStats = { fetched: 0, emitted: 0, failed: 0, durationMs: 0 };
 
   constructor(options: PipesEngineOptions) {
+    assertValidEngineOptions(options);
     this.#options = options;
   }
 
@@ -437,6 +436,7 @@ export interface PipesConfig {
 }
 
 export function createEngine(config: PipesConfig, options: { readonly ripstream?: PipesRipstream } = {}): PipesEngine {
+  assertValidPipesConfig(config);
   const fetcher =
     config.source.type === "http"
       ? new HttpFetcher(config.source.urls ?? [])
@@ -464,6 +464,7 @@ export class PipesClient {
   readonly #ripstream: PipesRipstream | undefined;
 
   constructor(config: PipesConfig, options: { readonly ripstream?: PipesRipstream } = {}) {
+    assertValidPipesConfig(config);
     this.#config = config;
     this.#ripstream = options.ripstream;
   }

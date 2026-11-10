@@ -1,5 +1,5 @@
 import { AbortError, ParseTimeoutError } from "./errors.ts";
-import { assertValidOutputLimit } from "./handlers/limits.ts";
+import { outputLimitIssue } from "./handlers/limits.ts";
 
 /**
  * Typed context key. The optional phantom field gives TypeScript the value
@@ -54,6 +54,68 @@ export const DEFAULT_LIMITS: ParseLimits = Object.freeze({
   maxZipEntries: 10_000,
   maxXmlEntityExpansions: 0,
 });
+
+/** Largest delay a timer can hold: past it Node fires the timer after 1 ms. */
+const MAX_TIMER_MILLIS = 2 ** 31 - 1;
+
+type LimitCheck = (name: string, value: unknown) => string | null;
+
+const nonNegativeInteger: LimitCheck = (name, value) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? null
+    : `${name} must be a non-negative integer, got ${String(value)}`;
+
+const timerMillis =
+  (min: number): LimitCheck =>
+  (name, value) =>
+    typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= MAX_TIMER_MILLIS
+      ? null
+      : `${name} must be an integer from ${min} to ${MAX_TIMER_MILLIS} milliseconds, got ${String(value)}`;
+
+const LIMIT_CHECKS: Readonly<Record<keyof ParseLimits, LimitCheck>> = {
+  maxOutputChars: outputLimitIssue,
+  maxDocumentOutputChars: outputLimitIssue,
+  maxEmbeddedResources: nonNegativeInteger,
+  maxEmbeddedResourceBytes: nonNegativeInteger,
+  maxTotalEmbeddedBytes: nonNegativeInteger,
+  maxDecompressionRatio: (name, value) =>
+    typeof value === "number" && Number.isFinite(value) && value > 0
+      ? null
+      : `${name} must be a positive finite number, got ${String(value)}`,
+  maxNodeDepth: nonNegativeInteger,
+  // 0 means no parse timer.
+  maxParseMillis: timerMillis(0),
+  maxTaskMillis: timerMillis(1),
+  maxMetadataValueChars: nonNegativeInteger,
+  maxZipEntries: nonNegativeInteger,
+  maxXmlEntityExpansions: nonNegativeInteger,
+};
+
+/**
+ * Refuses limits a parser would misread: an unknown name, and a value that is not a number of the kind the limit
+ * needs. NaN, a string or a negative turns a `count > limit` check off for good, and a timer delay past 2^31-1 fires
+ * at once. A limit set to `undefined` is absent (it keeps the default), so it is not checked. Throws a RangeError
+ * naming every problem.
+ */
+export function assertValidLimits(limits: Partial<ParseLimits> | undefined): void {
+  if (limits === undefined) return;
+  if (typeof limits !== "object" || limits === null) {
+    throw new RangeError(`invalid limits: expected an object, got ${limits === null ? "null" : typeof limits}`);
+  }
+  const issues: string[] = [];
+  for (const [name, value] of Object.entries(limits)) {
+    if (value === undefined) continue;
+    const check = Object.hasOwn(LIMIT_CHECKS, name) ? LIMIT_CHECKS[name as keyof ParseLimits] : undefined;
+    const issue = check === undefined ? `unknown limit "${name}"` : check(name, value);
+    if (issue !== null) issues.push(issue);
+  }
+  if (issues.length > 0) throw new RangeError(`invalid limits: ${issues.join("; ")}`);
+}
+
+/** The limits the caller set: an `undefined` is not set, and must not replace a default. */
+function definedOnly(limits: Partial<ParseLimits> | undefined): Partial<ParseLimits> {
+  return Object.fromEntries(Object.entries(limits ?? {}).filter(([, value]) => value !== undefined));
+}
 
 export interface AsyncClosable {
   close(): void | Promise<void>;
@@ -115,11 +177,8 @@ export class ParseContext implements AsyncDisposable {
 
   constructor(options: ParseContextOptions = {}) {
     this.signal = options.signal ?? new AbortController().signal;
-    this.limits = Object.freeze({ ...DEFAULT_LIMITS, ...options.limits });
-    assertValidOutputLimit("maxOutputChars", this.limits.maxOutputChars);
-    if (this.limits.maxDocumentOutputChars !== undefined) {
-      assertValidOutputLimit("maxDocumentOutputChars", this.limits.maxDocumentOutputChars);
-    }
+    assertValidLimits(options.limits);
+    this.limits = Object.freeze({ ...DEFAULT_LIMITS, ...definedOnly(options.limits) });
     this.resources = options.resources ?? new TemporaryResources();
   }
 
@@ -159,7 +218,7 @@ export class ParseContext implements AsyncDisposable {
   createChild(options: ParseContextOptions = {}): ParseContext {
     const child = new ParseContext({
       signal: options.signal ?? this.signal,
-      limits: { ...this.limits, ...options.limits },
+      limits: { ...this.limits, ...definedOnly(options.limits) },
       resources: options.resources ?? this.resources,
     });
     for (const [key, value] of this.values) child.values.set(key, value);
