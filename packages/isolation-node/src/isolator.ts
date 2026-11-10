@@ -4,10 +4,12 @@ import { isAbsolute } from "node:path";
 import {
   AbortError,
   DEFAULT_LIMITS,
+  HANDLER_TYPES,
   IsolationError,
   LimitExceededError,
   ParseTimeoutError,
   validateConfig,
+  type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedComponents,
   type IsolatedParseRequest,
@@ -236,6 +238,25 @@ function checkRequest(request: IsolatedParseRequest): void {
   if (maxNodeDepth !== undefined && (!Number.isSafeInteger(maxNodeDepth) || maxNodeDepth < 0)) {
     throw new RangeError(`isolate: request.maxNodeDepth must be a non-negative safe integer, got ${String(maxNodeDepth)}`);
   }
+  const { recordFailures } = request;
+  if (recordFailures !== undefined && typeof recordFailures !== "boolean") {
+    throw new TypeError(`isolate: request.recordFailures must be a boolean, got ${String(recordFailures)}`);
+  }
+  const { truncateOutput } = request;
+  if (truncateOutput !== undefined && typeof truncateOutput !== "boolean") {
+    throw new TypeError(`isolate: request.truncateOutput must be a boolean, got ${String(truncateOutput)}`);
+  }
+  const { handlerType } = request;
+  if (handlerType !== undefined && !HANDLER_TYPES.includes(handlerType)) {
+    throw new TypeError(`isolate: request.handlerType must be one of ${HANDLER_TYPES.join(", ")}, got ${String(handlerType)}`);
+  }
+  const { unpackBytes } = request;
+  if (unpackBytes !== undefined) {
+    if (!Number.isSafeInteger(unpackBytes) || unpackBytes < 0) {
+      throw new RangeError(`isolate: request.unpackBytes must be a non-negative safe integer, got ${String(unpackBytes)}`);
+    }
+    if (output !== "records") throw new TypeError('isolate: request.unpackBytes needs output "records"');
+  }
 }
 
 /** The facade rule for an aborted signal: a TimeoutError becomes ParseTimeoutError, anything else AbortError. */
@@ -257,19 +278,20 @@ function metadataToRecord(metadata: Metadata): Record<string, readonly string[]>
   return Object.fromEntries(metadata.names().map((name) => [name, [...metadata.getAll(name)]]));
 }
 
+function toIsolatedException(exception: Error): IsolatedException {
+  const code = "code" in exception && typeof exception.code === "string" ? exception.code : undefined;
+  return { name: exception.name, message: exception.message, ...(code === undefined ? {} : { code }) };
+}
+
 function toIsolatedRecord(record: ParseRecord): IsolatedParseRecord {
-  const { exception } = record;
-  const code = exception !== null && "code" in exception && typeof exception.code === "string" ? exception.code : undefined;
   return {
     metadata: metadataToRecord(record.metadata),
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
     depth: record.depth,
     mediaType: record.mediaType.toString(),
-    exception:
-      exception === null
-        ? null
-        : { name: exception.name, message: exception.message, ...(code === undefined ? {} : { code }) },
+    exception: record.exception === null ? null : toIsolatedException(record.exception),
+    ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
   };
 }
 
@@ -388,7 +410,14 @@ class NodeIsolatorImpl implements NodeIsolator {
     // caps), not an outage: refuse it as a limit rather than let the pool call it "unavailable" (503).
     const { overshootMb } = isolating.pool;
     const { poolMb } = isolating.pool.stats();
-    const needMb = limits.perChildMb + overshootMb + parentResultMb(limits.maxResultBytes, limits.output);
+    const needMb =
+      limits.perChildMb +
+      overshootMb +
+      parentResultMb(
+        limits.maxResultBytes,
+        limits.output,
+        limits.unpackBytes === undefined ? undefined : { bytes: limits.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
+      );
     if (needMb > poolMb) {
       throw new LimitExceededError(
         `A ${limits.output} request with maxOutputChars ${limits.maxOutputChars} and maxEmbeddedResources ` +
@@ -405,6 +434,10 @@ class NodeIsolatorImpl implements NodeIsolator {
       maxOutputChars: limits.maxOutputChars,
       maxEmbeddedResources: limits.maxEmbeddedResources,
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+      ...(request.recordFailures === true ? { recordFailures: true } : {}),
+      ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
+      ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
+      ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
     };
     return isolating.runner.run(effective, {
       ...(signal === undefined ? {} : { signal }),
@@ -413,6 +446,7 @@ class NodeIsolatorImpl implements NodeIsolator {
         maxResultBytes: limits.maxResultBytes,
         maxFrameBytes: limits.maxFrameBytes,
         maxParseMillis: limits.maxParseMillis,
+        ...(limits.unpackWireBytes === undefined ? {} : { unpackWireBytes: limits.unpackWireBytes }),
       },
     });
   }
@@ -428,6 +462,10 @@ class NodeIsolatorImpl implements NodeIsolator {
       limits,
       ...(request.filename === undefined ? {} : { filename: request.filename }),
       ...(signal === undefined ? {} : { signal }),
+      ...(request.recordFailures === true ? { onDocumentFailure: "record" as const } : {}),
+      ...(request.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
+      ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
+      ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
     };
     const { inProcess } = this.#plan;
     try {
@@ -435,8 +473,13 @@ class NodeIsolatorImpl implements NodeIsolator {
         const records = await inProcess.parseRecursive(request.input, parseOptions);
         return { kind: "records", records: records.map(toIsolatedRecord) };
       }
-      const { metadata, text } = await inProcess.parse(request.input, parseOptions);
-      return { kind: "text", metadata: metadataToRecord(metadata), text };
+      const { metadata, text, exception } = await inProcess.parse(request.input, parseOptions);
+      return {
+        kind: "text",
+        metadata: metadataToRecord(metadata),
+        text,
+        ...(exception === undefined ? {} : { exception: toIsolatedException(exception) }),
+      };
     } catch (error) {
       // The facade's rule for an aborted signal, whatever the parser threw because of it.
       throwIfAborted(signal);

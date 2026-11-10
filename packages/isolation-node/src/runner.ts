@@ -69,10 +69,34 @@ const RECORDS_RESULT_FACTOR = 24;
  */
 export const PARENT_RESULT_SLACK_MB = 96;
 
-/** MiB of parent memory to reserve for a result of at most `maxResultBytes`. */
-export function parentResultMb(maxResultBytes: number, output: "text" | "records" | undefined): number {
+/**
+ * Parent bytes held, during the run, per byte of embedded documents a result carries (`unpackBytes`). Not the records
+ * factor, which is for JSON the parent parses and re-builds: bytes arrive in frames of at most 192 KiB and are kept
+ * as they are.
+ *
+ * Measured (2026-11-10, macOS arm64, Node 24, real standard child, a ZIP of 1 MiB documents, the parent's
+ * heapUsed + external sampled every millisecond against the figure just before the call): unpacking 64 MiB held
+ * +78 MiB (1.2x) from a stored archive and +82 MiB (1.3x) from a deflated one; unpacking 256 MiB held +275 MiB
+ * (1.07x). The rest is the base64 frames in flight. 2 leaves about half as much again over the worst of those.
+ * (The child, for the same runs, peaked near 140 MiB + 2x the bytes: 640 MiB at 256 MiB, inside the quarter of
+ * `perChildMb` that `unpackBytes` is capped at.) Re-measure if the way bytes are carried changes.
+ */
+export const UNPACK_RESULT_FACTOR = 2;
+
+/**
+ * MiB of parent memory to reserve for a result of at most `maxResultBytes`. With embedded bytes, `wireBytes` of the
+ * result (their base64 form) is for them: it is reserved as `bytes * UNPACK_RESULT_FACTOR`, not at the factor of the
+ * rest.
+ */
+export function parentResultMb(
+  maxResultBytes: number,
+  output: "text" | "records" | undefined,
+  unpack?: { readonly bytes: number; readonly wireBytes: number },
+): number {
   const factor = output === "records" ? RECORDS_RESULT_FACTOR : TEXT_RESULT_FACTOR;
-  return Math.ceil((maxResultBytes * factor) / MIB) + PARENT_RESULT_SLACK_MB;
+  const rest = unpack === undefined ? maxResultBytes : Math.max(0, maxResultBytes - unpack.wireBytes);
+  const held = unpack === undefined ? 0 : unpack.bytes * UNPACK_RESULT_FACTOR;
+  return Math.ceil((rest * factor + held) / MIB) + PARENT_RESULT_SLACK_MB;
 }
 
 /** Default for `ChildRunnerOptions.disposeWaitMs`. */
@@ -154,6 +178,8 @@ export interface RunLimits {
   readonly maxFrameBytes?: number;
   /** The child's own parse timer in ms (InputHeader.maxParseMillis). Omitted: none is sent. */
   readonly maxParseMillis?: number;
+  /** The part of `maxResultBytes` that is for the bytes of embedded documents (`request.unpackBytes`); see parentResultMb. */
+  readonly unpackWireBytes?: number;
 }
 
 function requirePositiveInteger(name: string, value: number): void {
@@ -268,7 +294,11 @@ export class ChildRunner {
     const lease = await o.pool.acquire(o.perChildMb, {
       signal,
       deadlineMs: o.maxTaskMillis,
-      parentMb: parentResultMb(maxResultBytes, request.output),
+      parentMb: parentResultMb(
+        maxResultBytes,
+        request.output,
+        request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
+      ),
     });
     let run;
     try {

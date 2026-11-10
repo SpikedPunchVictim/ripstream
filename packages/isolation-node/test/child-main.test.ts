@@ -186,6 +186,84 @@ test("text: ready, meta, text, done; metadata through the Metadata API", async (
   assert.match(String(r.frames[2]?.chunk), /hello/);
 });
 
+test("text: a document that cannot be read is an error frame, unless the request records failures", async () => {
+  const unreadable = ripstreamOf(async (handler) => {
+    await writes("partial")(handler);
+    throw new MalformedDocumentError("bad document");
+  });
+  const thrown = run(unreadable, input(header()));
+  await thrown.outcome;
+  assert.deepEqual(types(thrown.frames), ["ready", "error"]);
+
+  const recorded = run(unreadable, input(header({ recordFailures: true })));
+  await recorded.outcome;
+  assert.deepEqual(types(recorded.frames), ["ready", "meta", "text", "done"]);
+  assert.deepEqual(recorded.frames[1]?.exception, { name: "MalformedDocumentError", message: "bad document", code: "MALFORMED_DOCUMENT" });
+  assert.deepEqual((recorded.frames[1]?.metadata as Record<string, string[]>)["tk:exception:container-exception"], [
+    "MalformedDocumentError: bad document",
+  ]);
+  assert.match(String(recorded.frames[2]?.chunk), /partial/);
+});
+
+test("text: a timeout is an error frame even when the request records failures", async () => {
+  const slow = ripstreamOf(async () => {
+    throw new ParseTimeoutError();
+  });
+  const r = run(slow, input(header({ recordFailures: true })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "error"]);
+  assert.equal(r.frames[1]?.kind, "timeout");
+});
+
+test("records: with recordFailures a container that cannot be read is a record carrying its failure", async () => {
+  const r = run(
+    ripstreamOf(async () => {
+      throw new MalformedDocumentError("bad container");
+    }),
+    input(header({ output: "records", recordFailures: true })),
+  );
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "done"]);
+  const record = r.frames[1]?.record as { exception: { name: string; code: string } };
+  assert.equal(record.exception.name, "MalformedDocumentError");
+  assert.equal(record.exception.code, "MALFORMED_DOCUMENT");
+});
+
+test("text: reaching the output limit is an error frame, unless the request truncates", async () => {
+  const long = ripstreamOf(writes("abcdefghij"));
+  const thrown = run(long, input(header({ maxOutputChars: 4 })));
+  await thrown.outcome;
+  assert.deepEqual(types(thrown.frames), ["ready", "error"]);
+
+  const cut = run(long, input(header({ maxOutputChars: 4, truncateOutput: true })));
+  await cut.outcome;
+  assert.deepEqual(types(cut.frames), ["ready", "meta", "text", "done"]);
+  assert.deepEqual((cut.frames[1]?.metadata as Record<string, string[]>)["tk:exception:write-limit-reached"], ["true"]);
+  assert.equal(String(cut.frames[2]?.chunk), "abcd");
+});
+
+test("records: a truncating request answers with the records so far, the container flagged", async () => {
+  // A record's content is every character the parser wrote, the markup's newlines included, so the cut falls in the text.
+  const r = run(ripstreamOf(writes("abcdefghij")), input(header({ output: "records", maxOutputChars: 6, truncateOutput: true })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "done"]);
+  const record = r.frames[1]?.record as { content: string; metadata: Record<string, string[]>; exception: unknown };
+  assert.equal(record.content.length, 6);
+  assert.ok(record.content.trim() !== "" && "abcdefghij".startsWith(record.content.trim()), JSON.stringify(record.content));
+  assert.deepEqual(record.metadata["tk:exception:write-limit-reached"], ["true"]);
+  assert.equal(record.exception, null);
+});
+
+test("a request's handlerType decides the shape of the content, for the text and the records answer", async () => {
+  const html = run(ripstreamOf(writes("hi")), input(header({ handlerType: "html" })));
+  await html.outcome;
+  assert.match(String(html.frames[2]?.chunk), /^<html[^>]*>[\s\S]*<p>hi<\/p>[\s\S]*<\/html>$/);
+
+  const records = run(ripstreamOf(writes("hi")), input(header({ output: "records", handlerType: "html" })));
+  await records.outcome;
+  assert.match((records.frames[1]?.record as { content: string }).content, /^<html[^>]*>[\s\S]*<p>hi<\/p>[\s\S]*<\/html>$/);
+});
+
 test("text: a metadata key named __proto__ stays an ordinary key and does not touch the prototype", async () => {
   const r = run(
     ripstreamOf(async (handler, metadata) => {
@@ -390,7 +468,7 @@ function fakeRecords(): ParseRecord[] {
   root.add("title", "Outer");
   root.add("title", "Alt");
   const child = new Metadata();
-  child.set("resourceName", "inner.bin");
+  child.set("tk:resource-name", "inner.bin");
   const broken = new Metadata();
   const named = Object.assign(new MalformedDocumentError("bad inner"), { extra: "ignored" });
   return [
@@ -416,7 +494,55 @@ test("records: one record frame per record, in order, then done", async () => {
     exception: null,
   });
   assert.equal(records[1]?.mediaType, "text/plain");
-  assert.deepEqual(records[1]?.metadata, { resourceName: ["inner.bin"] });
+  assert.deepEqual(records[1]?.metadata, { "tk:resource-name": ["inner.bin"] });
+});
+
+// ---- embedded bytes ----
+
+function recordWithBytes(name: string, bytes: Uint8Array | undefined): ParseRecord {
+  const metadata = new Metadata();
+  metadata.set("tk:resource-name", name);
+  return {
+    metadata,
+    content: "",
+    embeddedResourcePath: `/outer/${name}`,
+    depth: 1,
+    mediaType: MediaType.OCTET_STREAM,
+    exception: null,
+    ...(bytes === undefined ? {} : { bytes }),
+  };
+}
+
+test("records: an embedded document's bytes follow its record in bytes frames of at most 192 KiB that reassemble exactly", async () => {
+  const big = Uint8Array.from({ length: 400 * 1024 }, (_unused, index) => index % 251);
+  const records = [recordWithBytes("none", undefined), recordWithBytes("big", big), recordWithBytes("empty", new Uint8Array(0)), recordWithBytes("tiny", Uint8Array.of(7))];
+  const ripstream: ChildRipstream = { parse: async () => assert.fail("parse"), parseRecursive: async () => records };
+  const r = run(ripstream, input(header({ output: "records", unpackBytes: 1_000_000 })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "record", "bytes", "bytes", "bytes", "record", "record", "bytes", "done"]);
+  assert.equal(r.frames[1]?.byteLength, undefined, "a document without bytes announces none");
+  assert.equal(r.frames[2]?.byteLength, big.length);
+  assert.equal(r.frames[6]?.byteLength, 0, "an empty document announces 0 and sends no bytes frame");
+  assert.equal(r.frames[7]?.byteLength, 1);
+  const chunks = r.frames.slice(3, 6).map((frame) => String(frame.chunk));
+  assert.ok(chunks.every((chunk) => chunk.length <= 256 * 1024));
+  assert.deepEqual(new Uint8Array(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk, "base64")))), big);
+  assert.equal("bytes" in (r.frames[2]?.record as object), false, "the record itself carries no bytes, they follow it");
+});
+
+test("records: unpackBytes of the header reaches core, and a request without it asks for no bytes", async () => {
+  const seen: Array<number | undefined> = [];
+  const ripstream: ChildRipstream = {
+    parse: async () => assert.fail("parse"),
+    parseRecursive: async (_source, options) => {
+      seen.push(options?.unpackBytes);
+      return [];
+    },
+  };
+  await run(ripstream, input(header({ output: "records", unpackBytes: 4096 }))).outcome;
+  await run(ripstream, input(header({ output: "records", unpackBytes: 0 }))).outcome;
+  await run(ripstream, input(header({ output: "records" }))).outcome;
+  assert.deepEqual(seen, [4096, 0, undefined]);
 });
 
 test("records: exceptions cross as { name, message, code? } data and are not rethrown", async () => {

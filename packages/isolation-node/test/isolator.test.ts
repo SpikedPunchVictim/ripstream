@@ -10,6 +10,8 @@ import {
   DEFAULT_LIMITS,
   IsolationError,
   LimitExceededError,
+  MediaType,
+  Metadata,
   ParseTimeoutError,
   type IsolationConfig,
 } from "@spikedpunch/ripstream-core";
@@ -747,6 +749,81 @@ test("the child is told the request's depth and parse timer, and the components 
   assert.deepEqual(named.components, components);
 });
 
+// ---------------------------------------------------------------- unpackBytes
+
+test("unpackBytes: a bad value is a RangeError and a text request is a TypeError, before anything is spawned", async () => {
+  const h = setup();
+  const isolator = await h.create();
+  for (const value of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(isolator.isolate({ input: bytes("x"), output: "records", unpackBytes: value }), RangeError, String(value));
+  }
+  await assert.rejects(isolator.isolate({ input: bytes("x"), unpackBytes: 10 }), TypeError);
+  await assert.rejects(isolator.isolate({ input: bytes("x"), output: "text", unpackBytes: 10 }), TypeError);
+  assert.equal(h.runs(), 0);
+});
+
+test("unpackBytes: an in-process parse is given it, and gives the bytes back", async () => {
+  const embedded = Uint8Array.from([1, 2, 3]);
+  const h = setup({
+    ripstream: fakeRipstream({
+      type: "text/csv",
+      parseRecursive: async () => [
+        { metadata: new Metadata(), content: "", embeddedResourcePath: "", depth: 0, mediaType: MediaType.parseOrThrow("text/csv"), exception: null },
+        { metadata: new Metadata(), content: "", embeddedResourcePath: "/a", depth: 1, mediaType: MediaType.TEXT_PLAIN, exception: null, bytes: embedded },
+      ],
+    }),
+  });
+  const result = await (await h.create()).isolate({ input: bytes("a,b"), output: "records", unpackBytes: 4096 });
+  assert.equal(h.runs(), 0);
+  assert.equal(h.ripstream.parseRecursiveCalls[0]?.options.unpackBytes, 4096);
+  assert.equal(result.kind, "records");
+  assert.equal(result.records[0]?.bytes, undefined);
+  assert.deepEqual([...(result.records[1]?.bytes ?? [])], [1, 2, 3]);
+});
+
+test("unpackBytes: a request that does not ask for it leaves it out of the parse", async () => {
+  const h = setup({ ripstream: fakeRipstream({ type: "text/csv" }) });
+  await (await h.create()).isolate({ input: bytes("a,b"), output: "records" });
+  assert.equal("unpackBytes" in (h.ripstream.parseRecursiveCalls[0]?.options ?? {}), false);
+});
+
+test("unpackBytes: the child is told it, and the reservation grows with it", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"], config: { mode: "strict", maxTaskMillis: 20_000 } });
+  const isolator = await h.create();
+  const report = async (request: Parameters<NodeIsolator["isolate"]>[0]) => {
+    const result = await isolator.isolate(request);
+    assert.equal(result.kind, "records");
+    return JSON.parse((result as { records: Array<{ content: string }> }).records[0]?.content ?? "{}") as { header: Record<string, unknown> };
+  };
+  assert.equal((await report({ input: bytes("x"), output: "records" })).header.unpackBytes, undefined);
+  assert.equal((await report({ input: bytes("x"), output: "records", unpackBytes: 5 * MIB })).header.unpackBytes, 5 * MIB);
+});
+
+test("unpackBytes: above what a child may hold it is a RangeError that names the ceiling", async () => {
+  const h = setup({ config: { ...STRICT, perChildMb: 512 } });
+  const isolator = await h.create();
+  // A quarter of 512 MiB is the ceiling here.
+  await assert.rejects(
+    isolator.isolate({ input: bytes("x"), output: "records", unpackBytes: 128 * MIB + 1 }),
+    (error: unknown) => error instanceof RangeError && /134217728/.test(error.message) && /perChildMb/.test(error.message),
+  );
+  assert.equal(h.runs(), 0);
+});
+
+test("unpackBytes: a pool that fits the records request but not the bytes on top is a LimitExceededError, not an outage", async () => {
+  const limits = deriveLimits({ mode: "strict" }, { output: "records" });
+  const fits = limits.perChildMb + parentResultMb(limits.maxResultBytes, "records");
+  const pool = new MemoryPool({ poolMb: fits + 40, overshootMb: 0, maxQueue: 0 });
+  const h = setup({ pool, config: { mode: "strict" }, childArgs: ["records"] });
+  const isolator = await h.create();
+  assert.equal((await isolator.isolate({ input: bytes("a"), output: "records" })).kind, "records");
+  await assert.rejects(
+    isolator.isolate({ input: bytes("a"), output: "records", unpackBytes: 64 * MIB }),
+    (error: unknown) => error instanceof LimitExceededError && /Lower the caps or enlarge the pool/.test(error.message),
+  );
+  assert.equal(h.runs(), 1, "only the request without bytes reached a child");
+});
+
 test("components too large for the request header are refused when the isolator is built, not on every request", async () => {
   const huge = { parsers: [{ name: "default-parser", marker: true, exclude: [], mimeInclude: Array.from({ length: 2000 }, (_, i) => `application/x-type-${i}`), mimeExclude: [] }] };
   await assert.rejects(
@@ -794,6 +871,87 @@ test("a request with an invalid maxNodeDepth is refused", async () => {
   for (const bad of [-1, 1.5, Number.NaN]) {
     await assert.rejects(isolator.isolate({ input: bytes("x"), maxNodeDepth: bad }), /maxNodeDepth/, String(bad));
   }
+});
+
+test("a request with a recordFailures that is not a boolean is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), recordFailures: "yes" as never }), /recordFailures/);
+});
+
+test("a request that records failures reaches the child as a header field, and an in-process parse as the option", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const child = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await child.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+  assert.equal((await header({ input: bytes("x"), recordFailures: true })).recordFailures, true);
+  assert.equal("recordFailures" in (await header({ input: bytes("x") })), false);
+
+  const plain = setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) });
+  const inProcess = await plain.create();
+  await inProcess.isolate({ input: bytes("x"), recordFailures: true });
+  await inProcess.isolate({ input: bytes("x") });
+  assert.equal(plain.ripstream.parseCalls[0]?.options.onDocumentFailure, "record");
+  assert.equal(plain.ripstream.parseCalls[1]?.options.onDocumentFailure, undefined);
+});
+
+test("a request with a truncateOutput that is not a boolean is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), truncateOutput: "yes" as never }), /truncateOutput/);
+});
+
+test("a request that truncates reaches the child as a header field, and an in-process parse as the option", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const child = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await child.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+  assert.equal((await header({ input: bytes("x"), truncateOutput: true })).truncateOutput, true);
+  assert.equal("truncateOutput" in (await header({ input: bytes("x") })), false);
+
+  const plain = setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) });
+  const inProcess = await plain.create();
+  await inProcess.isolate({ input: bytes("x"), truncateOutput: true });
+  await inProcess.isolate({ input: bytes("x") });
+  assert.equal(plain.ripstream.parseCalls[0]?.options.onOutputLimit, "truncate");
+  assert.equal(plain.ripstream.parseCalls[1]?.options.onOutputLimit, undefined);
+});
+
+test("a request with a handlerType that is not one is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), handlerType: "txt" as never }), /handlerType/);
+});
+
+test("a request's handlerType reaches the child as a header field, and an in-process parse as the option", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const child = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await child.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+  assert.equal((await header({ input: bytes("x"), handlerType: "html" })).handlerType, "html");
+  assert.equal("handlerType" in (await header({ input: bytes("x") })), false);
+
+  const plain = setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) });
+  const inProcess = await plain.create();
+  await inProcess.isolate({ input: bytes("x"), handlerType: "markdown" });
+  await inProcess.isolate({ input: bytes("x") });
+  assert.equal(plain.ripstream.parseCalls[0]?.options.handlerType, "markdown");
+  assert.equal(plain.ripstream.parseCalls[1]?.options.handlerType, undefined);
+});
+
+test("an in-process parse that could not read the document answers with the failure", async () => {
+  const failure = Object.assign(new Error("bad document"), { name: "MalformedDocumentError", code: "MALFORMED_DOCUMENT" });
+  const h = setup({
+    config: STRICT,
+    ripstream: fakeRipstream({
+      type: "text/plain",
+      parse: async () => ({ metadata: new Metadata(), text: "partial", exception: failure }),
+    }),
+  });
+  const answer = await (await h.create()).isolate({ input: bytes("x"), recordFailures: true });
+  assert.deepEqual(answer, {
+    kind: "text",
+    metadata: {},
+    text: "partial",
+    exception: { name: "MalformedDocumentError", message: "bad document", code: "MALFORMED_DOCUMENT" },
+  });
 });
 
 test("a configured heapMb is used as given", async () => {

@@ -1,4 +1,5 @@
 import { DEFAULT_LIMITS, LimitExceededError, type IsolationConfig } from "@spikedpunch/ripstream-core";
+import { MAX_BYTES_CHUNK } from "./frames.ts";
 
 /**
  * Everything the facade hands to the runner for one request, derived from the isolation config plus the request's
@@ -86,6 +87,26 @@ export const RESULT_SLACK_BYTES = 64 * 1024;
  */
 export const MAX_RESULT_BYTES_CEILING = 512 * MIB;
 
+/**
+ * Most embedded-document bytes (`unpackBytes`) one request may ask for. They are held by the child (outside its heap) and
+ * then by the parent, so the number is bounded on its own, and by a quarter of the child's memory (see `deriveLimits`).
+ * The wire form (base64, a third more) still has to fit MAX_RESULT_BYTES_CEILING: 256 MiB of bytes is 341 MiB of it.
+ */
+export const MAX_UNPACK_BYTES_CEILING = 256 * MIB;
+
+/** What one bytes frame costs on the wire besides its payload: `{"t":"bytes","chunk":""}` and the newline, with room. */
+const BYTES_FRAME_ENVELOPE = 40;
+
+/**
+ * Bytes on the wire for `unpackBytes` of embedded documents, at most: base64 of them, plus the envelope of every bytes
+ * frame. Every document ends a frame, so a document with a few bytes still costs one: allow one extra frame for each
+ * possible embedded document.
+ */
+export function unpackWireBytes(unpackBytes: number, maxEmbeddedResources: number): number {
+  if (unpackBytes === 0) return 0;
+  return Math.ceil(unpackBytes / 3) * 4 + (Math.ceil(unpackBytes / MAX_BYTES_CHUNK) + maxEmbeddedResources) * BYTES_FRAME_ENVELOPE;
+}
+
 /** The wrapper accepts at most this many CPU seconds (wrapper.ts). */
 const MAX_CPU_SECS = 86_400;
 /** The soft RLIMIT_CPU sits this far above the wall-clock budget; see `cpuSecsFor`. */
@@ -100,6 +121,8 @@ export interface LimitsRequest {
   readonly maxEmbeddedResources?: number;
   /** The child's parse timer. At most what the isolation allows (`DerivedLimits.maxParseMillis` of a request without one). */
   readonly maxParseMillis?: number;
+  /** Bytes of embedded documents to bring back; records output only. */
+  readonly unpackBytes?: number;
 }
 
 export interface DerivedLimits {
@@ -126,6 +149,12 @@ export interface DerivedLimits {
   readonly maxResultBytes: number;
   /** Longest single frame: the default for text (many small frames), the whole result for records (one frame each). */
   readonly maxFrameBytes: number;
+  /** Most `unpackBytes` a request may ask for under this config: the smaller of MAX_UNPACK_BYTES_CEILING and a quarter of `perChildMb`. */
+  readonly unpackCeiling: number;
+  /** The request's `unpackBytes`; present only when it had one. */
+  readonly unpackBytes?: number;
+  /** The part of `maxResultBytes` that is for the bytes of embedded documents; present with `unpackBytes`. */
+  readonly unpackWireBytes?: number;
 }
 
 function requireCount(name: string, value: number): number {
@@ -219,9 +248,25 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
       );
     }
   }
+  const unpackCeiling = Math.min(MAX_UNPACK_BYTES_CEILING, Math.floor((perChildMb * MIB) / 4));
+  const unpackBytes = request.unpackBytes;
+  if (unpackBytes !== undefined) {
+    if (!Number.isSafeInteger(unpackBytes) || unpackBytes < 0) {
+      throw new RangeError(`unpackBytes must be a non-negative safe integer, got ${String(unpackBytes)}`);
+    }
+    if (output !== "records") throw new RangeError('unpackBytes needs a "records" request: only records carry bytes');
+    if (unpackBytes > unpackCeiling) {
+      throw new RangeError(
+        `unpackBytes ${unpackBytes} is more than the isolation allows (${unpackCeiling}: the smaller of ` +
+          `${MAX_UNPACK_BYTES_CEILING} and a quarter of the ${perChildMb} MiB a child has, perChildMb). Lower it`,
+      );
+    }
+  }
+  const unpackWire = unpackBytes === undefined ? 0 : unpackWireBytes(unpackBytes, maxEmbeddedResources);
   const maxResultBytes =
     maxOutputChars * WIRE_BYTES_PER_OUTPUT_CHAR +
     metadataAllowanceBytes(output, maxEmbeddedResources) +
+    unpackWire +
     RESULT_SLACK_BYTES;
   if (maxResultBytes > MAX_RESULT_BYTES_CEILING) {
     throw new LimitExceededError(
@@ -247,5 +292,7 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     // a records result (24x, runner.ts) already covers the line buffer that can grow that large. Text mode's largest
     // frame is the meta frame (text chunks are 64 KiB), hence the metadata allowance.
     maxFrameBytes: output === "records" ? maxResultBytes : TEXT_METADATA_BYTES,
+    unpackCeiling,
+    ...(unpackBytes === undefined ? {} : { unpackBytes, unpackWireBytes: unpackWire }),
   };
 }

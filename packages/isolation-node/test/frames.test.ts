@@ -270,6 +270,10 @@ const afterReady: [string, unknown][] = [
   ["meta value not an array", { t: "meta", metadata: { a: "x" } }],
   ["meta array of numbers", { t: "meta", metadata: { a: [1] } }],
   ["meta with extra field", { t: "meta", metadata: {}, x: 1 }],
+  ["meta with a string exception", { t: "meta", metadata: {}, exception: "boom" }],
+  ["meta with a null exception", { t: "meta", metadata: {}, exception: null }],
+  ["meta with an exception that has no message", { t: "meta", metadata: {}, exception: { name: "E" } }],
+  ["meta with an exception with an extra field", { t: "meta", metadata: {}, exception: { name: "E", message: "m", stack: "s" } }],
   ["text without chunk", { t: "text" }],
   ["text with numeric chunk", { t: "text", chunk: 5 }],
   ["done with extra field", { t: "done", x: 1 }],
@@ -510,6 +514,20 @@ for (const [label, tail] of [
     assert.deepEqual(r.result(), { kind: "records", records: [RECORD] });
   });
 }
+
+test("text: the failure of a document that could not be read rides on the meta frame into the result", () => {
+  const exception = { name: "ZeroByteFileError", message: "InputStream must have > 0 bytes", code: "MALFORMED_DOCUMENT" };
+  const r = reader();
+  const events = feedAll(r, line(READY) + line({ ...META, exception }) + line(TEXT_ABC) + line(DONE));
+  assert.deepEqual(violationKinds(events), []);
+  assert.deepEqual(r.result(), { kind: "text", metadata: { a: ["1"] }, text: "IMPORTANT CONTENT", exception });
+});
+
+test("text: a result with no failure has no exception key", () => {
+  const r = reader();
+  feedAll(r, line(READY) + line(META) + line(DONE));
+  assert.equal("exception" in r.result(), false);
+});
 
 test("text: done followed by bytes that cross the TOTAL cap in the same chunk: result intact, no total_too_large", () => {
   const head = line(READY) + line(META) + line(TEXT_ABC) + line(DONE);
@@ -826,4 +844,90 @@ test("a document with 80,000 metadata keys is accepted by the defaults (at the 8
   const r = reader({ maxFrameBytes: 8 * 1024 * 1024 });
   r.push(bytes(line(READY)));
   assert.deepEqual(violationKinds(r.push(bytes(line({ t: "meta", metadata: metadataWith(80_000, 1) })))), []);
+});
+
+// ---- embedded bytes (records output, `unpackBytes`) ----------------------------
+
+const b64 = (...values: number[]): string => Buffer.from(values).toString("base64");
+const withBytes = (length: number): object => ({ t: "record", record: RECORD, byteLength: length });
+const chunkFrame = (...values: number[]): object => ({ t: "bytes", chunk: b64(...values) });
+
+function feedLines(r: FrameReader, frameList: readonly object[]): FrameEvent[] {
+  return frameList.flatMap((frame) => feedAll(r, line(frame)));
+}
+
+test("bytes: a record announces its length and the bytes frames after it carry exactly that many, in pieces", () => {
+  const r = recordsReader({ unpackBytes: 100 });
+  const events = feedLines(r, [READY, withBytes(5), chunkFrame(1, 2), chunkFrame(3, 4, 5), { t: "record", record: RECORD }, DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  const result = r.result();
+  assert.equal(result.kind, "records");
+  const records = result.kind === "records" ? result.records : [];
+  assert.deepEqual([...(records[0]?.bytes ?? [])], [1, 2, 3, 4, 5]);
+  assert.equal(records[1]?.bytes, undefined, "a record that announced nothing has no bytes");
+});
+
+test("bytes: an empty document announces 0 and has an empty array, with no bytes frame", () => {
+  const r = recordsReader({ unpackBytes: 100 });
+  feedLines(r, [READY, withBytes(0), DONE]);
+  const result = r.result();
+  assert.equal(result.kind === "records" ? result.records[0]?.bytes?.length : -1, 0);
+});
+
+test("bytes: the same stream arrives byte by byte just the same", () => {
+  const r = recordsReader({ unpackBytes: 100 });
+  const input = bytes([READY, withBytes(3), chunkFrame(7, 8, 9), DONE].map(line).join(""));
+  assert.deepEqual(violationKinds(feedByByte(r, input)), []);
+  const result = r.result();
+  assert.deepEqual([...(result.kind === "records" ? (result.records[0]?.bytes ?? []) : [])], [7, 8, 9]);
+});
+
+const BAD_BYTES: ReadonlyArray<readonly [string, readonly object[], number | undefined, string, RegExp]> = [
+  ["bytes announced when none were asked for", [READY, withBytes(1), chunkFrame(1)], undefined, "protocol", /bytes/],
+  ["more than the budget in all", [READY, withBytes(60), chunkFrame(...Array(60).fill(1)), withBytes(60)], 100, "total_too_large", /100/],
+  ["a bytes frame with nothing announced", [READY, { t: "record", record: RECORD }, chunkFrame(1)], 100, "protocol", /bytes/],
+  ["a bytes frame past the announced length", [READY, withBytes(2), chunkFrame(1, 2, 3)], 100, "protocol", /bytes/],
+  ["a record while bytes are still owed", [READY, withBytes(2), chunkFrame(1), { t: "record", record: RECORD }], 100, "protocol", /owed|bytes/],
+  ["done while bytes are still owed", [READY, withBytes(2), chunkFrame(1), DONE], 100, "protocol", /owed|bytes/],
+  ["a bytes frame before any record", [READY, chunkFrame(1)], 100, "protocol", /bytes/],
+  ["an empty bytes frame", [READY, withBytes(1), { t: "bytes", chunk: "" }], 100, "protocol", /bytes/],
+  ["a chunk that is not base64", [READY, withBytes(3), { t: "bytes", chunk: "not base64!" }], 100, "protocol", /base64/],
+  ["a chunk with a bad tail", [READY, withBytes(3), { t: "bytes", chunk: "AQID=" }], 100, "protocol", /base64/],
+  ["a chunk that is not a string", [READY, withBytes(1), { t: "bytes", chunk: 7 }], 100, "protocol", /chunk/],
+  ["a negative length", [READY, withBytes(-1)], 100, "protocol", /byteLength/],
+  ["a fractional length", [READY, withBytes(1.5)], 100, "protocol", /byteLength/],
+  ["an extra field on a bytes frame", [READY, withBytes(1), { t: "bytes", chunk: b64(1), extra: 1 }], 100, "protocol", /unexpected/],
+];
+
+for (const [label, frameList, budget, kind, message] of BAD_BYTES) {
+  test(`bytes: ${label} is a violation`, () => {
+    const r = recordsReader({ ...(budget === undefined ? {} : { unpackBytes: budget }) });
+    const events = feedLines(r, frameList);
+    assert.deepEqual(violationKinds(events), [kind]);
+    const violation = events.find((event) => event.type === "violation");
+    assert.match(violation?.type === "violation" ? violation.message : "", message);
+  });
+}
+
+test("bytes: a bytes frame on a text stream is a violation", () => {
+  const events = feedLines(reader(), [READY, META, chunkFrame(1)]);
+  assert.deepEqual(violationKinds(events), ["protocol"]);
+});
+
+test("bytes: a chunk of more than 256 KiB is refused whatever the budget", () => {
+  const r = recordsReader({ unpackBytes: 10_000_000 });
+  const big = Buffer.alloc(256 * 1024 + 3, 1).toString("base64");
+  const events = feedLines(r, [READY, withBytes(256 * 1024 + 3), { t: "bytes", chunk: big }]);
+  assert.deepEqual(violationKinds(events), ["protocol"]);
+});
+
+test("bytes: a violation drops what was folded, the bytes included", () => {
+  const r = recordsReader({ unpackBytes: 100 });
+  feedLines(r, [READY, withBytes(2), chunkFrame(1, 2), withBytes(500)]);
+  assert.equal(r.retainedPieces, 0);
+});
+
+test("bytes: a bad unpackBytes option is refused", () => {
+  for (const value of [-1, 1.5, Number.NaN]) assert.throws(() => recordsReader({ unpackBytes: value }), RangeError, String(value));
+  assert.throws(() => reader({ unpackBytes: 5 }), TypeError);
 });

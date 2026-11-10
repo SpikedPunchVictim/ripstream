@@ -154,7 +154,7 @@ function wireMetadata(metadata: Metadata): WireMetadata {
 }
 
 /** Core stamps each record with how long its parse took: the one metadata key that cannot be equal across two runs. */
-const TIMING_KEY = "X-TIKA:parse_time_millis";
+const TIMING_KEY = "tk:parse-time-millis";
 
 /** A record in a shape two runs (in-process, and across the isolation boundary) can be compared in. */
 function comparable(record: ParseRecord): unknown {
@@ -233,6 +233,50 @@ test("parseRecursive over a zip with embedded documents gives the in-process rec
       records.some((r) => /Embedded DOCX paragraph/.test(r.content)),
       "the nested document's text is in its record",
     );
+  });
+});
+
+test("parseRecursive with unpackBytes brings back each embedded document's bytes through the child, as in-process", async () => {
+  // Past 192 KiB, so the bytes cross in more than one frame; the parts are not text a parser would reshape.
+  const big = Uint8Array.from({ length: 500 * 1024 }, (_unused, index) => (index * 31 + (index >> 8)) % 251);
+  const container = storedZip({
+    "notes.txt": "Plain notes inside the archive",
+    "data/blob.bin": big,
+    "empty.txt": "",
+    "inner/report.docx": docx(["Embedded DOCX paragraph"]),
+  });
+  const bytesOf = (records: readonly ParseRecord[]): Array<string | null> =>
+    records.map((r) => (r.bytes === undefined ? null : `${r.bytes.length}:${Buffer.from(r.bytes).toString("base64").slice(0, 64)}`));
+  const expected = await reference.parseRecursive(container, { filename: "bundle.zip", unpackBytes: 4 * 1024 * 1024 });
+  assert.equal(expected[0]?.bytes, undefined, "the container itself carries none");
+  assert.ok(expected.slice(1).every((r) => r.bytes !== undefined), "every part of the zip kept its bytes in-process");
+
+  await withStandard({}, async ({ ripstream }) => {
+    const before = settled.length;
+    const records = await ripstream.parseRecursive(container, { filename: "bundle.zip", unpackBytes: 4 * 1024 * 1024 });
+    assert.equal(settled.length - before, 1, "one child");
+    assert.deepEqual(bytesOf(records), bytesOf(expected));
+    const blob = records.find((r) => r.metadata.get("tk:resource-name")?.endsWith("blob.bin"));
+    assert.equal(Buffer.compare(Buffer.from(blob?.bytes ?? []), Buffer.from(big)), 0, "the large document arrives whole");
+  });
+});
+
+test("parseRecursive with an unpackBytes budget leaves out the documents that would pass it, in the child as in-process", async () => {
+  const container = storedZip({ "a.txt": "a".repeat(300), "b.txt": "b".repeat(300), "c.txt": "c".repeat(100) });
+  const budget = 450;
+  const expected = await reference.parseRecursive(container, { filename: "t.zip", unpackBytes: budget });
+  const sizes = (records: readonly ParseRecord[]): Array<number | null> => records.map((r) => r.bytes?.length ?? null);
+  assert.deepEqual(sizes(expected), [null, 300, null, 100], "the second would take the total to 600");
+  await withStandard({}, async ({ ripstream }) => {
+    assert.deepEqual(sizes(await ripstream.parseRecursive(container, { filename: "t.zip", unpackBytes: budget })), sizes(expected));
+  });
+});
+
+test("parseRecursive without unpackBytes brings back no bytes", async () => {
+  const container = storedZip({ "a.txt": "hello" });
+  await withStandard({}, async ({ ripstream }) => {
+    const records = await ripstream.parseRecursive(container, { filename: "t.zip" });
+    assert.ok(records.every((r) => r.bytes === undefined));
   });
 });
 

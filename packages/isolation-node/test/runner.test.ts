@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { test } from "node:test";
 import { AbortError, IsolationError, LimitExceededError, ParseTimeoutError } from "@spikedpunch/ripstream-core";
 import { MemoryPool } from "../src/pool.ts";
-import { ChildRunner, PARENT_RESULT_SLACK_MB, parentResultMb, type ChildRunnerOptions } from "../src/runner.ts";
+import { ChildRunner, PARENT_RESULT_SLACK_MB, UNPACK_RESULT_FACTOR, parentResultMb, type ChildRunnerOptions } from "../src/runner.ts";
 import { fakeSpawn } from "./fixtures/fake-child.ts";
 import { CHILD, expectGroupGone, TEST_TEMP_DIR } from "./fixtures/helpers.ts";
 import type { RunDiagnostics } from "../src/supervisor.ts";
@@ -210,6 +210,14 @@ test("parentResultMb: rounds up, adds the fixed slack, and is larger for records
   assert.equal(parentResultMb(1024 * 1024, undefined), 6 + 96);
   assert.equal(parentResultMb(1024 * 1024, "records"), 24 + 96);
   assert.equal(parentResultMb(1_500_000, "text"), 9 + 96); // 8.58 MiB
+});
+
+test("parentResultMb: embedded bytes are reserved at their own factor, and their share of the wire is not charged again", () => {
+  const MiB = 1024 * 1024;
+  // 100 MiB of result, 60 MiB of it the wire form of 45 MiB of embedded bytes: the other 40 MiB is records at 24x.
+  assert.equal(parentResultMb(100 * MiB, "records", { bytes: 45 * MiB, wireBytes: 60 * MiB }), 40 * 24 + 45 * UNPACK_RESULT_FACTOR + 96);
+  // Asked for and none given: as before.
+  assert.equal(parentResultMb(MiB, "records", { bytes: 0, wireBytes: 0 }), parentResultMb(MiB, "records"));
 });
 
 /** A runner whose spawn always throws, recording what the pool had reserved at that moment. */

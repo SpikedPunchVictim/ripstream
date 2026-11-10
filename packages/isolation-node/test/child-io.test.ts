@@ -38,6 +38,29 @@ test("maxNodeDepth round trips, including 0", async () => {
   assert.equal((await readInput(stream(wire(header())))).header.maxNodeDepth, undefined);
 });
 
+test("recordFailures round trips, and anything but a boolean is refused", async () => {
+  assert.equal((await readInput(stream(wire(header({ recordFailures: true }))))).header.recordFailures, true);
+  assert.equal((await readInput(stream(wire(header())))).header.recordFailures, undefined);
+});
+
+test("truncateOutput round trips, and anything but a boolean is refused", async () => {
+  assert.equal((await readInput(stream(wire(header({ truncateOutput: true }))))).header.truncateOutput, true);
+  assert.equal((await readInput(stream(wire(header())))).header.truncateOutput, undefined);
+});
+
+test("unpackBytes round trips for a records request, including 0", async () => {
+  for (const unpackBytes of [0, 1, 268_435_456]) {
+    const got = await readInput(stream(wire(header({ output: "records", unpackBytes }))));
+    assert.equal(got.header.unpackBytes, unpackBytes);
+  }
+  assert.equal((await readInput(stream(wire(header({ output: "records" }))))).header.unpackBytes, undefined);
+});
+
+test("handlerType round trips", async () => {
+  assert.equal((await readInput(stream(wire(header({ handlerType: "markdown" }))))).header.handlerType, "markdown");
+  assert.equal((await readInput(stream(wire(header())))).header.handlerType, undefined);
+});
+
 const entry = (name: string, overrides: Record<string, unknown> = {}) => ({
   name,
   marker: false,
@@ -114,6 +137,14 @@ for (const [label, json] of [
   ["null maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":null}'],
   ["negative maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":-1}'],
   ["string maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":"3"}'],
+  ["string recordFailures", '{"v":1,"output":"text","byteLength":0,"recordFailures":"yes"}'],
+  ["string truncateOutput", '{"v":1,"output":"text","byteLength":0,"truncateOutput":"yes"}'],
+  ["negative unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":-1}'],
+  ["fractional unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":1.5}'],
+  ["string unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":"9"}'],
+  ["unpackBytes for text output", '{"v":1,"output":"text","byteLength":0,"unpackBytes":9}'],
+  ["unknown handlerType", '{"v":1,"output":"text","byteLength":0,"handlerType":"txt"}'],
+  ["numeric handlerType", '{"v":1,"output":"text","byteLength":0,"handlerType":1}'],
   ["components that is not an object", '{"v":1,"output":"text","byteLength":0,"components":[]}'],
   ["custom media types that are not a string", '{"v":1,"output":"text","byteLength":0,"components":{"customMimeTypes":["a"]}}'],
   ["components with an unknown section", '{"v":1,"output":"text","byteLength":0,"components":{"encoders":[]}}'],

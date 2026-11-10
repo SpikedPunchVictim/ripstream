@@ -18,6 +18,7 @@ import {
   type InputHeader,
 } from "./child-io.ts";
 import { encodeChildError, encodeCrashError, oneLineText } from "./error-codec.ts";
+import { MAX_BYTES_CHUNK } from "./frames.ts";
 
 /**
  * The child side of the wire protocol: runs ONE whole parse in this process and answers over fd 3. The entry file
@@ -121,6 +122,13 @@ export function* textChunks(text: string, maxChars: number = MAX_TEXT_CHUNK_CHAR
   }
 }
 
+/** `bytes` as base64 in pieces of at most MAX_BYTES_CHUNK raw bytes; nothing for no bytes. */
+export function* byteChunks(bytes: Uint8Array, size: number = MAX_BYTES_CHUNK): Generator<string> {
+  for (let start = 0; start < bytes.length; start += size) {
+    yield Buffer.from(bytes.buffer, bytes.byteOffset + start, Math.min(size, bytes.length - start)).toString("base64");
+  }
+}
+
 /** Own data properties only: a key such as "__proto__" stays an ordinary key (the parent drops it on receipt). */
 function metadataToRecord(metadata: Metadata): Record<string, string[]> {
   return Object.fromEntries(metadata.names().map((name) => [name, [...metadata.getAll(name)]]));
@@ -157,7 +165,14 @@ function parseOptionsFor(header: InputHeader): ParseOptions {
     ...(header.maxNodeDepth === undefined ? {} : { maxNodeDepth: header.maxNodeDepth }),
     ...(header.maxParseMillis === undefined ? {} : { maxParseMillis: header.maxParseMillis }),
   };
-  return { ...(header.filename === undefined ? {} : { filename: header.filename }), limits };
+  return {
+    ...(header.filename === undefined ? {} : { filename: header.filename }),
+    limits,
+    ...(header.recordFailures === true ? { onDocumentFailure: "record" as const } : {}),
+    ...(header.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
+    ...(header.handlerType === undefined ? {} : { handlerType: header.handlerType }),
+    ...(header.unpackBytes === undefined ? {} : { unpackBytes: header.unpackBytes }),
+  };
 }
 
 /**
@@ -247,10 +262,18 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
       const ripstream = typeof options.ripstream === "function" ? options.ripstream(input.header.components) : options.ripstream;
       if (input.header.output === "records") {
         const records = await Promise.race([ripstream.parseRecursive(source, parseOptions), watchdog.expired]);
-        for (const record of records) send({ t: "record", record: toWireRecord(record) });
+        for (const record of records) {
+          const { bytes } = record;
+          send({ t: "record", record: toWireRecord(record), ...(bytes === undefined ? {} : { byteLength: bytes.length }) });
+          if (bytes !== undefined) for (const chunk of byteChunks(bytes)) send({ t: "bytes", chunk });
+        }
       } else {
         const result = await Promise.race([ripstream.parse(source, parseOptions), watchdog.expired]);
-        send({ t: "meta", metadata: metadataToRecord(result.metadata) });
+        send({
+          t: "meta",
+          metadata: metadataToRecord(result.metadata),
+          ...(result.exception === undefined ? {} : { exception: wireException(result.exception) }),
+        });
         for (const chunk of textChunks(result.text)) send({ t: "text", chunk });
       }
     } catch (error) {

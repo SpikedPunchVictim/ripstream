@@ -1,5 +1,6 @@
 import {
   IsolationError,
+  type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedParseResult,
 } from "@spikedpunch/ripstream-core";
@@ -17,7 +18,8 @@ import {
  * rather than after the whole stream was buffered:
  *
  *   text:    ready, meta, text*, done      (an error frame may end it anywhere after ready)
- *   records: ready, record*, done
+ *   records: ready, (record bytes*)*, done  (a record that announces `byteLength` is followed by bytes frames that
+ *            add up to exactly that; only when the request asked for `unpackBytes`)
  */
 
 export const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
@@ -37,6 +39,17 @@ export const DEFAULT_MAX_FRAMES = 1_000_000;
 export const DEFAULT_MAX_METADATA_KEYS = 200_000;
 /** Most strings, over all keys, in one metadata object. */
 export const DEFAULT_MAX_METADATA_VALUES = 1_000_000;
+
+/** Raw bytes in one bytes frame, at most: the child cuts a document's bytes at this size. */
+export const MAX_BYTES_CHUNK = 192 * 1024;
+
+/**
+ * Most characters of base64 in one bytes frame, the base64 of MAX_BYTES_CHUNK. A longer chunk is a protocol violation,
+ * so the parent never decodes more than this at once whatever the frame cap is.
+ */
+export const MAX_BYTES_CHUNK_CHARS = (MAX_BYTES_CHUNK / 3) * 4;
+
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export type ChildErrorKind = "limit" | "timeout" | "malformed" | "abort" | "crash";
 
@@ -62,9 +75,11 @@ export interface ErrorFrame {
 
 export type Frame =
   | { readonly t: "ready"; readonly pid: number }
-  | { readonly t: "meta"; readonly metadata: Record<string, string[]> }
+  | { readonly t: "meta"; readonly metadata: Record<string, string[]>; readonly exception?: IsolatedException }
   | { readonly t: "text"; readonly chunk: string }
-  | { readonly t: "record"; readonly record: IsolatedParseRecord }
+  /** `byteLength`: the embedded document's bytes follow in bytes frames (0: it is empty). Only with `unpackBytes`. */
+  | { readonly t: "record"; readonly record: IsolatedParseRecord; readonly byteLength?: number }
+  | { readonly t: "bytes"; readonly data: Uint8Array }
   | { readonly t: "done" }
   | ErrorFrame;
 
@@ -91,6 +106,11 @@ export interface FrameReaderOptions {
   readonly maxMetadataKeys?: number;
   /** Most strings in one metadata object. Default DEFAULT_MAX_METADATA_VALUES. */
   readonly maxMetadataValues?: number;
+  /**
+   * Records output only: the most bytes of embedded documents accepted over the stream (the request's
+   * `unpackBytes`). Omitted: the child may send none.
+   */
+  readonly unpackBytes?: number;
 }
 
 interface MetadataLimits {
@@ -132,9 +152,15 @@ export class FrameReader {
   #violation: Extract<FrameEvent, { type: "violation" }> | null = null;
   // The result, folded as the frames arrive. Frame objects themselves are not kept.
   #metadata: Record<string, string[]> | null = null;
+  #exception: IsolatedException | null = null;
   #chunks: string[] = [];
   #records: IsolatedParseRecord[] = [];
   #result: IsolatedParseResult | null = null;
+  readonly #unpackBytes: number;
+  /** Bytes announced so far, over all records. */
+  #unpackAnnounced = 0;
+  /** The record whose bytes are still arriving. */
+  #owing: { readonly index: number; readonly parts: Uint8Array[]; remaining: number; readonly length: number } | null = null;
 
   constructor(options: FrameReaderOptions) {
     this.#maxFrameBytes = checkPositiveInteger(
@@ -157,6 +183,13 @@ export class FrameReader {
       throw new TypeError(`output must be "text" or "records", got ${String(options.output)}`);
     }
     this.#output = options.output;
+    if (options.unpackBytes !== undefined) {
+      if (options.output !== "records") throw new TypeError('unpackBytes needs output "records"');
+      if (!Number.isSafeInteger(options.unpackBytes) || options.unpackBytes < 0) {
+        throw new RangeError(`unpackBytes must be a non-negative safe integer, got ${String(options.unpackBytes)}`);
+      }
+    }
+    this.#unpackBytes = options.unpackBytes ?? 0;
   }
 
   /** Frames accepted so far, of every kind. */
@@ -277,6 +310,7 @@ export class FrameReader {
     this.#lineLength = 0;
     this.#chunks = [];
     this.#records = [];
+    this.#owing = null;
     events.push(violation);
   }
 
@@ -311,7 +345,14 @@ export class FrameReader {
       this.#fail(events, "protocol", parsed);
       return false;
     }
-    const orderError = this.#checkOrder(parsed);
+    let orderError: string | null;
+    try {
+      orderError = this.#checkOrder(parsed);
+    } catch (error) {
+      if (!(error instanceof UnpackBudgetError)) throw error;
+      this.#fail(events, "total_too_large", error.message);
+      return false;
+    }
     if (orderError !== null) {
       this.#fail(events, "protocol", orderError);
       return false;
@@ -336,6 +377,7 @@ export class FrameReader {
         if (this.#output !== "text") return '"meta" frame for records output';
         if (this.#metadata !== null) return 'second "meta" frame';
         this.#metadata = frame.metadata;
+        this.#exception = frame.exception ?? null;
         return null;
       case "text":
         if (this.#output !== "text") return '"text" frame for records output';
@@ -345,10 +387,14 @@ export class FrameReader {
         return null;
       case "record":
         if (this.#output !== "records") return '"record" frame for text output';
-        this.#records.push(frame.record);
-        return null;
+        if (this.#owing !== null) return '"record" frame while the bytes of the last record are still owed';
+        return this.#acceptRecord(frame.record, frame.byteLength);
+      case "bytes":
+        if (this.#output !== "records") return '"bytes" frame for text output';
+        return this.#acceptBytes(frame.data);
       case "done":
         if (this.#output === "text" && this.#metadata === null) return '"done" frame before "meta" for text output';
+        if (this.#owing !== null) return '"done" frame while the bytes of the last record are still owed';
         this.#terminal = "done";
         return null;
       case "error":
@@ -356,6 +402,39 @@ export class FrameReader {
         this.#errorFrame = frame;
         return null;
     }
+  }
+
+  /** A record, and the bytes it announces. The announced length is checked against the budget before any byte is kept. */
+  #acceptRecord(record: IsolatedParseRecord, byteLength: number | undefined): string | null {
+    this.#records.push(record);
+    if (byteLength === undefined) return null;
+    if (this.#unpackBytes === 0 && byteLength > 0) return "record announces bytes, but none were asked for";
+    if (this.#unpackAnnounced + byteLength > this.#unpackBytes) {
+      throw new UnpackBudgetError(`embedded bytes exceed the unpackBytes budget of ${this.#unpackBytes}`);
+    }
+    this.#unpackAnnounced += byteLength;
+    const index = this.#records.length - 1;
+    if (byteLength === 0) this.#records[index] = { ...record, bytes: new Uint8Array(0) };
+    else this.#owing = { index, parts: [], remaining: byteLength, length: byteLength };
+    return null;
+  }
+
+  #acceptBytes(data: Uint8Array): string | null {
+    const owing = this.#owing;
+    if (owing === null) return '"bytes" frame with no record waiting for bytes';
+    if (data.length > owing.remaining) return `"bytes" frame of ${data.length} bytes, ${owing.remaining} were owed`;
+    owing.parts.push(data);
+    owing.remaining -= data.length;
+    if (owing.remaining > 0) return null;
+    const whole = new Uint8Array(owing.length);
+    let offset = 0;
+    for (const part of owing.parts) {
+      whole.set(part, offset);
+      offset += part.length;
+    }
+    this.#records[owing.index] = { ...this.#records[owing.index]!, bytes: whole };
+    this.#owing = null;
+    return null;
   }
 
   /**
@@ -372,7 +451,12 @@ export class FrameReader {
       this.#records = [];
     } else {
       if (this.#metadata === null) throw protocolFailure('text output has no "meta" frame');
-      this.#result = { kind: "text", metadata: this.#metadata, text: this.#chunks.join("") };
+      this.#result = {
+        kind: "text",
+        metadata: this.#metadata,
+        text: this.#chunks.join(""),
+        ...(this.#exception === null ? {} : { exception: this.#exception }),
+      };
       this.#chunks = [];
     }
     return this.#result;
@@ -406,6 +490,9 @@ function onlyKeys(value: Obj, allowed: readonly string[]): string | null {
  * Caught only in FrameReader.#acceptLine.
  */
 class MetadataCapError extends Error {}
+
+/** Thrown by `#acceptRecord` when a record announces more bytes than the request's budget allows: a size limit, not a protocol fault. */
+class UnpackBudgetError extends Error {}
 
 function validateMetadata(value: unknown, limits: MetadataLimits): Record<string, string[]> | string {
   if (!isObject(value)) return "metadata must be an object";
@@ -443,36 +530,29 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
   if (typeof value.depth !== "number" || !Number.isSafeInteger(value.depth) || value.depth < 0) {
     return "record.depth must be a non-negative integer";
   }
-  const exception = value.exception;
-  if (exception === null) {
-    return {
-      metadata,
-      content: value.content,
-      embeddedResourcePath: value.embeddedResourcePath,
-      depth: value.depth,
-      mediaType: value.mediaType,
-      exception: null,
-    };
-  }
-  if (!isObject(exception)) return "record.exception must be null or an object";
-  if (onlyKeys(exception, ["name", "message", "code"]) !== null) return "record.exception has unexpected fields";
-  if (typeof exception.name !== "string" || typeof exception.message !== "string") {
-    return "record.exception.name and message must be strings";
-  }
-  if (exception.code !== undefined && typeof exception.code !== "string") {
-    return "record.exception.code must be a string";
-  }
+  const exception = value.exception === null ? null : validateException(value.exception, "record.exception");
+  if (typeof exception === "string") return exception;
   return {
     metadata,
     content: value.content,
     embeddedResourcePath: value.embeddedResourcePath,
     depth: value.depth,
     mediaType: value.mediaType,
-    exception:
-      exception.code === undefined
-        ? { name: exception.name, message: exception.message }
-        : { name: exception.name, message: exception.message, code: exception.code },
+    exception,
   };
+}
+
+/** A failure as the child describes it: three plain strings, nothing else. */
+function validateException(value: unknown, where: string): IsolatedException | string {
+  if (!isObject(value)) return `${where} must be an object`;
+  if (onlyKeys(value, ["name", "message", "code"]) !== null) return `${where} has unexpected fields`;
+  if (typeof value.name !== "string" || typeof value.message !== "string") {
+    return `${where}.name and message must be strings`;
+  }
+  if (value.code !== undefined && typeof value.code !== "string") return `${where}.code must be a string`;
+  return value.code === undefined
+    ? { name: value.name, message: value.message }
+    : { name: value.name, message: value.message, code: value.code };
 }
 
 /** Returns the typed frame, or a description of what is wrong with it. */
@@ -488,10 +568,13 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return { t: "ready", pid: value.pid };
     }
     case "meta": {
-      const extra = onlyKeys(value, ["t", "metadata"]);
+      const extra = onlyKeys(value, ["t", "metadata", "exception"]);
       if (extra !== null) return `meta: ${extra}`;
       const metadata = validateMetadata(value.metadata, limits);
-      return typeof metadata === "string" ? `meta: ${metadata}` : { t: "meta", metadata };
+      if (typeof metadata === "string") return `meta: ${metadata}`;
+      if (value.exception === undefined) return { t: "meta", metadata };
+      const exception = validateException(value.exception, "meta.exception");
+      return typeof exception === "string" ? exception : { t: "meta", metadata, exception };
     }
     case "text": {
       const extra = onlyKeys(value, ["t", "chunk"]);
@@ -500,10 +583,24 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return { t: "text", chunk: value.chunk };
     }
     case "record": {
-      const extra = onlyKeys(value, ["t", "record"]);
+      const extra = onlyKeys(value, ["t", "record", "byteLength"]);
       if (extra !== null) return `record frame: ${extra}`;
       const record = validateRecord(value.record, limits);
-      return typeof record === "string" ? record : { t: "record", record };
+      if (typeof record === "string") return record;
+      if (value.byteLength === undefined) return { t: "record", record };
+      if (typeof value.byteLength !== "number" || !Number.isSafeInteger(value.byteLength) || value.byteLength < 0) {
+        return "record frame: byteLength must be a non-negative integer";
+      }
+      return { t: "record", record, byteLength: value.byteLength };
+    }
+    case "bytes": {
+      const extra = onlyKeys(value, ["t", "chunk"]);
+      if (extra !== null) return `bytes: ${extra}`;
+      if (typeof value.chunk !== "string") return "bytes.chunk must be a string";
+      if (value.chunk.length === 0) return "bytes.chunk must not be empty";
+      if (value.chunk.length > MAX_BYTES_CHUNK_CHARS) return `bytes.chunk is over ${MAX_BYTES_CHUNK_CHARS} characters`;
+      if (!BASE64.test(value.chunk)) return "bytes.chunk is not base64";
+      return { t: "bytes", data: new Uint8Array(Buffer.from(value.chunk, "base64")) };
     }
     case "done": {
       const extra = onlyKeys(value, ["t"]);

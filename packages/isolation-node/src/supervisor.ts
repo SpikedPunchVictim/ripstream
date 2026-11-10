@@ -354,6 +354,7 @@ class Supervision {
       output: this.#output,
       ...(options.maxFrameBytes === undefined ? {} : { maxFrameBytes: options.maxFrameBytes }),
       ...(options.maxFrames === undefined ? {} : { maxFrames: options.maxFrames }),
+      ...(options.request.unpackBytes === undefined ? {} : { unpackBytes: options.request.unpackBytes }),
     });
   }
 
@@ -444,6 +445,10 @@ class Supervision {
       ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
       ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+      ...(request.recordFailures === true ? { recordFailures: true } : {}),
+      ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
+      ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
+      ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
       ...(this.#options.components === undefined ? {} : { components: this.#options.components }),
       ...(this.#options.maxParseMillis === undefined ? {} : { maxParseMillis: this.#options.maxParseMillis }),
     };

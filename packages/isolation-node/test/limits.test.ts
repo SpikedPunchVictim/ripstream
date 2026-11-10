@@ -7,6 +7,7 @@ import {
   DEFAULT_PER_CHILD_MB,
   MAX_RECORDS_METADATA_BYTES,
   MAX_RESULT_BYTES_CEILING,
+  MAX_UNPACK_BYTES_CEILING,
   RESULT_SLACK_BYTES,
   TEXT_METADATA_BYTES,
   deriveLimits,
@@ -30,6 +31,7 @@ test("defaults: a text request with no overrides", () => {
     output: "text",
     maxResultBytes: 600_000 + 8 * MIB + 64 * 1024, // 100,000 * 6 + metadata allowance + slack
     maxFrameBytes: 8 * MIB, // the meta frame: all metadata travels in one frame
+    unpackCeiling: 256 * MIB, // min(256 MiB, a quarter of the 1536 MiB a child has)
   });
 });
 
@@ -215,4 +217,63 @@ test("a maxParseMillis the isolation cannot honour is refused, naming what to ch
   for (const bad of [0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
     assert.throws(() => deriveLimits(strict, { maxParseMillis: bad }), RangeError, String(bad));
   }
+});
+
+// ---- embedded bytes (`unpackBytes`) ----------------------------------------------------------------------------
+
+test("unpackBytes: a records request with none derives exactly what it did before", () => {
+  const without = deriveLimits(strict, { output: "records", maxOutputChars: 1000 });
+  assert.equal("unpackBytes" in without, false);
+  assert.equal("unpackWireBytes" in without, false);
+});
+
+test("unpackBytes: the result cap grows by the bytes as base64 and their frames, and nothing else changes", () => {
+  const base = deriveLimits(strict, { output: "records", maxOutputChars: 1000 });
+  const unpack = deriveLimits(strict, { output: "records", maxOutputChars: 1000, unpackBytes: 30 * MIB });
+  assert.equal(unpack.unpackBytes, 30 * MIB);
+  assert.equal(unpack.maxResultBytes, base.maxResultBytes + (unpack.unpackWireBytes ?? 0));
+  const base64 = (30 * MIB) / 3 * 4;
+  assert.ok((unpack.unpackWireBytes ?? 0) >= base64, "at least the base64 of the bytes");
+  assert.ok((unpack.unpackWireBytes ?? 0) < base64 + 1 * MIB, "and not much more than the frame envelopes");
+  assert.equal(unpack.maxFrameBytes, unpack.maxResultBytes, "a record is still one frame, bounded by the whole result");
+  assert.equal(unpack.perChildMb, base.perChildMb);
+  assert.equal(unpack.heapMb, base.heapMb);
+});
+
+test("unpackBytes: 0 asks for the empty documents only and costs nothing", () => {
+  const base = deriveLimits(strict, { output: "records", maxOutputChars: 1000 });
+  const zero = deriveLimits(strict, { output: "records", maxOutputChars: 1000, unpackBytes: 0 });
+  assert.equal(zero.unpackBytes, 0);
+  assert.equal(zero.maxResultBytes, base.maxResultBytes);
+});
+
+test("unpackBytes: a text request cannot have it", () => {
+  assert.throws(() => deriveLimits(strict, { output: "text", unpackBytes: 10 }), /unpackBytes.*records/);
+  assert.throws(() => deriveLimits(strict, { unpackBytes: 10 }), RangeError);
+});
+
+test("unpackBytes: a number that is not a count is refused", () => {
+  for (const unpackBytes of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => deriveLimits(strict, { output: "records", unpackBytes }), RangeError, String(unpackBytes));
+  }
+});
+
+test("unpackBytes: more than the ceiling, or than a quarter of the child's memory, is refused naming the numbers", () => {
+  assert.throws(
+    () => deriveLimits(strict, { output: "records", unpackBytes: MAX_UNPACK_BYTES_CEILING + 1 }),
+    (error) => error instanceof RangeError && error.message.includes(String(MAX_UNPACK_BYTES_CEILING + 1)) && error.message.includes(String(MAX_UNPACK_BYTES_CEILING)),
+  );
+  assert.equal(deriveLimits(strict, { output: "records", unpackBytes: MAX_UNPACK_BYTES_CEILING }).unpackBytes, MAX_UNPACK_BYTES_CEILING);
+  // 400 MiB of child: a quarter is 100 MiB.
+  const small: IsolationConfig = { mode: "strict", perChildMb: 400, heapMb: 100 };
+  assert.equal(deriveLimits(small, { output: "records", unpackBytes: 100 * MIB }).unpackBytes, 100 * MIB);
+  assert.throws(() => deriveLimits(small, { output: "records", unpackBytes: 100 * MIB + 1 }), /perChildMb|child/);
+});
+
+test("unpackCeiling: every derivation says what unpackBytes may be, whether or not the request asked for any", () => {
+  assert.equal(deriveLimits(strict).unpackCeiling, Math.min(MAX_UNPACK_BYTES_CEILING, Math.floor((1536 * MIB) / 4)));
+  assert.equal(deriveLimits(strict, { output: "records" }).unpackCeiling, MAX_UNPACK_BYTES_CEILING);
+  const small: IsolationConfig = { mode: "strict", perChildMb: 400, heapMb: 100 };
+  assert.equal(deriveLimits(small).unpackCeiling, 100 * MIB);
+  assert.equal(deriveLimits(small, { output: "records", unpackBytes: 100 * MIB }).unpackBytes, deriveLimits(small).unpackCeiling);
 });

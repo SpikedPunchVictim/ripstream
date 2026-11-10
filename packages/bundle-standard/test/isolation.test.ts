@@ -150,7 +150,7 @@ function wireMetadata(metadata: Metadata): WireMetadata {
 }
 
 /** Core stamps each record with how long its parse took: the one metadata key that cannot be equal across two runs. */
-const TIMING_KEY = "X-TIKA:parse_time_millis";
+const TIMING_KEY = "tk:parse-time-millis";
 
 function withoutTiming(record: IsolatedParseRecord): IsolatedParseRecord {
   const { [TIMING_KEY]: _timing, ...metadata } = record.metadata;
@@ -318,10 +318,14 @@ test("streaming: a large result under the cap comes back as many bounded frames,
 const MALFORMED = "MalformedDocumentError/MALFORMED_DOCUMENT";
 const UNSUPPORTED = "UnsupportedFormatError/UNSUPPORTED_FORMAT";
 
+/** What an error of the in-process class arrives as across the boundary: a subclass crosses as the class of its code. */
+const ZERO_BYTE = "ZeroByteFileError/MALFORMED_DOCUMENT";
+const CROSSES_AS: Readonly<Record<string, string>> = { [ZERO_BYTE]: MALFORMED };
+
 const FAILURE_CASES: readonly (readonly [name: string, filename: string, bytes: () => Uint8Array, expected: string])[] = [
   ["PDF header with garbage", "garbage.pdf", () => encoder.encode("%PDF-1.7\nthis is not a pdf at all\n"), MALFORMED],
   ["DOCX that is not a zip", "fake.docx", () => encoder.encode("PK\u0003\u0004 definitely not a zip file"), MALFORMED],
-  ["empty input", "empty.bin", () => new Uint8Array(0), UNSUPPORTED],
+  ["empty input", "empty.bin", () => new Uint8Array(0), ZERO_BYTE],
   ["binary noise", "noise.bin", () => Uint8Array.from({ length: 4096 }, (_, i) => (i * 131 + 17) & 0xff), UNSUPPORTED],
 ];
 
@@ -331,9 +335,67 @@ for (const [name, filename, bytes, expected] of FAILURE_CASES) {
     const reference = await outcomeOf(() => inProcess.parse(input, { filename }));
     assert.equal(reference, expected, "the in-process outcome this case is meant to pin");
     const answer = await outcomeOf(() => isolated({ input, filename }));
-    assert.equal(answer, reference);
+    assert.equal(answer, CROSSES_AS[reference] ?? reference);
   });
 }
+
+// ---- recording a failure instead of throwing: the same answer in-process and from a child -------------------------------
+
+for (const [name, filename, bytes] of FAILURE_CASES.filter(([, , , expected]) => expected !== UNSUPPORTED)) {
+  test(`recorded failure parity: ${name} gives the same text and failure isolated as in-process`, async () => {
+    const input = bytes();
+    const reference = await inProcess.parse(input, { filename, onDocumentFailure: "record" });
+    assert.ok(reference.exception !== undefined, "the in-process parse records the failure");
+    const answer = await isolated({ input, filename, output: "text", recordFailures: true });
+    assert.equal(answer.kind, "text");
+    const text = answer as Extract<IsolatedParseResult, { kind: "text" }>;
+    assert.equal(text.text, reference.text);
+    assert.equal(text.exception?.name, reference.exception.name);
+    assert.equal(text.exception?.message, reference.exception.message);
+    assert.equal(text.exception?.code, "MALFORMED_DOCUMENT");
+    assert.deepEqual(text.metadata["tk:exception:container-exception"], [`${reference.exception.name}: ${reference.exception.message}`]);
+  });
+}
+
+test("recorded failure parity: records of an empty input carry the failure on the container, as in-process", async () => {
+  const input = new Uint8Array(0);
+  const [reference] = await inProcess.parseRecursive(input, { filename: "empty.bin", onDocumentFailure: "record" });
+  const answer = await isolated({ input, filename: "empty.bin", output: "records", recordFailures: true });
+  assert.equal(answer.kind, "records");
+  const [record] = (answer as Extract<IsolatedParseResult, { kind: "records" }>).records;
+  assert.equal(record?.exception?.name, reference?.exception?.name);
+  assert.equal(record?.exception?.name, "ZeroByteFileError");
+});
+
+// ---- truncating at the output limit: the same answer in-process and from a child ----------------------------------------
+
+test("truncation parity: text cut at the output limit is the same isolated as in-process, flagged the same way", async () => {
+  const input = encoder.encode("The quick brown fox jumps over the lazy dog. ".repeat(40));
+  const reference = await inProcess.parse(input, { filename: "long.txt", limits: { maxOutputChars: 100 }, onOutputLimit: "truncate" });
+  assert.equal(reference.text.length, 100);
+  assert.equal(reference.metadata.get("tk:exception:write-limit-reached"), "true");
+  const answer = await isolated({ input, filename: "long.txt", output: "text", maxOutputChars: 100, truncateOutput: true });
+  assert.equal(answer.kind, "text");
+  const text = answer as Extract<IsolatedParseResult, { kind: "text" }>;
+  assert.equal(text.text, reference.text);
+  assert.deepEqual(text.metadata["tk:exception:write-limit-reached"], ["true"]);
+});
+
+test("truncation parity: without truncate the same input is a LimitExceededError from the child", async () => {
+  const input = encoder.encode("The quick brown fox jumps over the lazy dog. ".repeat(40));
+  assert.equal(await outcomeOf(() => isolated({ input, filename: "long.txt", output: "text", maxOutputChars: 100 })), "LimitExceededError/LIMIT_EXCEEDED");
+});
+
+test("truncation parity: records cut at the output limit are the records so far, as in-process", async () => {
+  const input = encoder.encode("The quick brown fox jumps over the lazy dog. ".repeat(40));
+  const [reference] = await inProcess.parseRecursive(input, { filename: "long.txt", limits: { maxOutputChars: 100 }, onOutputLimit: "truncate" });
+  const answer = await isolated({ input, filename: "long.txt", output: "records", maxOutputChars: 100, truncateOutput: true });
+  assert.equal(answer.kind, "records");
+  const [record] = (answer as Extract<IsolatedParseResult, { kind: "records" }>).records;
+  assert.equal(record?.content, reference?.content);
+  assert.deepEqual(record?.metadata["tk:exception:write-limit-reached"], ["true"]);
+  assert.equal(record?.exception, null);
+});
 
 // ---- the facade (createNodeIsolator) around the same child ----------------------------------------------------------
 

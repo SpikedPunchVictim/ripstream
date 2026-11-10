@@ -1,6 +1,6 @@
 import { writeSync } from "node:fs";
 import type { Writable } from "node:stream";
-import type { IsolatedComponents } from "@spikedpunch/ripstream-core";
+import { HANDLER_TYPES, type HandlerType, type IsolatedComponents } from "@spikedpunch/ripstream-core";
 
 /**
  * Child-side I/O shared by the real child entry (P3), the probe child and the
@@ -48,6 +48,14 @@ export interface InputHeader {
    * A parser stuck in a synchronous loop never sees it; the parent's timer is the real bound.
    */
   readonly maxParseMillis?: number;
+  /** ParseOptions.onDocumentFailure "record": a document that cannot be read is answered, not thrown. Omitted: false. */
+  readonly recordFailures?: boolean;
+  /** ParseOptions.onOutputLimit "truncate": the output limit ends the parse with the text so far, flagged. Omitted: false. */
+  readonly truncateOutput?: boolean;
+  /** ParseOptions.handlerType: the shape the content is written in. Omitted: "text". */
+  readonly handlerType?: HandlerType;
+  /** ParseOptions.unpackBytes: keep the bytes of the embedded documents, up to this many in all. Records output only. */
+  readonly unpackBytes?: number;
 }
 
 export interface ChildInput {
@@ -156,6 +164,19 @@ function parseHeader(json: string): InputHeader {
   optionalNonNegativeInteger(header, "maxEmbeddedResources");
   optionalNonNegativeInteger(header, "maxParseMillis");
   optionalNonNegativeInteger(header, "maxNodeDepth");
+  optionalNonNegativeInteger(header, "unpackBytes");
+  if (header.unpackBytes !== undefined && header.output !== "records") {
+    throw new TypeError('input header: unpackBytes needs output "records"');
+  }
+  if (header.recordFailures !== undefined && typeof header.recordFailures !== "boolean") {
+    throw new TypeError("input header: recordFailures must be a boolean");
+  }
+  if (header.truncateOutput !== undefined && typeof header.truncateOutput !== "boolean") {
+    throw new TypeError("input header: truncateOutput must be a boolean");
+  }
+  if (header.handlerType !== undefined && !HANDLER_TYPES.includes(header.handlerType as HandlerType)) {
+    throw new TypeError(`input header: handlerType must be one of ${HANDLER_TYPES.join(", ")}`);
+  }
   if (header.components !== undefined) checkComponents(header.components);
   return header as unknown as InputHeader;
 }
