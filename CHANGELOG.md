@@ -4,6 +4,29 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Digesters: the `parse-context` digester factories make `tk:digest:*` (`tikajs-68os.9.1`)
+
+Added: `commons-digester-factory` and `bouncy-castle-digester-factory` are read from `parse-context` (`digests` of
+`{algorithm, encoding}` and `skipContainerDocumentDigest`; Tika's names and defaults, MD5 in hex when none is named) and every
+document, the container and each embedded one, gets the digests under Tika's keys (`tk:digest:MD5`,
+`tk:digest:SHA-256:BASE32`, ...), made in `AutoDetectParser` before the type is detected, with `Content-Length` where nothing
+set it. All nine algorithms and the three encodings are there: MD2 is ripstream's own (RFC 1319, since OpenSSL 3 has none;
+about 5 MiB/s against MD5's 600), the rest are `node:crypto`'s. The settings reach the isolation child
+(`IsolatedComponents.digest`, checked in the request header) and the in-process side of `createStandardIsolation`;
+`createRipstream` takes a `digest` option for a ripstream built beside a `detector`; `pipes` `NO_PARSE` digests and detects, as
+Tika's `ParseHandler.detectOnly` does (`PipesSettings.digest`, set by `loadConfig` as `unpack` is), and now also writes
+`tk:content-type-parser-override`. New core exports: `DIGEST_ALGORITHMS`, `DIGEST_ENCODINGS`, `digestKey`, `digestBytes` and the
+`DigestDef`, `DigestSettings`, `DigestAlgorithm` and `DigestEncoding` types.
+
+Refused, as Tika refuses: an unknown setting, an unknown algorithm or encoding, SHA3 under the Commons factory (the message
+names the other factory), and both factories at once.
+
+Verified against Tika's own `DigestConfigTest`: its `test_recursive_embedded.docx` (vendored unmodified, in `NOTICE`) gives the
+MD2, MD5, SHA1, SHA256, SHA384, SHA512, SHA3-512 and SHA1 BASE32 digests that test hard-codes, in-process and, for the CLI, under
+strict isolation. Not the same: Tika digests an embedded OLE2/`oleObject` document after POI re-writes it, and an email in a PST
+after `PSTEmailStreamTranslator`; ripstream digests the document it extracts, so those embedded digests can differ (read from
+source: there is no Java here to run Tika). `DigestSink` is not built. See `docs/migration.md`.
+
 ### Pipes: S3, Elasticsearch and OpenSearch components, with no cloud or search SDK (`tikajs-68os.6.6`)
 
 Added: the Tika component settings `s3-fetcher`, `s3-emitter`, `s3-pipes-iterator`, `es-emitter` and `opensearch-emitter` are

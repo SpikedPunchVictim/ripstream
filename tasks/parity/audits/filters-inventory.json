@@ -4,19 +4,19 @@
   "kind": "digester",
   "upstream": "DigestDef.Algorithm (MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512, SHA3-256, SHA3-384, SHA3-512)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestDef.java:48",
-  "ripstream": "packages/core/src/runtime.ts:65-83",
-  "status": "partial",
-  "evidence": "run: sha256Digest('abc') = node:crypto = FIPS 180 known answer ba7816bf...15ad; the only digest/hash export in @spikedpunch/ripstream-core is sha256Digest",
-  "note": "1 of 9 algorithms. node:crypto covers md5, sha1, sha2, sha3; MD2 is not in OpenSSL 3 defaults (needs a JS lib)."
+  "ripstream": "packages/core/src/digest.ts (createHasher, Md2)",
+  "status": "implemented",
+  "evidence": "run: packages/bundle-standard/test/digest-tika.test.ts reproduces the digests Tika's DigestConfigTest hard-codes for test_recursive_embedded.docx: MD2 d768c8e2..., MD5 59f626e0..., SHA1, SHA256, SHA384, SHA512 and SHA3-512; packages/core/test/digest.test.ts checks MD2 against RFC 1319's suite and the rest against NIST/hashlib answers",
+  "note": "All 9. node:crypto has md5, sha1, sha2 and sha3; MD2 is not in OpenSSL 3, so it is ripstream's own (RFC 1319). Measured: MD2 5.2 MiB/s, MD5 602, SHA-256 2,421, SHA3-512 466; MD2 is for parity, and SHA-256 is the one to use for large documents."
  },
  {
   "id": "dig-encodings",
   "kind": "digester",
   "upstream": "DigestDef.Encoding (HEX default, BASE32, BASE64)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestDef.java:77",
-  "ripstream": "packages/core/src/runtime.ts:65-83",
-  "status": "partial",
-  "evidence": "source: sha256Digest returns lowercase hex only; no Encoder abstraction",
+  "ripstream": "packages/core/src/digest.ts (encodeDigest)",
+  "status": "implemented",
+  "evidence": "run: digest.test.ts checks hex (lower case), BASE64 and BASE32 against RFC 4648 with padding; digest-tika.test.ts matches Tika's SHA1 BASE32 PIPQAHIWHLEQ3DVFJQCQ7L22HADZPCFG; the CLI printed the same value under tk:digest:SHA-1:BASE32 in-process and under strict isolation",
   "note": "Key suffix rule: hex is bare tk:digest:<ALG>, others append :BASE32/:BASE64."
  },
  {
@@ -24,70 +24,70 @@
   "kind": "digester",
   "upstream": "CommonsDigester (JCA MessageDigest; MD2..SHA-512; rejects SHA3)",
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/CommonsDigester.java:84",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: CommonsDigester.checkSupported throws for SHA3-* and points to BouncyCastleDigester; no ripstream class",
-  "note": "Feeds tk:digest:* keys. Cheap to build on node:crypto streaming hash."
+  "ripstream": "packages/core/src/digest-config.ts (parseDigesterFactory)",
+  "status": "implemented",
+  "evidence": "run: digest-config.test.ts: commons-digester-factory refuses SHA3_256/384/512 with the message that points to bouncy-castle-digester-factory, as CommonsDigester.checkSupported does; `ripstream metadata -c` with it exits 2",
+  "note": "MD2..SHA-512 on node:crypto and Md2."
  },
  {
   "id": "dig-bouncycastle-digester",
   "kind": "digester",
   "upstream": "BouncyCastleDigester (SHA3-256/384/512 via BC)",
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/BouncyCastleDigester.java:45",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: BC is the only upstream path for SHA3",
-  "note": "node:crypto createHash('sha3-256') makes this trivial in JS; no BC needed."
+  "ripstream": "packages/core/src/digest-config.ts (parseDigesterFactory)",
+  "status": "implemented",
+  "evidence": "run: digest-tika.test.ts: bouncy-castle-digester-factory with MD5, SHA256, SHA384, SHA512 and SHA3_512 gives Tika's expected values and writes no MD2",
+  "note": "SHA3 is node:crypto's (sha3-256/384/512); no BouncyCastle."
  },
  {
   "id": "dig-input-stream-digester",
   "kind": "digester",
   "upstream": "InputStreamDigester (reads the whole stream; digest() and digestSink(); rewinds the TikaInputStream)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/InputStreamDigester.java:105",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: InputStreamDigester.java:105-141 reads to EOF, no markLimit, uses enableRewind/rewind",
-  "note": "Semantics: one pass over all bytes regardless of parser read limits; side effect: sets Content-Length (InputStreamDigester.java:74-79) when blank; honours CacheMemoryBudget from the ParseContext; tis.tryRetainInMemory() for embedded entries."
+  "ripstream": "packages/core/src/digest.ts (digestStream, maybeDigest)",
+  "status": "implemented",
+  "evidence": "run: digest.test.ts: one pass over every byte from the stream's position to its end whatever the chunks, the position put back, a temp-file-spooled document digested the same, Content-Length set only where blank, an abort stops it",
+  "note": "Not carried: digestSink (see dig-sinks) and CacheMemoryBudget/tryRetainInMemory, which are Java stream details; RipstreamInputStream spools to memory and then a temporary file."
  },
  {
   "id": "dig-composite-digester",
   "kind": "digester",
   "upstream": "CompositeDigester (runs N digesters in sequence, stream rewound between)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/CompositeDigester.java:27",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: CompositeDigester runs each child digest() in turn (stream rewound by each); digestSink() fans every write to all child sinks",
-  "note": "Part of every multi-algorithm config."
+  "ripstream": "packages/core/src/digest.ts (digestStream)",
+  "status": "implemented",
+  "evidence": "run: digest.test.ts: SHA256 hex, MD5 BASE64 and SHA256 BASE32 in one pass give three keys in the configured order",
+  "note": "Tika rewinds between digesters; one pass feeds every algorithm, which gives the same values."
  },
  {
   "id": "dig-commons-factory",
   "kind": "digester",
   "upstream": "CommonsDigesterFactory (parse-context key commons-digester-factory; config: digests[{algorithm,encoding}], skipContainerDocumentDigest=false)",
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/CommonsDigesterFactory.java:52",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: factory fields at CommonsDigesterFactory.java:52-53; registry entry packages/core/src/generated/upstream-services.ts:141",
-  "note": "Config surface to mirror in RipstreamConfig; today no digest option exists."
+  "ripstream": "packages/core/src/digest-config.ts; RipstreamConfig.digest",
+  "status": "implemented",
+  "evidence": "run: digest-config.test.ts reads Tika's tika-config-digests.json, -skip-container.json and the empty factory (MD5, hex); refuses unknown settings, bad shapes and both factories at once; reads enums in any case as Tika's mapper does",
+  "note": "`parse-context` `commons-digester-factory`: digests[{algorithm, encoding}], skipContainerDocumentDigest. Reaches createRipstream, the isolation child (IsolatedComponents.digest) and pipes (PipesSettings.digest)."
  },
  {
   "id": "dig-bc-factory",
   "kind": "digester",
   "upstream": "BouncyCastleDigesterFactory (bouncy-castle-digester-factory)",
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-digest-commons/src/main/java/org/apache/tika/parser/digestutils/BouncyCastleDigesterFactory.java:52",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "registry entry packages/core/src/generated/upstream-services.ts:140",
-  "note": "Same config as commons factory but allows SHA3."
+  "ripstream": "packages/core/src/digest-config.ts; RipstreamConfig.digest",
+  "status": "implemented",
+  "evidence": "run: digest-config.test.ts: tika-config-bc-digests-multiple.json (MD5, SHA256, SHA3_512) is read",
+  "note": "Same settings as the commons factory, and SHA3 allowed."
  },
  {
   "id": "dig-skip-container",
   "kind": "digester",
   "upstream": "DigestHelper.maybeDigest + SkipContainerDocumentDigest marker (digest container before parse unless skipContainerDocumentDigest; embedded docs digested at depth>0; depth null/0 = container)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestHelper.java:61",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: DigestHelper.java:61-121; pipes ParseHandler.java:137-142 digests the container then sets the skip marker so AutoDetectParser does not re-digest",
-  "note": "Embedded-vs-container semantics are the subtle part for parity of rmeta lists."
+  "ripstream": "packages/core/src/parser.ts (AutoDetectParser.parse calls maybeDigest before detection); packages/pipes/src/index.ts (NO_PARSE)",
+  "status": "implemented",
+  "evidence": "run: digest-tika.test.ts and digest.test.ts: with skipContainerDocumentDigest the container has no digest and every embedded record has one, without it all do; standard-isolation.test.ts: the same across the isolation boundary; modes.test.ts: NO_PARSE with the option digests nothing",
+  "note": "Digest runs in AutoDetectParser before the type is detected, for the container and every embedded document, at depth from CONTEXT_KEYS.EMBEDDED_DEPTH (depth 0 is the container). Tika's pipes digest the container first and mark it so the parser does not repeat it; the digests are the same, made once."
  },
  {
   "id": "dig-sinks",
@@ -95,9 +95,9 @@
   "upstream": "DigestSink / BufferingDigestSink (digest embedded bytes while a parser streams them)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/digest/DigestSink.java:44",
   "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Lets OLE2/PST embedded streams be digested without a second read."
+  "status": "non-goal-candidate",
+  "evidence": "source: DigestSink/BufferingDigestSink digest the bytes of an embedded OLE2/PST stream as the parser writes them, which saves a second read; ripstream digests the document's own stored bytes when it enters AutoDetectParser",
+  "note": "The values are the same where the bytes are; only the second read differs, and RipstreamInputStream spools so it is cheap. Proposed as a non-goal until an owner decision."
  },
  {
   "id": "dig-embedded-translators",
@@ -105,29 +105,29 @@
   "upstream": "MSEmbeddedStreamTranslator, PSTEmailStreamTranslator, DefaultEmbeddedStreamTranslator (EmbeddedStreamTranslator SPI; NOT language translators)",
   "upstreamSource": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module/src/main/java/org/apache/tika/extractor/microsoft/MSEmbeddedStreamTranslator.java:42",
   "ripstream": "none",
-  "status": "gap",
-  "evidence": "registry entries packages/core/src/generated/upstream-services.ts:87-88; source only",
-  "note": "Translates OLE2/PST embedded byte streams to the bytes a user wants (and digests them). Depends on OLE2/PST parsers being present; belongs with the Microsoft/embedded audit."
+  "status": "non-goal-candidate",
+  "evidence": "run: `ripstream -r -c <md5 config> test_recursive_embedded.docx` digests the embedded /oleObject1.bin (13,824 bytes) as it enters the parser; source: MSEmbeddedStreamTranslator re-serialises OLE2 through POI and PSTEmailStreamTranslator writes nothing, so Tika's digests of those documents are of bytes ripstream does not produce",
+  "note": "Deviation: an embedded OLE2 or oleObject document is digested as extracted, not as POI re-writes it, and an email in a PST gets the digest of nothing in Tika. Not reproducible here (no Java to run Tika). Tika's own test asserts only that embedded records have a digest, not its value."
  },
  {
   "id": "dig-metadata-keys",
   "kind": "digester",
   "upstream": "tk:digest:<ALG>[:BASE32|:BASE64] metadata keys (TikaCoreProperties.digestProperty)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/TikaCoreProperties.java:45",
-  "ripstream": "packages/core/src/generated/metadata-schema.ts:610-636",
-  "status": "gap",
-  "evidence": "run: grep finds 27 tk:digest:* keys (9 algorithms x 3 encodings) in packages/core/src/generated/metadata-schema.ts; no code in packages/*/src writes any",
-  "note": "Schema-only: keys declared, never produced."
+  "ripstream": "packages/core/src/digest.ts (digestKey)",
+  "status": "implemented",
+  "evidence": "run: digest.test.ts checks all 27 keys (9 algorithms x 3 encodings) against packages/core/src/generated/metadata-schema.ts, which was generated from TikaCoreProperties",
+  "note": "Hex is bare, others append :BASE32 or :BASE64; the name is the JCA one (SHA-1, SHA-256, SHA3-512)."
  },
  {
   "id": "dig-pipes-no-parse",
   "kind": "digester",
   "upstream": "ParseMode.NO_PARSE = detect + digest only (ParseHandler.detectOnly)",
   "upstreamSource": "tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/server/ParseHandler.java:93",
-  "ripstream": "packages/pipes/src/index.ts:40-45,155",
-  "status": "partial",
-  "evidence": "source: ripstream NO_PARSE returns [{id, bytes}] (pipes/src/index.ts:155); no detection, no digest, no metadata",
-  "note": "Mode name exists, semantics differ."
+  "ripstream": "packages/pipes/src/index.ts (NO_PARSE branch); packages/core/src/digest.ts (digestBytes)",
+  "status": "implemented",
+  "evidence": "run: packages/pipes/test/modes.test.ts: NO_PARSE with a digester factory writes tk:digest:*, Content-Length, Content-Type and tk:content-type-parser-override (Tika's _preParse), no content; skipContainerDocumentDigest writes no digest; no factory writes only the two type keys; mutation checks on the forwarding, the skip rule and loadConfig's merge each fail a test",
+  "note": "digest, then detect, no parse. Digest settings reach it as PipesSettings.digest, set by loadConfig from `parse-context`, as `unpack` is."
  },
  {
   "id": "ren-spi",
