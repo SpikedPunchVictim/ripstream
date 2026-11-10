@@ -8,7 +8,10 @@ import { createRipstream, loadConfig } from "../src/index.ts";
  * Tika's own DigestConfigTest (tika-parsers-standard-integration-tests), run against ripstream: the same document, the
  * same configurations, and the digests Tika's test hard-codes. The document is Tika's test_recursive_embedded.docx,
  * unmodified (fixtures/tika/README.txt). Tika computes with java.security and BouncyCastle; these are node:crypto's, and
- * MD2 (which OpenSSL 3 no longer has) ripstream's own.
+ * MD2 (which OpenSSL 3 no longer has) ripstream's own. Tika's configuration files also carry an `auto-detect-parser` section,
+ * which is not supported (CFG-014): the configurations here are their `parse-context` part. The record-level Content-Length
+ * assertions below are also the recursive parse's own (recursive.ts sets it), so where digest.ts sets it is guarded by
+ * packages/core/test/digest.test.ts.
  */
 
 const DOCX = await readFile(fileURLToPath(new URL("./fixtures/tika/test_recursive_embedded.docx", import.meta.url)));
@@ -83,7 +86,7 @@ test("SHA1 in BASE32 is Tika's, under the key that carries the encoding", async 
   assert.equal(metadata.get(`${P}SHA-1`), null, "the hex key is not written");
 });
 
-test("Tika's tika-config-digests.json: SHA256 as BASE32 beside MD5 in hex", async () => {
+test("the parse-context of Tika's tika-config-digests.json: SHA256 as BASE32 beside MD5 in hex", async () => {
   const { metadata } = await digesting("commons-digester-factory", {
     digests: [{ algorithm: "SHA256", encoding: "BASE32" }, { algorithm: "MD5" }],
   }).parse(DOCX, { filename: "test_recursive_embedded.docx" });

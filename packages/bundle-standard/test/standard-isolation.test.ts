@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -689,6 +690,29 @@ test("the digests of a configuration cross the boundary: a child gives a zip's r
       assert.match(record.metadata.get("tk:digest:MD5") ?? "", /^[0-9a-f]{32}$/, record.embeddedResourcePath || "container");
       assert.match(record.metadata.get("tk:digest:SHA-256:BASE32") ?? "", /^[A-Z2-7]{52}=*$/, record.embeddedResourcePath || "container");
     }
+  });
+});
+
+test("each embedded document's digest is the digest of its own bytes: a nested archive and an empty entry too, in a child and not", async () => {
+  const deep = "the deepest entry";
+  const inner = storedZip({ "deep.txt": deep });
+  const archive = storedZip({ "a.txt": "first entry", "empty.txt": "", "inner.zip": inner });
+  const md5 = (bytes: string | Uint8Array): string => createHash("md5").update(bytes).digest("hex");
+  const expected = new Map<string, string>([
+    ["/a.zip", md5(archive)],
+    ["/a.zip/a.txt", md5("first entry")],
+    ["/a.zip/empty.txt", md5("")],
+    ["/a.zip/inner.zip", md5(inner)],
+    ["/a.zip/inner.zip/deep.txt", md5(deep)],
+  ]);
+  const digests = (records: readonly ParseRecord[]): Map<string, string | null> =>
+    new Map(records.map((record) => [record.embeddedResourcePath, record.metadata.get("tk:digest:MD5")]));
+  assert.deepEqual(digests(await createRipstream({ config: DIGESTS }).parseRecursive(archive, { filename: "a.zip" })), expected, "in this process");
+  await withStandard({ ripstreamConfig: DIGESTS }, async ({ ripstream }) => {
+    const before = settled.length;
+    const records = await ripstream.parseRecursive(archive, { filename: "a.zip" });
+    assert.equal(settled.length - before, 1, "it was a child that parsed it");
+    assert.deepEqual(digests(records), expected, "in a child");
   });
 });
 

@@ -90,6 +90,16 @@ test("components carry the text of a custom-mimetypes file", async () => {
   assert.deepEqual((await readInput(stream(wire(header({ components }))))).header.components, components);
 });
 
+test("components carry the digests to make, and whether to skip the container", async () => {
+  const digest = {
+    digests: [{ algorithm: "SHA256", encoding: "BASE32" }, { algorithm: "SHA3_512", encoding: "HEX" }, { algorithm: "MD2", encoding: "BASE64" }],
+    skipContainerDocumentDigest: true,
+  } as const;
+  assert.deepEqual((await readInput(stream(wire(header({ components: { digest } }))))).header.components?.digest, digest);
+  const none = { digests: [], skipContainerDocumentDigest: false };
+  assert.deepEqual((await readInput(stream(wire(header({ components: { digest: none } }))))).header.components?.digest, none);
+});
+
 test("round trip across arbitrary chunk boundaries (1 byte at a time)", async () => {
   const body = Buffer.from("0123456789");
   const all = wire(header({ byteLength: body.length }), body);
@@ -176,6 +186,31 @@ for (const [label, json] of [
     const prefix = Buffer.alloc(4);
     prefix.writeUInt32BE(body.length, 0);
     await assert.rejects(readInput(stream(Buffer.concat([prefix, body]))), TypeError);
+  });
+}
+
+// The digest section of the components, each way it can be wrong, and the refusal that names it (a TypeError of any other
+// kind, a "not iterable" from reading a number as a list, would be the check missing and the loop failing by chance).
+for (const [label, digest, refusal] of [
+  ["digest that is not an object", "[]", /components.digest must be an object/],
+  ["digest that is null", "null", /components.digest must be an object/],
+  ["digest without skipContainerDocumentDigest", "{\"digests\":[]}", /skipContainerDocumentDigest must be a boolean/],
+  ["digest whose skipContainerDocumentDigest is a string", "{\"digests\":[],\"skipContainerDocumentDigest\":\"true\"}", /skipContainerDocumentDigest must be a boolean/],
+  ["digest whose digests is not an array", "{\"digests\":{},\"skipContainerDocumentDigest\":false}", /digests must be an array/],
+  ["digest without digests", "{\"skipContainerDocumentDigest\":false}", /digests must be an array/],
+  ["a digest entry that is a string", "{\"digests\":[\"MD5\"],\"skipContainerDocumentDigest\":false}", /entry must be an object/],
+  ["a digest entry that is null", "{\"digests\":[null],\"skipContainerDocumentDigest\":false}", /entry must be an object/],
+  ["a digest entry that is an array", "{\"digests\":[[]],\"skipContainerDocumentDigest\":false}", /entry must be an object/],
+  ["a digest entry with an unknown algorithm", "{\"digests\":[{\"algorithm\":\"SHA-256\",\"encoding\":\"HEX\"}],\"skipContainerDocumentDigest\":false}", /algorithm must be one of/],
+  ["a digest entry without an algorithm", "{\"digests\":[{\"encoding\":\"HEX\"}],\"skipContainerDocumentDigest\":false}", /algorithm must be one of/],
+  ["a digest entry with an unknown encoding", "{\"digests\":[{\"algorithm\":\"MD5\",\"encoding\":\"BASE16\"}],\"skipContainerDocumentDigest\":false}", /encoding must be one of/],
+  ["a digest entry without an encoding", "{\"digests\":[{\"algorithm\":\"MD5\"}],\"skipContainerDocumentDigest\":false}", /encoding must be one of/],
+] as const) {
+  test(`malformed header rejects: ${label}`, async () => {
+    const body = Buffer.from(`{"v":1,"output":"text","byteLength":0,"components":{"digest":${digest}}}`);
+    const prefix = Buffer.alloc(4);
+    prefix.writeUInt32BE(body.length, 0);
+    await assert.rejects(readInput(stream(Buffer.concat([prefix, body]))), (error: unknown) => error instanceof TypeError && refusal.test(error.message));
   });
 }
 
