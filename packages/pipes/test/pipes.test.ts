@@ -5,14 +5,17 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LimitExceededError, Metadata } from "@spikedpunch/ripstream-core";
 import {
-  FileSystemEmitter,
+  FlatFileEmitter,
   FileSystemFetcher,
+  FileSystemPipesIterator,
   MemoryEmitter,
   PipesClient,
   PipesEngine,
+  PipesPathError,
   createEngine,
   type PipesRipstream,
 } from "../src/index.ts";
+import { fileSystem } from "./helpers.ts";
 
 test("runs filesystem pipes in content and rmeta modes", async () => {
   const directory = mkdtempSync(join(tmpdir(), "ripstream-pipes-"));
@@ -22,7 +25,7 @@ test("runs filesystem pipes in content and rmeta modes", async () => {
 
     const content = new MemoryEmitter();
     const count = await new PipesEngine({
-      fetcher: new FileSystemFetcher(directory),
+      ...fileSystem(directory),
       emitter: content,
       mode: "CONTENT_ONLY",
     }).run();
@@ -35,12 +38,12 @@ test("runs filesystem pipes in content and rmeta modes", async () => {
 
     const rmeta = new MemoryEmitter();
     await new PipesEngine({
-      fetcher: new FileSystemFetcher(directory),
+      ...fileSystem(directory),
       emitter: rmeta,
       mode: "RMETA",
     }).run();
     assert.equal(rmeta.documents[0]?.records?.length, 1);
-    assert.match(rmeta.documents[0]?.text ?? "", /X-TIKA:content/);
+    assert.match(rmeta.documents[0]?.text ?? "", /tk:content/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -64,15 +67,16 @@ test("writes filesystem output and builds from config", async () => {
   }
 });
 
-test("UNPACK emits one document per parse record", async () => {
+test("UNPACK, REGULAR, emits one document per parse record", async () => {
   const directory = mkdtempSync(join(tmpdir(), "ripstream-pipes-unpack-"));
   try {
     writeFileSync(join(directory, "one.txt"), "unpack text");
     const emitter = new MemoryEmitter();
     const count = await new PipesEngine({
-      fetcher: new FileSystemFetcher(directory),
+      ...fileSystem(directory),
       emitter,
       mode: "UNPACK",
+      unpack: { outputFormat: "REGULAR" },
     }).run();
     assert.equal(count, 1);
     assert.match(emitter.documents[0]?.text ?? "", /unpack text/);
@@ -107,7 +111,7 @@ test("bounded queue still drains every document", async () => {
     }
     const emitter = new MemoryEmitter();
     const count = await new PipesEngine({
-      fetcher: new FileSystemFetcher(directory),
+      ...fileSystem(directory),
       emitter,
       concurrency: 2,
       maxQueue: 2,
@@ -130,7 +134,7 @@ test("ordered mode emits in fetch order", async () => {
   };
   const emitter = new MemoryEmitter();
   await new PipesEngine({
-    fetcher,
+    source: fetcher,
     emitter,
     concurrency: 3,
     ordered: true,
@@ -164,7 +168,7 @@ test("resolveWithinRoot rejects escapes, absolute paths and symlinks", async () 
   }
 });
 
-test("FileSystemFetcher skips symlinks when followSymlinks is false", async () => {
+test("the file-system iterator skips, follows or leaves to the fetcher each symbolic link, and the fetcher confines them", async () => {
   const { mkdirSync, symlinkSync } = await import("node:fs");
   const base = mkdtempSync(join(tmpdir(), "ripstream-sym-"));
   try {
@@ -173,30 +177,64 @@ test("FileSystemFetcher skips symlinks when followSymlinks is false", async () =
     mkdirSync(root);
     mkdirSync(outside);
     writeFileSync(join(root, "a.txt"), "a");
+    writeFileSync(join(root, "inside.txt"), "inside");
     writeFileSync(join(outside, "secret.txt"), "secret");
     symlinkSync(outside, join(root, "dir"));
     symlinkSync(join(outside, "secret.txt"), join(root, "file.txt"));
-    const ids = async (follow: boolean): Promise<string[]> => {
+    symlinkSync(join(root, "inside.txt"), join(root, "link-inside.txt"));
+    const keys = async (symlinks: "fetch" | "follow" | "skip"): Promise<string[]> => {
       const found: string[] = [];
-      for await (const doc of new FileSystemFetcher(root, { followSymlinks: follow }).fetch()) found.push(doc.id);
+      for await (const tuple of new FileSystemPipesIterator({ basePath: root, fetcherId: "fs", symlinks })) found.push(tuple.fetchKey);
       return found.sort();
     };
-    assert.deepEqual(await ids(false), ["a.txt"]);
-    assert.deepEqual(await ids(true), ["a.txt", "dir/secret.txt", "file.txt"]);
+    assert.deepEqual(await keys("skip"), ["a.txt", "inside.txt"]);
+    assert.deepEqual(await keys("fetch"), ["a.txt", "dir", "file.txt", "inside.txt", "link-inside.txt"]);
+    assert.deepEqual(await keys("follow"), ["a.txt", "dir/secret.txt", "file.txt", "inside.txt", "link-inside.txt"]);
+
+    // Tika's fetcher: a link that stays inside the base is read, one that leaves it is refused, whatever walked to it.
+    const context = { signal: new AbortController().signal };
+    const confined = new FileSystemFetcher({ basePath: root });
+    assert.equal(new TextDecoder().decode(await confined.fetch("link-inside.txt", context)), "inside");
+    await assert.rejects(confined.fetch("file.txt", context), PipesPathError);
+    await assert.rejects(confined.fetch("dir/secret.txt", context), PipesPathError);
+    await assert.rejects(confined.fetch("dir", context), /not a regular file|PipesPathError|descendant/);
+    const trusting = new FileSystemFetcher({ basePath: root, confineSymlinks: false });
+    assert.equal(new TextDecoder().decode(await trusting.fetch("file.txt", context)), "secret");
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
 });
 
-test("a worker failure stops siblings, closes the emitter once and rejects with the original error", async () => {
+test("the file-system fetcher keeps every key under its basePath and refuses what Tika refuses", async () => {
+  const base = mkdtempSync(join(tmpdir(), "ripstream-fetch-"));
+  try {
+    writeFileSync(join(base, "a.txt"), "a");
+    const context = { signal: new AbortController().signal };
+    const fetcher = new FileSystemFetcher({ basePath: base });
+    assert.equal(new TextDecoder().decode(await fetcher.fetch("a.txt", context)), "a");
+    for (const key of ["../a.txt", "sub/../../a.txt", join(tmpdir(), "x"), "a\u0000.txt"]) {
+      await assert.rejects(fetcher.fetch(key, context), PipesPathError, key);
+    }
+    await assert.rejects(fetcher.fetch("missing.txt", context), /ENOENT/);
+    await assert.rejects(new FileSystemFetcher({ basePath: join(base, "no-such-dir") }).fetch("a.txt", context), /basePath is not a directory/);
+    assert.throws(() => new FileSystemFetcher(), /needs basePath, or allowAbsolutePaths/);
+    assert.throws(() => new FileSystemFetcher({ basePath: "s3://bucket" }), /local directories only/);
+    assert.throws(() => new FileSystemFetcher({ basePath: "/a\u0000" }), /NUL/);
+    const open = new FileSystemFetcher({ allowAbsolutePaths: true });
+    assert.equal(new TextDecoder().decode(await open.fetch(join(base, "a.txt"), context)), "a");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("a fetcher that cannot list its inputs stops siblings, closes the emitter once and rejects with its error", async () => {
   const text = (value: string): Uint8Array => new TextEncoder().encode(value);
+  const broken = new Error("listing broke");
   const fetcher = {
     async *fetch() {
       for (let index = 0; index < 12; index++) {
-        yield {
-          id: `doc${index}.txt`,
-          data: index === 3 ? text("x".repeat(5000)) : text(`small ${index}`),
-        };
+        if (index === 4) throw broken;
+        yield { id: `doc${index}.txt`, data: text(`small ${index}`) };
       }
     },
   };
@@ -213,27 +251,38 @@ test("a worker failure stops siblings, closes the emitter once and rejects with 
     }
   }
   const emitter = new SpyEmitter();
-  const engine = new PipesEngine({
-    fetcher,
-    emitter,
-    concurrency: 3,
-    maxQueue: 1,
-    limits: { maxOutputChars: 100 },
-  });
-  await assert.rejects(engine.run(), LimitExceededError);
+  const engine = new PipesEngine({ source: fetcher, emitter, concurrency: 3, maxQueue: 1 });
+  await assert.rejects(engine.run(), (error) => error === broken);
   assert.equal(emitter.closes, 1);
-  assert.equal(engine.stats.failed, 1);
   const emitsAtReject = emitter.emits;
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(emitter.emits, emitsAtReject, "no emit after run() rejected");
   assert.equal(emitter.closes, 1);
-  assert.ok(emitter.emits < 11, `siblings kept running: ${emitter.emits} emits`);
+  assert.ok(emitter.emits < 12, `siblings kept running: ${emitter.emits} emits`);
 });
 
-test("FileSystemEmitter keeps distinct unsafe ids in distinct files", async () => {
+test("a document over a limit is that input's result: the run goes on and emits the rest", async () => {
+  const text = (value: string): Uint8Array => new TextEncoder().encode(value);
+  const fetcher = {
+    async *fetch() {
+      for (let index = 0; index < 12; index++) {
+        yield { id: `doc${index}.txt`, data: index === 3 ? text("x".repeat(5000)) : text(`small ${index}`) };
+      }
+    },
+  };
+  const emitter = new MemoryEmitter();
+  const engine = new PipesEngine({ source: fetcher, emitter, concurrency: 3, maxQueue: 1, limits: { maxOutputChars: 100 } });
+  assert.equal(await engine.run(), 11);
+  assert.equal(emitter.documents.length, 11);
+  assert.ok(!emitter.documents.some((document) => document.id === "doc3.txt"));
+  assert.equal(engine.stats.failed, 1);
+  assert.deepEqual(engine.stats.byStatus, { EMIT_SUCCESS: 11, PAYLOAD_LIMIT_EXCEEDED: 1 });
+});
+
+test("FlatFileEmitter keeps distinct unsafe ids in distinct files", async () => {
   const output = mkdtempSync(join(tmpdir(), "ripstream-emit-"));
   try {
-    const emitter = new FileSystemEmitter(output);
+    const emitter = new FlatFileEmitter(output);
     await emitter.emit({ id: "a/x", text: "slash" });
     await emitter.emit({ id: "a:x", text: "colon" });
     await emitter.emit({ id: "a_x", text: "underscore" });
@@ -267,10 +316,10 @@ test("a ripstream given to the engine does every parse; the default pipeline is 
       },
     };
     const content = new MemoryEmitter();
-    await new PipesEngine({ fetcher: new FileSystemFetcher(directory), emitter: content, mode: "CONTENT_ONLY", ripstream }).run();
+    await new PipesEngine({ ...fileSystem(directory), emitter: content, mode: "CONTENT_ONLY", ripstream }).run();
     assert.deepEqual(content.documents.map((document) => document.text), ["from the injected parser"]);
     const rmeta = new MemoryEmitter();
-    await new PipesEngine({ fetcher: new FileSystemFetcher(directory), emitter: rmeta, mode: "RMETA", ripstream }).run();
+    await new PipesEngine({ ...fileSystem(directory), emitter: rmeta, mode: "RMETA", ripstream }).run();
     assert.deepEqual(calls, ["parse:a.txt", "parseRecursive:a.txt"]);
 
     const client = new PipesClient({ source: { type: "filesystem", path: directory }, mode: "CONTENT_ONLY" }, { ripstream });

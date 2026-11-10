@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   CompositeEmitter,
-  CsvFetcher,
-  JsonFetcher,
+  CsvSource,
+  JsonSource,
   JsonlEmitter,
   MemoryEmitter,
 } from "../src/index.ts";
@@ -24,11 +24,11 @@ test("CSV and JSON iterators yield records", async () => {
   try {
     const csv = join(directory, "data.csv");
     writeFileSync(csv, "name,age\nAda,36\nGrace,45\n");
-    assert.deepEqual(await collect(new CsvFetcher(csv)), ["Ada,36", "Grace,45"]);
+    assert.deepEqual(await collect(new CsvSource(csv)), ["Ada,36", "Grace,45"]);
 
     const json = join(directory, "data.json");
     writeFileSync(json, JSON.stringify([{ a: 1 }, { b: 2 }]));
-    assert.deepEqual(await collect(new JsonFetcher(json)), ['{"a":1}', '{"b":2}']);
+    assert.deepEqual(await collect(new JsonSource(json)), ['{"a":1}', '{"b":2}']);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

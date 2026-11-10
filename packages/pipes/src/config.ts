@@ -1,4 +1,5 @@
 import { assertValidLimits, RipstreamConfigError, type ParseLimits } from "@spikedpunch/ripstream-core";
+import { componentIdIssue } from "./tuple.ts";
 
 export const PIPE_MODES = ["CONTENT_ONLY", "CONCATENATE", "RMETA", "NO_PARSE", "UNPACK"] as const;
 
@@ -91,8 +92,23 @@ export function assertValidEngineOptions(options: {
   readonly maxBuffered?: unknown;
   readonly ordered?: unknown;
   readonly limits?: Partial<ParseLimits> | undefined;
+  readonly iterator?: unknown;
+  readonly source?: unknown;
+  readonly fetchers?: Readonly<Record<string, unknown>> | undefined;
+  readonly emitters?: Readonly<Record<string, unknown>> | undefined;
+  readonly retry?: unknown;
+  readonly checkpoint?: unknown;
 }): void {
   const issues: string[] = [];
+  if ((options.iterator === undefined) === (options.source === undefined)) {
+    issues.push("give exactly one of iterator (tuples, read by the fetchers) and source (documents that arrive with their bytes)");
+  }
+  for (const [name, components] of [["fetchers", options.fetchers], ["emitters", options.emitters]] as const) {
+    for (const id of Object.keys(components ?? {})) {
+      const issue = componentIdIssue(id);
+      if (issue !== null) issues.push(`${name}: ${issue}`);
+    }
+  }
   if (options.mode !== undefined) {
     const issue = modeIssue(options.mode);
     if (issue !== null) issues.push(issue);
@@ -103,6 +119,27 @@ export function assertValidEngineOptions(options: {
     }
   }
   if (options.ordered !== undefined && typeof options.ordered !== "boolean") issues.push("ordered must be a boolean");
+  if (options.retry !== undefined) {
+    const retry = options.retry as Record<string, unknown> | null;
+    if (typeof retry !== "object" || retry === null) {
+      issues.push("retry must be an object (attempts, baseDelayMs, maxDelayMs, retryIf)");
+    } else {
+      if (retry.attempts !== undefined && !isPositiveInteger(retry.attempts)) issues.push(`retry.attempts must be a positive integer, got ${String(retry.attempts)}`);
+      for (const key of ["baseDelayMs", "maxDelayMs"] as const) {
+        const value = retry[key];
+        if (value !== undefined && !(typeof value === "number" && Number.isFinite(value) && value >= 0)) {
+          issues.push(`retry.${key} must be a number of milliseconds, 0 or more, got ${String(value)}`);
+        }
+      }
+      if (retry.retryIf !== undefined && typeof retry.retryIf !== "function") issues.push("retry.retryIf must be a function");
+    }
+  }
+  if (options.checkpoint !== undefined) {
+    const checkpoint = options.checkpoint as { has?: unknown; mark?: unknown } | null;
+    if (typeof checkpoint?.has !== "function" || typeof checkpoint.mark !== "function") {
+      issues.push("checkpoint must have has(id) and mark(id): a CheckpointStore is one");
+    }
+  }
   if (issues.length > 0) throw new RangeError(`invalid pipes options: ${issues.join("; ")}`);
   assertValidLimits(options.limits);
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RipstreamConfigError } from "@spikedpunch/ripstream-core";
-import { MemoryEmitter, PipesClient, PipesEngine, createEngine, validatePipesConfig, type Fetcher } from "../src/index.ts";
+import { MemoryEmitter, PipesClient, PipesEngine, createEngine, validatePipesConfig, type DocumentSource } from "../src/index.ts";
 
 /*
  * A pipes configuration that is wrong used to run anyway (tasks/parity/audits/config-inventory.json, E02-E06): an
@@ -113,10 +113,10 @@ test("createEngine and PipesClient refuse a bad configuration up front", () => {
   );
 });
 
-const noDocuments: Fetcher = { fetch: async function* () {} };
+const noDocuments: DocumentSource = { fetch: async function* () {} };
 
 test("PipesEngine refuses options that would stall or run unbounded", () => {
-  const options = { fetcher: noDocuments, emitter: new MemoryEmitter() };
+  const options = { source: noDocuments, emitter: new MemoryEmitter() };
   for (const key of ["concurrency", "maxQueue", "maxBuffered"]) {
     for (const value of [Number.NaN, 0, -1, 1.5, Infinity, "4"]) {
       assert.throws(

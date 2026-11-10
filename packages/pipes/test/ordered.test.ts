@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { crc32 } from "node:zlib";
 import { mock, test } from "node:test";
-import { LimitExceededError, Ripstream, type ParseRecord } from "@spikedpunch/ripstream-core";
+import { LimitExceededError, Ripstream, TIKA_KEYS, type ParseRecord } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import {
   PipesEngine,
@@ -10,8 +9,11 @@ import {
   type PipeDocument,
   type PipeMode,
 } from "../src/index.ts";
+import { storedZip } from "./helpers.ts";
 
 const TIMEOUT = { timeout: 20_000 };
+/** These tests are about order, not layout: each embedded document is its own emit, as REGULAR gives. */
+const REGULAR = { outputFormat: "REGULAR" } as const;
 const encoder = new TextEncoder();
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -66,55 +68,17 @@ function documentFetcher(documents: readonly PipeDocument[]): { fetch(): AsyncIt
   };
 }
 
-/** Minimal "stored" (uncompressed) zip writer; fflate is not a dependency of this package. */
-function storedZip(files: Readonly<Record<string, string>>): Uint8Array {
-  const parts: Buffer[] = [];
-  const central: Buffer[] = [];
-  let offset = 0;
-  for (const [name, content] of Object.entries(files)) {
-    const nameBytes = Buffer.from(name);
-    const data = Buffer.from(content);
-    const checksum = crc32(data);
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt32LE(checksum, 14);
-    local.writeUInt32LE(data.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(nameBytes.length, 26);
-    parts.push(local, nameBytes, data);
-    const entry = Buffer.alloc(46);
-    entry.writeUInt32LE(0x02014b50, 0);
-    entry.writeUInt16LE(20, 4);
-    entry.writeUInt16LE(20, 6);
-    entry.writeUInt32LE(checksum, 16);
-    entry.writeUInt32LE(data.length, 20);
-    entry.writeUInt32LE(data.length, 24);
-    entry.writeUInt16LE(nameBytes.length, 28);
-    entry.writeUInt32LE(offset, 42);
-    central.push(entry, nameBytes);
-    offset += local.length + nameBytes.length + data.length;
-  }
-  const centralSize = central.reduce((total, part) => total + part.length, 0);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(Object.keys(files).length, 8);
-  end.writeUInt16LE(Object.keys(files).length, 10);
-  end.writeUInt32LE(centralSize, 12);
-  end.writeUInt32LE(offset, 16);
-  return new Uint8Array(Buffer.concat([...parts, ...central, end]));
-}
-
 function zipDocument(id: string, entries = 3): PipeDocument {
   const files: Record<string, string> = {};
   for (let index = 0; index < entries; index++) files[`${id}-e${index}.txt`] = `entry ${index} of ${id}`;
   return { id, data: storedZip(files) };
 }
 
-/** Expected UNPACK ids for a source, in parseRecursive order. */
+/** Expected UNPACK ids for a source: the document's own metadata, then the bytes of each embedded document by embedded id. */
 async function expectedUnpackIds(document: PipeDocument): Promise<string[]> {
-  const records = await createRipstream().parseRecursive(document.data, { filename: document.id });
-  return records.map((record) => `${document.id}${record.embeddedResourcePath}`);
+  const records = await createRipstream().parseRecursive(document.data, { filename: document.id, unpackBytes: 1 << 20 });
+  const embedded = records.filter((record) => record.bytes !== undefined).map((record) => `${document.id}-embed/${record.metadata.get(TIKA_KEYS.EMBEDDED_ID)}`);
+  return [document.id, ...embedded];
 }
 
 interface ParseHooks {
@@ -173,7 +137,7 @@ test("ordered: async emitter never re-enters and emits each doc once in fetch or
     const ids = idsOf(count);
     const emitter = new DelayedSpyEmitter(20);
     const result = await new PipesEngine({
-      fetcher: textFetcher(ids),
+      source: textFetcher(ids),
       emitter,
       concurrency,
       ordered: true,
@@ -207,7 +171,7 @@ test("ordered: shuffled parse completion order still emits in fetch order (#26)"
     hookParsing({ delay });
     const emitter = new DelayedSpyEmitter(2);
     const result = await new PipesEngine({
-      fetcher: textFetcher(ids),
+      source: textFetcher(ids),
       emitter,
       concurrency: 5,
       ordered: true,
@@ -228,9 +192,10 @@ test("ordered UNPACK: every record of every zip is emitted, contiguous per sourc
     hookParsing({ delay: (filename) => (filename === "zip0.zip" ? 60 : 1) });
     const emitter = new DelayedSpyEmitter(5);
     const result = await new PipesEngine({
-      fetcher: documentFetcher(documents),
+      source: documentFetcher(documents),
       emitter,
       mode: "UNPACK",
+      unpack: REGULAR,
       concurrency,
       ordered: true,
     }).run();
@@ -255,9 +220,10 @@ test("ordered UNPACK: early-arriving later zips and slow middle zip keep per-sou
     hookParsing({ delay });
     const emitter = new DelayedSpyEmitter(3);
     const result = await new PipesEngine({
-      fetcher: documentFetcher(documents),
+      source: documentFetcher(documents),
       emitter,
       mode: "UNPACK",
+      unpack: REGULAR,
       concurrency: 3,
       ordered: true,
     }).run();
@@ -276,9 +242,10 @@ test("ordered UNPACK: zero-record inputs at head, middle and tail do not stall o
   });
   const emitter = new DelayedSpyEmitter(3);
   const engine = new PipesEngine({
-    fetcher: textFetcher(ids),
+    source: textFetcher(ids),
     emitter,
     mode: "UNPACK",
+    unpack: REGULAR,
     concurrency: 3,
     ordered: true,
   });
@@ -294,9 +261,10 @@ test("ordered UNPACK: only zero-record inputs terminates cleanly", TIMEOUT, asyn
   hookParsing({ empty: () => true });
   const emitter = new DelayedSpyEmitter(1);
   const result = await new PipesEngine({
-    fetcher: textFetcher(["x", "y", "z"]),
+    source: textFetcher(["x", "y", "z"]),
     emitter,
     mode: "UNPACK",
+    unpack: REGULAR,
     concurrency: 2,
     ordered: true,
   }).run();
@@ -308,9 +276,10 @@ test("ordered: an empty input stream terminates cleanly and closes once", TIMEOU
   for (const mode of ["CONTENT_ONLY", "UNPACK", "NO_PARSE"] as const satisfies readonly PipeMode[]) {
     const emitter = new DelayedSpyEmitter(1);
     const engine = new PipesEngine({
-      fetcher: textFetcher([]),
+      source: textFetcher([]),
       emitter,
       mode,
+      unpack: REGULAR,
       concurrency: 3,
       ordered: true,
     });
@@ -325,7 +294,7 @@ test("ordered: NO_PARSE and RMETA also emit once each in fetch order", TIMEOUT, 
     const ids = idsOf(15);
     const emitter = new DelayedSpyEmitter(4);
     const result = await new PipesEngine({
-      fetcher: textFetcher(ids),
+      source: textFetcher(ids),
       emitter,
       mode,
       concurrency: 4,
@@ -342,9 +311,10 @@ test("unordered UNPACK still emits every record of every zip", TIMEOUT, async ()
   const expected = (await Promise.all(documents.map(expectedUnpackIds))).flat();
   const emitter = new DelayedSpyEmitter(3);
   const result = await new PipesEngine({
-    fetcher: documentFetcher(documents),
+    source: documentFetcher(documents),
     emitter,
     mode: "UNPACK",
+    unpack: REGULAR,
     concurrency: 3,
   }).run();
   assert.equal(result, 3);
@@ -354,24 +324,26 @@ test("unordered UNPACK still emits every record of every zip", TIMEOUT, async ()
 test("unordered still emits every document", TIMEOUT, async () => {
   const ids = idsOf(30);
   const emitter = new DelayedSpyEmitter(2);
-  assert.equal(await new PipesEngine({ fetcher: textFetcher(ids), emitter, concurrency: 5 }).run(), 30);
+  assert.equal(await new PipesEngine({ source: textFetcher(ids), emitter, concurrency: 5 }).run(), 30);
   assert.deepEqual([...emitter.ids].sort(), [...ids].sort());
 });
 
-test("CONCATENATE keeps fetch order and a single final emit", TIMEOUT, async (t) => {
+test("CONCATENATE emits one document per input, in fetch order when ordered", TIMEOUT, async (t) => {
   t.after(() => mock.restoreAll());
   const ids = idsOf(8);
   hookParsing({ delay: (filename) => (8 - Number(filename.slice(1))) * 4 });
   const emitter = new DelayedSpyEmitter(1);
-  await new PipesEngine({ fetcher: textFetcher(ids), emitter, mode: "CONCATENATE", concurrency: 4 }).run();
-  assert.deepEqual(emitter.ids, ["concatenated"]);
-  const text = emitter.documents[0]?.text ?? "";
-  const positions = ids.map((id) => text.indexOf(`text of ${id}`));
-  assert.ok(positions.every((position) => position >= 0));
-  assert.deepEqual([...positions].sort((a, b) => a - b), positions);
+  const result = await new PipesEngine({ source: textFetcher(ids), emitter, mode: "CONCATENATE", concurrency: 4, ordered: true }).run();
+  assert.equal(result, 8);
+  assert.deepEqual(emitter.ids, ids);
+  assert.deepEqual(
+    emitter.documents.map((document) => document.text?.trim()),
+    ids.map((id) => `text of ${id}`),
+    "each input's own content, not one text for the run",
+  );
 });
 
-test("ordered: a failing document rejects with the original error, emits a strict prefix, closes once", TIMEOUT, async () => {
+test("ordered: a document over a limit is a result in its place, and the rest are emitted in fetch order", TIMEOUT, async () => {
   const ids = Array.from({ length: 12 }, (_, index) => `doc${index}.txt`);
   const fetcher = {
     async *fetch() {
@@ -381,45 +353,48 @@ test("ordered: a failing document rejects with the original error, emits a stric
     },
   };
   const emitter = new DelayedSpyEmitter(5);
+  const heard: string[] = [];
   const engine = new PipesEngine({
-    fetcher,
+    source: fetcher,
     emitter,
     concurrency: 3,
     maxQueue: 1,
     ordered: true,
     limits: { maxOutputChars: 100 },
+    reporter: { report: (result) => void heard.push(`${result.id}:${result.status}`) },
   });
-  await assert.rejects(engine.run(), LimitExceededError);
+  assert.equal(await engine.run(), 11);
   assert.equal(emitter.closes, 1);
+  assert.equal(emitter.inFlight, 0);
+  assert.deepEqual(emitter.ids, ids.filter((id) => id !== "doc3.txt"), "every other input, in fetch order");
+  assert.deepEqual(
+    heard,
+    ids.map((id) => `${id}:${id === "doc3.txt" ? "PAYLOAD_LIMIT_EXCEEDED" : "EMIT_SUCCESS"}`),
+    "the reporter hears the failure in its place",
+  );
   assert.equal(engine.stats.failed, 1);
-  assert.equal(emitter.inFlight, 0, "no emit in flight when run() rejects");
-  const emitsAtReject = emitter.ids.length;
-  await sleep(100);
-  assert.equal(emitter.ids.length, emitsAtReject, "no late emits");
-  assert.equal(emitter.closes, 1);
-  assert.deepEqual(emitter.ids, ids.slice(0, emitter.ids.length), "strict prefix of fetch order");
-  assert.ok(!emitter.ids.includes("doc3.txt"));
-  assert.ok(emitter.ids.length <= 3);
 });
 
-test("ordered: abort while workers are parked on the window gate does not hang", TIMEOUT, async (t) => {
-  t.after(() => mock.restoreAll());
+test("ordered: a reporter that throws ends the run with its error, closes once and parks nothing", TIMEOUT, async () => {
   const boom = new Error("boom");
-  hookParsing({ fail: (filename) => (filename === "d1" ? boom : null) });
   const emitter = new DelayedSpyEmitter(60);
   const engine = new PipesEngine({
-    fetcher: textFetcher(idsOf(20)),
+    source: textFetcher(idsOf(20)),
     emitter,
     concurrency: 4,
     maxBuffered: 2,
     ordered: true,
+    reporter: {
+      report: (result) => {
+        if (result.id === "d1") throw boom;
+      },
+    },
   });
   await assert.rejects(engine.run(), (error) => error === boom);
   assert.equal(emitter.closes, 1);
   assert.equal(emitter.inFlight, 0);
-  assert.equal(engine.stats.failed, 1);
   assert.deepEqual(emitter.ids, emitter.ids.slice().sort(), "prefix in order");
-  assert.ok(emitter.ids.length <= 1, "only d0 can have been emitted");
+  assert.ok(emitter.ids.length <= 2, `d0 and d1 only: ${emitter.ids.join(",")}`);
 });
 
 test("ordered: maxBuffered bounds how many inputs are in flight ahead of the head", TIMEOUT, async (t) => {
@@ -438,7 +413,7 @@ test("ordered: maxBuffered bounds how many inputs are in flight ahead of the hea
       release = resolve;
     });
     const ids = idsOf(30);
-    const run = new PipesEngine({ fetcher: textFetcher(ids), emitter, ordered: true, ...options }).run();
+    const run = new PipesEngine({ source: textFetcher(ids), emitter, ordered: true, ...options }).run();
     await sleep(150);
     assert.equal(started, expectedWindow, `parses started while the head is blocked (${JSON.stringify(options)})`);
     release();

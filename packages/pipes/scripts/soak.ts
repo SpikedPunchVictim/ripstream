@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FileSystemFetcher, MemoryEmitter, PipesEngine } from "../src/index.ts";
+import { FileSystemFetcher, FileSystemPipesIterator, MemoryEmitter, PipesEngine } from "../src/index.ts";
 
 const seconds = Number(process.argv[2] ?? "60");
 const directory = mkdtempSync(join(tmpdir(), "ripstream-soak-"));
@@ -10,7 +10,8 @@ for (let index = 0; index < 50; index++) {
 }
 const started = Date.now();
 const engine = new PipesEngine({
-  fetcher: new FileSystemFetcher(directory),
+  iterator: new FileSystemPipesIterator({ basePath: directory, fetcherId: "fs" }),
+  fetchers: { fs: new FileSystemFetcher({ basePath: directory }) },
   emitter: new MemoryEmitter(),
   mode: "CONTENT_ONLY",
   concurrency: 4,
