@@ -20,6 +20,7 @@ import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
 import { createRipstreamServer } from "@spikedpunch/ripstream-server";
 import {
   IsolationSettingsError,
+  assertKnownVariables,
   resolveIsolationConfig,
   resolveMaxOutputChars,
   type ResolvedIsolation,
@@ -345,6 +346,8 @@ async function resolveSettings(
     return { isolation: { config: { mode: "off" }, modeSource: "default" }, maxOutputChars: null };
   }
   try {
+    // After detect and language, which read no setting: a misspelling there changes nothing.
+    assertKnownVariables(env);
     return {
       isolation: resolveIsolationConfig({
         defaultMode: options.command === "serve" ? "strict" : "off",
@@ -390,12 +393,12 @@ function parseArgs(argv: readonly string[]): Options {
         throw new Error("--output expects text, json or jsonl");
       }
       output = value;
-    } else if (argument === "--config" || argument === "-c") config = rest[++index] ?? null;
-    else if (argument === "--password" || argument === "-p") password = rest[++index] ?? null;
-    else if (argument === "--port") port = Number(rest[++index] ?? "9998");
-    else if (argument === "--host") host = rest[++index] ?? "127.0.0.1";
-    else if (argument === "--isolation") isolation = requireValue(rest[++index], "--isolation");
-    else if (argument === "--max-output-chars") maxOutputChars = requireValue(rest[++index], "--max-output-chars");
+    } else if (argument === "--config" || argument === "-c") config = requireValue(rest[++index], argument);
+    else if (argument === "--password" || argument === "-p") password = requireValue(rest[++index], argument);
+    else if (argument === "--port") port = parsePort(requireValue(rest[++index], argument));
+    else if (argument === "--host") host = requireValue(rest[++index], argument);
+    else if (argument === "--isolation") isolation = requireValue(rest[++index], argument);
+    else if (argument === "--max-output-chars") maxOutputChars = requireValue(rest[++index], argument);
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
@@ -407,9 +410,22 @@ function parseArgs(argv: readonly string[]): Options {
   return { command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars };
 }
 
+/** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
+const FLAGS: ReadonlySet<string> = new Set([
+  "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "--version", "-V",
+  "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
+]);
+
+/** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
 function requireValue(value: string | undefined, flag: string): string {
   if (value === undefined) throw new Error(`${flag} expects a value`);
+  if (FLAGS.has(value)) throw new Error(`${flag} expects a value, got the option ${value}`);
   return value;
+}
+
+/** Digits only: `Number("")` is 0 and `Number(" 80 ")` is 80, neither of which is what was typed. */
+function parsePort(raw: string): number {
+  return /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
 }
 
 function defaultOptions(): Options {
@@ -461,7 +477,7 @@ function usage(): string {
     "",
     "Environment (flags win): RIPSTREAM_ISOLATION, RIPSTREAM_ISOLATION_MEMORY_POOL_MB, _PER_CHILD_MB,",
     "  _MAX_INPUT_BYTES, _MAX_TASK_MILLIS, _HEAP_MB, _MAX_QUEUE, _MAX_DISK_MB, _REQUIRE_STRICT_CONTAINMENT,",
-    "  RIPSTREAM_MAX_OUTPUT_CHARS",
+    "  RIPSTREAM_MAX_OUTPUT_CHARS. Any other RIPSTREAM_* name is an error.",
     "",
     "Exit codes:",
     "  0  success",

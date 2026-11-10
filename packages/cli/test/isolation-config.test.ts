@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { IsolationSettingsError, resolveIsolationConfig, resolveMaxOutputChars } from "../src/isolation-config.ts";
+import {
+  IsolationSettingsError,
+  assertKnownVariables,
+  resolveIsolationConfig,
+  resolveMaxOutputChars,
+} from "../src/isolation-config.ts";
 
 const none = { flagMode: null, env: {}, fileIsolation: null } as const;
 
@@ -149,4 +154,74 @@ test("maxOutputChars: flag over environment; absent is null; bad values are refu
     assert.throws(() => resolveMaxOutputChars({ flag, env: {} }), IsolationSettingsError, flag);
   }
   assert.throws(() => resolveMaxOutputChars({ flag: null, env: { RIPSTREAM_MAX_OUTPUT_CHARS: "x" } }), /RIPSTREAM_MAX_OUTPUT_CHARS/);
+});
+
+/*
+ * A RIPSTREAM_* name that is misspelled used to be ignored (tasks/parity/audits/config-inventory.json, C18): the setting
+ * it was meant to be fell back to its default, and for a limit that is a different limit from the one asked for.
+ */
+
+test("a RIPSTREAM_ name that is not a setting is refused, with the nearest setting as the hint", () => {
+  const refusal = (name: string): string => {
+    try {
+      assertKnownVariables({ [name]: "1" });
+    } catch (error) {
+      assert.ok(error instanceof IsolationSettingsError, name);
+      return error.message;
+    }
+    assert.fail(`${name} was accepted`);
+  };
+  assert.match(refusal("RIPSTREAM_ISOLATION_MAXQUEUE"), /RIPSTREAM_ISOLATION_MAXQUEUE.*did you mean RIPSTREAM_ISOLATION_MAX_QUEUE\?/);
+  assert.match(refusal("RIPSTREAM_ISOLATON"), /did you mean RIPSTREAM_ISOLATION\?/);
+  assert.match(refusal("RIPSTREAM_MAX_OUTPUT_CHAR"), /did you mean RIPSTREAM_MAX_OUTPUT_CHARS\?/);
+  assert.match(refusal("RIPSTREAM_ISOLATION_PERCHILD_MB"), /did you mean RIPSTREAM_ISOLATION_PER_CHILD_MB\?/);
+  // A name near nothing is still refused, without a made-up hint.
+  assert.doesNotMatch(refusal("RIPSTREAM_TOTALLY_DIFFERENT_THING"), /did you mean/);
+});
+
+test("every unknown name is listed, not only the first", () => {
+  assert.throws(
+    () => assertKnownVariables({ RIPSTREAM_ONE: "1", RIPSTREAM_TWO: "2" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /RIPSTREAM_ONE/.test(error.message) && /RIPSTREAM_TWO/.test(error.message),
+  );
+});
+
+test("every setting the CLI reads is accepted; so are names that do not start with RIPSTREAM_", () => {
+  assertKnownVariables({
+    RIPSTREAM_ISOLATION: "off",
+    RIPSTREAM_ISOLATION_MEMORY_POOL_MB: "1",
+    RIPSTREAM_ISOLATION_PER_CHILD_MB: "1",
+    RIPSTREAM_ISOLATION_MAX_INPUT_BYTES: "1",
+    RIPSTREAM_ISOLATION_MAX_TASK_MILLIS: "1",
+    RIPSTREAM_ISOLATION_HEAP_MB: "1",
+    RIPSTREAM_ISOLATION_MAX_QUEUE: "1",
+    RIPSTREAM_ISOLATION_MAX_DISK_MB: "1",
+    RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT: "true",
+    RIPSTREAM_MAX_OUTPUT_CHARS: "1",
+    PATH: "/bin",
+    ripstream_lowercase: "x",
+    MY_RIPSTREAM_THING: "x",
+  });
+});
+
+test("RIPSTREAM_PDFJS_CORPUS belongs to the test suite and is not refused", () => {
+  assertKnownVariables({ RIPSTREAM_PDFJS_CORPUS: "/corpus" });
+});
+
+test("the variables the CLI reads are exactly the ones accepted", () => {
+  // resolveIsolationConfig reads each of these; if one were added there and not to the accepted list, setting it
+  // would be refused as unknown.
+  const every = {
+    RIPSTREAM_ISOLATION: "strict",
+    RIPSTREAM_ISOLATION_MEMORY_POOL_MB: "4000",
+    RIPSTREAM_ISOLATION_PER_CHILD_MB: "1536",
+    RIPSTREAM_ISOLATION_MAX_INPUT_BYTES: "1048576",
+    RIPSTREAM_ISOLATION_MAX_TASK_MILLIS: "30000",
+    RIPSTREAM_ISOLATION_HEAP_MB: "512",
+    RIPSTREAM_ISOLATION_MAX_QUEUE: "4",
+    RIPSTREAM_ISOLATION_MAX_DISK_MB: "512",
+    RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT: "true",
+  };
+  assertKnownVariables(every);
+  assert.equal(resolveIsolationConfig({ ...none, defaultMode: "off", env: every }).config.maxQueue, 4);
 });

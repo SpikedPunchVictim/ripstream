@@ -44,6 +44,12 @@ same rules as a config file, so `perChildMb` above `memoryPoolMb` is rejected wh
 `requireStrictContainment`: it refines `strict`, so when the flag or `RIPSTREAM_ISOLATION` lowers the mode it is
 dropped instead of failing.
 
+A `RIPSTREAM_*` variable that is not in the table is also a usage error, with the nearest setting offered
+(`RIPSTREAM_ISOLATION_MAXQUEUE` → did you mean `RIPSTREAM_ISOLATION_MAX_QUEUE`?). Left alone, a misspelled name would
+have no effect and the setting would keep its default. A config file with a repeated key, or nested more than 64
+levels, is refused the same way, and so is a flag that takes a value (`-c`, `-p`, `--port`, `--host`) when the value
+is missing or is another flag.
+
 `detect` and `language` run in this process whatever is set, so they do not read these settings and a bad value cannot
 make them fail. `--max-output-chars` and `RIPSTREAM_MAX_OUTPUT_CHARS` belong to `serve`; one-shot commands ignore them.
 

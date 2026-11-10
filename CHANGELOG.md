@@ -30,6 +30,16 @@ Changed: input that used to be accepted and ignored is refused, naming what was 
   `X-Tika-*` header, a multipart part other than the one file, and an invalid `POST /pipes` body (unknown key, bad
   `mode`, `followSymlinks: true`). A preset with an invalid limit or handler fails `createRipstreamServer`.
 
+Changed: the CLI and `loadConfig` no longer take what they would misread (`tikajs-68os.8.4`).
+
+- A `RIPSTREAM_*` environment variable that is not a setting is a usage error (exit 2) naming it and the nearest real
+  one; it used to be ignored, leaving the setting at its default. `detect` and `language` read no setting and still
+  ignore them. `RIPSTREAM_PDFJS_CORPUS`, which only the test suite reads, is allowed.
+- `-c`/`--config`, `-p`/`--password`, `--port` and `--host` with no value, or with another flag in the value's place,
+  are usage errors. They used to mean "no config", "no password", port 9998 and host 127.0.0.1. `--port` takes digits
+  only (`--port ""` was port 0).
+- `loadConfig` refuses an object with a repeated key (`JSON.parse` kept the last) and nesting deeper than 64 levels.
+
 ### Parse isolation (epic `tikajs-zgg2`)
 
 Added: per-document child-process isolation with a host memory budget (`@spikedpunch/ripstream-isolation-node`,

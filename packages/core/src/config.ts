@@ -1,4 +1,5 @@
 import type { IsolationConfig } from "./isolation.ts";
+import { jsonStructureIssues } from "./json-structure.ts";
 
 export interface RipstreamConfigShape {
   readonly version?: number;
@@ -80,6 +81,8 @@ export class RipstreamConfig {
 /** Loads JSON configuration, failing fast with every validation issue. */
 export function loadConfig(source: string | Uint8Array | unknown): RipstreamConfig {
   let value: unknown = source;
+  // What JSON.parse accepts silently (a repeated key, absurd nesting) is reported with the other problems.
+  let structureIssues: string[] = [];
   if (typeof source === "string" || source instanceof Uint8Array) {
     const text =
       typeof source === "string"
@@ -92,9 +95,11 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
         `invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
       ]);
     }
+    structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues, isolation } = inspectConfig(value);
+  const { issues: valueIssues, isolation } = inspectConfig(value);
+  const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated isolation copy, never from the caller's object.
   const { isolation: _unvalidated, ...rest } = value as RipstreamConfigShape;

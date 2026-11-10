@@ -309,3 +309,87 @@ test("isolation warnings reach stderr with a WARN prefix", async () => {
   assert.match(sink.err.join(""), /ripstream: WARN: falling back to in-process/);
   assert.doesNotMatch(sink.err.join(""), /quiet detail/);
 });
+
+test("a misspelled RIPSTREAM_ variable is a usage error that names it and the nearest setting", async () => {
+  const env = { RIPSTREAM_ISOLATION_MAXQUEUE: "4" };
+  for (const argv of [["serve"], ["-"], ["metadata", "-"]]) {
+    const sink = io("x");
+    assert.equal(await main(argv, sink, { env }), 2, argv.join(" "));
+    assert.match(sink.err.join(""), /RIPSTREAM_ISOLATION_MAXQUEUE.*did you mean RIPSTREAM_ISOLATION_MAX_QUEUE\?/, argv.join(" "));
+  }
+});
+
+test("a misspelled RIPSTREAM_ variable does not stop detect or language, which read none", async () => {
+  const env = { RIPSTREAM_ISOLATON: "strict" };
+  assert.equal(await main(["detect", "-"], io("plain"), { env }), 0);
+  assert.equal(await main(["language", "-"], io("plain text here"), { env }), 0);
+});
+
+test("RIPSTREAM_PDFJS_CORPUS, which only the test suite reads, does not stop a parse", async () => {
+  assert.equal(await main(["-"], io("plain"), { env: { RIPSTREAM_PDFJS_CORPUS: "/corpus" } }), 0);
+});
+
+test("a flag that takes a value and is given none is a usage error, never a default", async () => {
+  const cases: Array<[string[], RegExp]> = [
+    [["-c"], /-c expects a value/],
+    [["--config"], /--config expects a value/],
+    [["-p"], /-p expects a value/],
+    [["--password"], /--password expects a value/],
+    [["serve", "--port"], /--port expects a value/],
+    [["serve", "--host"], /--host expects a value/],
+    [["--output"], /--output expects/],
+  ];
+  for (const [argv, pattern] of cases) {
+    const sink = io("x");
+    assert.equal(await main(argv, sink, { env: {} }), 2, argv.join(" "));
+    assert.match(sink.err.join(""), pattern, argv.join(" "));
+  }
+});
+
+test("a flag that takes a value is not given another flag as its value", async () => {
+  const cases: Array<[string[], RegExp]> = [
+    [["-c", "--json", "-"], /-c expects a value, got the option --json/],
+    [["-p", "-m", "-"], /-p expects a value, got the option -m/],
+    [["serve", "--host", "--port", "0"], /--host expects a value, got the option --port/],
+    [["serve", "--port", "--host"], /--port expects a value, got the option --host/],
+    [["--config", "--password", "x", "-"], /--config expects a value, got the option --password/],
+  ];
+  for (const [argv, pattern] of cases) {
+    const sink = io("x");
+    assert.equal(await main(argv, sink, { env: {} }), 2, argv.join(" "));
+    assert.match(sink.err.join(""), pattern, argv.join(" "));
+  }
+});
+
+test("--port takes digits only: an empty or padded value is not port 0", async () => {
+  for (const value of ["", " ", "0x10", "1e3", "-1", "80.5", "99999"]) {
+    const sink = io("x");
+    assert.equal(await main(["serve", "--port", value], sink, { env: {} }), 2, JSON.stringify(value));
+    assert.match(sink.err.join(""), /--port expects an integer between 0 and 65535/, JSON.stringify(value));
+  }
+});
+
+test("a config file with a repeated key, or deep nesting, is a usage error", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-config-"));
+  try {
+    const write = (name: string, text: string): string => {
+      const path = join(directory, name);
+      writeFileSync(path, text);
+      return path;
+    };
+    const duplicate = write("duplicate.json", '{"isolation":{"mode":"strict","mode":"off"}}');
+    let sink = io("x");
+    assert.equal(await main(["--config", duplicate, "-"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /duplicate key "mode"/);
+
+    const deep = write("deep.json", `{"version":1,"x":${"[".repeat(100_000)}${"]".repeat(100_000)}}`);
+    sink = io("x");
+    assert.equal(await main(["--config", deep, "-"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /deeper than 64 levels/);
+
+    const fine = write("fine.json", '{"version":1,"isolation":{"mode":"off"}}');
+    assert.equal(await main(["--config", fine, "-"], io("plain"), { env: {} }), 0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

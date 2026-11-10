@@ -18,6 +18,10 @@ export class IsolationSettingsError extends Error {
 
 const MODES: readonly IsolationMode[] = ["strict", "lenient", "off"];
 
+const MODE_VARIABLE = "RIPSTREAM_ISOLATION";
+const STRICT_CONTAINMENT_VARIABLE = "RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT";
+const MAX_OUTPUT_CHARS_VARIABLE = "RIPSTREAM_MAX_OUTPUT_CHARS";
+
 const NUMBER_VARIABLES = [
   ["RIPSTREAM_ISOLATION_MEMORY_POOL_MB", "memoryPoolMb"],
   ["RIPSTREAM_ISOLATION_PER_CHILD_MB", "perChildMb"],
@@ -27,6 +31,66 @@ const NUMBER_VARIABLES = [
   ["RIPSTREAM_ISOLATION_MAX_QUEUE", "maxQueue"],
   ["RIPSTREAM_ISOLATION_MAX_DISK_MB", "maxDiskMb"],
 ] as const;
+
+/** Every RIPSTREAM_* name the CLI reads. A name outside this list (and TEST_ONLY_VARIABLES) is a mistake. */
+const KNOWN_VARIABLES: readonly string[] = [
+  MODE_VARIABLE,
+  STRICT_CONTAINMENT_VARIABLE,
+  MAX_OUTPUT_CHARS_VARIABLE,
+  ...NUMBER_VARIABLES.map(([variable]) => variable),
+];
+
+/** Read by the test suite (packages/parser-pdf/test/pdf.test.ts), never by the CLI, and often set in the same shell. */
+const TEST_ONLY_VARIABLES: readonly string[] = ["RIPSTREAM_PDFJS_CORPUS"];
+
+/** The most single-character edits between a misspelling and the name it is offered as a correction of. */
+const MAX_SUGGESTION_DISTANCE = 3;
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= a.length; row++) {
+    const current = [row];
+    for (let column = 1; column <= b.length; column++) {
+      const substitution = previous[column - 1]! + (a[row - 1] === b[column - 1] ? 0 : 1);
+      current.push(Math.min(substitution, previous[column]! + 1, current[column - 1]! + 1));
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
+}
+
+function nearestKnownVariable(name: string): string | null {
+  let best: string | null = null;
+  let bestDistance = MAX_SUGGESTION_DISTANCE + 1;
+  for (const candidate of KNOWN_VARIABLES) {
+    const distance = editDistance(name, candidate);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Refuses a RIPSTREAM_* variable that is not a setting. A misspelled name used to be ignored, so the setting it was
+ * meant to be fell back to its default, which for a limit is not the limit that was asked for. Each unknown name is
+ * listed with the nearest real one.
+ */
+export function assertKnownVariables(env: Readonly<Record<string, string | undefined>>): void {
+  const unknown = Object.keys(env)
+    .filter((name) => name.startsWith("RIPSTREAM_") && !KNOWN_VARIABLES.includes(name) && !TEST_ONLY_VARIABLES.includes(name))
+    .sort();
+  if (unknown.length === 0) return;
+  const described = unknown.map((name) => {
+    const suggestion = nearestKnownVariable(name);
+    return suggestion === null ? name : `${name} (did you mean ${suggestion}?)`;
+  });
+  const noun = unknown.length === 1 ? "variable" : "variables";
+  throw new IsolationSettingsError(
+    `unknown environment ${noun}: ${described.join(", ")}. The settings are ${KNOWN_VARIABLES.join(", ")}`,
+  );
+}
 
 function parseMode(value: string, where: string): IsolationMode {
   const mode = MODES.find((candidate) => candidate === value);
@@ -71,8 +135,8 @@ export function resolveIsolationConfig(input: {
     mode = fileIsolation.mode;
     modeSource = "config";
   }
-  if (env.RIPSTREAM_ISOLATION !== undefined) {
-    mode = parseMode(env.RIPSTREAM_ISOLATION, "RIPSTREAM_ISOLATION");
+  if (env[MODE_VARIABLE] !== undefined) {
+    mode = parseMode(env[MODE_VARIABLE], MODE_VARIABLE);
     modeSource = "env";
   }
   if (input.flagMode !== null) {
@@ -85,9 +149,9 @@ export function resolveIsolationConfig(input: {
     const raw = env[variable];
     if (raw !== undefined) merged[key] = parseInteger(raw, variable);
   }
-  const strictRaw = env.RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT;
+  const strictRaw = env[STRICT_CONTAINMENT_VARIABLE];
   if (strictRaw !== undefined) {
-    merged.requireStrictContainment = parseBoolean(strictRaw, "RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT");
+    merged.requireStrictContainment = parseBoolean(strictRaw, STRICT_CONTAINMENT_VARIABLE);
   }
 
   // requireStrictContainment is a refinement of strict. When flag or environment lowered the mode, it has nothing to
@@ -105,7 +169,7 @@ export function resolveMaxOutputChars(input: {
   readonly env: Readonly<Record<string, string | undefined>>;
 }): number | null {
   const [raw, where] =
-    input.flag !== null ? [input.flag, "--max-output-chars"] : [input.env.RIPSTREAM_MAX_OUTPUT_CHARS, "RIPSTREAM_MAX_OUTPUT_CHARS"];
+    input.flag !== null ? [input.flag, "--max-output-chars"] : [input.env[MAX_OUTPUT_CHARS_VARIABLE], MAX_OUTPUT_CHARS_VARIABLE];
   if (raw === undefined) return null;
   const value = parseInteger(raw, where);
   if (value < 1) throw new IsolationSettingsError(`${where} expects a positive integer, got "${raw}"`);
