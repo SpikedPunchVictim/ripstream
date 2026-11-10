@@ -11,7 +11,8 @@ import {
   RipstreamError,
   UnsupportedFormatError,
   loadConfig,
-  rmetaObject,
+  metadataJson,
+  rmetaObjects,
   serializeRmeta,
   type Metadata,
   type ParseLimits,
@@ -21,7 +22,9 @@ import {
 import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
-import { createRipstreamServer } from "@spikedpunch/ripstream-server";
+import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
+import { createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
+import { serverMimeTypes } from "./mime-types.ts";
 import {
   IsolationSettingsError,
   assertKnownVariables,
@@ -66,6 +69,10 @@ interface Options {
   /** `--maxEmbeddedDepth` and `--maxEmbeddedCount` as typed; validated by embeddedLimit. */
   readonly maxEmbeddedDepth: string | null;
   readonly maxEmbeddedCount: string | null;
+  /** `--checkpoint`, pipes only: the file that records which inputs are done, so a run that stopped can be started again. */
+  readonly checkpoint: string | null;
+  /** `--retry-attempts` as typed, pipes only; validated by retryAttempts. */
+  readonly retryAttempts: string | null;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -141,6 +148,7 @@ export async function main(
     }
     return serve(options, settings, deps, io);
   }
+  if (options.command === "pipes") return pipes(options, settings, deps, io);
   if (settings.isolation.config.mode !== "off" && options.password !== null && ["parse", "metadata"].includes(options.command)) {
     io.stderr("ripstream: --password cannot be used with isolation: the password cannot cross the isolation boundary\n");
     return EXIT_USAGE;
@@ -189,7 +197,7 @@ export async function main(
 
     if (options.command === "metadata") {
       const result = await ripstream.parse(bytes, filename === undefined ? {} : { filename });
-      io.stdout(`${JSON.stringify(metadataObject(result.metadata), null, options.json ? 2 : 0)}\n`);
+      io.stdout(`${JSON.stringify(metadataJson(result.metadata), null, options.json ? 2 : 0)}\n`);
       return 0;
     }
 
@@ -199,7 +207,7 @@ export async function main(
         filename === undefined ? {} : { filename },
       );
       if (options.output === "jsonl") {
-        io.stdout(records.map((record) => `${JSON.stringify(rmetaObject(record))}\n`).join(""));
+        io.stdout(rmetaObjects(records).map((object) => `${JSON.stringify(object)}\n`).join(""));
       } else {
         io.stdout(`${serializeRmeta(records)}\n`);
       }
@@ -208,19 +216,19 @@ export async function main(
 
     const result = await ripstream.parse(bytes, filename === undefined ? {} : { filename });
     if (options.metadataOnly) {
-      io.stdout(`${JSON.stringify(metadataObject(result.metadata), null, options.json ? 2 : 0)}\n`);
+      io.stdout(`${JSON.stringify(metadataJson(result.metadata), null, options.json ? 2 : 0)}\n`);
     } else if (options.output === "jsonl") {
       io.stdout(
         `${JSON.stringify({
-          ...metadataObject(result.metadata),
-          "X-TIKA:content": result.text,
+          ...metadataJson(result.metadata),
+          "tk:content": result.text,
         })}\n`,
       );
     } else if (options.output === "json" || options.json) {
       io.stdout(
         `${JSON.stringify({
           text: result.text,
-          metadata: metadataObject(result.metadata),
+          metadata: metadataJson(result.metadata),
         }, null, 2)}\n`,
       );
     } else {
@@ -277,7 +285,10 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         ...(isolation === null ? {} : { isolation: isolation.isolator }),
         ...(maxOutputChars === null ? {} : { maxLimits: { maxOutputChars } }),
         ...(Object.keys(defaultLimits).length === 0 ? {} : { defaultLimits }),
+        // `throwOnWriteLimit: true` in the file asks for a failure at the limit; without it the server answers as Tika does.
+        ...(settings.config?.throwOnWriteLimit === true ? { onOutputLimit: "throw" as const } : {}),
         endpoints: server.endpoints ?? DEFAULT_SERVER_ENDPOINTS,
+        mimeTypes: serverMimeTypes(settings.config?.customMimeTypes ?? null),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
         ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
         ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),
@@ -322,6 +333,88 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
       return exitCodeFor(error);
     }
     throw error;
+  } finally {
+    await isolation?.isolator.dispose();
+  }
+}
+
+/** The most failed inputs `pipes` names on stderr; the run's reporters have all of them. */
+const MAX_FAILURES_SHOWN = 100;
+
+/**
+ * Runs the pipes sections of a Tika configuration (tikajs-68os.6.5): the pipes-iterator lists the tuples, the fetchers
+ * read them, each document is parsed and the emitters write it, and the reporters hear every result. A failed input
+ * does not stop the run; it is named on stderr and the exit code is 3 when there was one.
+ *
+ * `--checkpoint <file>` makes the run one that can be started again after it was stopped, however it was stopped:
+ * the inputs that are in the file are left out. `--retry-attempts <n>` tries a fetch or an emit that failed in a way
+ * that may not happen again (a reset connection, a 503) up to n times in all.
+ */
+async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io: CliIO): Promise<number> {
+  let isolation: StandardIsolation | null = null;
+  try {
+    const pipesSettings = settings.config?.pipes;
+    if (pipesSettings === null || pipesSettings === undefined) {
+      io.stderr("ripstream: pipes needs --config with the pipes sections (fetchers, emitters and a pipes-iterator)\n");
+      return EXIT_USAGE;
+    }
+    for (const notice of pipesSettings.notices) io.stderr(`ripstream: NOTE: ${notice}\n`);
+    let checkpoint: CheckpointStore | undefined;
+    if (options.checkpoint !== null) {
+      try {
+        checkpoint = await CheckpointStore.open(options.checkpoint);
+      } catch (error) {
+        io.stderr(`ripstream: ${error instanceof Error ? error.message : String(error)}\n`);
+        return EXIT_USAGE;
+      }
+      // Emitting and recording are two steps, so a run that is killed between them emits that input again on resume.
+      const strict = pipesSettings.emitters.filter((emitter) => emitter.onExists === "EXCEPTION").map((emitter) => emitter.id);
+      if (strict.length > 0) {
+        io.stderr(
+          `ripstream: WARN: emitter ${strict.join(", ")} has onExists EXCEPTION (Tika's default): an input that was emitted just before a run was ` +
+            "killed fails with EMIT_EXCEPTION when the run is resumed, and is done again on the next one. Set onExists to SKIP or REPLACE for a clean resume\n",
+        );
+      }
+    }
+    isolation = settings.isolation.config.mode !== "off" ? await openIsolation(settings, deps, io) : null;
+    const ripstream =
+      isolation === null
+        ? createRipstream({
+            ...(settings.config === null ? {} : { config: settings.config }),
+            ...(settings.limits === null ? {} : { limits: settings.limits }),
+          })
+        : isolation.ripstream;
+    let shown = 0;
+    const reporter: Reporter = {
+      report: (result) => {
+        if (!isFailure(result)) return;
+        if (++shown <= MAX_FAILURES_SHOWN) io.stderr(`ripstream: ${result.status} ${result.id}${result.message === undefined ? "" : `: ${result.message}`}\n`);
+      },
+    };
+    // Read when a file is first named by its media type, once.
+    let mimeTypes: ServerMimeType[] | undefined;
+    const engine = createEngineFromSettings(pipesSettings, {
+      ripstream,
+      reporter,
+      // UNPACK with `suffixStrategy: DETECTED` names files as `ripstream serve` and /unpack do: by the media type registry.
+      extensionOf: (contentType) => extensionFor(contentType, (mimeTypes ??= serverMimeTypes(settings.config?.customMimeTypes ?? null))),
+      ...(checkpoint === undefined ? {} : { checkpoint }),
+      ...(settings.retryAttempts === null ? {} : { retry: { attempts: settings.retryAttempts } }),
+    });
+    await engine.run();
+    const stats = engine.stats;
+    if (shown > MAX_FAILURES_SHOWN) io.stderr(`ripstream: and ${shown - MAX_FAILURES_SHOWN} more failed inputs (the reporters have all of them)\n`);
+    if (options.json || options.output === "json") {
+      io.stdout(`${JSON.stringify(stats)}\n`);
+    } else {
+      io.stdout(
+        `ripstream: pipes: fetched ${stats.fetched}, resumed ${stats.resumed}, emitted ${stats.emitted}, failed ${stats.failed} (${Math.round(stats.durationMs)} ms)\n`,
+      );
+    }
+    return stats.failed === 0 ? 0 : EXIT_DATA;
+  } catch (error) {
+    io.stderr(`ripstream: ${error instanceof Error ? error.message : String(error)}\n`);
+    return exitCodeFor(error);
   } finally {
     await isolation?.isolator.dispose();
   }
@@ -379,6 +472,17 @@ interface CliSettings {
   readonly maxOutputChars: number | null;
   /** The limits of `--maxEmbeddedDepth` / `--maxEmbeddedCount`, which win over the configuration's, or null. */
   readonly limits: Partial<ParseLimits> | null;
+  /** `--retry-attempts` (tries in all, the first included), or null: no retry. */
+  readonly retryAttempts: number | null;
+}
+
+/** Digits only, at least 1: `--retry-attempts 1` is one try, so no retry. */
+function retryAttempts(raw: string | null): number | null {
+  if (raw === null) return null;
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) < 1) {
+    throw new Error(`ripstream: --retry-attempts expects a positive integer (tries in all, the first included), got ${JSON.stringify(raw)}`);
+  }
+  return Number(raw);
 }
 
 /** Digits only, as for --port: `Number("")` is 0 and `Number(" 3 ")` is 3, neither of which is what was typed. */
@@ -410,6 +514,11 @@ async function resolveSettings(
     // A flag that changes nothing for the command it is given to must not look as if it did.
     throw new Error(`ripstream: ${flagged.join(" and ")} applies to parse and metadata, not ${options.command}`);
   }
+  const pipesOnly = [...(options.checkpoint === null ? [] : ["--checkpoint"]), ...(options.retryAttempts === null ? [] : ["--retry-attempts"])];
+  if (pipesOnly.length > 0 && options.command !== "pipes") {
+    throw new Error(`ripstream: ${pipesOnly.join(" and ")} applies to pipes, not ${options.command}`);
+  }
+  const attempts = retryAttempts(options.retryAttempts);
   const limits: Partial<ParseLimits> | null =
     flagged.length === 0
       ? null
@@ -422,6 +531,7 @@ async function resolveSettings(
       config: options.command === "detect" ? config : null,
       maxOutputChars: null,
       limits: null,
+      retryAttempts: null,
     };
   }
   try {
@@ -437,6 +547,7 @@ async function resolveSettings(
       isolation,
       config,
       limits,
+      retryAttempts: attempts,
       // Only the server has an output ceiling; a one-shot command ignores it.
       maxOutputChars: options.command === "serve" ? resolveMaxOutputChars({ flag: options.maxOutputChars, env }) : null,
     };
@@ -446,10 +557,11 @@ async function resolveSettings(
   }
 }
 
+const COMMANDS: readonly string[] = ["parse", "detect", "metadata", "language", "serve", "pipes", "help", "version"];
+
 function parseArgs(argv: readonly string[]): Options {
-  const known = ["parse", "detect", "metadata", "language", "serve", "help", "version"];
-  const command = argv[0] !== undefined && known.includes(argv[0]) ? argv[0] : "parse";
-  const rest = argv[0] !== undefined && known.includes(argv[0]) ? argv.slice(1) : argv;
+  const command = argv[0] !== undefined && COMMANDS.includes(argv[0]) ? argv[0] : "parse";
+  const rest = argv[0] !== undefined && COMMANDS.includes(argv[0]) ? argv.slice(1) : argv;
   let json = false;
   let metadataOnly = false;
   let recursive = false;
@@ -463,6 +575,8 @@ function parseArgs(argv: readonly string[]): Options {
   let maxOutputChars: string | null = null;
   let maxEmbeddedDepth: string | null = null;
   let maxEmbeddedCount: string | null = null;
+  let checkpoint: string | null = null;
+  let retryAttemptsFlag: string | null = null;
 
   for (let index = 0; index < rest.length; index++) {
     const written = rest[index]!;
@@ -502,28 +616,36 @@ function parseArgs(argv: readonly string[]): Options {
     else if (argument === "--max-output-chars") maxOutputChars = takeValue();
     else if (argument === "--maxEmbeddedDepth") maxEmbeddedDepth = takeValue();
     else if (argument === "--maxEmbeddedCount") maxEmbeddedCount = takeValue();
+    else if (argument === "--checkpoint") checkpoint = takeValue();
+    else if (argument === "--retry-attempts") retryAttemptsFlag = takeValue();
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
     else throw new Error(`Unexpected argument: ${argument}`);
   }
-  if (!["parse", "detect", "metadata", "language", "serve", "help", "version"].includes(command)) {
+  if (!COMMANDS.includes(command)) {
     throw new Error(`Unknown command: ${command}`);
   }
-  return { command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars, maxEmbeddedDepth, maxEmbeddedCount };
+  if (command === "pipes" && file !== null) {
+    throw new Error("ripstream pipes takes no file: its inputs come from the configuration's pipes-iterator");
+  }
+  return {
+    command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars,
+    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag,
+  };
 }
 
 /** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
 const FLAGS: ReadonlySet<string> = new Set([
   "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "-?", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts",
 ]);
 
 /** The long options that take a value: the ones `--name=value` is for. */
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--output", "--config", "--password", "--port", "--host", "--isolation", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts",
 ]);
 
 /** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
@@ -555,13 +677,9 @@ function defaultOptions(): Options {
     maxOutputChars: null,
     maxEmbeddedDepth: null,
     maxEmbeddedCount: null,
+    checkpoint: null,
+    retryAttempts: null,
   };
-}
-
-function metadataObject(metadata: Metadata): Record<string, readonly string[]> {
-  const result: Record<string, readonly string[]> = {};
-  for (const name of metadata.names()) result[name] = metadata.getAll(name);
-  return result;
 }
 
 function usage(): string {
@@ -574,6 +692,7 @@ function usage(): string {
     "  metadata    Print metadata JSON",
     "  language    Detect text language",
     "  serve       Start the HTTP server (-p/--port, -h/--host; Tika's spellings)",
+    "  pipes       Run the pipes sections of --config: the iterator's inputs, fetched, parsed and emitted",
     "",
     "Options:",
     "  -j, --json           JSON output",
@@ -587,6 +706,8 @@ function usage(): string {
     "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
     "      --maxEmbeddedDepth <n>  parse, metadata: fail (exit 3) when an embedded document is nested deeper than n",
     "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",
+    "      --checkpoint <file>     pipes: record the inputs that are done, and leave them out when the run is started again",
+    "      --retry-attempts <n>    pipes: try a fetch or an emit that failed in a way that may not happen again up to n times",
     "  -h, --help           Show help (serve: -h is the host; help is --help or -?)",
     "  -V, --version        Show version",
     "",
@@ -600,7 +721,7 @@ function usage(): string {
     "  0  success",
     "  1  internal error",
     "  2  usage error (bad arguments or configuration)",
-    "  3  bad input data (malformed, unsupported, encrypted or over-limit document)",
+    "  3  bad input data (malformed, unsupported, encrypted or over-limit document; pipes: an input failed)",
     "  4  environment problem (file not found, missing optional dependency)",
     "",
   ].join("\n");

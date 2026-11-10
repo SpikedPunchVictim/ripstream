@@ -29,6 +29,7 @@
     "@spikedpunch/ripstream-core": "workspace:*",
     "@spikedpunch/ripstream-parsers": "workspace:*",
     "@spikedpunch/ripstream-language": "workspace:*",
+    "@spikedpunch/ripstream-pipes": "workspace:*",
     "@spikedpunch/ripstream-server": "workspace:*"
   },
   "devDependencies": {

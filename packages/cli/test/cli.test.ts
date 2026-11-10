@@ -86,16 +86,16 @@ test("jsonl output emits one JSON object per line", async () => {
   const lines = sink.out.join("").split("\n").filter((line) => line !== "");
   assert.equal(lines.length, 1);
   const parsed = JSON.parse(lines[0]!) as Record<string, unknown>;
-  assert.match(String(parsed["X-TIKA:content"]), /Hello JSONL/);
-  assert.ok(Array.isArray(parsed["Content-Type"]));
+  assert.match(String(parsed["tk:content"]), /Hello JSONL/);
+  assert.equal(typeof parsed["Content-Type"], "string", "a key with one value is a string, as in Tika");
 
   sink = io("Hello JSONL");
   assert.equal(await main(["-r", "-o", "jsonl", "-"], sink), 0);
   const recursive = sink.out.join("").split("\n").filter((line) => line !== "");
   assert.ok(recursive.length >= 1);
   const first = JSON.parse(recursive[0]!) as Record<string, unknown>;
-  assert.match(String(first["X-TIKA:content"]), /Hello JSONL/);
-  assert.ok("X-TIKA:embedded_depth" in first);
+  assert.match(String(first["tk:content"]), /Hello JSONL/);
+  assert.ok("tk:embedded-depth" in first);
 });
 
 test("detects language from stdin", async () => {

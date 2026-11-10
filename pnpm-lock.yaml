@@ -65,6 +65,9 @@ importers:
       '@spikedpunch/ripstream-parsers':
         specifier: workspace:*
         version: link:../parsers
+      '@spikedpunch/ripstream-pipes':
+        specifier: workspace:*
+        version: link:../pipes
       '@spikedpunch/ripstream-server':
         specifier: workspace:*
         version: link:../server

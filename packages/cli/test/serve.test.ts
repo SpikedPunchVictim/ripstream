@@ -129,8 +129,8 @@ test("serve isolates by default: strict, with the default output ceiling, and sa
     const status = (await (await fetch(`${running.base}/status`)).json()) as { isolation: { mode: string }; gate: unknown };
     assert.equal(status.isolation.mode, "strict");
     // Sized by the dearer reservation (records, 3000): floor(8192 / 3000) = 2 running + the pool's 4 queued;
-    // the server queues none of its own.
-    assert.deepEqual(status.gate, { maxConcurrent: 6, maxQueue: 0 });
+    // the server holds the next 100 itself, as it does without isolation.
+    assert.deepEqual(status.gate, { maxConcurrent: 6, maxQueue: 100 });
 
     assert.equal(await (await fetch(`${running.base}/tika`, { method: "PUT", body: "x" })).text(), "isolated");
     await fetch(`${running.base}/tika?maxOutputChars=999999999`, { method: "PUT", body: "x" });
@@ -394,6 +394,30 @@ test("a server section ripstream cannot apply is a usage error naming the settin
   });
 });
 
+test("serve answers with the text up to the output limit, unless the file says throwOnWriteLimit", async () => {
+  const long = "word ".repeat(100);
+  await withConfig({ isolation: { mode: "off" } }, async (file) => {
+    const running = await startServe(["--config", file, "--max-output-chars", "10"], { env: {} });
+    try {
+      const response = await fetch(`${running.base}/tika`, { method: "PUT", body: long });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("x-ripstream-write-limit-reached"), "true");
+      assert.equal((await response.text()).length, 10);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  });
+  const strict = { isolation: { mode: "off" }, "parse-context": { "output-limits": { throwOnWriteLimit: true } } };
+  await withConfig(strict, async (file) => {
+    const running = await startServe(["--config", file, "--max-output-chars", "10"], { env: {} });
+    try {
+      assert.equal((await fetch(`${running.base}/tika`, { method: "PUT", body: long })).status, 422);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  });
+});
+
 test("a parse-context section gives requests that name no limit its limits; a request's own limit wins", async () => {
   const section = { isolation: { mode: "off" }, "parse-context": { "output-limits": { writeLimit: 20, throwOnWriteLimit: true } } };
   await withConfig(section, async (file) => {
@@ -413,4 +437,37 @@ test("a parse-context section gives requests that name no limit its limits; a re
     assert.match(sink.err.join(""), /defaultLimits\.maxOutputChars \(20\) is above maxLimits\.maxOutputChars \(10\)/);
     assert.equal(sink.out.join(""), "");
   });
+});
+
+test("serve describes the standard media types at /mime-types, with the custom-mimetypes file merged in", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-serve-mime-"));
+  try {
+    const types = join(directory, "custom-mimetypes.xml");
+    writeFileSync(
+      types,
+      `<?xml version="1.0" encoding="UTF-8"?>\n<mime-info>\n<mime-type type="application/x-acme-report">\n<_comment>Acme report</_comment>\n<sub-class-of type="application/xml"/>\n<glob pattern="*.acme"/>\n</mime-type>\n</mime-info>\n`,
+    );
+    await withConfig({ "custom-mimetypes": types }, async (file) => {
+      const running = await startServe(["--isolation", "off", "--config", file], { env: {} });
+      try {
+        const ask = (path: string): Promise<Response> => fetch(`${running.base}${path}`, { headers: { accept: "application/json" } });
+        const plain = (await (await ask("/mime-types/text/plain")).json()) as { type: string; extensions: string[]; defaultExtension: string };
+        assert.equal(plain.type, "text/plain");
+        assert.equal(plain.defaultExtension, ".txt");
+        assert.ok(plain.extensions.includes(".text"));
+
+        const custom = (await (await ask("/mime-types/application/x-acme-report")).json()) as Record<string, unknown>;
+        assert.equal(custom.supertype, "application/xml");
+        assert.equal(custom.description, "Acme report");
+        assert.deepEqual(custom.extensions, [".acme"]);
+
+        const all = (await (await ask("/mime-types")).json()) as Record<string, unknown>;
+        assert.ok(Object.keys(all).length > 1000, "the whole registry");
+      } finally {
+        assert.equal(await stop(running), 0);
+      }
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
