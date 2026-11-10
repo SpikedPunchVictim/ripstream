@@ -2,6 +2,7 @@ import { parseComponentSection, type ComponentEntry, type ComponentSection } fro
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 import type { ParseLimits } from "./parse-context.ts";
+import type { DigestSettings } from "./digest.ts";
 import { parseParseContextSection } from "./parse-context-config.ts";
 import { parsePipesSections, PIPES_SECTION_KEYS, type PipesSettings } from "./pipes-config.ts";
 import { parseServerSection, type ServerSettings } from "./server-config.ts";
@@ -18,6 +19,8 @@ export interface RipstreamConfigShape {
   readonly limits?: Readonly<Partial<ParseLimits>>;
   /** `parse-context` `output-limits.throwOnWriteLimit` is true. */
   readonly throwOnWriteLimit?: boolean;
+  /** The `parse-context` digester factory: the digests every document gets. */
+  readonly digest?: DigestSettings;
   /** The path the `custom-mimetypes` key names. */
   readonly customMimeTypes?: string;
   /** The `server` section, already read by `loadConfig`. */
@@ -111,6 +114,12 @@ export class RipstreamConfig {
    */
   readonly throwOnWriteLimit: boolean;
   /**
+   * The digests the `parse-context` digester factory (`commons-digester-factory`, `bouncy-castle-digester-factory`)
+   * asks for, or null when it names none. `createRipstream({ config })` applies them: every document, the container and
+   * what is embedded in it, gets `tk:digest:*` keys.
+   */
+  readonly digest: DigestSettings | null;
+  /**
    * The path of a `custom-mimetypes.xml' (Tika's file, whose property is `tika.custom-mimetypes`), or null when the
    * configuration names none. `createRipstream({ config })` reads it, relative to the working directory, and adds its
    * media types to the registry that names, magic and aliases are resolved with.
@@ -138,6 +147,7 @@ export class RipstreamConfig {
     this.detectors = freezeEntries(shape.detectors);
     this.limits = shape.limits === undefined || Object.keys(shape.limits).length === 0 ? null : Object.freeze({ ...shape.limits });
     this.throwOnWriteLimit = shape.throwOnWriteLimit ?? false;
+    this.digest = shape.digest === undefined ? null : Object.freeze({ digests: Object.freeze([...shape.digest.digests]), skipContainerDocumentDigest: shape.digest.skipContainerDocumentDigest });
     this.customMimeTypes = shape.customMimeTypes ?? null;
     this.server = shape.server === undefined || Object.keys(shape.server).length === 0 ? null : Object.freeze({ ...shape.server });
     this.pipes = shape.pipes === undefined ? null : shape.pipes;
@@ -182,7 +192,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers, detectors, limits, throwOnWriteLimit, customMimeTypes, server, pipes, notices } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers, detectors, limits, throwOnWriteLimit, digest, customMimeTypes, server, pipes, notices } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -194,6 +204,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(detectors === undefined ? {} : { detectors }),
     ...(limits === undefined ? {} : { limits }),
     ...(throwOnWriteLimit === true ? { throwOnWriteLimit } : {}),
+    ...(digest === undefined ? {} : { digest }),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
     ...(pipes === undefined ? {} : { pipes }),
@@ -212,6 +223,7 @@ interface InspectedConfig {
   readonly detectors?: readonly ComponentEntry[];
   readonly limits?: Partial<ParseLimits>;
   readonly throwOnWriteLimit?: boolean;
+  readonly digest?: DigestSettings;
   readonly customMimeTypes?: string;
   readonly server?: ServerSettings;
   readonly pipes?: PipesSettings;
@@ -263,6 +275,7 @@ function inspectConfig(value: unknown): InspectedConfig {
   let limits: Partial<ParseLimits> | undefined;
   let throwOnWriteLimit = false;
   let unpack: UnpackSettings | undefined;
+  let digest: DigestSettings | undefined;
   if (record["parse-context"] !== undefined) {
     const result = parseParseContextSection(record["parse-context"]);
     issues.push(...result.issues);
@@ -270,6 +283,7 @@ function inspectConfig(value: unknown): InspectedConfig {
       limits = result.limits;
       throwOnWriteLimit = result.throwOnWriteLimit;
       unpack = result.unpack;
+      digest = result.digest;
     }
   }
   let customMimeTypes: string | undefined;
@@ -295,7 +309,8 @@ function inspectConfig(value: unknown): InspectedConfig {
   issues.push(...pipesResult.issues);
   if (pipesResult.issues.length === 0 && pipesResult.settings !== undefined) {
     // UNPACK mode's settings live in the parse-context section but only pipes uses them.
-    pipes = unpack === undefined ? pipesResult.settings : { ...pipesResult.settings, unpack };
+    // The digester factory is the same: it is a parse-context setting, and NO_PARSE is where pipes needs it.
+    pipes = { ...pipesResult.settings, ...(unpack === undefined ? {} : { unpack }), ...(digest === undefined ? {} : { digest }) };
     notices.push(...pipes.notices);
   } else if (unpack !== undefined && pipesResult.issues.length === 0) {
     notices.push('"parse-context" unpack-config says what pipes\' UNPACK mode emits; the configuration has no pipes sections, so it changes nothing');
@@ -308,6 +323,7 @@ function inspectConfig(value: unknown): InspectedConfig {
     ...(sections.detectors === undefined ? {} : { detectors: sections.detectors }),
     ...(limits === undefined ? {} : { limits }),
     ...(throwOnWriteLimit ? { throwOnWriteLimit } : {}),
+    ...(digest === undefined ? {} : { digest }),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
     ...(pipes === undefined ? {} : { pipes }),

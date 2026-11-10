@@ -254,6 +254,7 @@ export {
   RecursiveParserWrapper,
   type ParseRecord,
 } from "./recursive.ts";
+export { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, digestBytes, digestKey, type DigestAlgorithm, type DigestDef, type DigestEncoding, type DigestSettings } from "./digest.ts";
 export { CONTENT_LENGTH, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
 export {
   markParseTiming,

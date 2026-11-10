@@ -7,6 +7,7 @@ import {
   type S3FetcherSettings,
   type S3IteratorSettings,
 } from "./pipes-s3-config.ts";
+import type { DigestSettings } from "./digest.ts";
 import type { UnpackSettings } from "./unpack-config.ts";
 
 /*
@@ -107,6 +108,11 @@ export interface PipesSettings {
   readonly maxQueue?: number;
   /** The `unpack-config` of the `parse-context` section: what UNPACK mode emits. Set by `loadConfig`, not by the pipes sections. */
   readonly unpack?: UnpackSettings;
+  /**
+   * The digester factory of the `parse-context` section: what NO_PARSE (digest and detect, no parse) writes for an input.
+   * Every parse digests by it in the parser. Set by `loadConfig`, not by the pipes sections.
+   */
+  readonly digest?: DigestSettings;
   /** Settings that were accepted and change nothing here, each with why: for the operator, not an error. */
   readonly notices: readonly string[];
 }

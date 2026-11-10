@@ -1,4 +1,5 @@
 import { AbortError, ParseTimeoutError } from "./errors.ts";
+import type { DigestSettings } from "./digest.ts";
 import { outputLimitIssue } from "./handlers/limits.ts";
 
 /**
@@ -249,6 +250,8 @@ export const CONTEXT_KEYS = {
   EMBEDDED_COUNT: new ParseContextKey<number>("embedded-count"),
   /** The `tk:embedded-id-path` of the document being parsed ("" for the container). */
   EMBEDDED_ID_PATH: new ParseContextKey<string>("embedded-id-path"),
+  /** The digests to make (Tika's DigesterFactory in the ParseContext); AutoDetectParser reads it. Absent: none. */
+  DIGESTS: new ParseContextKey<DigestSettings>("digests"),
   /** Mutable budget shared by a context and all of its descendants. */
   EMBEDDED_BUDGET: new ParseContextKey<{ count: number; bytes: number }>(
     "embedded-budget",

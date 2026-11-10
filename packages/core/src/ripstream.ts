@@ -1,4 +1,5 @@
 import type { ContentHandler } from "./content-handler.ts";
+import type { DigestSettings } from "./digest.ts";
 import { Metadata } from "./metadata.ts";
 import {
   DEFAULT_LIMITS,
@@ -28,6 +29,12 @@ export interface RipstreamOptions {
    * defaults. `createRipstream` fills it from the `parse-context` section of a loaded configuration.
    */
   readonly limits?: Partial<ParseLimits>;
+  /**
+   * The digests every parse makes (Tika's digester factory): each document, the container and what is embedded in it,
+   * gets `tk:digest:*` keys, by the `AutoDetectParser` that parses it. `createRipstream` fills it from the
+   * `parse-context` section of a loaded configuration.
+   */
+  readonly digest?: DigestSettings;
 }
 
 export interface ParseOptions {
@@ -81,9 +88,11 @@ export class Ripstream {
   private readonly parser: Parser;
   private readonly eventSink: EventSink | undefined;
   private readonly limits: Partial<ParseLimits> | undefined;
+  private readonly digest: DigestSettings | undefined;
 
   constructor(options: RipstreamOptions) {
     assertValidLimits(options.limits);
+    this.digest = options.digest;
     this.detector = options.detector;
     this.parser = options.parser;
     this.eventSink = options.eventSink;
@@ -352,6 +361,7 @@ export class Ripstream {
     });
     const metadata = metadataFor(options.filename);
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
+    if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
     const stream = await RipstreamInputStream.from(source, {
       context: ctx,
       signal,

@@ -6,11 +6,13 @@
  */
 
 import type { ComponentEntry } from "./component-config.ts";
+import type { DigestSettings } from "./digest.ts";
 import type { HandlerType } from "./handler-type.ts";
 
 /**
  * What a configuration sets that the isolation child must apply too (plain data, so it crosses a process boundary as
- * JSON): the `parsers` and `detectors` sections as `loadConfig` read them, and the text of the custom-mimetypes file.
+ * JSON): the `parsers` and `detectors` sections as `loadConfig` read them, the digests of the `parse-context` digester
+ * factory, and the text of the custom-mimetypes file.
  * The child builds its parsers and detectors from them, and applies the same names the parent applied to its own
  * routing detector and in-process parsers. The file's text crosses, not its path: the child reads exactly what the
  * parent checked, whatever happens to the file meanwhile.
@@ -18,6 +20,8 @@ import type { HandlerType } from "./handler-type.ts";
 export interface IsolatedComponents {
   readonly parsers?: readonly ComponentEntry[];
   readonly detectors?: readonly ComponentEntry[];
+  /** The child digests every document it parses (the container, and what is embedded in it) as the parent's configuration says. */
+  readonly digest?: DigestSettings;
   readonly customMimeTypes?: string;
 }
 

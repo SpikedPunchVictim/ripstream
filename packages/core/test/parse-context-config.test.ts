@@ -122,7 +122,7 @@ test("an unknown setting, an unknown block and a wrong shape are refused", () =>
   assert.match(issuesOf({ "embedded-limits": { throwOnWriteLimit: true } }).join(";"), /embedded-limits: unknown setting "throwOnWriteLimit"/);
   assert.match(
     issuesOf({ "digester-factory": {} }).join(";"),
-    /parse-context: "digester-factory" is not supported: ripstream reads only embedded-limits, output-limits, timeout-limits and unpack-config/,
+    /parse-context: "digester-factory" is not supported: ripstream reads only embedded-limits, output-limits, timeout-limits, unpack-config, commons-digester-factory and bouncy-castle-digester-factory/,
   );
   for (const section of ["limits", [], null, 3]) {
     assert.match(issuesOf(section).join(";"), /parse-context must be an object/, JSON.stringify(section));

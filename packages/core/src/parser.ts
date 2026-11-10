@@ -6,6 +6,7 @@ import {
   UnsupportedFormatError,
   ZeroByteFileError,
 } from "./errors.ts";
+import { maybeDigest } from "./digest.ts";
 import { MediaType } from "./media-type.ts";
 import type { MediaTypeRegistry } from "./media-type-registry.ts";
 import { Metadata } from "./metadata.ts";
@@ -267,6 +268,8 @@ export class AutoDetectParser implements Parser {
     metadata: Metadata,
     ctx: ParseContext,
   ): Promise<void> {
+    // Before the type is detected, as Tika does it (DigestHelper.maybeDigest): the container and every embedded document.
+    await maybeDigest(stream, metadata, ctx);
     const type = await this.detector.detect(stream, metadata, ctx);
     metadata.set(TIKA_KEYS.CONTENT_TYPE_MAGIC_DETECTED, type.toString());
     metadata.set(TIKA_KEYS.CONTENT_TYPE_PARSER_OVERRIDE, type.toString());

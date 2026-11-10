@@ -3,6 +3,7 @@ import {
   CompositeParser,
   Ripstream,
   RipstreamConfigError,
+  type DigestSettings,
   type MediaTypeRegistry,
   type Parser,
   type ParseLimits,
@@ -192,6 +193,8 @@ export interface CreateRipstreamOptions extends DefaultParserOptions {
    * in its own `limits` wins over both.
    */
   readonly limits?: Partial<ParseLimits>;
+  /** The digests every parse makes. It is used instead of the `config`'s digester factory, for a ripstream built beside a `detector`. */
+  readonly digest?: DigestSettings;
 }
 
 /** Wires the default detector and parser registry into the Ripstream facade. */
@@ -219,5 +222,11 @@ export function createRipstream(options: CreateRipstreamOptions = {}): Ripstream
   // The configuration's limits are the base, and what the caller passes beside it is laid over them.
   const limits: Record<string, number | undefined> = { ...options.config?.limits };
   for (const [name, value] of Object.entries(options.limits ?? {})) if (value !== undefined) limits[name] = value as number;
-  return new Ripstream({ detector, parser, ...(Object.keys(limits).length === 0 ? {} : { limits: limits as Partial<ParseLimits> }) });
+  const digest = options.digest ?? options.config?.digest ?? undefined;
+  return new Ripstream({
+    detector,
+    parser,
+    ...(Object.keys(limits).length === 0 ? {} : { limits: limits as Partial<ParseLimits> }),
+    ...(digest === undefined ? {} : { digest }),
+  });
 }

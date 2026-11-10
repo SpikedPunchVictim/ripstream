@@ -1,3 +1,5 @@
+import type { DigestSettings } from "./digest.ts";
+import { DIGESTER_FACTORIES, parseDigesterFactory, type DigesterFactoryName } from "./digest-config.ts";
 import type { ParseLimits } from "./parse-context.ts";
 import { parseUnpackConfig, type UnpackSettings } from "./unpack-config.ts";
 
@@ -19,6 +21,8 @@ import { parseUnpackConfig, type UnpackSettings } from "./unpack-config.ts";
  * name, with the reason.
  *
  * `unpack-config` is not a limit: it says what pipes' UNPACK mode emits (unpack-config.ts) and is passed on as `unpack`.
+ * `commons-digester-factory` and `bouncy-castle-digester-factory` say which digests every document gets (digest-config.ts)
+ * and are passed on as `digest`.
  */
 
 type Block = "embedded-limits" | "output-limits" | "timeout-limits";
@@ -88,15 +92,31 @@ export function parseParseContextSection(value: unknown): {
   throwOnWriteLimit: boolean;
   /** The `unpack-config` component, when the section has one. */
   unpack?: UnpackSettings;
+  /** The digester factory the section names, when it names one. */
+  digest?: DigestSettings;
   issues: string[];
 } {
   const issues: string[] = [];
   const limits: { -readonly [Key in keyof ParseLimits]?: number } = {};
   let throwOnWriteLimit = false;
   let unpack: UnpackSettings | undefined;
+  let digest: DigestSettings | undefined;
+  let factory: DigesterFactoryName | undefined;
   if (!isObject(value)) return { limits, throwOnWriteLimit, issues: ["parse-context must be an object"] };
 
   for (const [name, raw] of Object.entries(value)) {
+    if ((DIGESTER_FACTORIES as readonly string[]).includes(name)) {
+      // A parse has one digester factory (Tika's ParseContext holds it under one key): two would leave Tika to pick.
+      if (factory !== undefined) {
+        issues.push(`parse-context: ${name} and ${factory} both set the digester factory, and a parse has one: keep one`);
+        continue;
+      }
+      factory = name as DigesterFactoryName;
+      const result = parseDigesterFactory(factory, raw);
+      issues.push(...result.issues);
+      if (result.settings !== undefined) digest = result.settings;
+      continue;
+    }
     if (name === "unpack-config") {
       const result = parseUnpackConfig(raw);
       issues.push(...result.issues);
@@ -105,7 +125,7 @@ export function parseParseContextSection(value: unknown): {
     }
     if (!(BLOCKS as readonly string[]).includes(name)) {
       issues.push(
-        `parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${[...BLOCKS, "unpack-config"].join(", ").replace(/, ([^,]*)$/, " and $1")}`,
+        `parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${[...BLOCKS, "unpack-config", ...DIGESTER_FACTORIES].join(", ").replace(/, ([^,]*)$/, " and $1")}`,
       );
       continue;
     }
@@ -151,5 +171,5 @@ export function parseParseContextSection(value: unknown): {
       limits[rule.limit] = number;
     }
   }
-  return { limits, throwOnWriteLimit, ...(unpack === undefined ? {} : { unpack }), issues };
+  return { limits, throwOnWriteLimit, ...(unpack === undefined ? {} : { unpack }), ...(digest === undefined ? {} : { digest }), issues };
 }
