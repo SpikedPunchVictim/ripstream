@@ -1,24 +1,55 @@
+import { once } from "node:events";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { gunzip, gzip } from "node:zlib";
 import {
+  Metadata,
   SERVER_ENDPOINTS,
+  TIKA_KEYS,
   assertValidLimits,
+  handlerTypeName,
   httpStatusForError,
+  metadataJson,
+  parseHandlerType,
   serializeRmeta,
   IsolationError,
   RipstreamError,
-  type Metadata,
+  type HandlerType,
   type ServerEndpoint,
 } from "@spikedpunch/ripstream-core";
-import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
+import { FrancLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
 import {
   PipesClient,
   PipesPathError,
+  buildUnpackPackage,
+  isFailure,
   resolveWithinRoot,
   validatePipesConfig,
+  zipChunks,
   type PipesConfig,
+  type PipesResult,
+  type UnpackPackage,
 } from "@spikedpunch/ripstream-pipes";
 import { randomUUID } from "node:crypto";
-import type { ParseOptions, Ripstream, Translator } from "@spikedpunch/ripstream-core";
+import type { ParseOptions, PipesSettings, Ripstream, Translator } from "@spikedpunch/ripstream-core";
+import {
+  MIME_DETAIL_OFFERS,
+  MIME_LIST_OFFERS,
+  escapeHtml,
+  findMimeType,
+  mimeTypeDetailHtml,
+  mimeTypeDetailJson,
+  mimeTypesHtml,
+  mimeTypesJson,
+  mimeTypesText,
+  sortMimeTypes,
+  type ServerMimeType,
+} from "./mime-types.ts";
+import { HttpError } from "./http-error.ts";
+import { TikaPipes, type TikaPipesAnswer } from "./tika-pipes.ts";
+import { extensionFor } from "./unpack.ts";
+
+export type { ServerMimeType } from "./mime-types.ts";
+export { extensionFor } from "./unpack.ts";
 
 /** What the server calls to detect and parse. A core Ripstream satisfies it, and so does an isolated one. */
 export type ServerRipstream = Pick<Ripstream, "detect" | "parse" | "parseRecursive">;
@@ -40,7 +71,7 @@ export interface ServerIsolationStatus {
    * The output cap the isolation was built for. When present and below `maxLimits.maxOutputChars`, the server warns:
    * a request at the ceiling needs more memory than the pool was sized to reserve. A NodeIsolatorStatus carries it.
    */
-  readonly limits?: { readonly maxOutputChars: number } | null;
+  readonly limits?: { readonly maxOutputChars: number; readonly unpackCeiling?: number } | null;
 }
 
 export interface ServerIsolation {
@@ -85,15 +116,31 @@ export interface RipstreamServerOptions {
    * ceilings. A request's own limit wins over a default, and a ceiling over both. Must not exceed its ceiling.
    */
   readonly defaultLimits?: { readonly maxOutputChars?: number; readonly maxEmbeddedResources?: number };
+  /**
+   * What /tika, /meta, /rmeta and /unpack do when the text reaches `maxOutputChars`. "truncate" (default): as Tika's
+   * server does with its write limit, answer 200 with the text up to it and flag the metadata
+   * (`tk:exception:write-limit-reached`). "throw": fail the request with a 422, as Tika does with `throwOnWriteLimit`.
+   * /async and /pipes always fail.
+   */
+  readonly onOutputLimit?: "truncate" | "throw";
   readonly maxBodyBytes?: number;
+  /**
+   * The most bytes of embedded documents one `/unpack` answer carries, summed over the whole document. A document that
+   * would take the total past it is left out of the package (its record in `rmeta.json` is still there); Tika does the
+   * same with its `maxUnpackBytes`, which is 10 GiB. Default 100 MiB, and with an active `isolation` no more than it
+   * allows (`limits.unpackCeiling` of its status: 256 MiB, or a quarter of a child's memory if that is less); naming
+   * more than that is refused when the server is built. At most 2 GiB.
+   */
+  readonly maxUnpackBytes?: number;
   /**
    * Requests parsed at once. Default 100; with an active `isolation`, what its memory pool can run plus what the
    * pool will queue (`max(1, floor(poolMb / defaultReservationMb.text)) + pool.maxQueue`).
    */
   readonly maxConcurrent?: number;
   /**
-   * Requests held waiting for a slot before the body is read. Default 100; 0 with an active `isolation`, whose
-   * memory pool queues the excess itself.
+   * Requests held waiting for a slot, their body unread, until `requestTimeoutMs` (then 408). Default 100, with or
+   * without `isolation`: a burst is queued, as Tika's server does, and only what the queue cannot hold is refused
+   * with 503. 0 refuses at once whatever the slots cannot run.
    */
   readonly maxQueue?: number;
   readonly requestTimeoutMs?: number;
@@ -114,13 +161,36 @@ export interface RipstreamServerOptions {
    * name paths relative to these roots; absolute paths, `..` and symlinks are rejected.
    */
   readonly pipes?: RipstreamServerPipesOptions;
+  /**
+   * The media types `/mime-types` describes. The server has no registry of its own, so it answers 404 until it is
+   * given one (`ripstream serve` passes the standard bundle's).
+   */
+  readonly mimeTypes?: readonly ServerMimeType[];
   /** With an active `isolation`, a preset's `limits` may only name `maxOutputChars` and `maxEmbeddedResources`. */
   readonly presets?: Readonly<Record<string, { readonly handler?: string; readonly limits?: Record<string, number> }>>;
 }
 
 export interface RipstreamServerPipesOptions {
-  /** Directory that client `source.path` values are resolved against. */
-  readonly sourceRoot: string;
+  /**
+   * Directory that client `source.path` values are resolved against. Without it the batch job body of /pipes
+   * (`{source, sink, ...}`) is refused, and only Tika's tuples (`settings`) are taken.
+   */
+  readonly sourceRoot?: string;
+  /**
+   * Tika's pipes sections (`loadConfig(...).pipes`). With them, POST /pipes takes one Tika FetchEmitTuple and answers
+   * `{status, message?}` with Tika's HTTP status (200, 400, 413, 429, 500, 503 and a Retry-After), and POST /async takes
+   * `{"tuples": [...]}` for a background run that keeps going between requests. Tuples name the settings' fetchers and
+   * emitters; they cannot name paths, `parseContext` or the components the server keeps for itself (`__` ids).
+   * `/pipes` does not run the settings' reporters (its answer is the report); `/async` does. Both parse under the
+   * server's ceilings and isolation. `close()` waits for the tuples `/async` already took. A body that has no `source`
+   * is a tuple; one that has is the batch job, so the two shapes do not clash.
+   */
+  readonly settings?: PipesSettings;
+  /**
+   * How long an /async request waits for room in the queue before it is answered 429. Default 5 000. Tika's is 60 000,
+   * which is as long as this server's own request timeout, so a queue that stays full would hold every request to it.
+   */
+  readonly asyncMaxWaitMs?: number;
   /** Directory that client `sink.path` values are resolved against; sinks are refused when omitted. */
   readonly sinkRoot?: string;
   /** Allow `source.type: "http"` (SSRF-guarded). Default false. */
@@ -138,24 +208,204 @@ interface Job {
   updatedAt: number;
 }
 
-class HttpError extends Error {
-  readonly status: number;
-  readonly headers: Readonly<Record<string, string>>;
-  constructor(status: number, message: string, headers: Readonly<Record<string, string>> = {}) {
-    super(message);
-    this.status = status;
-    this.headers = headers;
-    this.name = "HttpError";
-  }
-}
-
 /** Seconds a client should wait before retrying a request refused because the server is full. */
+/** The characters of a body `/language` looks at: Tika's `MAX_DETECT_CHARS`. */
+const LANGUAGE_SAMPLE_CHARS = 100_000;
 const RETRY_AFTER_FULL = "1";
 /** Seconds a client should wait before retrying when isolation itself is unavailable. */
 const RETRY_AFTER_UNAVAILABLE = "5";
 
-/** The handlers `?handler=` and a preset's `handler` can name. */
-const HANDLERS: readonly string[] = ["meta", "json"];
+/**
+ * The handlers `?handler=` and a preset's `handler` can name: the two answers that are not a content format (`meta`, the
+ * metadata alone; `json`, the text and the metadata), and the content formats, by Tika's spellings.
+ */
+const HANDLERS: readonly string[] = ["meta", "json", "text", "txt", "html", "xml", "body", "markdown", "md", "ignore"];
+
+/** The most failed inputs `/pipes` lists in its answer; the rest are counted in `failuresOmitted`. */
+const MAX_PIPES_FAILURES_LISTED = 1000;
+
+/** What `maxUnpackBytes` is when nothing says otherwise. */
+const DEFAULT_MAX_UNPACK_BYTES = 100 * 1024 * 1024;
+/** The most `maxUnpackBytes` may name: the whole package has to fit one zip (4 GiB), with its compressed forms and manifests. */
+const MAX_UNPACK_BYTES_OPTION = 2 * 1024 * 1024 * 1024;
+
+/**
+ * The bytes of embedded documents a request may collect: the option, else the default held under what the isolation
+ * allows. An option above what the isolation allows would fail every unpack, so it is refused here. Throws, naming it.
+ */
+function resolveUnpackBytes(requested: number | undefined, isolationCeiling: number | undefined): number {
+  if (requested !== undefined) {
+    if (!Number.isSafeInteger(requested) || requested < 0 || requested > MAX_UNPACK_BYTES_OPTION) {
+      throw new RangeError(`createRipstreamServer: maxUnpackBytes must be an integer from 0 to ${MAX_UNPACK_BYTES_OPTION}, got ${String(requested)}`);
+    }
+    if (isolationCeiling !== undefined && requested > isolationCeiling) {
+      throw new RangeError(
+        `createRipstreamServer: maxUnpackBytes ${requested} is more than the isolation allows (${isolationCeiling}: the smaller ` +
+          "of 256 MiB and a quarter of a child's memory). Lower it, or give the isolation children more memory (perChildMb)",
+      );
+    }
+    return requested;
+  }
+  return isolationCeiling === undefined ? DEFAULT_MAX_UNPACK_BYTES : Math.min(DEFAULT_MAX_UNPACK_BYTES, isolationCeiling);
+}
+
+/** What GET / and GET /tika say; this server is not Tika, so it does not claim to be. */
+const GREETING = "This is Ripstream Server (ripstream 0.0.0). Please PUT\n";
+
+/** The routes each endpoint serves, for the welcome page. */
+const ENDPOINT_ROUTES: Readonly<Record<ServerEndpoint, readonly string[]>> = {
+  tika: ["PUT /tika", "PUT /tika/{text,html,xml,md}", "PUT /tika/json[/{handler}]"],
+  rmeta: ["PUT /rmeta[/{handler}]", "POST /rmeta/form[/{handler}]"],
+  meta: ["PUT /meta", "PUT /meta/{field}", "POST /meta/form"],
+  unpack: ["PUT /unpack", "PUT /unpack/all[/{handler}]", "POST /unpack[/all[/{handler}]] (multipart)"],
+  detect: ["PUT /detect"],
+  language: ["PUT /language"],
+  "mime-types": ["GET /mime-types", "GET /mime-types/{type}/{subtype}"],
+  version: ["GET /version"],
+  status: ["GET /status"],
+  async: ["POST /async", "GET /status/{id}"],
+};
+
+function servedRoutes(enabled: ReadonlySet<string>): string[] {
+  return SERVER_ENDPOINTS.filter((endpoint) => enabled.has(endpoint)).flatMap((endpoint) => ENDPOINT_ROUTES[endpoint]);
+}
+
+function welcomeText(enabled: ReadonlySet<string>): string {
+  return `Ripstream 0.0.0\n\n${servedRoutes(enabled).join("\n")}\n`;
+}
+
+function welcomeHtml(enabled: ReadonlySet<string>): string {
+  const items = servedRoutes(enabled).map((route) => `<li><code>${escapeHtml(route)}</code></li>`).join("\n");
+  return `<!DOCTYPE html>\n<html><head><title>Ripstream</title></head><body>\n<h1>Ripstream 0.0.0</h1>\n<ul>\n${items}\n</ul>\n</body></html>\n`;
+}
+
+/** What `/tika/{format}` answers with, and the handler type it fixes. `/tika/text` is Tika's body-only text. */
+const TIKA_FORMATS: Readonly<Record<string, HandlerType>> = { text: "body", html: "html", xml: "xml", md: "markdown" };
+
+/** The Content-Type of a content format's answer. */
+function contentTypeOf(type: HandlerType): string {
+  return type === "html" ? "text/html; charset=utf-8" : type === "xml" ? "text/xml; charset=utf-8" : "text/plain; charset=utf-8";
+}
+
+/**
+ * The request target as Tika's server reads it: a trailing slash is ignored; a path that starts with `//` is a 400 and
+ * one with a `.` or `..` segment a 404, where `new URL` alone would take `//tika/text` for a host and fold the dots.
+ */
+function parseTarget(rawUrl: string | undefined): URL {
+  const raw = rawUrl ?? "/";
+  if (raw.startsWith("//")) throw new HttpError(400, "Bad Request");
+  if (/(^|\/)(\.|%2e){1,2}(\/|$)/i.test(raw.split("?")[0] ?? "")) throw new HttpError(404, "Not found");
+  let url: URL;
+  try {
+    url = new URL(raw, "http://localhost");
+  } catch {
+    throw new HttpError(400, "Bad Request");
+  }
+  if (url.pathname.length > 1 && url.pathname.endsWith("/")) url.pathname = url.pathname.replace(/\/+$/, "");
+  return url;
+}
+
+/** What a request path asks for. */
+interface Target {
+  readonly endpoint: "/detect" | "/tika" | "/meta" | "/rmeta" | "/unpack";
+  /** The handler the path names, as written: `/rmeta/{handler}`, `/tika/json/{handler}`, `/rmeta/form/{handler}`. */
+  readonly handler: string | null;
+  /** `/tika/json[/{handler}]`: the metadata and the content as one JSON object. */
+  readonly json: boolean;
+  /** `/tika/{text,html,xml,md}`: the handler type the route fixes. */
+  readonly fixedType: HandlerType | null;
+  /** `/meta/{field}`: the one metadata field answered. */
+  readonly field: string | null;
+  /** `/meta/form`, `/rmeta/form`: the document arrives as a multipart form. */
+  readonly form: boolean;
+  /** `/unpack/all`: the document itself is in the package too, as `unpacked/0`. */
+  readonly all: boolean;
+}
+
+/**
+ * The route of a path, as Tika lays them out; null for a path that is none. A trailing slash is ignored, as Tika's
+ * JAX-RS router does. `form` is a literal, so it wins over `{handler}` and `{field}`.
+ */
+function resolveTarget(pathname: string): Target | null {
+  const trimmed = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  let segments: string[];
+  try {
+    segments = trimmed.split("/").slice(1).map(decodeURIComponent);
+  } catch {
+    return null; // a malformed escape names no route
+  }
+  const [root, first, second, ...rest] = segments;
+  if (rest.length > 0 || root === undefined) return null;
+  const target = (endpoint: Target["endpoint"], extra: Partial<Target> = {}): Target => ({
+    endpoint,
+    handler: null,
+    json: false,
+    fixedType: null,
+    field: null,
+    form: false,
+    all: false,
+    ...extra,
+  });
+  switch (root) {
+    case "detect":
+      return first === undefined ? target("/detect") : null;
+    case "unpack":
+      if (first === undefined) return target("/unpack");
+      // `all` is a literal, and there is no `/unpack/{handler}`: the handler comes after it.
+      return first === "all" ? target("/unpack", { all: true, handler: second ?? null }) : null;
+    case "tika":
+      if (first === undefined) return target("/tika");
+      if (first === "json") return target("/tika", { json: true, handler: second ?? null });
+      if (second === undefined && Object.hasOwn(TIKA_FORMATS, first)) return target("/tika", { fixedType: TIKA_FORMATS[first]! });
+      return null;
+    case "rmeta":
+      if (first === undefined) return target("/rmeta");
+      if (first === "form") return target("/rmeta", { form: true, handler: second ?? null });
+      return second === undefined ? target("/rmeta", { handler: first }) : null;
+    case "meta":
+      if (first === undefined) return target("/meta");
+      if (second !== undefined) return null;
+      return first === "form" ? target("/meta", { form: true }) : target("/meta", { field: first });
+    default:
+      return null;
+  }
+}
+
+/**
+ * The offer the Accept header prefers (highest q first, the more specific range first), or null when it accepts none.
+ * No header, or an empty one, takes the first offer, which is the route's default.
+ */
+function negotiate(accept: string | undefined, offers: readonly string[]): string | null {
+  if (accept === undefined || accept.trim() === "") return offers[0] ?? null;
+  const ranges = accept
+    .split(",")
+    .map((part, order) => {
+      const [range = "", ...params] = part.split(";").map((piece) => piece.trim().toLowerCase());
+      const q = params.map((param) => /^q=([0-9.]+)$/.exec(param)?.[1]).find((value) => value !== undefined);
+      const weight = q === undefined || Number.isNaN(Number(q)) ? 1 : Number(q);
+      const specificity = range === "*/*" ? 0 : range.endsWith("/*") ? 1 : 2;
+      return { range, weight, specificity, order };
+    })
+    .filter((entry) => entry.range !== "")
+    .sort((a, b) => b.weight - a.weight || b.specificity - a.specificity || a.order - b.order);
+  for (const entry of ranges) {
+    if (entry.weight <= 0) continue;
+    const match = offers.find((offer) =>
+      entry.range === "*/*" || entry.range === offer || (entry.range.endsWith("/*") && offer.startsWith(entry.range.slice(0, -1))),
+    );
+    if (match !== undefined) return match;
+  }
+  return null;
+}
+
+/** Metadata as Tika's CSV writer does (`CSVFormat.EXCEL`): a row per key, the key then its values, CRLF-ended. */
+function metadataCsv(metadata: Metadata): string {
+  const field = (value: string): string => (/[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
+  return metadata
+    .names()
+    .map((name) => `${[name, ...metadata.getAll(name)].map(field).join(",")}\r\n`)
+    .join("");
+}
 
 const LIMIT_PARAMS = ["maxOutputChars", "maxEmbeddedResources"] as const;
 /**
@@ -170,6 +420,7 @@ const QUERY_PARAMS: Readonly<Record<string, readonly string[]>> = {
   "/unpack": ["filename", "preset", ...LIMIT_PARAMS],
   "/async": ["filename"],
   "/language": [],
+  "/mime-types": [],
   "/translate": ["target"],
   "/pipes": [],
 };
@@ -180,11 +431,13 @@ function rejectUnreadRequestInput(request: IncomingMessage, url: URL): void {
     // would parse the document under settings the client did not ask for.
     if (name.startsWith("x-tika-")) throw new HttpError(400, `Header ${name} is not supported`);
   }
-  const allowed = Object.hasOwn(QUERY_PARAMS, url.pathname) ? QUERY_PARAMS[url.pathname] : undefined;
+  // /tika/json and /rmeta/text read what /tika and /rmeta do: the parameters are the endpoint's, not the path's.
+  const root = `/${url.pathname.split("/")[1] ?? ""}`;
+  const allowed = Object.hasOwn(QUERY_PARAMS, root) ? QUERY_PARAMS[root] : undefined;
   if (allowed === undefined) return;
   for (const name of new Set(url.searchParams.keys())) {
     if (!allowed.includes(name)) {
-      throw new HttpError(400, `Unknown query parameter "${name}"; ${url.pathname} reads: ${allowed.join(", ") || "none"}`);
+      throw new HttpError(400, `Unknown query parameter "${name}"; ${root} reads: ${allowed.join(", ") || "none"}`);
     }
     if (url.searchParams.getAll(name).length > 1) {
       throw new HttpError(400, `Query parameter "${name}" was given more than once`);
@@ -195,7 +448,7 @@ function rejectUnreadRequestInput(request: IncomingMessage, url: URL): void {
 /** A preset the server could not apply is a construction error, not a surprise on the first request that names it. */
 function requireValidPresets(presets: RipstreamServerOptions["presets"]): void {
   for (const [name, preset] of Object.entries(presets ?? {})) {
-    if (preset.handler !== undefined && !HANDLERS.includes(preset.handler)) {
+    if (preset.handler !== undefined && !HANDLERS.includes(preset.handler.toLowerCase())) {
       throw new Error(
         `createRipstreamServer: preset "${name}" has handler ${JSON.stringify(preset.handler)}; handlers are: ${HANDLERS.join(", ")}`,
       );
@@ -245,6 +498,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   if (options.pipes !== undefined && options.authenticate === undefined) {
     throw new Error("createRipstreamServer: the `pipes` option requires `authenticate`");
   }
+  if (options.pipes !== undefined && options.pipes.sourceRoot === undefined && options.pipes.settings === undefined) {
+    throw new Error("createRipstreamServer: `pipes` needs `sourceRoot` (the batch job) or `settings` (Tika's tuples), or it takes nothing");
+  }
   requireValidGateOptions(options);
   requireValidServerOptions(options);
   requireValidPresets(options.presets);
@@ -258,10 +514,22 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const derivedGate = startupStatus === undefined ? undefined : deriveGate(startupStatus);
   // /async and /pipes take no limit parameters: they parse under the server's ceilings, like a request without any.
   const ceilinged = withCeilings(ripstream, options.maxLimits, options.defaultLimits);
+  const tikaPipes =
+    options.pipes?.settings === undefined
+      ? undefined
+      : new TikaPipes({
+          settings: options.pipes.settings,
+          ripstream: ceilinged,
+          // Pipes' UNPACK with `suffixStrategy: DETECTED` names files as /unpack does: by the server's media type registry.
+          extensionOf: (contentType) => extensionFor(contentType, options.mimeTypes),
+          ...(options.pipes.asyncMaxWaitMs === undefined ? {} : { asyncMaxWaitMs: options.pipes.asyncMaxWaitMs }),
+        });
   const enabled: ReadonlySet<string> = new Set(options.endpoints ?? SERVER_ENDPOINTS);
+  const sortedMimeTypes = sortMimeTypes(options.mimeTypes ?? []);
   const maxBodyBytes = options.maxBodyBytes ?? 100 * 1024 * 1024;
+  const maxUnpackBytes = resolveUnpackBytes(options.maxUnpackBytes, isolating ? startupStatus?.limits?.unpackCeiling : undefined);
   const maxConcurrent = options.maxConcurrent ?? derivedGate?.maxConcurrent ?? 100;
-  const maxQueue = options.maxQueue ?? derivedGate?.maxQueue ?? 100;
+  const maxQueue = options.maxQueue ?? 100;
   log("info", `Concurrency gate: maxConcurrent ${maxConcurrent}, maxQueue ${maxQueue}`);
   const requestTimeoutMs = options.requestTimeoutMs ?? 60_000;
   const corsOrigin = options.corsOrigin;
@@ -333,7 +601,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         response.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
       }
       if (request.method === "OPTIONS") {
-        response.writeHead(204);
+        // Tika's answer, for every path: 200 and the one list of methods its server is built on.
+        response.writeHead(200, { Allow: "POST, GET, PUT, OPTIONS, HEAD", "Content-Length": "0" });
         response.end();
         return;
       }
@@ -347,8 +616,13 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         send(response, 401, "text/plain", "Unauthorized");
         return;
       }
-      const probePath = new URL(request.url ?? "/", "http://localhost").pathname;
-      if (request.method === "GET" && (probePath === "/health" || probePath === "/version" || probePath === "/status")) {
+      let probePath = "";
+      try {
+        probePath = parseTarget(request.url).pathname;
+      } catch {
+        /* route() answers a target that is not one */
+      }
+      if ((request.method === "GET" || request.method === "HEAD") && (probePath === "/health" || probePath === "/version" || probePath === "/status")) {
         // Liveness/version endpoints must not be gated by the concurrency semaphore.
         try {
           await route(request, response, () => () => undefined);
@@ -369,6 +643,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         const { status, headers, code, message } = errorResponse(error);
         if (!response.headersSent && !response.writableEnded) {
           for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
+          // A body refused unread leaves the rest of it on the wire, so the connection cannot carry another request.
+          if (status === 413 && !request.complete) response.setHeader("Connection", "close");
           const wantsJson = (request.headers.accept ?? "").includes("application/json");
           if (wantsJson) {
             sendJson(response, status, { error: message, code });
@@ -398,8 +674,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     response: ServerResponse,
     detachSlot: () => () => void,
   ): Promise<void> {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    const method = request.method ?? "GET";
+    const url = parseTarget(request.url);
+    // A HEAD is the GET's headers: Node leaves the body off by itself.
+    const method = request.method === "HEAD" ? "GET" : (request.method ?? "GET");
     const served = endpointOf(url.pathname);
     if (served !== null && !enabled.has(served)) {
       send(response, 404, "text/plain", "Not found");
@@ -426,12 +703,32 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       if (!(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         throw new HttpError(415, "Content-Type must be application/json");
       }
-      const config = await buildPipesConfig(
-        parseJsonBody(await readBody(request, maxBodyBytes)),
-        options.pipes,
-      );
-      const result = await new PipesClient(config, { ripstream: ceilinged }).run();
-      sendJson(response, 200, result);
+      const parsedBody = parseJsonBody(await readBody(request, maxBodyBytes));
+      // A body with a `source` is the batch job; any other is a Tika tuple, so its own mistakes get the tuple's messages.
+      if (tikaPipes !== undefined && !(isRecord(parsedBody) && "source" in parsedBody)) {
+        sendTika(response, await tikaPipes.pipes(parsedBody));
+        return;
+      }
+      if (options.pipes.sourceRoot === undefined) {
+        throw new HttpError(400, "This server takes Tika tuples only: the batch job (a body with `source`) needs the pipes.sourceRoot option");
+      }
+      if (isRecord(parsedBody) && "fetcher" in parsedBody) {
+        throw new HttpError(400, "This server takes batch jobs only: Tika tuples need the pipes.settings option");
+      }
+      const config = await buildPipesConfig(parsedBody, { ...options.pipes, sourceRoot: options.pipes.sourceRoot });
+      // The run goes on after an input that fails: what each came to is in `stats.byStatus`, and the ones that failed
+      // (a category other than SUCCESS) are listed, up to a cap so a run of a million bad files is not a million rows.
+      const failures: PipesResult[] = [];
+      let omitted = 0;
+      const reporter = {
+        report: (outcome: PipesResult): void => {
+          if (!isFailure(outcome)) return;
+          if (failures.length < MAX_PIPES_FAILURES_LISTED) failures.push(outcome);
+          else omitted++;
+        },
+      };
+      const result = await new PipesClient(config, { ripstream: ceilinged, reporter }).run();
+      sendJson(response, 200, { ...result, failures, ...(omitted === 0 ? {} : { failuresOmitted: omitted }) });
       return;
     }
     if (method === "GET" && url.pathname === "/health") {
@@ -450,6 +747,14 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     }
     if (method === "POST" && url.pathname === "/async") {
       const body = await readBody(request, maxBodyBytes);
+      // With Tika's settings, a JSON object that has `tuples` is Tika's request; any other body is a document to parse.
+      if (tikaPipes !== undefined && (request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
+        const parsedBody = tryParseJson(body);
+        if (isRecord(parsedBody) && "tuples" in parsedBody) {
+          sendTika(response, await tikaPipes.enqueue(parsedBody));
+          return;
+        }
+      }
       pruneJobs();
       if (jobs.size >= maxJobs) throw new HttpError(503, "Too many running async jobs");
       const id = randomUUID();
@@ -467,12 +772,12 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           jobs.set(id, { status: "error", error: String(error), updatedAt: Date.now() });
         })
         .finally(releaseSlot);
-      response.writeHead(202, { "Content-Type": "application/json" });
-      response.end(`${JSON.stringify({ id })}\n`);
+      sendJson(response, 202, { id });
       return;
     }
     if (method === "GET" && url.pathname === "/version") {
-      send(response, 200, "text/plain", "ripstream 0.0.0\n");
+      if (negotiate(request.headers.accept, ["text/plain"]) === null) notAcceptable(response);
+      else send(response, 200, "text/plain", "ripstream 0.0.0\n");
       return;
     }
     if (url.pathname === "/language") {
@@ -481,11 +786,18 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         send(response, 405, "text/plain", "Method not allowed");
         return;
       }
+      // Tika: text/plain, the two-letter code. application/json is ripstream's, the detector's whole answer.
+      const kind = negotiate(request.headers.accept, ["text/plain", "application/json"]);
+      if (kind === null) {
+        notAcceptable(response);
+        return;
+      }
       const body = await readBody(request, maxBodyBytes);
-      const result = languageDetector.detect(
-        new TextDecoder("utf-8", { fatal: false }).decode(body),
-      );
-      sendJson(response, 200, result);
+      // Tika reads the first 100,000 characters and ignores the rest: detection saturates well before that.
+      const sample = new TextDecoder("utf-8", { fatal: false }).decode(body.subarray(0, LANGUAGE_SAMPLE_CHARS * 4));
+      const result = languageDetector.detect(sample.slice(0, LANGUAGE_SAMPLE_CHARS));
+      if (kind === "application/json") sendJson(response, 200, result);
+      else send(response, 200, "text/plain; charset=utf-8", result.language === "und" ? "" : toIso6391(result.language));
       return;
     }
     if (url.pathname === "/translate") {
@@ -506,13 +818,41 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       send(response, 200, "text/plain; charset=utf-8", translated);
       return;
     }
+    if (url.pathname === "/mime-types" || url.pathname.startsWith("/mime-types/")) {
+      serveMimeTypes(request, response, url.pathname);
+      return;
+    }
+    if ((method === "GET" || method === "HEAD") && url.pathname === "/") {
+      const kind = negotiate(request.headers.accept, ["text/html", "text/plain"]);
+      if (kind === null) {
+        notAcceptable(response);
+        return;
+      }
+      const page = kind === "text/html" ? welcomeHtml(enabled) : welcomeText(enabled);
+      send(response, 200, `${kind}; charset=utf-8`, page);
+      return;
+    }
+    if (url.pathname === "/") {
+      response.setHeader("Allow", "GET, HEAD");
+      send(response, 405, "text/plain", "Method not allowed");
+      return;
+    }
+    if (method === "GET" && url.pathname.replace(/\/$/, "") === "/tika") {
+      if (negotiate(request.headers.accept, ["text/plain"]) === null) notAcceptable(response);
+      else send(response, 200, "text/plain; charset=utf-8", GREETING);
+      return;
+    }
+    const target = resolveTarget(url.pathname);
+    if (target === null) {
+      send(response, 404, "text/plain", "Not found");
+      return;
+    }
     const presets = options.presets ?? {};
     const presetName = url.searchParams.get("preset");
     if (presetName !== null && !Object.hasOwn(presets, presetName)) {
       throw new HttpError(400, `Unknown preset ${JSON.stringify(presetName)}`);
     }
     const preset = presetName === null ? undefined : presets[presetName];
-    const presetHandler = preset?.handler;
     const limits: Record<string, number> = { ...(preset?.limits ?? {}) };
     for (const key of ["maxOutputChars", "maxEmbeddedResources"] as const) {
       const requested = clientLimit(url.searchParams.get(key), key);
@@ -521,19 +861,53 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       if (ceiling !== undefined) limits[key] = Math.min(value ?? ceiling, ceiling);
       else if (value !== undefined) limits[key] = value;
     }
-    const requestedHandler = url.searchParams.get("handler");
+    const requestedHandler = url.searchParams.get("handler")?.toLowerCase() ?? null;
     if (requestedHandler !== null && !HANDLERS.includes(requestedHandler)) {
       throw new HttpError(400, `Unknown handler ${JSON.stringify(requestedHandler)}; handlers are: ${HANDLERS.join(", ")}`);
     }
-    const handlerOverride = requestedHandler ?? presetHandler;
-    const endpoint = url.pathname === "/unpack" ? "/rmeta" : url.pathname;
-    if (!["/detect", "/tika", "/meta", "/rmeta", "/unpack"].includes(url.pathname)) {
-      send(response, 404, "text/plain", "Not found");
+    if (requestedHandler !== null && (target.fixedType !== null || target.json)) {
+      throw new HttpError(400, `${url.pathname} names its handler in the path; ?handler= is read by /tika alone`);
+    }
+    // What the request names, most specific first: ?handler=, then the preset's. (The path's own handler is read below.)
+    const handlerOverride = requestedHandler ?? preset?.handler?.toLowerCase();
+    const allowed = target.form ? ["POST"] : ["PUT", "POST"];
+    if (!allowed.includes(method)) {
+      response.setHeader("Allow", allowed.join(", "));
+      send(response, 405, "text/plain", "Method not allowed");
       return;
     }
-    if (method !== "PUT" && method !== "POST") {
-      response.setHeader("Allow", "PUT, POST");
-      send(response, 405, "text/plain", "Method not allowed");
+    // A handler that names a content format. `meta` and `json` are answers of /tika alone; /rmeta ignores them.
+    const formatOf = (name: string | null | undefined, fallback: HandlerType): HandlerType => {
+      try {
+        return parseHandlerType(name === "meta" || name === "json" ? null : name, fallback);
+      } catch (error) {
+        throw new HttpError(400, error instanceof Error ? error.message : String(error));
+      }
+    };
+    // A bad handler in the path is the caller's mistake, found before the document is read, as Tika's is.
+    const pathType = target.handler === null ? null : formatOf(target.handler, "text");
+    // Tika picks the resource by Accept before it reads the request: what the route writes is all it offers.
+    const offered = ((): readonly string[] => {
+      switch (target.endpoint) {
+        case "/detect":
+          return ["text/plain"];
+        case "/meta":
+          return target.field === null ? ["application/json", "text/csv"] : ["application/json", "text/csv", "text/plain"];
+        case "/rmeta":
+          return ["application/json"];
+        case "/unpack":
+          return ["application/zip"];
+        case "/tika": {
+          if (target.json) return ["application/json"];
+          // `?handler=json` and `meta` are ripstream's own answers, the older object and the bare metadata.
+          if (target.fixedType === null && (handlerOverride === "json" || handlerOverride === "meta")) return ["application/json"];
+          return [contentTypeOf(target.fixedType ?? formatOf(handlerOverride, "text")).split(";")[0] ?? "text/plain"];
+        }
+      }
+    })();
+    const kind = negotiate(request.headers.accept, offered);
+    if (kind === null) {
+      notAcceptable(response);
       return;
     }
     let body = await readBody(request, maxBodyBytes);
@@ -552,41 +926,163 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       }
       body = parsed.bytes;
       multipartName = parsed.filename;
+    } else if (target.form || (target.endpoint === "/unpack" && method === "POST")) {
+      throw new HttpError(415, "A form route takes a multipart/form-data request");
     }
     const name = multipartName ?? url.searchParams.get("filename") ?? dispositionName;
     const signal = AbortSignal.timeout(requestTimeoutMs);
     const parseOptions =
       name === undefined ? { signal } : { filename: name, signal };
 
-    if (endpoint === "/detect") {
+    if (target.endpoint === "/detect") {
       const type = await ripstream.detect(body, parseOptions);
       send(response, 200, "text/plain", `${type.toString()}\n`);
       return;
     }
-    if (endpoint === "/rmeta" || url.pathname === "/unpack") {
+    // Tika answers for a document it could not read, rather than failing the request: the JSON routes (and the
+    // `rmeta.json` of an unpack) carry the exception in the metadata (200), the text routes answer 422 with what was
+    // extracted.
+    const failures = { onDocumentFailure: "record" as const };
+    // Tika's server answers with the text up to its write limit and flags it (`tk:exception:write-limit-reached`),
+    // rather than failing the request. /async and /pipes keep the hard limit: they have no response to flag.
+    const output = { onOutputLimit: options.onOutputLimit ?? ("truncate" as const) };
+    const withLimits = Object.keys(limits).length === 0 ? {} : { limits };
+    if (target.endpoint === "/rmeta" || target.endpoint === "/unpack") {
+      const handlerType = pathType ?? formatOf(handlerOverride, "text");
+      const unpacking = target.endpoint === "/unpack";
       const records = await ripstream.parseRecursive(body, {
         ...parseOptions,
-        ...(Object.keys(limits).length === 0 ? {} : { limits }),
+        ...failures,
+        ...output,
+        ...withLimits,
+        handlerType,
+        ...(unpacking ? { unpackBytes: maxUnpackBytes } : {}),
       });
-      sendJson(response, 200, JSON.parse(serializeRmeta(records)));
+      if (!unpacking) {
+        sendJson(response, 200, JSON.parse(serializeRmeta(records)));
+        return;
+      }
+      // A document that could not be read at all has nothing to unpack: Tika answers 422 with the failure as the body.
+      // A failure of one embedded document stays in its record of `rmeta.json`, and the package is still the answer.
+      const [container] = records;
+      if (container?.exception != null) {
+        const noted = container.metadata.get(TIKA_KEYS.CONTAINER_EXCEPTION);
+        throw new HttpError(422, noted ?? `${container.exception.name}: ${container.exception.message}`);
+      }
+      const pkg = buildUnpackPackage({
+        records,
+        container: target.all ? body : null,
+        filename: name,
+        rmeta: Buffer.from(`${serializeRmeta(records)}\n`, "utf8"),
+        nameOf: (id, record) => `${id}${extensionFor(record.metadata.get("Content-Type"), options.mimeTypes)}`,
+        now: new Date(),
+      });
+      await sendZip(response, pkg);
       return;
     }
-    const result = await ripstream.parse(body, {
-      ...parseOptions,
-      ...(Object.keys(limits).length === 0 ? {} : { limits }),
-    });
-    if (endpoint === "/meta" || handlerOverride === "meta") {
-      sendJson(response, 200, metadataObject(result.metadata));
+    if (target.endpoint === "/meta") {
+      // Metadata only, as Tika's /meta is: the ignore handler writes no content, so there is no output limit to reach.
+      const result = await ripstream.parse(body, { ...parseOptions, ...failures, ...withLimits, handlerType: "ignore" });
+      sendMetadata(response, result, target.field, kind);
       return;
     }
-    if ((request.headers.accept ?? "").includes("application/json") || handlerOverride === "json") {
+    const type =
+      target.fixedType ?? (target.json ? (pathType ?? formatOf(preset?.handler?.toLowerCase(), "text")) : formatOf(handlerOverride, "text"));
+    const result = await ripstream.parse(body, { ...parseOptions, ...failures, ...output, ...withLimits, handlerType: type });
+    if (handlerOverride === "meta" && !target.json && target.fixedType === null) {
+      sendJson(response, 200, metadataJson(result.metadata));
+      return;
+    }
+    if (target.json) {
+      // Tika's /tika/json: one object, the metadata with the content in `tk:content` and the handler that made it.
+      const document = metadataJson(result.metadata);
+      if (result.text.trim() !== "") document[TIKA_KEYS.CONTENT] = result.text;
+      document[TIKA_KEYS.CONTENT_HANDLER_TYPE] = handlerTypeName(type);
+      sendJson(response, 200, document);
+    } else if (target.fixedType === null && handlerOverride === "json") {
       sendJson(response, 200, {
         text: result.text,
-        metadata: metadataObject(result.metadata),
+        metadata: metadataJson(result.metadata),
       });
+    } else if (result.exception !== undefined) {
+      send(response, 422, contentTypeOf(type), result.text, {
+        "X-Ripstream-Error": headerText(`${result.exception.name}: ${result.exception.message}`),
+      });
+    } else if (result.metadata.get(TIKA_KEYS.WRITE_LIMIT_REACHED) === "true") {
+      // A text answer has no metadata to carry the flag: a client that needs to know the text was cut reads this header.
+      send(response, 200, contentTypeOf(type), result.text, { "X-Ripstream-Write-Limit-Reached": "true" });
     } else {
-      send(response, 200, "text/plain; charset=utf-8", result.text);
+      send(response, 200, contentTypeOf(type), result.text);
     }
+  }
+
+  /** /mime-types and /mime-types/{type}/{subtype}: the media types the server was given, as HTML, JSON or text. */
+  function serveMimeTypes(request: IncomingMessage, response: ServerResponse, pathname: string): void {
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      response.setHeader("Allow", "GET, HEAD");
+      send(response, 405, "text/plain", "Method not allowed");
+      return;
+    }
+    let segments: string[];
+    try {
+      segments = pathname.split("/").filter((part) => part !== "").slice(1).map(decodeURIComponent);
+    } catch {
+      send(response, 404, "text/plain", "Not found");
+      return;
+    }
+    if (segments.length !== 0 && segments.length !== 2) {
+      send(response, 404, "text/plain", "Not found");
+      return;
+    }
+    if (options.mimeTypes === undefined) {
+      send(response, 404, "text/plain", "This server has no media type registry");
+      return;
+    }
+    const [type, subtype] = segments;
+    const detail = type === undefined || subtype === undefined ? undefined : findMimeType(options.mimeTypes, type, subtype);
+    if (type !== undefined && detail === undefined) {
+      send(response, 404, "text/plain", `No media type registered for ${type}/${subtype}`);
+      return;
+    }
+    const offers: readonly string[] = detail === undefined ? MIME_LIST_OFFERS : MIME_DETAIL_OFFERS;
+    const kind = negotiate(request.headers.accept, offers);
+    if (kind === null) {
+      notAcceptable(response);
+      return;
+    }
+    const types = sortedMimeTypes;
+    if (detail !== undefined) {
+      if (kind === "application/json") send(response, 200, "application/json", mimeTypeDetailJson(detail));
+      else send(response, 200, "text/html; charset=utf-8", mimeTypeDetailHtml(detail));
+    } else if (kind === "application/json") send(response, 200, "application/json", mimeTypesJson(types));
+    else if (kind === "text/plain") send(response, 200, "text/plain; charset=utf-8", mimeTypesText(types));
+    else send(response, 200, "text/html; charset=utf-8", mimeTypesHtml(types));
+  }
+
+  /** /meta and /meta/{field}: the metadata (or one field of it) as JSON, CSV or, for a field, plain text. */
+  function sendMetadata(
+    response: ServerResponse,
+    result: { readonly metadata: Metadata; readonly exception?: Error },
+    field: string | null,
+    kind: string,
+  ): void {
+    let metadata = result.metadata;
+    if (field !== null) {
+      // A bare field value has no envelope to carry the failure of the container, so it is an error, as Tika's is.
+      if (result.exception !== undefined) {
+        throw new HttpError(422, `${result.exception.name}: ${result.exception.message}`);
+      }
+      if (metadata.get(field) === null) {
+        send(response, 404, "text/plain; charset=utf-8", `Failed to get metadata field ${field}`);
+        return;
+      }
+      const only = new Metadata();
+      for (const value of metadata.getAll(field)) only.add(field, value);
+      metadata = only;
+    }
+    if (kind === "application/json") sendJson(response, 200, metadataJson(metadata));
+    else if (kind === "text/csv") send(response, 200, "text/csv; charset=UTF-8", metadataCsv(metadata));
+    else send(response, 200, "text/plain; charset=utf-8", metadata.get(field ?? "") ?? "");
   }
 
   // Node checks the deadline on an interval, so a short deadline needs a short interval to be kept.
@@ -623,11 +1119,13 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         });
       });
     },
-    close(): Promise<void> {
-      return new Promise((resolve) => {
+    async close(): Promise<void> {
+      await new Promise<void>((resolve) => {
         server.closeAllConnections?.();
         server.close(() => resolve());
       });
+      // After the listener is closed, so nothing new is queued while what was taken is finished.
+      await tikaPipes?.close();
     },
   };
 }
@@ -682,7 +1180,7 @@ function requireCount(name: string, value: number | undefined, min: number): voi
 /** The endpoint a path belongs to, or null for a path no `endpoints` setting governs. */
 function endpointOf(pathname: string): ServerEndpoint | null {
   if (pathname.startsWith("/status/")) return "async";
-  const name = pathname.slice(1);
+  const name = pathname.split("/")[1] ?? "";
   return (SERVER_ENDPOINTS as readonly string[]).includes(name) ? (name as ServerEndpoint) : null;
 }
 
@@ -696,6 +1194,10 @@ function requireValidServerOptions(options: RipstreamServerOptions): void {
   const read = options.maxRequestReadMillis;
   if (read !== undefined && (!Number.isInteger(read) || read === 0 || Math.abs(read) > 2_147_483_647)) {
     throw new RangeError("createRipstreamServer: maxRequestReadMillis must be a non-zero integer up to 2147483647 (negative: no deadline)");
+  }
+  const asyncWait = options.pipes?.asyncMaxWaitMs;
+  if (asyncWait !== undefined && (!Number.isInteger(asyncWait) || asyncWait < 0 || asyncWait > 2_147_483_647)) {
+    throw new RangeError("createRipstreamServer: pipes.asyncMaxWaitMs must be an integer from 0 to 2147483647");
   }
   const idle = options.idleTimeoutMillis;
   if (idle !== undefined && (!Number.isInteger(idle) || idle < 1 || idle > 2_147_483_647)) {
@@ -789,21 +1291,21 @@ function warnAboutIsolation(
 }
 
 /**
- * The gate for an active isolation: the requests its memory pool can run at once plus the ones it will queue, with
- * no queue of our own. It is sized by the dearer of the text and records reservations, so a run of /rmeta requests
- * does not read more bodies than the pool can place. Requests beyond the gate are refused with 503 before their body
- * is read. It does not bound memory exactly: /pipes spends one slot on a run that parses several documents at once.
- * Undefined when nothing is isolated or the status cannot size it, which leaves the caller's options and the old
- * defaults in charge.
+ * The slots for an active isolation: the requests its memory pool can run at once plus the ones it will queue. It is
+ * sized by the dearer of the text and records reservations, so a run of /rmeta requests does not read more bodies than
+ * the pool can place. Requests beyond the slots wait in the server's own queue with their body unread, so a burst
+ * costs sockets, not memory. It does not bound memory exactly: /pipes spends one slot on a run that parses several
+ * documents at once. Undefined when nothing is isolated or the status cannot size it, which leaves the caller's
+ * options and the old default in charge.
  */
-function deriveGate(status: ServerIsolationStatus): { maxConcurrent: number; maxQueue: number } | undefined {
+function deriveGate(status: ServerIsolationStatus): { maxConcurrent: number } | undefined {
   const { pool, defaultReservationMb } = status;
   if (pool === null || defaultReservationMb === null) return undefined;
   const reservation = Math.max(defaultReservationMb.text, defaultReservationMb.records);
   if (!Number.isFinite(reservation) || reservation <= 0 || !Number.isFinite(pool.poolMb)) return undefined;
   // A status from an older or third-party isolation may not report the pool's queue: an unknown one counts as none.
   const poolQueue = Number.isSafeInteger(pool.maxQueue) && pool.maxQueue > 0 ? pool.maxQueue : 0;
-  return { maxConcurrent: Math.max(1, Math.floor(pool.poolMb / reservation)) + poolQueue, maxQueue: 0 };
+  return { maxConcurrent: Math.max(1, Math.floor(pool.poolMb / reservation)) + poolQueue };
 }
 
 /** Parses a client limit: absent -> undefined; otherwise a finite integer >= 0 or HTTP 400. */
@@ -823,6 +1325,18 @@ function parseJsonBody(body: Uint8Array): unknown {
   }
 }
 
+/** The JSON in a body, or undefined when it is not JSON (a body that may be a document, not only a request). */
+function tryParseJson(body: Uint8Array): unknown {
+  try {
+    return JSON.parse(new TextDecoder("utf-8", { fatal: false }).decode(body));
+  } catch {
+    return undefined;
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 function clampCount(requested: unknown, ceiling: number, fallback: number): number {
   if (requested === undefined) return Math.min(fallback, ceiling);
   if (typeof requested !== "number" || !Number.isInteger(requested) || requested < 1) {
@@ -834,7 +1348,7 @@ function clampCount(requested: unknown, ceiling: number, fallback: number): numb
 /** Maps a client pipes request onto server-configured roots; never trusts client paths. */
 async function buildPipesConfig(
   input: unknown,
-  pipes: RipstreamServerPipesOptions,
+  pipes: RipstreamServerPipesOptions & { readonly sourceRoot: string },
 ): Promise<PipesConfig> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new HttpError(400, "Pipes config must be a JSON object");
@@ -883,21 +1397,93 @@ async function buildPipesConfig(
   }
 }
 
-async function readBody(
-  request: IncomingMessage,
-  limit: number,
-): Promise<Uint8Array> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of request) {
-    const buffer = chunk as Buffer;
-    total += buffer.length;
-    if (total > limit) {
-      throw new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes`);
+/**
+ * How much of a body over the cap is read and thrown away, and for how long, so the 413 can be answered on a
+ * connection that lives on. A body past that is not read at all: the 413 closes the connection.
+ */
+const DRAIN_BYTES = 16 * 1024 * 1024;
+const DRAIN_MILLIS = 5_000;
+
+/**
+ * The request body, inflated when it is sent with `Content-Encoding: gzip`, as Tika's server does. `limit` bounds the
+ * body on the wire and again what it inflates to, so a small gzip cannot become a large document.
+ */
+async function readBody(request: IncomingMessage, limit: number): Promise<Uint8Array> {
+  const raw = await readRawBody(request, limit);
+  const encoding = String(request.headers["content-encoding"] ?? "").trim().toLowerCase();
+  if ((encoding !== "gzip" && encoding !== "x-gzip") || raw.length === 0) return raw;
+  return new Promise((resolve, reject) => {
+    gunzip(raw, { maxOutputLength: limit }, (error, inflated) => {
+      if (error === null) {
+        resolve(new Uint8Array(inflated));
+      } else if ((error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+        reject(new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes once decoded`));
+      } else {
+        reject(new HttpError(400, "Request body is not valid gzip"));
+      }
+    });
+  });
+}
+
+/**
+ * The request body as it came, or `REQUEST_TOO_LARGE` when it is over `limit`. A body over the limit is not kept: it
+ * is read and discarded up to `DRAIN_BYTES` more, then the error is raised with the request read to its end
+ * (`request.complete`), or, when the client sends more than that or too slowly, with the request left unread
+ * (`!request.complete`). Never destroys the request: that would take the connection with it before the 413 is written.
+ */
+function readRawBody(request: IncomingMessage, limit: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    if (request.readableEnded) {
+      resolve(new Uint8Array());
+      return;
     }
-    chunks.push(buffer);
-  }
-  return new Uint8Array(Buffer.concat(chunks));
+    const tooLarge = (): RipstreamError => new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes`);
+    const chunks: Buffer[] = [];
+    let total = 0;
+    let discarding = false;
+    let timer: NodeJS.Timeout | undefined;
+
+    const settle = (error: Error | null): void => {
+      clearTimeout(timer);
+      request.off("data", onData);
+      request.off("end", onEnd);
+      request.off("error", onError);
+      request.off("close", onClose);
+      if (error === null) {
+        resolve(new Uint8Array(Buffer.concat(chunks)));
+        return;
+      }
+      request.pause();
+      reject(error);
+    };
+    const startDiscarding = (): void => {
+      discarding = true;
+      chunks.length = 0;
+      timer = setTimeout(() => settle(tooLarge()), DRAIN_MILLIS);
+    };
+    const onData = (chunk: Buffer): void => {
+      total += chunk.length;
+      if (!discarding && total > limit) startDiscarding();
+      if (!discarding) chunks.push(chunk);
+      else if (total > limit + DRAIN_BYTES) settle(tooLarge());
+    };
+    const onEnd = (): void => settle(discarding ? tooLarge() : null);
+    const onError = (error: Error): void => settle(error);
+    const onClose = (): void => {
+      if (!request.readableEnded) settle(new Error("Request aborted before its body was read"));
+    };
+
+    const declared = Number(request.headers["content-length"]);
+    if (declared > limit + DRAIN_BYTES) {
+      reject(tooLarge());
+      return;
+    }
+    if (declared > limit) startDiscarding();
+    request.on("data", onData);
+    request.on("end", onEnd);
+    request.on("error", onError);
+    request.on("close", onClose);
+  });
 }
 
 function extractMultipart(
@@ -930,22 +1516,96 @@ function extractMultipart(
   return file;
 }
 
-function metadataObject(metadata: Metadata): Record<string, readonly string[]> {
-  const result: Record<string, readonly string[]> = {};
-  for (const name of metadata.names()) result[name] = metadata.getAll(name);
-  return result;
+/** A document's own words in a header value: printable ASCII only, one line, bounded. */
+function headerText(text: string): string {
+  return text.replace(/[^\x20-\x7e]+/g, " ").trim().slice(0, 200);
 }
 
+/**
+ * 406 with no body, as Tika answers when the Accept header names nothing the route can write. Tika makes the choice
+ * before it reads the request, so a document that would fail to parse is still a 406.
+ */
+function notAcceptable(response: ServerResponse): void {
+  response.writeHead(406, { "Content-Length": "0" });
+  response.end();
+}
+
+/** What a response is compressed from: text, JSON and XML. The smallest body worth it is Jetty's, which Tika uses. */
+const COMPRESSIBLE = /^(text\/|application\/(json|xml|rdf\+xml))/i;
+const GZIP_MIN_BYTES = 32;
+
+/** Whether an `Accept-Encoding` header allows gzip: named, or by `*`, and not at quality 0. */
+function acceptsGzip(header: string | undefined): boolean {
+  if (header === undefined) return false;
+  return header.split(",").some((part) => {
+    const [name = "", ...params] = part.split(";").map((piece) => piece.trim().toLowerCase());
+    if (name !== "gzip" && name !== "x-gzip" && name !== "*") return false;
+    const q = params.map((param) => /^q=([0-9.]+)$/.exec(param)?.[1]).find((value) => value !== undefined);
+    return q === undefined || Number(q) > 0;
+  });
+}
+
+/**
+ * Writes a response in one piece. Gzipped, with `Content-Encoding` and `Vary`, when the client allows it and the body
+ * is a text type of at least `GZIP_MIN_BYTES`, as Tika's server does; otherwise as it is. `headers` are the response's
+ * own, beyond its type.
+ */
 function send(
   response: ServerResponse,
   status: number,
   contentType: string,
   body: string,
+  headers: Readonly<Record<string, string>> = {},
 ): void {
-  response.writeHead(status, { "Content-Type": contentType });
-  response.end(body);
+  const bytes = Buffer.from(body, "utf8");
+  const head = { "Content-Type": contentType, ...headers };
+  if (bytes.length < GZIP_MIN_BYTES || !COMPRESSIBLE.test(contentType) || !acceptsGzip(response.req.headers["accept-encoding"])) {
+    response.writeHead(status, head);
+    response.end(bytes);
+    return;
+  }
+  // Off the event loop: a large answer is compressed while other requests are served.
+  gzip(bytes, (error, packed) => {
+    if (error !== null) {
+      response.writeHead(status, head);
+      response.end(bytes);
+      return;
+    }
+    response.appendHeader("Vary", "Accept-Encoding");
+    response.writeHead(status, { ...head, "Content-Encoding": "gzip" });
+    response.end(packed);
+  });
+}
+
+/**
+ * Writes the package as a zip, a file at a time, so the answer is never held a second time beside the files it is made
+ * of. Everything that can refuse the request is done before the first byte: a failure after it can only end the
+ * connection, which a client reads as a failed download and not as a short zip.
+ */
+async function sendZip(response: ServerResponse, pkg: UnpackPackage): Promise<void> {
+  const chunks = zipChunks(pkg);
+  try {
+    const first = await chunks.next();
+    if (first.done === true) throw new Error("A package has at least its manifest");
+    response.writeHead(200, { "Content-Type": "application/zip" });
+    if (!response.write(first.value)) await once(response, "drain");
+    for await (const chunk of chunks) {
+      if (response.destroyed) return;
+      if (!response.write(chunk)) await once(response, "drain");
+    }
+    response.end();
+  } catch (error) {
+    if (!response.headersSent) throw error;
+    response.destroy(error instanceof Error ? error : undefined);
+  }
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   send(response, status, "application/json", `${JSON.stringify(body)}\n`);
+}
+
+/** Tika's answer to /pipes and /async: its status, its Retry-After when it has one, and its JSON body. */
+function sendTika(response: ServerResponse, answer: TikaPipesAnswer): void {
+  if (answer.retryAfterSeconds !== undefined) response.setHeader("Retry-After", String(answer.retryAfterSeconds));
+  sendJson(response, answer.status, answer.body);
 }

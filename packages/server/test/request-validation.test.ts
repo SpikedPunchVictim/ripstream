@@ -70,10 +70,11 @@ test("a header that Tika reads and this server does not is refused, not ignored"
 
 test("an unknown ?handler= is refused with the handlers there are", async () => {
   await withServer(async (base) => {
-    await refused(await put(base, "/tika?handler=xml"), /Unknown handler "xml".*meta, json/);
+    await refused(await put(base, "/tika?handler=bogus"), /Unknown handler "bogus".*meta, json, text, txt, html, xml, body, markdown, md, ignore/);
     await refused(await put(base, "/tika?handler="), /Unknown handler ""/);
-    assert.equal((await put(base, "/tika?handler=meta")).status, 200);
-    assert.equal((await put(base, "/tika?handler=json")).status, 200);
+    for (const handler of ["meta", "json", "text", "TXT", "html", "xml", "body", "markdown", "Md", "ignore"]) {
+      assert.equal((await put(base, `/tika?handler=${handler}`)).status, 200, handler);
+    }
   });
 });
 
@@ -94,7 +95,8 @@ test("a preset with a limit or handler the server cannot apply is refused when t
     createRipstreamServer({ ripstream: createRipstream(), presets: presets as never, log: () => undefined });
   assert.throws(make({ p: { limits: { maxNodeDepth: Number.NaN } } }), /preset "p".*maxNodeDepth/);
   assert.throws(make({ p: { limits: { bogus: 1 } } }), /preset "p".*unknown limit "bogus"/);
-  assert.throws(make({ p: { handler: "xml" } }), /preset "p".*handler.*meta, json/);
+  assert.throws(make({ p: { handler: "bogus" } }), /preset "p".*handler.*meta, json, text/);
+  make({ p: { handler: "XML" } })();
   make({ p: { handler: "json", limits: { maxOutputChars: 5 } } })();
 });
 

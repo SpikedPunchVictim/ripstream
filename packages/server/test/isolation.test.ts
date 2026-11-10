@@ -422,9 +422,9 @@ test("maxConcurrent must be a positive integer and maxQueue a non-negative one",
 
 test("the gate is derived from the memory pool when the caller sets neither number", async () => {
   // The dearer reservation (records, 2048) sizes it: floor(4096 / 2048) + 4 = 6 running-or-pool-queued requests;
-  // nothing waits in the server.
+  // the server queues the next 100 itself, as it does without isolation.
   await withServer({ ripstream: fakeEngine(), isolation: fakeIsolation(), maxLimits: { maxOutputChars: 1000 } }, async (base) => {
-    assert.deepEqual((await readStatus(base)).gate, { maxConcurrent: 6, maxQueue: 0 });
+    assert.deepEqual((await readStatus(base)).gate, { maxConcurrent: 6, maxQueue: 100 });
   });
 });
 
@@ -438,8 +438,8 @@ test("the derived gate rounds the pool down and never falls below one running re
       },
       async (base) => (await readStatus(base)).gate,
     );
-  assert.deepEqual(await gate({ poolMb: 5000, maxQueue: 0 }, 1024), { maxConcurrent: 2, maxQueue: 0 });
-  assert.deepEqual(await gate({ poolMb: 512, maxQueue: 2 }, 1024), { maxConcurrent: 3, maxQueue: 0 });
+  assert.deepEqual(await gate({ poolMb: 5000, maxQueue: 0 }, 1024), { maxConcurrent: 2, maxQueue: 100 });
+  assert.deepEqual(await gate({ poolMb: 512, maxQueue: 2 }, 1024), { maxConcurrent: 3, maxQueue: 100 });
 });
 
 test("explicit gate options win, each independently of the other", async () => {
@@ -448,7 +448,7 @@ test("explicit gate options win, each independently of the other", async () => {
       { ripstream: fakeEngine(), isolation: fakeIsolation(), maxLimits: { maxOutputChars: 1000 }, ...extra },
       async (base) => (await readStatus(base)).gate,
     );
-  assert.deepEqual(await gate({ maxConcurrent: 3 }), { maxConcurrent: 3, maxQueue: 0 });
+  assert.deepEqual(await gate({ maxConcurrent: 3 }), { maxConcurrent: 3, maxQueue: 100 });
   assert.deepEqual(await gate({ maxQueue: 5 }), { maxConcurrent: 6, maxQueue: 5 });
   assert.deepEqual(await gate({ maxConcurrent: 3, maxQueue: 5 }), { maxConcurrent: 3, maxQueue: 5 });
 });
@@ -471,7 +471,7 @@ test("a pool status without maxQueue is treated as an empty pool queue", async (
   await withServer(
     { ripstream: fakeEngine(), isolation: { status: () => status }, maxLimits: { maxOutputChars: 1000 } },
     async (base) => {
-      assert.deepEqual((await readStatus(base)).gate, { maxConcurrent: 2, maxQueue: 0 });
+      assert.deepEqual((await readStatus(base)).gate, { maxConcurrent: 2, maxQueue: 100 });
     },
   );
 });
@@ -486,11 +486,11 @@ test("the gate is sized by the dearer of the text and records reservations", asy
       },
       async (base) => (await readStatus(base)).gate,
     );
-  assert.deepEqual(await gate({ text: 2000, records: 3000 }), { maxConcurrent: 5, maxQueue: 0 }); // 12000 / 3000 + 1
-  assert.deepEqual(await gate({ text: 3000, records: 2000 }), { maxConcurrent: 5, maxQueue: 0 }); // never the smaller one
+  assert.deepEqual(await gate({ text: 2000, records: 3000 }), { maxConcurrent: 5, maxQueue: 100 }); // 12000 / 3000 + 1
+  assert.deepEqual(await gate({ text: 3000, records: 2000 }), { maxConcurrent: 5, maxQueue: 100 }); // never the smaller one
 });
 
-test("a full derived gate refuses with 503 before the body is read, and says when to retry", async () => {
+test("a derived gate with no queue refuses with 503 before the body is read, and says when to retry", async () => {
   const release = deferred();
   const started = deferred();
   const engine = fakeEngine(async (call) => {
@@ -498,9 +498,9 @@ test("a full derived gate refuses with 503 before the body is read, and says whe
     started.resolve();
     await release.promise;
   });
-  // floor(1024 / 1024) + 0 = one request at a time, none waiting.
+  // floor(1024 / 1024) + 0 = one request at a time, and maxQueue 0: none waiting.
   const isolation = fakeIsolation({ pool: { poolMb: 1024, maxQueue: 0 } });
-  await withServer({ ripstream: engine, isolation, maxLimits: { maxOutputChars: 1000 } }, async (base) => {
+  await withServer({ ripstream: engine, isolation, maxQueue: 0, maxLimits: { maxOutputChars: 1000 } }, async (base) => {
     const first = fetch(`${base}/tika`, { method: "PUT", body: "first" });
     await started.promise;
     assert.equal(engine.calls.length, 1);
@@ -515,6 +515,27 @@ test("a full derived gate refuses with 503 before the body is read, and says whe
     const done = await first;
     assert.equal(done.status, 200);
     assert.equal(await done.text(), "fake text");
+  });
+});
+
+test("a burst larger than the derived slots is queued and every request is answered", async () => {
+  // One request at a time. The 40 that arrive together are what a client's burst looks like; none is turned away.
+  let running = 0;
+  let mostRunning = 0;
+  const engine = fakeEngine(async (call) => {
+    if (call.method !== "parse") return;
+    running++;
+    mostRunning = Math.max(mostRunning, running);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    running--;
+  });
+  const isolation = fakeIsolation({ pool: { poolMb: 1024, maxQueue: 0 } });
+  await withServer({ ripstream: engine, isolation, maxLimits: { maxOutputChars: 1000 } }, async (base) => {
+    const responses = await Promise.all(
+      Array.from({ length: 40 }, () => fetch(`${base}/tika`, { method: "PUT", body: "x" }).then(async (r) => (await r.arrayBuffer(), r.status))),
+    );
+    assert.deepEqual(responses, Array.from({ length: 40 }, () => 200));
+    assert.equal(mostRunning, 1, "the queue ran them one at a time, as the pool allows");
   });
 });
 
@@ -559,7 +580,7 @@ test("isolation failures map to their status and Retry-After on every parsing en
 
 test("a JSON error response carries Retry-After and the isolation error code", async () => {
   await withServer({ ripstream: fakeEngine(), isolation: fakeIsolation(), maxLimits: { maxOutputChars: 1000 } }, async (base) => {
-    const response = await fetch(`${base}/tika?filename=queue_full.txt`, {
+    const response = await fetch(`${base}/tika/json?filename=queue_full.txt`, {
       method: "PUT",
       headers: { accept: "application/json" },
       body: "x",
