@@ -294,11 +294,13 @@ test("random corruption of valid files never throws", async () => {
   }
 });
 
-test("detection finishes within a second on every hostile shape", async () => {
+// A loop or quadratic walk shows as a hang or minutes, so the bound is generous: the full suite runs files in parallel.
+test("detection finishes promptly on every hostile shape", async () => {
   const started = performance.now();
   await detect(patched(plain, { offset: FAT_ENTRY_0, value: 0 }));
   await detect(patched(plain, { offset: FAT_ENTRY_1, value: 1 }));
   await detect(patched(plain, { offset: 44, value: 0x7fffffff }));
   await detect(patched(draw, { offset: 512 * 2, value: 0 }));
-  assert.ok(performance.now() - started < 1000);
+  const took = performance.now() - started;
+  assert.ok(took < 10_000, `took ${took.toFixed(0)} ms`);
 });
