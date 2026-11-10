@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,6 +75,66 @@ test("NO_PARSE reads nothing from the content: a document no parser could read i
     const engine = new PipesEngine({ ...fileSystem(directory), emitter: new MemoryEmitter(), mode: "NO_PARSE" });
     await engine.run();
     assert.deepEqual(engine.stats.byStatus, { EMIT_SUCCESS: 1 });
+  });
+});
+
+test("NO_PARSE says what it detected twice: the type, and the type a parser is to be given", async () => {
+  await scratch(async (directory) => {
+    writeFileSync(join(directory, "a.txt"), "alpha text");
+    const [document] = await emitted("NO_PARSE", directory);
+    assert.equal(document?.metadata?.["Content-Type"], "text/plain");
+    assert.equal(document?.metadata?.["tk:content-type-parser-override"], "text/plain");
+  });
+});
+
+/** Tika's NO_PARSE with a digester factory: `_preParse` digests the container, then detects. No parser runs. */
+async function noParse(directory: string, parseContext: unknown): Promise<Record<string, unknown>> {
+  const output = join(directory, "out");
+  const input = join(directory, "in");
+  const config = {
+    fetchers: { fsf: { "file-system-fetcher": { basePath: input } } },
+    emitters: { fse: { "file-system-emitter": { basePath: output, fileExtension: "json" } } },
+    "pipes-iterator": { "file-system-pipes-iterator": { basePath: input, fetcherId: "fsf", emitterId: "fse" } },
+    pipes: { parseMode: "NO_PARSE" },
+    "parse-context": parseContext,
+  };
+  assert.equal(await createEngineFromSettings(loadConfig(config).pipes!).run(), 1);
+  const [record] = JSON.parse(readFileSync(join(output, "doc.txt.json"), "utf8")) as Array<Record<string, unknown>>;
+  return record ?? {};
+}
+
+test("NO_PARSE with a digester factory digests the document without parsing it, as Tika's _preParse does", async () => {
+  await scratch(async (directory) => {
+    const content = "alpha text, digested and not parsed";
+    mkdirSync(join(directory, "in"));
+    writeFileSync(join(directory, "in", "doc.txt"), content);
+    const metadata = await noParse(directory, {
+      "commons-digester-factory": { digests: [{ algorithm: "MD5" }, { algorithm: "SHA256", encoding: "BASE64" }] },
+    });
+    assert.equal(metadata["tk:digest:MD5"], createHash("md5").update(content).digest("hex"));
+    assert.equal(metadata["tk:digest:SHA-256:BASE64"], createHash("sha256").update(content).digest("base64"));
+    assert.equal(metadata["Content-Length"], String(content.length));
+    assert.equal(metadata["Content-Type"], "text/plain");
+    assert.equal(metadata["tk:content"], undefined, "no content");
+  });
+});
+
+test("NO_PARSE with skipContainerDocumentDigest digests nothing: the container is skipped and no parser runs", async () => {
+  await scratch(async (directory) => {
+    mkdirSync(join(directory, "in"));
+    writeFileSync(join(directory, "in", "doc.txt"), "alpha text");
+    const metadata = await noParse(directory, { "commons-digester-factory": { digests: [{ algorithm: "MD5" }], skipContainerDocumentDigest: true } });
+    assert.deepEqual(Object.keys(metadata).filter((key) => key.startsWith("tk:digest:")), []);
+    assert.equal(metadata["Content-Type"], "text/plain");
+  });
+});
+
+test("NO_PARSE without a digester factory writes no digest, and no Content-Length", async () => {
+  await scratch(async (directory) => {
+    mkdirSync(join(directory, "in"));
+    writeFileSync(join(directory, "in", "doc.txt"), "alpha text");
+    const metadata = await noParse(directory, {});
+    assert.deepEqual(Object.keys(metadata).sort(), ["Content-Type", "tk:content-type-parser-override"]);
   });
 });
 

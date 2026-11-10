@@ -1,7 +1,10 @@
 import { lstat, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
+  CONTENT_LENGTH,
+  digestBytes,
   metadataJson,
+  type DigestSettings,
   type RmetaValue,
   serializeRmeta,
   TEXT_HANDLER_TYPE,
@@ -182,6 +185,12 @@ export interface PipesEngineOptions {
    */
   readonly unpack?: UnpackSettings;
   /**
+   * NO_PARSE only: the digests an input gets (Tika's `parse-context` digester factory; `pipes` settings carry it from a
+   * configuration). NO_PARSE digests and detects without a parse, so the parser's own digesting never runs. The other
+   * modes digest in the parser, from the ripstream's own configuration. Default: none.
+   */
+  readonly digest?: DigestSettings;
+  /**
    * UNPACK with `suffixStrategy: "DETECTED"`: the extension, dot included, of a media type (a server's registry of types
    * knows them). Default: none known, `.bin` for every type.
    */
@@ -259,6 +268,7 @@ export class PipesEngine {
     const extensionOf = this.#options.extensionOf ?? (() => ".bin");
     const ripstream = this.#options.ripstream ?? createRipstream();
     const limits = this.#options.limits;
+    const digest = this.#options.digest;
     const checkpoint = options.checkpoint;
     const retry = options.retry;
     // A try again of a fetch or an emit, when the run asked for them; only failures that may not repeat are tried again.
@@ -409,9 +419,17 @@ export class PipesEngine {
       const skipFailed = (tuple.onParseException ?? onParseException) === "SKIP";
       try {
         if (mode === "NO_PARSE") {
-          // Tika's detectOnly: what is known of the document without parsing it. Nothing is read from its content.
-          const detected = await ripstream.detect(bytes, { filename: tuple.id, signal });
-          return emitting([{ id: emitKey, mode, metadata: { "Content-Type": String(detected) } }]);
+          // Tika's detectOnly (ParseHandler._preParse): the digests, then the type, with no parse. With
+          // skipContainerDocumentDigest the container is not digested here, and no parser runs to digest it.
+          const metadata: Record<string, string> = {};
+          if (digest !== undefined && !digest.skipContainerDocumentDigest && digest.digests.length > 0) {
+            for (const [key, value] of await digestBytes(bytes, digest.digests, signal)) metadata[key] = value;
+            metadata[CONTENT_LENGTH] = String(bytes.length);
+          }
+          const detected = String(await ripstream.detect(bytes, { filename: tuple.id, signal }));
+          metadata["Content-Type"] = detected;
+          metadata[TIKA_KEYS.CONTENT_TYPE_PARSER_OVERRIDE] = detected;
+          return emitting([{ id: emitKey, mode, metadata }]);
         }
         const parseOptions = {
           filename: tuple.id,
@@ -851,6 +869,7 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.checkpoint === undefined ? {} : { checkpoint: options.checkpoint }),
     ...(options.unpack === undefined && settings.unpack === undefined ? {} : { unpack: options.unpack ?? settings.unpack }),
+    ...(settings.digest === undefined ? {} : { digest: settings.digest }),
     ...(options.extensionOf === undefined ? {} : { extensionOf: options.extensionOf }),
   });
 }
