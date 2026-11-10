@@ -57,6 +57,16 @@ test("components (the parsers and detectors sections) round trip", async () => {
   assert.equal((await readInput(stream(wire(header({ components: {} }))))).header.components?.parsers, undefined);
 });
 
+test("components carry the settings of a parser entry", async () => {
+  const components = { parsers: [entry("pdf-parser", { settings: { sortByPosition: false, extractAnnotationText: true } })] };
+  assert.deepEqual((await readInput(stream(wire(header({ components }))))).header.components, components);
+});
+
+test("components carry the text of a custom-mimetypes file", async () => {
+  const components = { customMimeTypes: '<mime-info><mime-type type="application/x-a"/></mime-info>', detectors: [entry("default-detector", { marker: true })] };
+  assert.deepEqual((await readInput(stream(wire(header({ components }))))).header.components, components);
+});
+
 test("round trip across arbitrary chunk boundaries (1 byte at a time)", async () => {
   const body = Buffer.from("0123456789");
   const all = wire(header({ byteLength: body.length }), body);
@@ -105,6 +115,7 @@ for (const [label, json] of [
   ["negative maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":-1}'],
   ["string maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":"3"}'],
   ["components that is not an object", '{"v":1,"output":"text","byteLength":0,"components":[]}'],
+  ["custom media types that are not a string", '{"v":1,"output":"text","byteLength":0,"components":{"customMimeTypes":["a"]}}'],
   ["components with an unknown section", '{"v":1,"output":"text","byteLength":0,"components":{"encoders":[]}}'],
   ["parsers that is not an array", '{"v":1,"output":"text","byteLength":0,"components":{"parsers":{}}}'],
   ["a parsers entry that is not an object", '{"v":1,"output":"text","byteLength":0,"components":{"parsers":["pdf-parser"]}}'],
@@ -115,6 +126,14 @@ for (const [label, json] of [
   [
     "a parsers entry whose exclude holds a number",
     '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"name":"a","marker":false,"exclude":[1],"mimeInclude":[],"mimeExclude":[]}]}}',
+  ],
+  [
+    "a parsers entry whose settings hold a string",
+    '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"name":"pdf-parser","marker":false,"exclude":[],"mimeInclude":[],"mimeExclude":[],"settings":{"sortByPosition":"false"}}]}}',
+  ],
+  [
+    "a parsers entry whose settings are an array",
+    '{"v":1,"output":"text","byteLength":0,"components":{"parsers":[{"name":"pdf-parser","marker":false,"exclude":[],"mimeInclude":[],"mimeExclude":[],"settings":[true]}]}}',
   ],
   [
     "a parsers entry whose marker is not a boolean",

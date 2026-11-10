@@ -102,6 +102,56 @@ Added: a configuration crosses the isolation boundary (`tikajs-68os.8.7`, [docs/
 - Refused when the isolation is built, as a usage error: a `maxParseMillis` above what the isolation allows (its
   `maxTaskMillis` less the parent's margin; the message says so) and `maxOutputChars: -1`, which no child can hold.
 
+Added: a `server` section for `ripstream serve`, and Tika's serve flags (`tikajs-68os.8.9`, [docs/parsing.md](docs/parsing.md#the-server-section)).
+
+- `"server": { port, host, endpoints, cors, maxRequestSizeBytes, requestLogLevel, maxRequestReadMillis, idleTimeoutMillis }`
+  in the configuration `serve --config` reads. A setting ripstream has no counterpart for (`maxQueuePauseMillis`,
+  `maxResponseWriteMillis`, `maxInFlightRequestBytes`, `id`, `tlsConfig`, `metricsPort`, and `allowPipes`,
+  `allowPerRequestConfig`, `allowHttp2` when `true`) is refused by name with the reason, as is an unknown one.
+- Changed: **`ripstream serve` no longer serves `/status` and `/async` unless `server.endpoints` lists them** (Tika's
+  default set; `/health` is unaffected). `createRipstreamServer` keeps serving everything unless given `endpoints`.
+- Changed: in `serve`, `-h <host>` and `-p <port>` are Tika's spellings (`-p` used to be the password, which `serve`
+  ignored, so `serve -p 8080` listened on 9998). `-?` is help in every command. `serve -h` with no value is a usage error
+  that points at `--help`.
+- Changed: `serve` applies a `parse-context` section instead of refusing it: its `writeLimit` and `maxCount` are the limits
+  of a request that names none (`createRipstreamServer({ defaultLimits })`), under the ceiling. A `writeLimit` above
+  `--max-output-chars`, or `-1`, is a usage error.
+- `createRipstreamServer` gained `endpoints`, `requestLogLevel`, `maxRequestReadMillis`, `idleTimeoutMillis` and
+  `defaultLimits`; its `log` callback may now receive `"debug"`. Core gained `ServerSettings`, `SERVER_ENDPOINTS`,
+  `DEFAULT_SERVER_ENDPOINTS`, `parseServerSection` and `RipstreamConfig.server`.
+- Read from Tika's source (`TikaServerConfig.java`, `TikaServerProcess.java`, `TikaServerCli.java`), not run against a Tika.
+
+Added: `pdf-parser` settings by Tika's property names (`tikajs-68os.8.10`, [docs/parsing.md](docs/parsing.md#the-parsers-section)).
+
+- A `parsers` entry `{ "pdf-parser": { "sortByPosition": false, "extractAnnotationText": false } }` sets the
+  `PDFParserConfig` properties of those names on ripstream's PDF parser. They reach `createRipstream`, the CLI and the
+  isolation child (a `settings` field on each entry in the request header). Each must be `true` or `false`; Tika's
+  loader would coerce `"false"` or `1`.
+- Every other setting of a parser (the rest of `PDFParserConfig`, OCR, HTML) is still refused by name, now listing the
+  two that are applied. `ComponentEntry` gained an optional `settings`.
+- Fixed: with isolation on, a `parsers` section that named a parser only the child has (`pdf-parser`) made
+  `createStandardIsolation` throw ("is not implemented"). The section is now applied to the whole default list and the
+  in-process parsers keep what they had, so they agree with the child on what is switched off.
+- Not changed: ripstream's `PdfParser` defaults `sortByPosition` to `true`; Tika's `PDFParserConfig` defaults it to `false`.
+- Checked against Tika's source (`PDFParserConfig.java`, `PDFParser.java`), not against a running Tika.
+
+Added: custom media types, from Tika's own `custom-mimetypes.xml` (`tikajs-68os.8.11`, [docs/parsing.md](docs/parsing.md#the-custom-mimetypes-key)).
+
+- A configuration's `"custom-mimetypes": "path/to/custom-mimetypes.xml"` (Tika: the `tika.custom-mimetypes` system
+  property) adds the file's media types, globs, regex globs, aliases, supertypes, root elements and magic to the
+  registry that names, magic, aliases and XML roots are resolved with. The format is Tika's (freedesktop mime-info), so
+  an existing file works unchanged. `new DefaultDetector({ customMimeTypes: xmlText })` and `createRipstream({ customMimeTypes })`
+  take the text directly. `MimeTypesOptions.custom` (`CustomMimeType`) gained `magic`, `regexGlobs` and `description`,
+  and a `custom` type's magic now reaches the magic detector, which it did not before.
+- Refused by name, every mistake in one error: a missing file, text that is not XML, a wrong root, an unknown element, a
+  missing or invalid `type`/`pattern`/`localName`/`value`/`offset`, a match type Tika does not decode, a magic regex or
+  a glob regex ripstream cannot run, and a glob two unrelated types claim (Tika's `Conflicting extension pattern`).
+- With isolation on, the text of the file is read once by the parent and crosses in the request header (so the file
+  can change or vanish without the child noticing); it counts against the 16 KiB the header leaves for components.
+- Read from Tika's source, not checked against a running Tika 4.2.0. Stricter than Tika where Tika would ignore a
+  mistake: it ignores a misspelled element and a `<glob>` without a pattern, and fails only at the first detect for a
+  match of an unknown type.
+
 Added: the CLI accepts `--name=value` as well as `--name value` for every long option that takes a value
 (`--config=ripstream.json`, `--output=json`, `--port=8080`) (`tikajs-68os.8.12`). An empty value (`--config=`), a value on
 a flag that takes none (`--json=yes`) and the short form (`-c=x`) are usage errors. The CLI stays ripstream's own

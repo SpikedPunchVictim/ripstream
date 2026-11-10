@@ -70,13 +70,41 @@ test("a component's settings must be an object", () => {
 });
 
 test("a setting ripstream cannot apply is refused by name, never dropped", () => {
-  assert.deepEqual(parsers([{ "pdf-parser": { sortByPosition: true } }]).issues, [
-    `parsers[0] "pdf-parser": setting "sortByPosition" is not supported`,
+  assert.deepEqual(parsers([{ "pdf-parser": { extractInlineImages: true } }]).issues, [
+    `parsers[0] "pdf-parser": setting "extractInlineImages" is not supported (ripstream applies sortByPosition and extractAnnotationText of this parser)`,
+  ]);
+  assert.deepEqual(parsers([{ "rtf-parser": { sortByPosition: true } }]).issues, [
+    `parsers[0] "rtf-parser": setting "sortByPosition" is not supported`,
   ]);
   // exclude belongs to the default marker only.
   assert.match(parsers([{ "pdf-parser": { exclude: ["rtf-parser"] } }]).issues.join("|"), /"pdf-parser": setting "exclude" is not supported/);
   // The marker takes no settings but its own.
   assert.match(parsers([{ "default-parser": { sortByPosition: true } }]).issues.join("|"), /"default-parser": setting "sortByPosition"/);
+});
+
+test("pdf-parser takes Tika's PDFParserConfig properties that ripstream has: sortByPosition and extractAnnotationText", () => {
+  const { entries, issues } = parsers([{ "pdf-parser": { sortByPosition: false, extractAnnotationText: false, "_mime-exclude": "application/pdf" } }]);
+  assert.deepEqual(issues, []);
+  assert.deepEqual(entries[0]?.settings, { sortByPosition: false, extractAnnotationText: false });
+  // Nothing set is no settings, so an entry without them is what it always was.
+  assert.equal(parsers([{ "pdf-parser": {} }]).entries[0]?.settings, undefined);
+  assert.equal(parsers(["pdf-parser"]).entries[0]?.settings, undefined);
+});
+
+test("a pdf-parser setting is a boolean: Tika's loader would coerce a string, ripstream refuses it", () => {
+  for (const value of ["true", 1, null, [], {}]) {
+    assert.match(
+      parsers([{ "pdf-parser": { sortByPosition: value } }]).issues.join("|"),
+      /"pdf-parser": setting "sortByPosition" must be true or false/,
+      JSON.stringify(value),
+    );
+  }
+});
+
+test("a configuration keeps the settings of its entries, frozen", () => {
+  const config = loadConfig({ parsers: [{ "pdf-parser": { sortByPosition: true } }] });
+  assert.deepEqual(config.parsers?.[0]?.settings, { sortByPosition: true });
+  assert.ok(Object.isFrozen(config.parsers?.[0]?.settings));
 });
 
 test("exclude lists registered parser names", () => {
@@ -137,7 +165,7 @@ test("loadConfig and validateConfig refuse a bad parsers section, naming it", ()
     () => loadConfig({ parsers: ["no-such-parser"] }),
     (error: unknown) => error instanceof RipstreamConfigError && /parsers\[0\]: unknown parser "no-such-parser"/.test(error.message),
   );
-  assert.match(validateConfig({ parsers: [{ "pdf-parser": { sortByPosition: true } }] }).join("|"), /setting "sortByPosition"/);
+  assert.match(validateConfig({ parsers: [{ "pdf-parser": { extractActions: true } }] }).join("|"), /setting "extractActions"/);
   assert.deepEqual(validateConfig({ parsers: [{ "default-parser": {} }] }), []);
 });
 

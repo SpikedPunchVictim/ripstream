@@ -8,9 +8,10 @@ import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
  * "@spikedpunch/ripstream-bundle-standard/isolation"). It parses ONE document with the standard pipeline in this
  * process and answers over fd 3. Importing it runs it, so nothing else imports it.
  *
- * The parent hands it the `parsers` and `detectors` sections of its configuration in the request header, and the
- * child builds the pipeline from them once it has read the input, so it parses with the same parsers and detectors
- * as the parent's routing and in-process parsers. Without a configuration it builds the default pipeline.
+ * The parent hands it the `parsers` and `detectors` sections of its configuration, and the text of its
+ * custom-mimetypes file, in the request header. The child builds the pipeline from them once it has read the input, so
+ * it parses with the same parsers, detectors and media types as the parent's routing and in-process parsers. Without
+ * a configuration it builds the default pipeline.
  *
  * The PDF parser always runs pdf.js on the calling thread, which here is this child's main thread. The child
  * process is the containment (heap cap, RSS kill, process-group kill, ulimit); there is no nested worker_thread
@@ -21,5 +22,13 @@ import { blockPdfjsCanvas } from "./block-pdfjs-canvas.ts";
  */
 blockPdfjsCanvas();
 await runChildMain({
-  ripstream: (components) => createRipstream(components === undefined ? {} : { config: new RipstreamConfig(components) }),
+  ripstream: (components) => {
+    if (components === undefined) return createRipstream();
+    // The custom media types cross as text; the configuration's own key is a path, which the child never reads.
+    const { customMimeTypes, ...sections } = components;
+    return createRipstream({
+      config: new RipstreamConfig(sections),
+      ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
+    });
+  },
 });

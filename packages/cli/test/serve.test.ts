@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { IsolationError, MediaType, Metadata, createIsolatedRipstream } from "@spikedpunch/ripstream-core";
@@ -84,6 +86,34 @@ function fakeIsolation(): FakeIsolation {
   return fake;
 }
 
+/** A configuration file that serves /status, which Tika (and so `ripstream serve`) leaves off unless it is listed. */
+const STATUS_CONFIG = (() => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-serve-status-"));
+  const file = join(directory, "status.json");
+  writeFileSync(file, JSON.stringify({ server: { endpoints: ["status", "tika"] } }));
+  return file;
+})();
+
+async function withConfig<T>(config: unknown, run: (file: string) => Promise<T>): Promise<T> {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-serve-config-"));
+  const file = join(directory, "config.json");
+  writeFileSync(file, JSON.stringify(config));
+  try {
+    return await run(file);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+/** Starts `serve` with exactly these arguments (no --port added) and waits until it listens. */
+async function startRaw(argv: readonly string[], deps: CliDeps = { env: {} }): Promise<{ sink: ReturnType<typeof io>; base: string; host: string; exit: Promise<number> }> {
+  const sink = io();
+  const exit = main(["serve", ...argv], sink, deps);
+  await until(() => /http:\/\/[\d.]+:\d+/.test(sink.out.join("")), "the server to listen");
+  const [, host, port] = /http:\/\/([\d.]+):(\d+)/.exec(sink.out.join(""))!;
+  return { sink, host: host!, base: `http://${host}:${port}`, exit };
+}
+
 async function stop(running: { exit: Promise<number> }): Promise<number> {
   process.emit("SIGTERM");
   return running.exit;
@@ -91,7 +121,7 @@ async function stop(running: { exit: Promise<number> }): Promise<number> {
 
 test("serve isolates by default: strict, with the default output ceiling, and says so", async () => {
   const fake = fakeIsolation();
-  const running = await startServe([], { env: {}, createIsolation: fake.createIsolation });
+  const running = await startServe(["--config", STATUS_CONFIG], { env: {}, createIsolation: fake.createIsolation });
   try {
     assert.deepEqual(fake.created.map((options) => options.config), [{ mode: "strict" }]);
     assert.match(running.sink.out.join(""), /isolation strict \(default\); memory pool 8192 MiB/);
@@ -137,7 +167,7 @@ test("--max-output-chars and RIPSTREAM_MAX_OUTPUT_CHARS set the ceiling", async 
 
 test("--isolation off serves in-process and is loud about it", async () => {
   const fake = fakeIsolation();
-  const running = await startServe(["--isolation", "off"], { env: {}, createIsolation: fake.createIsolation });
+  const running = await startServe(["--isolation", "off", "--config", STATUS_CONFIG], { env: {}, createIsolation: fake.createIsolation });
   try {
     assert.equal(fake.created.length, 0);
     assert.match(running.sink.out.join(""), /isolation off \(flag\): documents are parsed in this process/);
@@ -278,4 +308,109 @@ test("SIGTERM stops the server and kills the child that is still parsing", async
   } finally {
     pool.dispose();
   }
+});
+
+// ---- the `server` section and Tika's serve flags (tikajs-68os.8.9) --------------------------------------------------
+
+test("without endpoints serve answers Tika's default set: /status and /async are off", async () => {
+  const running = await startServe(["--isolation", "off"], { env: {} });
+  try {
+    for (const [method, path] of [["GET", "/status"], ["POST", "/async"]] as const) {
+      assert.equal((await fetch(`${running.base}${path}`, { method })).status, 404, path);
+    }
+    for (const path of ["/health", "/version"]) assert.equal((await fetch(`${running.base}${path}`)).status, 200, path);
+    assert.equal((await fetch(`${running.base}/detect`, { method: "PUT", body: "x" })).status, 200);
+  } finally {
+    assert.equal(await stop(running), 0);
+  }
+});
+
+test("a server section sets what serve listens on and serves; a flag beats the file", async () => {
+  await withConfig(
+    {
+      server: {
+        port: 0,
+        host: "127.0.0.1",
+        endpoints: ["detect", "status"],
+        cors: "https://example.com",
+        maxRequestSizeBytes: 8,
+        requestLogLevel: "info",
+      },
+    },
+    async (file) => {
+      const running = await startRaw(["--isolation", "off", "--config", file]);
+      try {
+        assert.equal(running.host, "127.0.0.1");
+        assert.equal((await fetch(`${running.base}/status`)).status, 200);
+        assert.equal((await fetch(`${running.base}/tika`, { method: "PUT", body: "x" })).status, 404, "endpoints is exactly the list");
+        const detected = await fetch(`${running.base}/detect`, { method: "PUT", body: "short" });
+        assert.equal(detected.status, 200);
+        assert.equal(detected.headers.get("access-control-allow-origin"), "https://example.com");
+        assert.equal((await fetch(`${running.base}/detect`, { method: "PUT", body: "far too long" })).status, 413);
+        await until(() => /PUT \/detect/.test(running.sink.err.join("")), "the request log");
+        assert.match(running.sink.err.join(""), /GET \/status/);
+      } finally {
+        assert.equal(await stop(running), 0);
+      }
+    },
+  );
+  // The file names a port nothing may use; the flag outranks it, as -p does in Tika.
+  await withConfig({ server: { port: 1 } }, async (file) => {
+    const running = await startRaw(["--isolation", "off", "--config", file, "--port", "0"]);
+    try {
+      assert.equal((await fetch(`${running.base}/health`)).status, 200);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  });
+});
+
+test("Tika's spellings: serve -h is the host, -p the port, -? help; * is every interface", async () => {
+  const running = await startRaw(["--isolation", "off", "-h", "*", "-p", "0"]);
+  try {
+    assert.equal(running.host, "0.0.0.0");
+    assert.equal((await fetch(`http://127.0.0.1:${new URL(running.base).port}/health`)).status, 200);
+  } finally {
+    assert.equal(await stop(running), 0);
+  }
+  for (const argv of [["serve", "-?"], ["-?"], ["serve", "--help"], ["parse", "-h"], ["-h"]]) {
+    const sink = io();
+    assert.equal(await main(argv, sink, { env: {} }), 0, argv.join(" "));
+    assert.match(sink.out.join(""), /^Usage: ripstream/, argv.join(" "));
+  }
+  // Away from serve -p is still the password, and -h still help.
+  const sink = io();
+  assert.equal(await main(["serve", "-h"], sink, { env: {} }), 2);
+  assert.match(sink.err.join(""), /-h expects a value, the host.*--help/);
+});
+
+test("a server section ripstream cannot apply is a usage error naming the setting, and nothing starts", async () => {
+  await withConfig({ isolation: { mode: "off" }, server: { id: "a", allowPipes: true } }, async (file) => {
+    const sink = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /server\.id is not supported/);
+    assert.match(sink.err.join(""), /server\.allowPipes is not supported/);
+    assert.equal(sink.out.join(""), "", "the server never started");
+  });
+});
+
+test("a parse-context section gives requests that name no limit its limits; a request's own limit wins", async () => {
+  const section = { isolation: { mode: "off" }, "parse-context": { "output-limits": { writeLimit: 20, throwOnWriteLimit: true } } };
+  await withConfig(section, async (file) => {
+    const running = await startServe(["--config", file], { env: {} });
+    try {
+      const long = "word ".repeat(100);
+      assert.equal((await fetch(`${running.base}/tika`, { method: "PUT", body: long })).status, 422);
+      assert.equal((await fetch(`${running.base}/tika?maxOutputChars=100000`, { method: "PUT", body: long })).status, 200);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  });
+  // A default above the ceiling would be silently clamped: refuse it instead.
+  await withConfig(section, async (file) => {
+    const sink = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file, "--max-output-chars", "10"], sink, { env: {} }), 2);
+    assert.match(sink.err.join(""), /defaultLimits\.maxOutputChars \(20\) is above maxLimits\.maxOutputChars \(10\)/);
+    assert.equal(sink.out.join(""), "");
+  });
 });

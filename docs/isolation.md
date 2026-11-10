@@ -18,7 +18,7 @@ pool can hold a child for it, so a flood of hostile documents queues or gets a 5
 | `createRipstream()` (library) | in-process | A library call is yours to contain. This includes PDFs: the PDF parser runs pdf.js on the calling thread and has no containment of its own. |
 
 `strict` refuses to start when isolation cannot be provided. `lenient` logs a WARN and parses everything in the
-server process. `off` parses in-process and says so at startup and on `/status`.
+server process. `off` parses in-process and says so at startup and, when `/status` is served, on `/status`.
 
 ## Configuration
 
@@ -47,12 +47,13 @@ dropped instead of failing.
 A `RIPSTREAM_*` variable that is not in the table is also a usage error, with the nearest setting offered
 (`RIPSTREAM_ISOLATION_MAXQUEUE` → did you mean `RIPSTREAM_ISOLATION_MAX_QUEUE`?). Left alone, a misspelled name would
 have no effect and the setting would keep its default. A config file with a repeated key, or nested more than 64
-levels, is refused the same way, and so is a flag that takes a value (`-c`, `-p`, `--port`, `--host`) when the value
+levels, is refused the same way, and so is a flag that takes a value (`-c`, `-p`, `--port`, `--host`, and `-h` in `serve`) when the value
 is missing or is another flag.
 
-A config file with a `parsers`, `detectors` or `parse-context` section ([parsing.md](parsing.md#the-parsers-section)),
-and the `--maxEmbeddedDepth` / `--maxEmbeddedCount` flags, apply with isolation on as they do with it off
-(`tikajs-68os.8.7`). The `parsers` and `detectors` sections reach the child in the header of each request, and the
+A config file with a `parsers`, `detectors`, `parse-context` or `custom-mimetypes` entry
+([parsing.md](parsing.md#the-parsers-section)), and the `--maxEmbeddedDepth` / `--maxEmbeddedCount` flags, apply with
+isolation on as they do with it off (`tikajs-68os.8.7`, `tikajs-68os.8.11`). The `parsers` and `detectors` sections, and
+the text of the custom-mimetypes file (read once by the parent), reach the child in the header of each request, and the
 routing detector, `detect()` and the parsers that stay in this process are built from them too, so all of them agree on
 what a document is and what parses it; the in-process parsers are narrowed by the section and never widened. Limits are
 the defaults of every isolated parse. Two things the isolation cannot carry are refused when it starts, as usage errors:
@@ -244,7 +245,8 @@ A PDF whose parser faults inside the child is a `crash` (500). Before isolation 
 malformed document (422). A clearly malformed PDF is still a 422.
 
 **`/status`** (outside the gate, and behind `authenticate` only if the embedder configured one; `ripstream serve` has
-none and binds `127.0.0.1` unless `--host` says otherwise) reports the gate, the running and waiting counts and the
+none, binds `127.0.0.1` unless `--host` or `server.host` says otherwise, and serves `/status` only when the configuration's
+`server.endpoints` lists it, as Tika does) reports the gate, the running and waiting counts and the
 isolator's own status: `mode`, `configuredMode`, `degraded` and `degradedReason`, `containment`, `pool`,
 `unreapedChildren` (should be 0), `limits`, `defaultReservationMb` and the in-process types.
 

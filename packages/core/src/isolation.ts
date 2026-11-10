@@ -8,13 +8,16 @@
 import type { ComponentEntry } from "./component-config.ts";
 
 /**
- * The `parsers` and `detectors` sections of a configuration, as `loadConfig` read them (plain data, so it crosses a
- * process boundary as JSON). The isolation child builds its parsers and detectors from them, and applies the same
- * names the parent applied to its own routing detector and in-process parsers.
+ * What a configuration sets that the isolation child must apply too (plain data, so it crosses a process boundary as
+ * JSON): the `parsers` and `detectors` sections as `loadConfig` read them, and the text of the custom-mimetypes file.
+ * The child builds its parsers and detectors from them, and applies the same names the parent applied to its own
+ * routing detector and in-process parsers. The file's text crosses, not its path: the child reads exactly what the
+ * parent checked, whatever happens to the file meanwhile.
  */
 export interface IsolatedComponents {
   readonly parsers?: readonly ComponentEntry[];
   readonly detectors?: readonly ComponentEntry[];
+  readonly customMimeTypes?: string;
 }
 
 /**

@@ -3,6 +3,7 @@ import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 import type { ParseLimits } from "./parse-context.ts";
 import { parseParseContextSection } from "./parse-context-config.ts";
+import { parseServerSection, type ServerSettings } from "./server-config.ts";
 
 export interface RipstreamConfigShape {
   readonly version?: number;
@@ -13,9 +14,13 @@ export interface RipstreamConfigShape {
   readonly detectors?: readonly ComponentEntry[];
   /** The limits of the `parse-context` section, already read by `loadConfig`. */
   readonly limits?: Readonly<Partial<ParseLimits>>;
+  /** The path the `custom-mimetypes` key names. */
+  readonly customMimeTypes?: string;
+  /** The `server` section, already read by `loadConfig`. */
+  readonly server?: ServerSettings;
 }
 
-const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors", "parse-context"]);
+const ALLOWED_ROOT_KEYS = new Set(["version", "isolation", "parsers", "detectors", "parse-context", "custom-mimetypes", "server"]);
 
 /**
  * Sections Tika's configuration has and ripstream does not apply. They are refused by name rather than accepted and
@@ -81,6 +86,17 @@ export class RipstreamConfig {
    * applies them as the defaults of every parse; a limit a call names itself wins.
    */
   readonly limits: Readonly<Partial<ParseLimits>> | null;
+  /**
+   * The path of a `custom-mimetypes.xml` (Tika's file, whose property is `tika.custom-mimetypes`), or null when the
+   * configuration names none. `createRipstream({ config })` reads it, relative to the working directory, and adds its
+   * media types to the registry that names, magic and aliases are resolved with.
+   */
+  readonly customMimeTypes: string | null;
+  /**
+   * What the `server` section sets for `ripstream serve`, or null when it sets nothing. Only the server reads it;
+   * `createRipstream` ignores it.
+   */
+  readonly server: ServerSettings | null;
 
   constructor(shape: RipstreamConfigShape = {}) {
     this.generation = ++generationCounter;
@@ -90,6 +106,8 @@ export class RipstreamConfig {
     this.parsers = freezeEntries(shape.parsers);
     this.detectors = freezeEntries(shape.detectors);
     this.limits = shape.limits === undefined || Object.keys(shape.limits).length === 0 ? null : Object.freeze({ ...shape.limits });
+    this.customMimeTypes = shape.customMimeTypes ?? null;
+    this.server = shape.server === undefined || Object.keys(shape.server).length === 0 ? null : Object.freeze({ ...shape.server });
   }
 
   get current(): boolean {
@@ -98,7 +116,12 @@ export class RipstreamConfig {
 }
 
 function freezeEntries(entries: readonly ComponentEntry[] | undefined): readonly ComponentEntry[] | null {
-  return entries === undefined ? null : Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
+  if (entries === undefined) return null;
+  return Object.freeze(
+    entries.map((entry) =>
+      Object.freeze({ ...entry, ...(entry.settings === undefined ? {} : { settings: Object.freeze({ ...entry.settings }) }) }),
+    ),
+  );
 }
 
 /** Loads JSON configuration, failing fast with every validation issue. */
@@ -125,7 +148,7 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers, detectors, limits } = inspectConfig(value);
+  const { issues: valueIssues, isolation, parsers, detectors, limits, customMimeTypes, server } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -136,6 +159,8 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(parsers === undefined ? {} : { parsers }),
     ...(detectors === undefined ? {} : { detectors }),
     ...(limits === undefined ? {} : { limits }),
+    ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
+    ...(server === undefined ? {} : { server }),
   });
 }
 
@@ -149,6 +174,8 @@ interface InspectedConfig {
   readonly parsers?: readonly ComponentEntry[];
   readonly detectors?: readonly ComponentEntry[];
   readonly limits?: Partial<ParseLimits>;
+  readonly customMimeTypes?: string;
+  readonly server?: ServerSettings;
 }
 
 function inspectConfig(value: unknown): InspectedConfig {
@@ -199,12 +226,26 @@ function inspectConfig(value: unknown): InspectedConfig {
     issues.push(...result.issues);
     if (result.issues.length === 0) limits = result.limits;
   }
+  let customMimeTypes: string | undefined;
+  const rawCustom = record["custom-mimetypes"];
+  if (rawCustom !== undefined) {
+    if (typeof rawCustom === "string" && rawCustom.length > 0) customMimeTypes = rawCustom;
+    else issues.push('"custom-mimetypes" must be the path of a custom-mimetypes.xml, a non-empty string');
+  }
+  let server: ServerSettings | undefined;
+  if (record.server !== undefined) {
+    const result = parseServerSection(record.server);
+    issues.push(...result.issues);
+    if (result.issues.length === 0) server = result.settings;
+  }
   return {
     issues,
     ...(isolation === undefined ? {} : { isolation }),
     ...(sections.parsers === undefined ? {} : { parsers: sections.parsers }),
     ...(sections.detectors === undefined ? {} : { detectors: sections.detectors }),
     ...(limits === undefined ? {} : { limits }),
+    ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
+    ...(server === undefined ? {} : { server }),
   };
 }
 

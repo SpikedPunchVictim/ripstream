@@ -126,6 +126,8 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new TarParser(),
       new PdfParser({
         ...(options.pdfPassword === undefined ? {} : { password: options.pdfPassword }),
+        // The `pdf-parser` entry's PDFParserConfig properties (the section only holds the ones PdfParser has).
+        ...section?.find((entry) => entry.name === "pdf-parser")?.settings,
       }),
       new ImageParser(),
       new Mp4Parser(),
@@ -181,6 +183,11 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
 export interface CreateRipstreamOptions extends DefaultParserOptions {
   readonly detector?: DefaultDetector;
   /**
+   * The text of a custom-mimetypes file (see `DefaultDetectorOptions.customMimeTypes`), used instead of reading the
+   * file the `config`'s `custom-mimetypes` names. It cannot be combined with `detector`, which was built without it.
+   */
+  readonly customMimeTypes?: string;
+  /**
    * Limits every parse starts from. They are laid over the `parse-context` limits of `config`, and a limit a call names
    * in its own `limits` wins over both.
    */
@@ -194,7 +201,17 @@ export function createRipstream(options: CreateRipstreamOptions = {}): Ripstream
       "the configuration's `detectors` section cannot be combined with `detector`: pass one or the other",
     ]);
   }
-  const detector = options.detector ?? new DefaultDetector(options.config === undefined ? {} : { config: options.config });
+  if (options.detector !== undefined && (options.customMimeTypes !== undefined || options.config?.customMimeTypes != null)) {
+    throw new RipstreamConfigError([
+      "custom media types cannot be combined with `detector`: build the detector with them (`new DefaultDetector({ customMimeTypes })`)",
+    ]);
+  }
+  const detector =
+    options.detector ??
+    new DefaultDetector({
+      ...(options.config === undefined ? {} : { config: options.config }),
+      ...(options.customMimeTypes === undefined ? {} : { customMimeTypes: options.customMimeTypes }),
+    });
   const parser = new AutoDetectParser({
     detector,
     parser: createDefaultParser({ ...options, registry: options.registry ?? detector.getMediaTypeRegistry() }),

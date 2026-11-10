@@ -621,7 +621,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     if (bytes > MAX_COMPONENTS_BYTES) {
       throw new RangeError(
         `components are ${bytes} bytes as JSON, more than the ${MAX_COMPONENTS_BYTES} the request header leaves for them ` +
-          `(the header is ${MAX_HEADER_BYTES} bytes at most and is sent with every request): shorten the parsers and detectors sections`,
+          `(the header is ${MAX_HEADER_BYTES} bytes at most and is sent with every request): shorten the parsers and detectors sections or the custom-mimetypes file`,
       );
     }
   }

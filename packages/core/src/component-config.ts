@@ -15,6 +15,8 @@ export interface ComponentEntry {
   readonly exclude: readonly string[];
   readonly mimeInclude: readonly string[];
   readonly mimeExclude: readonly string[];
+  /** Parser properties named as Tika names them (`PDFParserConfig.sortByPosition`); absent when the entry sets none. */
+  readonly settings?: Readonly<Record<string, boolean>>;
 }
 
 const MARKERS: Readonly<Record<ComponentSection, string>> = {
@@ -30,6 +32,14 @@ const NAMES: Readonly<Record<ComponentSection, ReadonlySet<string>>> = {
 };
 
 const MIME_KEYS = ["_mime-include", "_mime-exclude"] as const;
+
+/**
+ * The properties of a Tika parser's own configuration that ripstream applies, by Tika's parser name. They are the
+ * `PDFParserConfig` bean properties that `PdfParser` has an option for; every other property is refused by name.
+ */
+const PARSER_SETTINGS: Readonly<Record<string, readonly string[]>> = {
+  "pdf-parser": ["sortByPosition", "extractAnnotationText"],
+};
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -73,6 +83,26 @@ function excludeList(value: unknown, section: ComponentSection, where: string, i
   return names;
 }
 
+/**
+ * The boolean settings of `keys` that the entry sets. Tika's loader coerces `"true"` or `1` into a boolean property;
+ * ripstream refuses anything but true and false, so a misspelt value is not read as its opposite.
+ */
+function booleanSettings(
+  keys: readonly string[],
+  setting: (key: string) => unknown,
+  where: string,
+  issues: string[],
+): Record<string, boolean> {
+  const chosen: Record<string, boolean> = {};
+  for (const key of keys) {
+    const value = setting(key);
+    if (value === undefined) continue;
+    if (typeof value === "boolean") chosen[key] = value;
+    else issues.push(`${where}: setting ${JSON.stringify(key)} must be true or false`);
+  }
+  return chosen;
+}
+
 /** The one `[name, settings]` pair of an entry, or null when it has been reported. */
 function entryParts(entry: unknown, position: string, issues: string[]): [string, Record<string, unknown>] | null {
   if (typeof entry === "string" && entry.length > 0) return [entry, {}];
@@ -98,7 +128,8 @@ function entryParts(entry: unknown, position: string, issues: string[]): [string
  * Reads a `parsers` or `detectors` section in Tika's JSON shape into entries, and reports everything that Tika would
  * accept and ripstream cannot honor: a name that is not a registered component, a second key in an entry, an `exclude`
  * item that is not a name, and any setting other than `exclude` on the marker and, for parsers, the media type
- * filters, which would otherwise be dropped without a word.
+ * filters and the few parser properties ripstream applies (`PARSER_SETTINGS`), which would otherwise be dropped
+ * without a word.
  *
  * It reads each value of the caller's object once, and returns copies.
  */
@@ -126,18 +157,23 @@ export function parseComponentSection(
     const where = `${position} ${JSON.stringify(name)}`;
     // Only a parser has media types to filter: Tika drops the filters on a named detector and refuses them on the marker.
     const filters: readonly string[] = section === "parsers" ? MIME_KEYS : [];
-    const allowed: readonly string[] = marker ? ["exclude", ...filters] : filters;
+    const applied: readonly string[] = section === "parsers" && !marker ? (PARSER_SETTINGS[name] ?? []) : [];
+    const allowed: readonly string[] = marker ? ["exclude", ...filters] : [...filters, ...applied];
     const read = Object.entries(settings);
     for (const [key] of read) {
-      if (!allowed.includes(key)) issues.push(`${where}: setting ${JSON.stringify(key)} is not supported`);
+      if (allowed.includes(key)) continue;
+      const hint = applied.length === 0 ? "" : ` (ripstream applies ${applied.join(" and ")} of this parser)`;
+      issues.push(`${where}: setting ${JSON.stringify(key)} is not supported${hint}`);
     }
     const setting = (key: string): unknown => read.find(([candidate]) => candidate === key)?.[1];
+    const chosen = booleanSettings(applied, setting, where, issues);
     entries.push({
       name,
       marker,
       exclude: marker ? excludeList(setting("exclude"), section, where, issues) : [],
       mimeInclude: mediaTypeList("_mime-include", setting("_mime-include"), where, issues),
       mimeExclude: mediaTypeList("_mime-exclude", setting("_mime-exclude"), where, issues),
+      ...(Object.keys(chosen).length === 0 ? {} : { settings: chosen }),
     });
   });
   return { entries, issues };

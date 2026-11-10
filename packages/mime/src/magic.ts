@@ -319,6 +319,20 @@ function compileJavaRegex(source: string, ranged: boolean): RegExp | null {
 }
 
 /**
+ * A Java regular expression that must match a whole string (`Matcher.matches`), as a JS one: the way Tika matches the
+ * `isregex` glob of a media type against a file name. Null when the pattern cannot be translated or compiled.
+ */
+export function compileJavaFullMatch(source: string): RegExp | null {
+  const regex = compileJavaRegex(source, false);
+  if (regex === null) return null;
+  try {
+    return new RegExp(`^(?:${regex.source})$`, regex.flags.replace("y", ""));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * JS has no atomic group, and reading `(?>X)` as `(?:X)` is not safe: a failing match then tries every way to split the
  * input (`(?>\r\n|[\r\n]){1,50}` on 40 CRLF pairs is 2^40 attempts, from a 100-byte upload). A lookahead's captured
  * text cannot be backtracked into, so `(?:(?=(X))\N)` is the same group; the wrapper keeps a quantifier on the group

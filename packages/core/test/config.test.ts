@@ -216,3 +216,15 @@ test("a UTF-8 byte order mark before the JSON is skipped, as Jackson skips it", 
   // The structure scan sees the same text, so a repeated key after a mark is still found.
   assert.throws(() => loadConfig('﻿{"isolation":{"mode":"off","mode":"strict"}}'), /duplicate key "mode"/);
 });
+
+test('"custom-mimetypes" is the path of Tika\'s custom-mimetypes.xml, kept as written', () => {
+  assert.equal(loadConfig({ "custom-mimetypes": "types/custom-mimetypes.xml" }).customMimeTypes, "types/custom-mimetypes.xml");
+  assert.equal(loadConfig({}).customMimeTypes, null);
+  assert.equal(new RipstreamConfig().customMimeTypes, null);
+});
+
+test('"custom-mimetypes" that is not a path is refused', () => {
+  for (const value of ["", 7, true, null, ["a.xml"], { path: "a.xml" }]) {
+    assert.throws(() => loadConfig({ "custom-mimetypes": value }), /"custom-mimetypes" must be the path of a custom-mimetypes\.xml/);
+  }
+});

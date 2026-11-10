@@ -580,6 +580,48 @@ test("a detectors section naming a detector ripstream does not implement is a us
   });
 });
 
+// A `custom-mimetypes` key names a Tika custom-mimetypes.xml (tikajs-68os.8.11); what the file may say is tested in
+// mime/test/custom-mimetypes.test.ts, and its crossing the isolation boundary in bundle-standard.
+
+const ACME_TYPES = `<mime-info><mime-type type="application/x-acme-report"><magic priority="60"><match value="ACMERPT" type="string" offset="0"/></magic></mime-type></mime-info>`;
+
+function withCustomTypes(extra: Record<string, unknown>, run: (file: string) => Promise<void>): Promise<void> {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-mimetypes-"));
+  const types = join(directory, "custom-mimetypes.xml");
+  writeFileSync(types, ACME_TYPES);
+  return withConfig({ "custom-mimetypes": types, ...extra }, run).finally(() => rmSync(directory, { recursive: true, force: true }));
+}
+
+test("a custom-mimetypes file in --config adds media types to detect", async () => {
+  await withCustomTypes({}, async (file) => {
+    const detected = io("ACMERPT 1.0");
+    assert.equal(await main(["detect", "--config", file, "-"], detected, { env: {} }), 0);
+    assert.equal(detected.out.join("").trim(), "application/x-acme-report");
+    const without = io("ACMERPT 1.0");
+    assert.equal(await main(["detect", "-"], without, { env: {} }), 0);
+    assert.equal(without.out.join("").trim(), "text/plain");
+  });
+});
+
+test("a custom-mimetypes file is handed to the isolation as the configuration that names it", async () => {
+  await withCustomTypes({}, async (file) => {
+    const { log, createIsolation } = fakeIsolation();
+    const sink = io("x");
+    assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 0, sink.err.join(""));
+    assert.ok(((log.created[0] as Given).ripstreamConfig as { customMimeTypes?: string } | undefined)?.customMimeTypes?.endsWith("custom-mimetypes.xml"));
+  });
+});
+
+test("a custom-mimetypes file that is missing is a usage error naming it, for detect and for a parse", async () => {
+  await withConfig({ "custom-mimetypes": "/nonexistent/types.xml", isolation: { mode: "off" } }, async (file) => {
+    for (const command of [["detect"], []]) {
+      const sink = io("x");
+      assert.equal(await main([...command, "--config", file, "-"], sink, { env: {} }), 2);
+      assert.match(sink.err.join(""), /custom-mimetypes: the file "\/nonexistent\/types\.xml" does not exist/);
+    }
+  });
+});
+
 // A `parse-context` section sets limits (tikajs-68os.8.8); --maxEmbeddedDepth and --maxEmbeddedCount are tika-app's flags
 // for the same two limits. What the section may say is tested in core/test/parse-context-config.test.ts.
 
@@ -737,16 +779,6 @@ test("limits the isolation cannot carry are a usage error that names the setting
     assert.equal(await main(["--config", file, "--isolation", "strict", "-"], sink, { env: {}, createIsolation: createStandardIsolation }), 2);
     assert.match(sink.err.join(""), /maxOutputChars -1 \(unlimited\) cannot be isolated/);
     assert.equal(sink.out.join(""), "");
-  });
-});
-
-test("serve does not apply a parse-context section yet, and says so instead of half applying it", async () => {
-  await withConfig({ ...MAX_TWO, isolation: { mode: "off" } }, async (file) => {
-    const sink = io();
-    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2);
-    assert.match(sink.err.join(""), /"parse-context".*serve|serve.*"parse-context"/s);
-    assert.match(sink.err.join(""), /tikajs-68os\.8\.9/);
-    assert.equal(sink.out.join(""), "", "the server never started");
   });
 });
 

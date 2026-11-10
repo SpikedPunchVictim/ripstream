@@ -83,12 +83,27 @@ function requireStringArray(value: unknown, where: string): void {
   }
 }
 
+function requireBooleanRecord(value: unknown, where: string): void {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    Object.values(value).some((item) => typeof item !== "boolean")
+  ) {
+    throw new TypeError(`input header: ${where} must be an object of booleans`);
+  }
+}
+
 /** The shape of `ComponentEntry`. The names themselves were checked by the parent, which authored them. */
 function checkComponents(value: unknown): void {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("input header: components must be an object");
   }
   for (const [section, entries] of Object.entries(value)) {
+    if (section === "customMimeTypes") {
+      if (typeof entries !== "string") throw new TypeError("input header: components.customMimeTypes must be a string");
+      continue;
+    }
     if (section !== "parsers" && section !== "detectors") {
       throw new TypeError(`input header: components has an unknown section ${JSON.stringify(section)}`);
     }
@@ -105,6 +120,7 @@ function checkComponents(value: unknown): void {
       requireStringArray(fields.exclude, `components.${section} exclude`);
       requireStringArray(fields.mimeInclude, `components.${section} mimeInclude`);
       requireStringArray(fields.mimeExclude, `components.${section} mimeExclude`);
+      if (fields.settings !== undefined) requireBooleanRecord(fields.settings, `components.${section} settings`);
     }
   }
 }

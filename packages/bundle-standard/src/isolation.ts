@@ -16,14 +16,14 @@ import {
   type NodeIsolator,
   type NodeIsolatorOptions,
 } from "@spikedpunch/ripstream-isolation-node";
-import { DefaultDetector } from "@spikedpunch/ripstream-mime";
+import { DefaultDetector, readCustomMimeTypesFile } from "@spikedpunch/ripstream-mime";
 import {
   CsvParser,
   HtmlDocumentParser,
   MarkdownParser,
   TextParser,
   XmlParser,
-  applyParserConfig,
+  createDefaultParser,
   createRipstream,
 } from "@spikedpunch/ripstream-parsers";
 
@@ -57,11 +57,18 @@ export function createInProcessParsers(): Parser[] {
  * further: the `parsers` section switches off what it names, and the `detectors` section shapes the type it detects
  * (the section never adds a parser, so the restriction holds).
  */
-export function createInProcessRipstream(config?: RipstreamConfig): Ripstream {
-  const detector = new DefaultDetector(config === undefined ? {} : { config });
-  const section = config?.parsers ?? null;
-  const parsers = section === null ? createInProcessParsers() : applyParserConfig(createInProcessParsers(), section, detector.getMediaTypeRegistry());
-  return createRipstream({ parsers, detector });
+export function createInProcessRipstream(config?: RipstreamConfig, customMimeTypes?: string): Ripstream {
+  const detector = new DefaultDetector({
+    ...(config === undefined ? {} : { config }),
+    ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
+  });
+  const inProcess = createInProcessParsers();
+  if (config?.parsers == null) return createRipstream({ parsers: inProcess, detector });
+  // The section is applied to the whole default list, as the child applies it, so a parser it names that only the
+  // child has (pdf-parser) is a real entry and not an error here; what this ripstream keeps is what it already had.
+  const names = new Set(inProcess.map((parser) => parser.name));
+  const configured = createDefaultParser({ config, registry: detector.getMediaTypeRegistry() }).getParsers();
+  return createRipstream({ parsers: configured.filter((parser) => names.has(parser.name)), detector });
 }
 
 export interface StandardIsolationOptions
@@ -88,11 +95,12 @@ export interface StandardIsolation {
 }
 
 /** The sections a child needs, or undefined when the configuration has neither (the child builds its defaults). */
-function componentsOf(config: RipstreamConfig | undefined): IsolatedComponents | undefined {
-  if (config === undefined || (config.parsers === null && config.detectors === null)) return undefined;
+function componentsOf(config: RipstreamConfig | undefined, customMimeTypes: string | undefined): IsolatedComponents | undefined {
+  if (config === undefined || (config.parsers === null && config.detectors === null && customMimeTypes === undefined)) return undefined;
   return {
     ...(config.parsers === null ? {} : { parsers: config.parsers }),
     ...(config.detectors === null ? {} : { detectors: config.detectors }),
+    ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
   };
 }
 
@@ -123,9 +131,16 @@ export async function createStandardIsolation(options: StandardIsolationOptions)
     });
   }
 
-  const full = createRipstream(ripstreamConfig === undefined ? {} : { config: ripstreamConfig });
-  const restricted = createInProcessRipstream(ripstreamConfig);
-  const components = componentsOf(ripstreamConfig);
+  // The file is read once, here: the routing detector, the in-process parsers and the child all get this text, so they
+  // cannot disagree about what the file said (and a missing or malformed file fails now, not at the first document).
+  const customPath = ripstreamConfig?.customMimeTypes ?? null;
+  const customMimeTypes = customPath === null ? undefined : readCustomMimeTypesFile(customPath);
+  const full = createRipstream({
+    ...(ripstreamConfig === undefined ? {} : { config: ripstreamConfig }),
+    ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
+  });
+  const restricted = createInProcessRipstream(ripstreamConfig, customMimeTypes);
+  const components = componentsOf(ripstreamConfig, customMimeTypes);
 
   // Set before the first request can arrive; the isolator only reads this when a request is parsed in-process.
   let isolator: NodeIsolator | undefined;

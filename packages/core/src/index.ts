@@ -26,6 +26,13 @@ export {
 } from "./config.ts";
 export { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 export {
+  DEFAULT_SERVER_ENDPOINTS,
+  SERVER_ENDPOINTS,
+  parseServerSection,
+  type ServerEndpoint,
+  type ServerSettings,
+} from "./server-config.ts";
+export {
   METADATA_FIELDS,
   METADATA_KEYS,
   METADATA_NAMESPACES,

@@ -2,8 +2,10 @@ export * from "./registry-types.ts";
 export {
   MimeTypes,
   filenameFromContentDisposition,
+  type CustomMimeType,
   type MimeTypesOptions,
 } from "./mime-types.ts";
+export { parseCustomMimeTypes, readCustomMimeTypesFile } from "./custom-mimetypes.ts";
 export { MagicDetector, type MagicCandidate } from "./magic.ts";
 export { extractXmlRoot, type XmlRoot } from "./xml-root.ts";
 export {

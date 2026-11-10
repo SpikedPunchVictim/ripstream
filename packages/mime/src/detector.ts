@@ -9,10 +9,12 @@ import {
   type RipstreamConfig,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { parseCustomMimeTypes, readCustomMimeTypesFile } from "./custom-mimetypes.ts";
 import { MagicDetector } from "./magic.ts";
 import {
   MimeTypes,
   filenameFromContentDisposition,
+  type CustomMimeType,
   type MimeTypesOptions,
 } from "./mime-types.ts";
 import { detectEncoding } from "./text-encoding.ts";
@@ -26,6 +28,12 @@ import { detectMatroska } from "./containers/matroska.ts";
 import { detectOgg } from "./containers/ogg.ts";
 
 export interface DefaultDetectorOptions extends MimeTypesOptions {
+  /**
+   * The text of a `custom-mimetypes.xml` (Tika's freedesktop mime-info shape): media types, globs, aliases, root
+   * elements and magic added to Tika's registry, for names, magic and alias resolution alike. A definition ripstream
+   * cannot apply is a `RipstreamConfigError`. It takes the place of the file the `config`'s `custom-mimetypes` names.
+   */
+  readonly customMimeTypes?: string;
   readonly magic?: MagicDetector;
   readonly trustContentTypeHeader?: boolean;
   readonly prefixLength?: number;
@@ -38,6 +46,13 @@ const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04];
 const ZIP_EMPTY_SIGNATURE = [0x50, 0x4b, 0x05, 0x06];
 const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 const BPLIST_SIGNATURE = [0x62, 0x70, 0x6c, 0x69, 0x73, 0x74];
+
+/** The custom definitions of the options: the text given, else the file the configuration names, else none. */
+function customDefinitions(options: DefaultDetectorOptions): readonly CustomMimeType[] {
+  if (options.customMimeTypes !== undefined) return parseCustomMimeTypes(options.customMimeTypes, "custom-mimetypes");
+  const path = options.config?.customMimeTypes ?? null;
+  return path === null ? [] : parseCustomMimeTypes(readCustomMimeTypesFile(path), path);
+}
 
 /** What a stage is given: the stream (null when there is none) and the sniffing prefix of it. */
 interface StageInput {
@@ -151,8 +166,12 @@ export class DefaultDetector implements Detector {
   private readonly components: readonly Component[];
 
   constructor(options: DefaultDetectorOptions = {}) {
-    this.mimeTypes = new MimeTypes(options);
-    this.magic = options.magic ?? new MagicDetector(options.registry);
+    this.mimeTypes = new MimeTypes({
+      ...(options.registry === undefined ? {} : { registry: options.registry }),
+      custom: [...(options.custom ?? []), ...customDefinitions(options)],
+    });
+    // The magic a custom definition adds is in the merged entries, not in Tika's.
+    this.magic = options.magic ?? new MagicDetector(this.mimeTypes.getEntries());
     this.trustContentTypeHeader = options.trustContentTypeHeader ?? false;
     this.prefixLength = options.prefixLength ?? 64 * 1024;
     const section = options.config?.detectors ?? null;

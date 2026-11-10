@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import {
   EncryptedDocumentError,
   DEFAULT_LIMITS,
+  DEFAULT_SERVER_ENDPOINTS,
   IsolationError,
   LimitExceededError,
   MalformedDocumentError,
@@ -54,8 +55,10 @@ interface Options {
   readonly output: "text" | "json" | "jsonl";
   readonly config: string | null;
   readonly password: string | null;
-  readonly port: number;
-  readonly host: string;
+  /** `--port`, or null when not given: the configuration's `server.port`, then 9998. */
+  readonly port: number | null;
+  /** `--host`, or null when not given: the configuration's `server.host`, then 127.0.0.1. `*` is every interface. */
+  readonly host: string | null;
   /** `--isolation` as typed; validated by resolveIsolationConfig. */
   readonly isolation: string | null;
   /** `--max-output-chars` as typed; validated by resolveMaxOutputChars. */
@@ -132,7 +135,7 @@ export async function main(
     return EXIT_USAGE;
   }
   if (options.command === "serve") {
-    if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+    if (options.port !== null && (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)) {
       io.stderr("ripstream: --port expects an integer between 0 and 65535\n");
       return EXIT_USAGE;
     }
@@ -253,26 +256,52 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
     const isolating = settings.isolation.config.mode !== "off";
     const maxOutputChars = settings.maxOutputChars ?? (isolating ? DEFAULT_LIMITS.maxOutputChars : null);
     if (isolating) isolation = await openIsolation(settings, deps, io, maxOutputChars ?? undefined);
-    const instance = createRipstreamServer({
-      ripstream:
-        isolation === null
-          ? createRipstream(settings.config === null ? {} : { config: settings.config })
-          : isolation.ripstream,
-      ...(isolation === null ? {} : { isolation: isolation.isolator }),
-      ...(maxOutputChars === null ? {} : { maxLimits: { maxOutputChars } }),
-      log: (level, message) => {
-        if (level === "warn") io.stderr(`ripstream: WARN: ${message}\n`);
-      },
-    });
+    // The flags are Tika's -p and -h, which outrank the file. Tika's `-h *` and `host: "*"` mean every interface.
+    const server = settings.config?.server ?? {};
+    const host = options.host === null ? (server.host ?? "127.0.0.1") : options.host === "*" ? "0.0.0.0" : options.host;
+    const wantedPort = options.port ?? server.port ?? 9998;
+    const defaults = settings.config?.limits;
+    const defaultLimits = {
+      ...(defaults?.maxOutputChars === undefined ? {} : { maxOutputChars: defaults.maxOutputChars }),
+      ...(defaults?.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: defaults.maxEmbeddedResources }),
+    };
+    // Info and debug lines are shown when the section asks for request logging, down to the level it names.
+    const shown = server.requestLogLevel === "debug" ? ["warn", "info", "debug"] : server.requestLogLevel === "info" ? ["warn", "info"] : ["warn"];
+    let instance: ReturnType<typeof createRipstreamServer>;
+    try {
+      instance = createRipstreamServer({
+        ripstream:
+          isolation === null
+            ? createRipstream(settings.config === null ? {} : { config: settings.config })
+            : isolation.ripstream,
+        ...(isolation === null ? {} : { isolation: isolation.isolator }),
+        ...(maxOutputChars === null ? {} : { maxLimits: { maxOutputChars } }),
+        ...(Object.keys(defaultLimits).length === 0 ? {} : { defaultLimits }),
+        endpoints: server.endpoints ?? DEFAULT_SERVER_ENDPOINTS,
+        ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
+        ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
+        ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),
+        ...(server.maxRequestReadMillis === undefined ? {} : { maxRequestReadMillis: server.maxRequestReadMillis }),
+        ...(server.idleTimeoutMillis === undefined ? {} : { idleTimeoutMillis: server.idleTimeoutMillis }),
+        log: (level, message) => {
+          if (!shown.includes(level)) return;
+          io.stderr(level === "warn" ? `ripstream: WARN: ${message}\n` : `ripstream: ${message}\n`);
+        },
+      });
+    } catch (error) {
+      // A setting the server rejects (a default above the ceiling) is the operator's mistake.
+      if (error instanceof RangeError) throw new IsolationSettingsError(error.message);
+      throw error;
+    }
     try {
       let port: number;
       try {
-        port = await instance.listen(options.port, options.host);
+        port = await instance.listen(wantedPort, host);
       } catch (error) {
-        io.stderr(`ripstream: cannot listen on ${options.host}:${options.port}: ${error instanceof Error ? error.message : String(error)}\n`);
+        io.stderr(`ripstream: cannot listen on ${host}:${wantedPort}: ${error instanceof Error ? error.message : String(error)}\n`);
         return EXIT_ENVIRONMENT;
       }
-      io.stdout(`ripstream server listening on http://${options.host}:${port}\n`);
+      io.stdout(`ripstream server listening on http://${host}:${port}\n`);
       io.stdout(`${describeIsolation(settings, isolation)}\n`);
       await new Promise<void>((resolve) => {
         const stop = (): void => {
@@ -395,14 +424,6 @@ async function resolveSettings(
       limits: null,
     };
   }
-  if (options.command === "serve" && config !== null && config.limits !== null) {
-    // The server sets the limits of each request itself (its ceilings, the request's parameters), so a default set here
-    // would apply to some limits and not to others. The server's own section is tikajs-68os.8.9.
-    throw new Error(
-      'ripstream: serve does not apply the configuration\'s "parse-context" section yet (tikajs-68os.8.9): ' +
-        "the server takes its limits from --max-output-chars, RIPSTREAM_MAX_OUTPUT_CHARS and each request; remove the section to serve with this configuration",
-    );
-  }
   try {
     // After detect and language, which read no setting: a misspelling there changes nothing.
     assertKnownVariables(env);
@@ -436,8 +457,8 @@ function parseArgs(argv: readonly string[]): Options {
   let config: string | null = null;
   let password: string | null = null;
   let file: string | null = null;
-  let port = 9998;
-  let host = "127.0.0.1";
+  let port: number | null = null;
+  let host: string | null = null;
   let isolation: string | null = null;
   let maxOutputChars: string | null = null;
   let maxEmbeddedDepth: string | null = null;
@@ -462,7 +483,10 @@ function parseArgs(argv: readonly string[]): Options {
     if (argument === "--json" || argument === "-j") json = true;
     else if (argument === "--metadata" || argument === "-m") metadataOnly = true;
     else if (argument === "--recursive" || argument === "-r") recursive = true;
-    else if (argument === "--help" || argument === "-h") return { ...defaultOptions(), command: "help" };
+    // Tika's serve takes -h as the host and -p as the port; everywhere else -h is help and -p the password.
+    else if (argument === "--help" || argument === "-?" || (argument === "-h" && command !== "serve")) {
+      return { ...defaultOptions(), command: "help" };
+    }
     else if (argument === "--version" || argument === "-V") return { ...defaultOptions(), command: "version" };
     else if (argument === "--output" || argument === "-o") {
       const value = inline ?? rest[++index];
@@ -471,9 +495,9 @@ function parseArgs(argv: readonly string[]): Options {
       }
       output = value;
     } else if (argument === "--config" || argument === "-c") config = takeValue();
-    else if (argument === "--password" || argument === "-p") password = takeValue();
-    else if (argument === "--port") port = parsePort(takeValue());
-    else if (argument === "--host") host = takeValue();
+    else if (argument === "--password" || (argument === "-p" && command !== "serve")) password = takeValue();
+    else if (argument === "--port" || argument === "-p") port = parsePort(takeValue());
+    else if (argument === "--host" || argument === "-h") host = takeValue();
     else if (argument === "--isolation") isolation = takeValue();
     else if (argument === "--max-output-chars") maxOutputChars = takeValue();
     else if (argument === "--maxEmbeddedDepth") maxEmbeddedDepth = takeValue();
@@ -491,7 +515,7 @@ function parseArgs(argv: readonly string[]): Options {
 
 /** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
 const FLAGS: ReadonlySet<string> = new Set([
-  "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "--version", "-V",
+  "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "-?", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
   "--maxEmbeddedDepth", "--maxEmbeddedCount",
 ]);
@@ -504,7 +528,8 @@ const VALUE_FLAGS: ReadonlySet<string> = new Set([
 
 /** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
 function requireValue(value: string | undefined, flag: string): string {
-  if (value === undefined) throw new Error(`${flag} expects a value`);
+  // serve's -h is Tika's host; someone who typed it for help is told where help is.
+  if (value === undefined) throw new Error(flag === "-h" ? "-h expects a value, the host (--help prints help)" : `${flag} expects a value`);
   if (FLAGS.has(value)) throw new Error(`${flag} expects a value, got the option ${value}`);
   return value;
 }
@@ -524,8 +549,8 @@ function defaultOptions(): Options {
     output: "text",
     config: null,
     password: null,
-    port: 9998,
-    host: "127.0.0.1",
+    port: null,
+    host: null,
     isolation: null,
     maxOutputChars: null,
     maxEmbeddedDepth: null,
@@ -548,21 +573,21 @@ function usage(): string {
     "  detect      Detect media type",
     "  metadata    Print metadata JSON",
     "  language    Detect text language",
-    "  serve       Start the HTTP server (--port, --host)",
+    "  serve       Start the HTTP server (-p/--port, -h/--host; Tika's spellings)",
     "",
     "Options:",
     "  -j, --json           JSON output",
     "  -m, --metadata       Metadata only",
     "  -r, --recursive      Recursive metadata JSON",
     "  -o, --output <mode>  text, json or jsonl",
-    "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context)",
-    "  -p, --password <pw>  Document password (not available with --isolation)",
+    "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context, custom-mimetypes, server)",
+    "  -p, --password <pw>  Document password (not available with --isolation; serve: -p is the port)",
     "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
     "                          (serve: strict unless set; other commands: off unless set)",
     "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
     "      --maxEmbeddedDepth <n>  parse, metadata: fail (exit 3) when an embedded document is nested deeper than n",
     "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",
-    "  -h, --help           Show help",
+    "  -h, --help           Show help (serve: -h is the host; help is --help or -?)",
     "  -V, --version        Show version",
     "",
     "A long option that takes a value also accepts --name=value (--config=ripstream.json).",

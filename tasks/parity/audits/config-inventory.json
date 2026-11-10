@@ -267,15 +267,15 @@
     "area": "loader.top-level",
     "upstreamKey": "server",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaServerConfig.java:199",
-    "ripstream": "createRipstreamServer(options) programmatic (packages/server/src/index.ts:41-87)",
-    "status": "partial",
-    "evidence": "O01-O06",
-    "unknownKeyBehaviour": "unknown option SILENTLY IGNORED (O01)",
-    "note": "No file form: CLI `serve` takes only --port/--host/--isolation/--max-output-chars.",
+    "ripstream": "config `server` section (parseServerSection, packages/core/src/server-config.ts) read by `serve --config`; createRipstreamServer(options) for code",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (RipstreamConfigError naming the key; refused keys give the reason)",
+    "note": "Only `serve` reads the section; createRipstream and the other commands ignore it.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "`serve --config` reads Tika's server section: eight keys applied, the rest refused by name with the reason, an unknown key refused with the list of applied ones. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -433,15 +433,15 @@
     "area": "parsers",
     "upstreamKey": "parser params (e.g. pdf-parser.sortByPosition)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/ComponentInstantiator.java; docs/modules/ROOT/pages/configuration/parsers/*",
-    "ripstream": "per-parser constructor options (PdfParserOptions packages/parser-pdf/src/pdf.ts; HtmlParserOptions; CsvParser options; TesseractOcrOptions)",
+    "ripstream": "parsers entry settings by Tika property name: pdf-parser sortByPosition and extractAnnotationText (ComponentEntry.settings); other parser options are constructor options (HtmlParserOptions; CsvParser options; TesseractOcrOptions)",
     "status": "partial",
-    "evidence": "J04,C02",
-    "unknownKeyBehaviour": "silent-ignore (J04: bogus param accepted)",
-    "note": "Option names differ from upstream property names; no JSON path to them.",
+    "evidence": "packages/core/test/component-config.test.ts,packages/parsers/test/parser-config.test.ts,packages/bundle-standard/test/standard-isolation.test.ts",
+    "unknownKeyBehaviour": "loud (RipstreamConfigError naming the entry, the setting and the settings ripstream applies)",
+    "note": "Only the two PDFParserConfig properties ripstream has an option for are applied, and only as true or false; any other setting of any parser is refused by name instead of dropped. ripstream's PdfParser defaults sortByPosition to true where PDFParserConfig defaults it to false.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.10",
-      "why": "Parser settings by Tika property name."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.10",
+      "why": "A setting ripstream has a counterpart for is read by Tika's property name and applied in the process, the isolation child and across the isolation header; a Tika property with no ripstream counterpart (OCR, the rest of PDFParserConfig) stays refused by name. Read from Tika source (PDFParserConfig.java, PDFParser.java), not run against a Tika."
     }
   },
   {
@@ -580,15 +580,15 @@
     "area": "detectors",
     "upstreamKey": "mime-type repository override (tika.custom-mimetypes)",
     "upstreamSource": "tika-core MimeTypesFactory.java:43,190",
-    "ripstream": "none (generated registry packages/mime/src/generated/registry.ts)",
-    "status": "gap",
-    "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "Custom magic/glob additions cannot be supplied at runtime.",
+    "ripstream": "config key \"custom-mimetypes\" (path of a Tika custom-mimetypes.xml); DefaultDetector({ customMimeTypes }); createRipstream({ customMimeTypes })",
+    "status": "implemented",
+    "evidence": "packages/mime/test/custom-mimetypes.test.ts",
+    "unknownKeyBehaviour": "loud (RipstreamConfigError naming the file, the line and the element or attribute)",
+    "note": "Same freedesktop mime-info XML as Tika, merged into the registry for names, globs, regex globs, aliases, supertypes, root elements and magic.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.11",
-      "why": "Custom media type definitions."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.11",
+      "why": "A configuration names the file, as tika.custom-mimetypes does (NG-10: the JVM system property itself is not read). Merged as Tika merges a second file; stricter where Tika ignores a mistake or fails only at the first detect. Read from Tika source, not run against a Tika."
     }
   },
   {
@@ -1439,15 +1439,15 @@
     "area": "server",
     "upstreamKey": "server.port (default 9998)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:46,97",
-    "ripstream": "CLI --port / createRipstreamServer.listen (main.ts:395)",
-    "status": "partial",
-    "evidence": "C21",
-    "unknownKeyBehaviour": "--port abc rejected loudly (C21)",
+    "ripstream": "server.port, then --port / -p, then 9998 (serve in main.ts)",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (a non-integer or out-of-range port is refused; --port abc is a usage error)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "server.port is applied; --port and -p win over the file. Default 9998 as upstream. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1455,15 +1455,15 @@
     "area": "server",
     "upstreamKey": "server.host (default localhost)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:47,98",
-    "ripstream": "CLI --host (main.ts:396)",
-    "status": "partial",
-    "evidence": "C22",
-    "unknownKeyBehaviour": "`-h <host>` Tika spelling prints help and exits 0 (C22)",
-    "note": "",
+    "ripstream": "server.host, then --host / -h, then 127.0.0.1 (serve in main.ts)",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (`serve -h` with no value is a usage error pointing at --help)",
+    "note": "Default is 127.0.0.1 where Tika's is localhost: the same machine, without a name lookup. `-h` is help in every other command.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "server.host is applied (`*` is every interface); --host and -h win over the file, -h being Tika's spelling in serve only. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1495,15 +1495,15 @@
     "area": "server",
     "upstreamKey": "server.endpoints allowlist (VALID_ENDPOINTS)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerProcess.java:109-112",
-    "ripstream": "fixed route table (server index.ts:423)",
-    "status": "gap",
-    "evidence": "O01",
-    "unknownKeyBehaviour": "n/a: cannot enable/disable endpoints",
-    "note": "",
+    "ripstream": "server.endpoints (createRipstreamServer({ endpoints }), serve defaults to DEFAULT_SERVER_ENDPOINTS)",
+    "status": "partial",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (an endpoint ripstream does not serve is refused naming it, as Tika refuses an unrecognized one)",
+    "note": "`ripstream serve` no longer serves /status or /async unless listed (breaking, as upstream). createRipstreamServer keeps serving everything unless given endpoints. /health, /translate and /pipes are not governed by endpoints; /status/<job> belongs to async.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "endpoints is applied as upstream: empty is the default set, a non-empty list is exactly those endpoints, an unknown name is fatal, status is served only when listed. ripstream serves tika rmeta meta unpack detect language version status async; mime, mime-types, detectors, parsers and pipes are refused by name (CFG-033, 038, 103, 104 are declared non-goals; pipes follows tikajs-68os.6). Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1511,15 +1511,15 @@
     "area": "server",
     "upstreamKey": "server.allowPipes",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:84,260-281",
-    "ripstream": "options.pipes + requires authenticate (server index.ts:159)",
+    "ripstream": "server.allowPipes: false accepted, true refused; options.pipes + authenticate in code (server index.ts)",
     "status": "partial",
-    "evidence": "S09",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "",
+    "note": "Refused when true, with the reason; read by parseServerSection.",
     "triage": {
       "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "target": "tikajs-68os.6",
+      "why": "allowPipes: true is refused by name: /pipes needs an authenticate function and path roots that only code can supply, so a config file cannot turn it on. False is accepted. The pipes group (tikajs-68os.6) decides what a file form could be."
     }
   },
   {
@@ -1555,7 +1555,7 @@
     "status": "non-goal-candidate",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": ""
+    "note": "server.allowHttp2: false is accepted, true is refused by name (node:http serves HTTP/1.1)."
   },
   {
     "id": "CFG-095",
@@ -1566,22 +1566,30 @@
     "status": "implemented",
     "evidence": "O05",
     "unknownKeyBehaviour": "wrong type silently accepted (O05)",
-    "note": ""
+    "note": "Applied from server.cors by `serve --config` (tikajs-68os.8.9)."
   },
   {
     "id": "CFG-096",
     "area": "server",
     "upstreamKey": "server.maxQueuePauseMillis",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:88,81",
-    "ripstream": "options.maxQueue bounds waiters (server index.ts:66); no pause-before-reject semantics (unverified)",
-    "status": "partial",
+    "ripstream": "server.maxQueuePauseMillis refused by name; options.maxQueue bounds waiters",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "non-goal",
+      "target": "NG-11 server settings with no ripstream counterpart",
+      "why": "ripstream answers 503 at once when its queue is full instead of pausing the request first; a configured pause would only hold sockets. Refused by name when set."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.8.9",
+      "by": "owner",
+      "date": "2026-11-10",
+      "group": "NG-11 server settings with no ripstream counterpart",
+      "reason": "ripstream answers 503 at once when its queue is full instead of pausing the request first; a configured pause would only hold sockets. Refused by name when set."
     }
   },
   {
@@ -1593,22 +1601,22 @@
     "status": "implemented",
     "evidence": "O02",
     "unknownKeyBehaviour": "negative silently accepted (O02)",
-    "note": ""
+    "note": "Applied from server.maxRequestSizeBytes by `serve --config` (tikajs-68os.8.9). Positive only: ripstream always bounds a body, where Tika lets a negative value lift the limit."
   },
   {
     "id": "CFG-098",
     "area": "server",
     "upstreamKey": "server.maxRequestReadMillis",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:90,70",
-    "ripstream": "none: requestTimeoutMs starts after the body is read (server index.ts:432,450)",
-    "status": "gap",
-    "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "",
+    "ripstream": "server.maxRequestReadMillis -> http.Server requestTimeout (408)",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (zero or a non-integer is refused)",
+    "note": "Upstream's bound is Jetty's; Node's requestTimeout is the same limit, the whole request including the body.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "maxRequestReadMillis bounds how long receiving a whole request may take (a slow-loris upload is a 408); a negative value is no deadline; zero is refused. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1616,15 +1624,23 @@
     "area": "server",
     "upstreamKey": "server.maxResponseWriteMillis",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:91,73",
-    "ripstream": "none",
-    "status": "gap",
+    "ripstream": "server.maxResponseWriteMillis refused by name",
+    "status": "non-goal",
     "evidence": "",
     "unknownKeyBehaviour": "n/a (no ripstream surface)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "non-goal",
+      "target": "NG-11 server settings with no ripstream counterpart",
+      "why": "Node writes a response as the client reads it and the connection's idle timeout (idleTimeoutMillis) bounds a stalled reader; a separate response-write clock has no counterpart. Refused by name when set."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.8.9",
+      "by": "owner",
+      "date": "2026-11-10",
+      "group": "NG-11 server settings with no ripstream counterpart",
+      "reason": "Node writes a response as the client reads it and the connection's idle timeout (idleTimeoutMillis) bounds a stalled reader; a separate response-write clock has no counterpart. Refused by name when set."
     }
   },
   {
@@ -1632,15 +1648,15 @@
     "area": "server",
     "upstreamKey": "server.idleTimeoutMillis",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:92,76",
-    "ripstream": "none",
-    "status": "gap",
-    "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
+    "ripstream": "server.idleTimeoutMillis -> http.Server setTimeout with a 'timeout' handler",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (zero, negative or a non-integer is refused)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "idleTimeoutMillis closes a connection with no bytes moving for that long; a request whose body is in and whose response has not begun is waiting on its parse and is not closed, as in Jetty. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1648,15 +1664,23 @@
     "area": "server",
     "upstreamKey": "server.maxInFlightRequestBytes",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:93,79",
-    "ripstream": "options.maxConcurrent/maxQueue (server index.ts:61-66)",
-    "status": "partial",
+    "ripstream": "server.maxInFlightRequestBytes refused by name; options.maxConcurrent/maxQueue",
+    "status": "non-goal",
     "evidence": "O03,O04",
     "unknownKeyBehaviour": "invalid values rejected loudly (O03,O04)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "non-goal",
+      "target": "NG-11 server settings with no ripstream counterpart",
+      "why": "Requests are bounded by number (maxConcurrent, maxQueue) and by body size (maxRequestSizeBytes), not by bytes in flight; the byte budget needs request accounting ripstream does not have. Refused by name when set."
+    },
+    "decision": {
+      "outcome": "non-goal",
+      "bead": "tikajs-68os.8.9",
+      "by": "owner",
+      "date": "2026-11-10",
+      "group": "NG-11 server settings with no ripstream counterpart",
+      "reason": "Requests are bounded by number (maxConcurrent, maxQueue) and by body size (maxRequestSizeBytes), not by bytes in flight; the byte budget needs request accounting ripstream does not have. Refused by name when set."
     }
   },
   {
@@ -1664,15 +1688,15 @@
     "area": "server",
     "upstreamKey": "server.requestLogLevel",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:99",
-    "ripstream": "options.log (startup warnings only)",
-    "status": "gap",
-    "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
+    "ripstream": "server.requestLogLevel -> createRipstreamServer({ requestLogLevel }) (debug | info)",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud (any other level is refused naming the two)",
     "note": "",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "requestLogLevel debug or info logs each request's method and URI to stderr, and shows the server's info lines; unset logs neither. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1728,15 +1752,15 @@
     "area": "server",
     "upstreamKey": "server section strictness (strict deserialize; missing 'server' fatal with -c)",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerConfig.java:199-202",
-    "ripstream": "createRipstreamServer(options) ignores unknown options",
-    "status": "gap",
-    "evidence": "O01",
-    "unknownKeyBehaviour": "silent-ignore",
-    "note": "",
+    "ripstream": "parseServerSection (strict: unknown or ill-typed key refused by name)",
+    "status": "implemented",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
+    "unknownKeyBehaviour": "loud",
+    "note": "Upstream's `missing server section is fatal with -c` has no counterpart: a config without a server section is a valid config (the section is optional).",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "The section is validated as strictly as the others: an unknown key is refused with the keys ripstream applies, and a key of the wrong type is refused naming the key. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1744,15 +1768,15 @@
     "area": "server",
     "upstreamKey": "CLI -h/--host -p/--port -c/--config -i/--id --metricsPort --preset -?/--help",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerCli.java:36-45",
-    "ripstream": "serve --port --host --isolation --max-output-chars -c (main.ts:380-403, 454)",
-    "status": "partial",
-    "evidence": "C16,C21,C22",
-    "unknownKeyBehaviour": "unknown flag rejected loudly (C16); flag-letter collisions: -h help vs host, -p password vs port (C22)",
-    "note": "",
+    "ripstream": "serve: -h/--host -p/--port -c/--config -?/--help --isolation --max-output-chars (main.ts)",
+    "status": "implemented",
+    "evidence": "packages/cli/test/serve.test.ts,packages/cli/test/cli.test.ts",
+    "unknownKeyBehaviour": "loud (a flag that needs a value without one is a usage error)",
+    "note": "`-p` is the password in the other commands and `-h` is help there: the meaning depends on the command. `serve -p 8080` listened on 9998 before this change.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "serve takes Tika's -h <host> and -p <port>; -? and --help are help in every command. --id, --metricsPort and --preset are refused or declined (CFG-090, CFG-107 are declared non-goals). Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -1795,15 +1819,15 @@
     "area": "server",
     "upstreamKey": "endpoints: /tika /rmeta /meta /unpack /detect /language /mime /mime-types /detectors /parsers /version /status /pipes /async",
     "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/TikaServerProcess.java:109-112",
-    "ripstream": "ripstream routes: /detect /tika /meta /rmeta /unpack /language /translate /version /status /health /async /pipes (server index.ts:320-423)",
+    "ripstream": "routes: /detect /tika /meta /rmeta /unpack /language /translate /version /status /health /async /pipes, governed by server.endpoints (server index.ts)",
     "status": "partial",
-    "evidence": "H01-H06",
+    "evidence": "packages/core/test/server-config.test.ts,packages/server/test/server-options.test.ts,packages/cli/test/serve.test.ts",
     "unknownKeyBehaviour": "missing: /mime, /mime-types, /detectors, /parsers, /parsers/details (404)",
-    "note": "/status is enabled by default here but opt-in upstream; oracle /status is 404 because it is not in `endpoints`.",
+    "note": "Missing: /mime, /mime-types, /detectors, /parsers, /parsers/details (404; refused in endpoints). Gap tracked in tikajs-68os.7 (server endpoints).",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.9",
-      "why": "A server section for ripstream serve."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.9",
+      "why": "Endpoints are enabled by Tika's names via server.endpoints; /status is opt-in under `ripstream serve` as upstream. Read from Tika source (TikaServerConfig.java, TikaServerProcess.java, TikaServerCli.java), not run against a Tika."
     }
   },
   {
@@ -2454,15 +2478,15 @@
     "area": "sysprops",
     "upstreamKey": "tika.custom-mimetypes",
     "upstreamSource": "tika-core MimeTypesFactory.java:43,190",
-    "ripstream": "none",
-    "status": "gap",
-    "evidence": "",
-    "unknownKeyBehaviour": "n/a (no ripstream surface)",
-    "note": "",
+    "ripstream": "config key \"custom-mimetypes\" (path of a Tika custom-mimetypes.xml); DefaultDetector({ customMimeTypes }); createRipstream({ customMimeTypes })",
+    "status": "implemented",
+    "evidence": "packages/mime/test/custom-mimetypes.test.ts",
+    "unknownKeyBehaviour": "loud (RipstreamConfigError naming the file, the line and the element or attribute)",
+    "note": "Same freedesktop mime-info XML as Tika, merged into the registry for names, globs, regex globs, aliases, supertypes, root elements and magic.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.8.11",
-      "why": "Custom media type definitions."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.8.11",
+      "why": "A configuration names the file, as tika.custom-mimetypes does (NG-10: the JVM system property itself is not read). Merged as Tika merges a second file; stricter where Tika ignores a mistake or fails only at the first detect. Read from Tika source, not run against a Tika."
     }
   },
   {

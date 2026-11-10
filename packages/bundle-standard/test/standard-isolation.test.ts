@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test, type TestContext } from "node:test";
@@ -13,6 +13,7 @@ import {
   CompositeParser,
   LimitExceededError,
   ParseContext,
+  RipstreamConfigError,
   UnsupportedFormatError,
   createRipstream,
   loadConfig,
@@ -120,7 +121,10 @@ function docx(paragraphs: readonly string[]): Uint8Array {
 
 /** A one-page PDF with standard Helvetica text (ASCII only, so string length is byte length). */
 function pdf(text: string): Uint8Array {
-  const content = `BT /F1 24 Tf 72 700 Td (${text}) Tj ET`;
+  return pdfOfContent(`BT /F1 24 Tf 72 700 Td (${text}) Tj ET`);
+}
+
+function pdfOfContent(content: string): Uint8Array {
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -531,4 +535,88 @@ test("limits that cannot be isolated are refused when the isolation is built, no
   // With isolation off there is no child to size, so the same limits are fine.
   const off = await createStandardIsolation({ config: { mode: "off" }, pool, limits: { maxOutputChars: -1 } });
   await off.isolator.dispose();
+});
+
+const ACME_PACK = `<?xml version="1.0"?><mime-info><mime-type type="application/x-acme-pack">
+  <sub-class-of type="application/zip"/><glob pattern="*.acmepack"/></mime-type></mime-info>`;
+
+function customMimeTypesFile(text: string): string {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-custom-mimetypes-"));
+  const path = join(directory, "custom-mimetypes.xml");
+  writeFileSync(path, text);
+  return path;
+}
+
+test("custom media types reach the router, detect() and the child, which is handed the text and never reads the file", async () => {
+  const path = customMimeTypesFile(ACME_PACK);
+  const config = loadConfig({ "custom-mimetypes": path });
+  const archive = storedZip({ "x.txt": "inside the archive" });
+  const configured = createRipstream({ config });
+  const expected = await outcomeOf(() => configured.parse(archive, { filename: "a.acmepack" }));
+  assert.deepEqual(expected, { text: (await referenceText(archive, "a.zip")).text, type: "application/x-acme-pack" });
+  assert.notDeepEqual(await outcomeOf(() => reference.parse(archive, { filename: "a.acmepack" })), expected, "the file changes the answer");
+
+  await withStandard({ ripstreamConfig: config }, async ({ ripstream }) => {
+    // The child is given the text: take the file away and nothing it needs is gone.
+    rmSync(join(path, ".."), { recursive: true });
+    assert.equal((await ripstream.detect(archive, { filename: "a.acmepack" })).toString(), "application/x-acme-pack");
+    const before = settled.length;
+    assert.deepEqual(await outcomeOf(() => ripstream.parse(archive, { filename: "a.acmepack" })), expected);
+    assert.equal(settled.length - before, 1, "it was the child that parsed it, as an application/x-acme-pack");
+  });
+});
+
+test("a pdf-parser setting reaches the child: the same PDF reads in the order the configuration asks for", async () => {
+  // Drawn bottom line first: the text reads Top first with sortByPosition (ripstream's default), Bottom first without.
+  const bytes = pdfOfContent("BT /F1 12 Tf 72 600 Td (Bottom line) Tj ET\nBT /F1 12 Tf 72 700 Td (Top line) Tj ET");
+  const order = (text: string): string => (text.indexOf("Top line") < text.indexOf("Bottom line") ? "top first" : "bottom first");
+  const config = loadConfig({ parsers: [{ "pdf-parser": { sortByPosition: false } }] });
+  assert.equal(order((await createRipstream({ config }).parse(bytes, { filename: "a.pdf" })).text), "bottom first");
+  assert.equal(order((await reference.parse(bytes, { filename: "a.pdf" })).text), "top first");
+
+  await withStandard({ ripstreamConfig: config }, async ({ ripstream }) => {
+    const before = settled.length;
+    assert.equal(order((await ripstream.parse(bytes, { filename: "a.pdf" })).text), "bottom first");
+    assert.equal(settled.length - before, 1, "it was the child that parsed it");
+  });
+  await withStandard({}, async ({ ripstream }) => {
+    assert.equal(order((await ripstream.parse(bytes, { filename: "a.pdf" })).text), "top first");
+  });
+});
+
+test("a parsers section that names a parser only the child has is applied here too, not refused", async () => {
+  // Only pdf-parser is on: text is not parsed by the full ripstream, so the in-process one must not parse it either.
+  const config = loadConfig({ parsers: [{ "pdf-parser": {} }] });
+  const text = encoder.encode("plain words");
+  const expected = await outcomeOf(() => createRipstream({ config }).parse(text, { filename: "a.txt" }));
+  assert.ok("error" in expected, "the section turns text off");
+  await withStandard({ ripstreamConfig: config }, async ({ ripstream }) => {
+    assert.deepEqual(await outcomeOf(() => ripstream.parse(text, { filename: "a.txt" })), expected);
+    assert.match((await ripstream.parse(pdf("Hello PDF"), { filename: "a.pdf" })).text, /Hello PDF/);
+  });
+});
+
+test("a missing or malformed custom-mimetypes file fails when the isolation is built, naming the file", async () => {
+  await assert.rejects(
+    createStandardIsolation({ config: { mode: "strict" }, pool, ripstreamConfig: loadConfig({ "custom-mimetypes": "/nonexistent/types.xml" }) }),
+    (error) => error instanceof RipstreamConfigError && /does not exist/.test(error.message) && error.message.includes("/nonexistent/types.xml"),
+  );
+  const bad = customMimeTypesFile(`<mime-info><mime-type type="application/x-bad"><glop/></mime-type></mime-info>`);
+  await assert.rejects(
+    createStandardIsolation({ config: { mode: "strict" }, pool, ripstreamConfig: loadConfig({ "custom-mimetypes": bad }) }),
+    (error) => error instanceof RipstreamConfigError && /<glop> is not a <mime-type> child/.test(error.message),
+  );
+});
+
+test("custom media types too large for the request header are refused when the isolation is built", async () => {
+  const types = Array.from({ length: 400 }, (_, index) => `<mime-type type="application/x-t${index}"><glob pattern="*.t${index}"/></mime-type>`);
+  const path = customMimeTypesFile(`<mime-info>${types.join("")}</mime-info>`);
+  await assert.rejects(
+    createStandardIsolation({ config: { mode: "strict" }, pool, ripstreamConfig: loadConfig({ "custom-mimetypes": path }) }),
+    /components are \d+ bytes as JSON.*custom-mimetypes file/,
+  );
+  // Without isolation there is no header: the same file is read and used.
+  await withStandard({ config: { mode: "off" }, ripstreamConfig: loadConfig({ "custom-mimetypes": path }) }, async ({ ripstream }) => {
+    assert.equal((await ripstream.detect(new Uint8Array([0, 1, 2]), { filename: "a.t399" })).toString(), "application/x-t399");
+  });
 });

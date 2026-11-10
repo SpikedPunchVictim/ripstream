@@ -40,7 +40,8 @@ await ripstream.parse(bytes, {
 ## Configuration
 
 `loadConfig(json)` validates a RipstreamConfig shape and exposes a generation counter for caches. It reads `version`,
-`isolation` ([isolation.md](isolation.md)), `parsers` and `detectors`; any other Tika section is refused by name.
+`isolation` ([isolation.md](isolation.md)), `parsers`, `detectors`, `parse-context`, `custom-mimetypes` and `server`; any
+other Tika section is refused by name.
 
 ### The `parsers` section
 
@@ -59,6 +60,8 @@ The shape and meaning are Tika's (`AbstractSpiComponentLoader`, `ParserLoader`, 
 - A named entry (`"pdf-parser"`, `{ "ooxml-parser": { "_mime-include": [...] } }`) loads exactly that parser.
 - With no `default-parser`, only the named entries load.
 - `_mime-include` / `_mime-exclude` narrow what a parser, or the whole default set, may take.
+- `pdf-parser` also takes `sortByPosition` and `extractAnnotationText`, the properties of Tika's `PDFParserConfig`
+  that ripstream has an option for (`{ "pdf-parser": { "sortByPosition": false } }`). Each is `true` or `false`.
 
 Names are Tika's component names (`pdf-parser`), not Java class names.
 
@@ -72,7 +75,11 @@ How it differs from Tika, because ripstream's parsers are not Tika's parsers:
   opt-in parser (`grib-parser`) cannot, and naming a Tika parser ripstream has no counterpart for (`bpg-parser`) is
   an error. Excluding either is fine: it is already not loaded.
 - Refused where Tika is silent: an entry with more than one key (Tika uses the first and drops the rest), a setting
-  other than the media type filters and `exclude`, a non-string `exclude` item, an `image/ocr-*` type.
+  other than the media type filters, `exclude` and the two `pdf-parser` properties (every other `PDFParserConfig`
+  property, and every setting of another parser, names no ripstream option), a `pdf-parser` setting that is not `true`
+  or `false` (Tika's loader would coerce `"false"` or `1`), a non-string `exclude` item, an `image/ocr-*` type.
+- `sortByPosition` defaults to `true` in ripstream's PDF parser and to `false` in Tika's `PDFParserConfig`: a
+  configuration that names the setting gets what it names, and one that does not gets ripstream's default.
 - It is applied by `createRipstream({ config })` and by the CLI. With isolation on, `createStandardIsolation({ ripstreamConfig })`
   builds the child's parsers from it (the child gets the section in the header of each request), and narrows the
   parsers that stay in this process by it too: the section switches parsers off, it never adds one, so the in-process set
@@ -159,9 +166,11 @@ How it differs from Tika:
   not an integer in range are refused too; Tika's loader would coerce a string or a fraction.
 - **The defaults are ripstream's, not Tika's.** A limit the section does not set keeps ripstream's default (for
   instance 10000 embedded documents where Tika has none, and 100000 output characters where Tika has none).
-- **Where it applies.** `createRipstream({ config })` and the CLI's `parse` and `metadata`, in this process or with
-  isolation on. `serve` refuses a `parse-context` section (`tikajs-68os.8.9`): the server sets the limits of each request
-  itself, so a default set here would reach some limits and not others.
+- **Where it applies.** `createRipstream({ config })` and the CLI's `parse`, `metadata` and `serve`, in this process or
+  with isolation on. In `serve`, `writeLimit` and `maxCount` are the limits of a request that names none (and of `/async`,
+  which cannot name any): a request's own `maxOutputChars` or `maxEmbeddedResources` wins, and the server's ceiling
+  (`--max-output-chars`, `RIPSTREAM_MAX_OUTPUT_CHARS`) wins over both. A `writeLimit` above the ceiling, or `-1`, is a
+  usage error: it would be clamped without a word.
 - **With isolation on** the limits are the defaults of every isolated parse (`createStandardIsolation({ ripstreamConfig,
   limits })`; a limit a call names wins). `maxDepth`, `maxCount` and `writeLimit` cross to the child as the request's
   `maxNodeDepth`, `maxEmbeddedResources` and `maxOutputChars`. `totalTaskTimeoutMillis` becomes the child's parse
@@ -172,6 +181,97 @@ How it differs from Tika:
 - The CLI flags `--maxEmbeddedDepth` and `--maxEmbeddedCount` (tika-app's names) set `maxNodeDepth` and
   `maxEmbeddedResources` for one `parse` or `metadata`, and win over the configuration. They fail the parse at the
   limit, like the section.
+- Read from Tika's source, not checked against a running Tika 4.2.0.
+
+### The `server` section
+
+```json
+{
+  "server": {
+    "port": 9998,
+    "host": "*",
+    "endpoints": ["detect", "tika", "status"],
+    "maxRequestSizeBytes": 104857600,
+    "requestLogLevel": "info"
+  }
+}
+```
+
+`ripstream serve --config file.json` reads Tika's `server` section (`TikaServerConfig`, tika-server 4.2.0). Applied:
+
+| Key | Effect |
+| --- | --- |
+| `port`, `host` | Where to listen (default 9998 and `127.0.0.1`; Tika's default host is `localhost`). `*` is every interface. `--port`/`-p` and `--host`/`-h` win over the file. |
+| `endpoints` | Exactly the endpoints served, by Tika's names: `tika rmeta meta unpack detect language version status async`. Naming one does not add it to a default. An empty list is the default. `/health` is always served. `/status/<job>` belongs to `async`. A disabled endpoint answers 404. |
+| `cors` | `Access-Control-Allow-Origin` (`createRipstreamServer({ corsOrigin })`). |
+| `maxRequestSizeBytes` | The request body limit (413 over it). Positive: ripstream always bounds a body, where Tika lets a negative value lift the limit. |
+| `requestLogLevel` | `debug` or `info`: each request's method and URI go to stderr. The server's own info lines (the concurrency gate) are shown with them. |
+| `maxRequestReadMillis` | How long receiving a whole request may take (408 after); negative: no deadline; not zero. Node's `requestTimeout`. |
+| `idleTimeoutMillis` | Closes a connection with no bytes moving for this long. A request whose body is in and whose response has not begun is waiting on its parse and is not closed (as in Jetty's idle timeout). |
+
+Without `endpoints`, `serve` answers Tika's default set less what ripstream lacks (`tika rmeta meta unpack detect language
+version`): **`/status` and `/async` are off unless listed**, as in Tika. The programmatic `createRipstreamServer` serves every
+endpoint unless `endpoints` is passed.
+
+Refused, naming the setting and the reason: `maxQueuePauseMillis` (ripstream answers 503 at once when its queue is full),
+`maxResponseWriteMillis`, `maxInFlightRequestBytes` (requests are bounded by number, not bytes in flight), `id`, `tlsConfig`
+(terminate TLS in front), `metricsPort`, and, when `true`, `allowPipes` (`/pipes` needs an `authenticate` function and path
+roots that only code can give), `allowPerRequestConfig` and `allowHttp2`; `false` is accepted, as it is what ripstream does.
+An endpoint Tika has and ripstream does not serve (`mime`, `mime-types`, `detectors`, `parsers`, `pipes`) and any other name are
+refused in `endpoints`, as Tika refuses an unrecognized one. An unknown setting is refused with the list of the applied ones.
+
+The CLI's flags follow Tika's for `serve`: `-h <host>` and `-p <port>`. Everywhere else `-h` is help and `-p` the password;
+`-?` and `--help` print help in every command. Only `serve` reads the section; `createRipstream` and the other commands
+ignore it.
+
+Read from Tika's source, not checked against a running Tika 4.2.0.
+
+### The `custom-mimetypes` key
+
+```ts
+const config = loadConfig({ "custom-mimetypes": "config/custom-mimetypes.xml" });
+const ripstream = createRipstream({ config });
+```
+
+Tika adds media types at startup from a file named by the system property `tika.custom-mimetypes`
+(`MimeTypesFactory`, tika-core 4.2.0), read after its own `tika-mimetypes.xml`. Ripstream reads the same file in the
+same format, so a file written for Tika works unchanged. The path is relative to the working directory, as Tika's is.
+
+```xml
+<mime-info>
+  <mime-type type="application/x-acme-report">
+    <_comment>Acme report</_comment>
+    <alias type="application/x-acme"/>
+    <sub-class-of type="application/xml"/>
+    <glob pattern="*.acme"/>
+    <glob pattern="report-\d{4}\.rpt" isregex="true"/>
+    <root-XML localName="acme-report" namespaceURI="urn:acme"/>
+    <magic priority="60"><match value="ACMERPT" type="string" offset="0"/></magic>
+  </mime-type>
+</mime-info>
+```
+
+- **Merged, not replaced.** A type the registry already has (named directly or by an alias) gains the file's globs,
+  aliases, root elements and magic, and takes its `sub-class-of` and comment; any other type is added.
+- **A glob two types claim.** The more general type keeps it when one is a specialization of the other; two unrelated
+  types are a conflict and the file is refused (`Conflicting extension pattern: .pdf`), as Tika refuses it. That rule
+  applies to the patterns the file names; Tika's own registry keeps the order it always had.
+- **`isregex="true"`** is a Java regular expression that must match the whole file name. It is run as a JavaScript one,
+  so Java-only syntax (a possessive quantifier, `\p{Alpha}`) can fail to compile, which is refused, or mean something
+  else in JavaScript, which is not detected. A pattern runs against caller-supplied file names, so keep it free of
+  nested quantifiers.
+- **Stricter than Tika.** Tika ignores a misspelled element, a `<glob>` without a `pattern`, and an unknown attribute
+  value, and a `<match>` of an unknown `type` fails only the first time a document is detected. Ripstream refuses each by
+  name, with the line, all of them in one error. The descriptive elements of Tika's own file (`_comment`, `comment`,
+  `acronym`, `expanded-acronym`, `tika:link`, `tika:uti`) are read and have no effect.
+- **A missing file** is a configuration error naming the path (Tika: `Specified custom mimetypes file not found`).
+- **Where it applies.** `createRipstream({ config })` and the CLI's `detect`, `parse`, `metadata` and `serve`. With
+  isolation on the parent reads the file once and the text crosses in the request header to the child, which never
+  reads the path; the routing detector, `detect()` and the in-process parsers use the same text. The header leaves
+  16 KiB for the `parsers` and `detectors` sections and this text together, and a larger file is refused when the
+  isolation starts.
+- In code: `new DefaultDetector({ customMimeTypes: xmlText })` or `createRipstream({ customMimeTypes })` take the text
+  directly, and `DefaultDetectorOptions.custom` takes definitions as objects.
 - Read from Tika's source, not checked against a running Tika 4.2.0.
 
 ## Handlers

@@ -215,3 +215,29 @@ test("createRipstream applies the section end to end", async () => {
   const result = await refused.parse(new TextEncoder().encode("Hello config"), { filename: "a.txt" });
   assert.match(result.text, /Hello config/);
 });
+
+/** Two lines drawn bottom first, so the text reads in a different order with and without `sortByPosition`. */
+function twoLinePdf(): Uint8Array {
+  const content = "BT /F1 12 Tf 72 600 Td (Bottom line) Tj ET\nBT /F1 12 Tf 72 700 Td (Top line) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  const body = objects.map((object, index) => `${index + 1} 0 obj\n${object}\nendobj\n`);
+  return Buffer.from(`%PDF-1.4\n${body.join("")}trailer\n<< /Root 1 0 R >>\n%%EOF\n`, "latin1");
+}
+
+test("a pdf-parser entry sets the PDFParserConfig properties of the parser that reads PDFs", async () => {
+  const order = async (config: object): Promise<string[]> => {
+    const { text } = await createRipstream({ config: loadConfig(config) }).parse(twoLinePdf(), { filename: "a.pdf" });
+    return ["Top line", "Bottom line"].sort((a, b) => text.indexOf(a) - text.indexOf(b));
+  };
+  const sorted = ["Top line", "Bottom line"];
+  assert.deepEqual(await order({}), sorted);
+  assert.deepEqual(await order({ parsers: ["default-parser"] }), sorted);
+  assert.deepEqual(await order({ parsers: [{ "pdf-parser": { sortByPosition: true } }] }), sorted);
+  assert.deepEqual(await order({ parsers: [{ "pdf-parser": { sortByPosition: false } }] }), [...sorted].reverse());
+});

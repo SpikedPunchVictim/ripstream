@@ -1,11 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import {
+  SERVER_ENDPOINTS,
   assertValidLimits,
   httpStatusForError,
   serializeRmeta,
   IsolationError,
   RipstreamError,
   type Metadata,
+  type ServerEndpoint,
 } from "@spikedpunch/ripstream-core";
 import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
 import {
@@ -58,8 +60,31 @@ export interface RipstreamServerOptions {
    * default concurrency gate and `/status`. The caller owns its lifecycle; `close()` does not dispose it.
    */
   readonly isolation?: ServerIsolation;
-  /** Receives the startup warnings (default: `console.warn` for "warn", "info" is dropped). */
-  readonly log?: (level: "info" | "warn", message: string) => void;
+  /** Receives the startup warnings and, with `requestLogLevel`, each request (default: `console.warn` for "warn", the rest is dropped). */
+  readonly log?: (level: "debug" | "info" | "warn", message: string) => void;
+  /**
+   * The endpoints served, by Tika's names (`SERVER_ENDPOINTS`): exactly these, so naming one is not adding it to a
+   * default. `/status/<job>` belongs to `async`. `/health`, `/translate` and `/pipes` are not governed by it. Default:
+   * all of them. (`ripstream serve` defaults to Tika's set, which leaves out `status` and `async`.)
+   */
+  readonly endpoints?: readonly ServerEndpoint[];
+  /** Passes each request's method and URI to `log` at this level. Default: requests are not logged. */
+  readonly requestLogLevel?: "debug" | "info";
+  /**
+   * How long receiving a whole request may take, in milliseconds; a request still arriving after that is answered 408.
+   * Negative: no deadline. Default: `requestTimeoutMs`.
+   */
+  readonly maxRequestReadMillis?: number;
+  /**
+   * Closes a connection after this many milliseconds with no bytes moving. A request whose body has arrived and whose
+   * response has not started is waiting on its parse, and is never closed by it. Default: no idle timeout.
+   */
+  readonly idleTimeoutMillis?: number;
+  /**
+   * The limits of a request that names none (and of /async and /pipes, which cannot name any), under the `maxLimits`
+   * ceilings. A request's own limit wins over a default, and a ceiling over both. Must not exceed its ceiling.
+   */
+  readonly defaultLimits?: { readonly maxOutputChars?: number; readonly maxEmbeddedResources?: number };
   readonly maxBodyBytes?: number;
   /**
    * Requests parsed at once. Default 100; with an active `isolation`, what its memory pool can run plus what the
@@ -221,6 +246,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     throw new Error("createRipstreamServer: the `pipes` option requires `authenticate`");
   }
   requireValidGateOptions(options);
+  requireValidServerOptions(options);
   requireValidPresets(options.presets);
   const ripstream: ServerRipstream = options.ripstream ?? refuseToStartWithoutRipstream();
   const log = options.log ?? defaultLog;
@@ -231,7 +257,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   warnAboutIsolation(startupStatus, options.maxLimits?.maxOutputChars, log);
   const derivedGate = startupStatus === undefined ? undefined : deriveGate(startupStatus);
   // /async and /pipes take no limit parameters: they parse under the server's ceilings, like a request without any.
-  const ceilinged = withCeilings(ripstream, options.maxLimits);
+  const ceilinged = withCeilings(ripstream, options.maxLimits, options.defaultLimits);
+  const enabled: ReadonlySet<string> = new Set(options.endpoints ?? SERVER_ENDPOINTS);
   const maxBodyBytes = options.maxBodyBytes ?? 100 * 1024 * 1024;
   const maxConcurrent = options.maxConcurrent ?? derivedGate?.maxConcurrent ?? 100;
   const maxQueue = options.maxQueue ?? derivedGate?.maxQueue ?? 100;
@@ -284,8 +311,13 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     });
   };
 
+  /** The request a connection is serving, for the idle timeout. */
+  const inFlight = new WeakMap<object, { request: IncomingMessage; response: ServerResponse }>();
+
   const handler = (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
+      if (options.requestLogLevel !== undefined) log(options.requestLogLevel, `${request.method} ${request.url}`);
+      inFlight.set(request.socket, { request, response });
       if (corsOrigin !== undefined) {
         if (typeof corsOrigin === "string") {
           response.setHeader("Access-Control-Allow-Origin", corsOrigin);
@@ -368,6 +400,11 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   ): Promise<void> {
     const url = new URL(request.url ?? "/", "http://localhost");
     const method = request.method ?? "GET";
+    const served = endpointOf(url.pathname);
+    if (served !== null && !enabled.has(served)) {
+      send(response, 404, "text/plain", "Not found");
+      return;
+    }
     rejectUnreadRequestInput(request, url);
     if (method === "GET" && url.pathname.startsWith("/status/")) {
       pruneJobs();
@@ -480,7 +517,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     for (const key of ["maxOutputChars", "maxEmbeddedResources"] as const) {
       const requested = clientLimit(url.searchParams.get(key), key);
       const ceiling = options.maxLimits?.[key];
-      const value = requested ?? limits[key];
+      const value = requested ?? limits[key] ?? options.defaultLimits?.[key];
       if (ceiling !== undefined) limits[key] = Math.min(value ?? ceiling, ceiling);
       else if (value !== undefined) limits[key] = value;
     }
@@ -552,10 +589,27 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     }
   }
 
+  // Node checks the deadline on an interval, so a short deadline needs a short interval to be kept.
+  const readMillis = options.maxRequestReadMillis ?? requestTimeoutMs;
+  const checkingInterval =
+    options.maxRequestReadMillis !== undefined && readMillis > 0 ? Math.min(30_000, Math.max(50, Math.floor(readMillis / 2))) : 30_000;
   const server = createServer(
-    { requestTimeout: requestTimeoutMs, connectionsCheckingInterval: 30_000 },
+    { requestTimeout: readMillis < 0 ? 0 : readMillis, connectionsCheckingInterval: checkingInterval },
     handler,
   );
+  const idleMillis = options.idleTimeoutMillis;
+  if (idleMillis !== undefined) {
+    server.setTimeout(idleMillis);
+    server.on("timeout", (socket) => {
+      const current = inFlight.get(socket);
+      // Body in, response not begun: the server is parsing and the client is rightly silent. Look again later.
+      if (current !== undefined && current.request.complete && !current.response.headersSent && !current.response.writableEnded) {
+        socket.setTimeout(idleMillis);
+        return;
+      }
+      socket.destroy();
+    });
+  }
 
   return {
     handler,
@@ -579,11 +633,17 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
 }
 
 /** The engine with the server's ceilings as the limits of any parse that does not name its own (or names more). */
-function withCeilings(engine: ServerRipstream, ceilings: RipstreamServerOptions["maxLimits"]): ServerRipstream {
+function withCeilings(
+  engine: ServerRipstream,
+  ceilings: RipstreamServerOptions["maxLimits"],
+  defaults: RipstreamServerOptions["defaultLimits"],
+): ServerRipstream {
   const entries = Object.entries(ceilings ?? {}).filter(([, value]) => value !== undefined);
-  if (entries.length === 0) return engine;
+  const fallbacks = Object.entries(defaults ?? {}).filter(([, value]) => value !== undefined);
+  if (entries.length === 0 && fallbacks.length === 0) return engine;
   const bound = (parseOptions?: ParseOptions): ParseOptions => {
     const limits: Record<string, number> = { ...parseOptions?.limits };
+    for (const [key, value] of fallbacks) limits[key] ??= value as number;
     for (const [key, ceiling] of entries) limits[key] = Math.min(limits[key] ?? ceiling, ceiling);
     return { ...parseOptions, limits };
   };
@@ -604,7 +664,7 @@ function refuseToStartWithoutRipstream(): never {
   );
 }
 
-function defaultLog(level: "info" | "warn", message: string): void {
+function defaultLog(level: "debug" | "info" | "warn", message: string): void {
   if (level === "warn") console.warn(`[ripstream-server] ${message}`);
 }
 
@@ -616,6 +676,38 @@ function requireCount(name: string, value: number | undefined, min: number): voi
   if (value === undefined) return;
   if (!Number.isSafeInteger(value) || value < min) {
     throw new Error(`createRipstreamServer: \`${name}\` must be an integer of at least ${min}, got ${String(value)}`);
+  }
+}
+
+/** The endpoint a path belongs to, or null for a path no `endpoints` setting governs. */
+function endpointOf(pathname: string): ServerEndpoint | null {
+  if (pathname.startsWith("/status/")) return "async";
+  const name = pathname.slice(1);
+  return (SERVER_ENDPOINTS as readonly string[]).includes(name) ? (name as ServerEndpoint) : null;
+}
+
+/** The options `ripstream serve` fills from its `server` section. Throws naming the option. */
+function requireValidServerOptions(options: RipstreamServerOptions): void {
+  for (const name of options.endpoints ?? []) {
+    if (!(SERVER_ENDPOINTS as readonly string[]).includes(name)) {
+      throw new Error(`createRipstreamServer: unknown endpoint ${JSON.stringify(name)}; the endpoints are ${SERVER_ENDPOINTS.join(", ")}`);
+    }
+  }
+  const read = options.maxRequestReadMillis;
+  if (read !== undefined && (!Number.isInteger(read) || read === 0 || Math.abs(read) > 2_147_483_647)) {
+    throw new RangeError("createRipstreamServer: maxRequestReadMillis must be a non-zero integer up to 2147483647 (negative: no deadline)");
+  }
+  const idle = options.idleTimeoutMillis;
+  if (idle !== undefined && (!Number.isInteger(idle) || idle < 1 || idle > 2_147_483_647)) {
+    throw new RangeError("createRipstreamServer: idleTimeoutMillis must be an integer from 1 to 2147483647");
+  }
+  for (const key of ["maxOutputChars", "maxEmbeddedResources"] as const) {
+    const fallback = options.defaultLimits?.[key];
+    const ceiling = options.maxLimits?.[key];
+    // -1 is "no limit", which no ceiling holds.
+    if (fallback !== undefined && ceiling !== undefined && (fallback < 0 || fallback > ceiling)) {
+      throw new RangeError(`createRipstreamServer: defaultLimits.${key} (${fallback < 0 ? "unlimited" : fallback}) is above maxLimits.${key} (${ceiling})`);
+    }
   }
 }
 

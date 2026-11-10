@@ -4,13 +4,13 @@ Every one of the 117 gap and partial rows of config-inventory.json has a disposi
 The owner accepted every non-goal group and the CLI recommendation on 2026-11-09 (tikajs-68os.24): those rows have
 status `non-goal` and a `decision` field. The 22 rows of the original audit that were already `non-goal-candidate`
 (CFG-001 and others, not gap or partial) are still proposals in tikajs-68os.24.
-Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after the audit was taken; their `status` is updated.
+Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12 after the audit was taken; their `status` is updated.
 
 | Disposition | Rows |
 | --- | --- |
-| implemented | 24 |
-| bead | 57 |
-| non-goal (declared) | 36 |
+| implemented | 37 |
+| bead | 41 |
+| non-goal (declared) | 39 |
 
 ## Implemented since the audit
 
@@ -30,6 +30,9 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after
 - CFG-081, CFG-082, CFG-083, CFG-084, CFG-085 (234e04c: ripstream no longer reads XML configuration, which Tika 4.x does not read at runtime either (loadXmlConfig removed).)
 - CFG-052, CFG-062 (tikajs-68os.8.8: embedded-limits.maxDepth is maxNodeDepth and timeout-limits.totalTaskTimeoutMillis is maxParseMillis; each is accepted only beside its throwOn flag set to true, because ripstream fails at a limit where Tika's default stops quietly.)
 - CFG-119 (tikajs-68os.8.8: --maxEmbeddedDepth and --maxEmbeddedCount.)
+- CFG-017, CFG-088, CFG-089, CFG-098, CFG-100, CFG-102, CFG-105, CFG-106 (tikajs-68os.8.9: `serve --config` reads a `server` section: port, host, endpoints, cors, maxRequestSizeBytes, requestLogLevel, maxRequestReadMillis and idleTimeoutMillis are applied; serve takes Tika's `-h <host>` and `-p <port>`; every other server setting is refused by name. Read from Tika source, not run against a Tika.)
+- CFG-091, CFG-109 (tikajs-68os.8.9: `server.endpoints` selects the served endpoints by Tika's names, so `ripstream serve` serves /status and /async only when listed. Partial: /mime, /mime-types, /detectors, /parsers and /pipes are not served and are refused in `endpoints`; /health, /translate and /pipes are not governed by it.)
+- CFG-037, CFG-146 (tikajs-68os.8.11: the `custom-mimetypes` config key names a Tika custom-mimetypes.xml; same XML, merged into the registry, malformed definitions refused by name.)
 
 ## Merged into beads
 
@@ -38,6 +41,7 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after
 - `tikajs-68os.9.1`: CFG-043, CFG-118. Digesters and --digest.
 - `tikajs-68os.9.3`: CFG-051. Language detection selection by name.
 - `tikajs-68os.7.6`: CFG-008, CFG-044. Content handler types on the server routes (/tika/{text,html,xml,md,json}); Tika 4.x defaults to Markdown.
+- CFG-028 (tikajs-68os.8.10: a parsers entry sets the PDFParserConfig properties ripstream has an option for, sortByPosition and extractAnnotationText, as true or false; every other parser setting is refused by name. Partial: the rest of the properties have no ripstream counterpart.)
 - `tikajs-68os.7.5`: CFG-045. Write limit: ripstream throws (422) where Tika truncates and flags.
 - `tikajs-68os.7.2`: CFG-065. tk:exception:* bounding belongs with the failure semantics.
 - `tikajs-68os.7.4`: CFG-066. Unpack output layout (frictionless/regular, name strategy) belongs with /unpack.
@@ -46,11 +50,9 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after
 - `tikajs-68os.6.3`: CFG-127, CFG-128. parseMode and emit strategy semantics.
 - `tikajs-68os.6.6`: CFG-020, CFG-137, CFG-138, CFG-139, CFG-140. Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24.
 - `tikajs-68os.6`: CFG-023. Pipes section: see the pipes rows.
-- `tikajs-68os.8.13`: CFG-014, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-063, CFG-064. Limits that need new engine behavior (stop-and-flag mode, XML depth, output:input ratio, stall timeout) and the auto-detect-parser section; refused by name meanwhile. A design reserve: built only if someone asks.
+- `tikajs-68os.8.13`: CFG-014, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-063, CFG-064. Limits that need new engine behavior (stop-and-flag mode, XML depth, output:input ratio, stall timeout) and the auto-detect-parser section; refused by name meanwhile. A design reserve: built only if someone asks. The bead was closed as a deferred non-goal on 2026-11-10 (owner); each key stays refused by name and the bead is reopened if someone asks.
 - `tikajs-68os.9.1`, `.9.2`, `.7.6` and NG-5: CFG-015. The parse-context limit blocks are applied (tikajs-68os.8.8); the other parse-context components follow their own beads.
-- `tikajs-68os.8.9`: CFG-017, CFG-088, CFG-089, CFG-091, CFG-092, CFG-096, CFG-098, CFG-099, CFG-100, CFG-101, CFG-102, CFG-105, CFG-106, CFG-109. A server section for ripstream serve.
-- `tikajs-68os.8.10`: CFG-028. Parser settings by Tika property name.
-- `tikajs-68os.8.11`: CFG-037, CFG-146. Custom media type definitions.
+- `tikajs-68os.6`: CFG-092. `server.allowPipes: true` is refused by name in the server section (tikajs-68os.8.9): /pipes needs an authenticate function and path roots only code can supply. The pipes group decides what a file form could be.
 - `tikajs-68os.8.12`: CFG-110. `--flag=value` on the CLI.
 
 ## Non-goals (declared by the owner, 2026-11-09)
@@ -66,6 +68,7 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.8 and .8.12 after
 - **NG-8 TIKA_PASSWORD**: CFG-117, CFG-142. A password in the environment leaks through /proc and process listings, and a password cannot cross the isolation boundary anyway. --password and the library option remain.
 - **NG-9 fork mode, server id, XML conversion**: CFG-086, CFG-090, CFG-121, CFG-122. Isolation replaces fork mode and its watchdog; the server id exists for that watchdog; Tika's XML-to-JSON converter has nothing to convert because ripstream never read XML configuration.
 - **NG-10 JVM system properties**: CFG-147. java.io.tmpdir is a JVM property; the isolation child's TMPDIR is set per child.
+- **NG-11 server settings with no ripstream counterpart** (declared by the owner, 2026-11-10, tikajs-68os.8.9): CFG-096, CFG-099, CFG-101. `maxQueuePauseMillis` (ripstream answers 503 at once when its queue is full), `maxResponseWriteMillis` (the idle timeout bounds a stalled reader) and `maxInFlightRequestBytes` (requests are bounded by number and body size, not bytes in flight). Each is refused by name when set, with the reason. `id` (CFG-090, NG-9), `tlsConfig` (CFG-103) and `metricsPort` (CFG-104) are already declared non-goals and `allowPerRequestConfig: true` is NG-5 (CFG-093); all are refused by name too, as is `allowHttp2: true` (CFG-094).
 
 ## CLI flags (decided: ripstream's own interface)
 
