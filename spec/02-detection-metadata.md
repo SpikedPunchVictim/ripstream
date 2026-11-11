@@ -200,12 +200,23 @@ interface MetadataWriteLimits {
   maxValueChars: number;
   maxValuesPerKey: number;
   maxTotalChars: number;
-  include?: RegExp[];
-  exclude?: RegExp[];
+}
+
+interface MetadataFilter {
+  filter(metadataList: Metadata[], context: ParseContext): void; // in place; may drop documents from the list
 }
 ```
 
-Applied at serialization and at the server boundary, never inside parsers, so parse behavior stays inspectable. Upstream parity: `--config` metadata filters map here.
+Write limits are applied at serialization and at the server boundary, never inside parsers, so parse behavior stays inspectable.
+
+Metadata filters are Tika's (`tikajs-68os.9.2`): the `metadata-filters` section of `--config` builds a `CompositeMetadataFilter` of
+`include-field`, `exclude-field`, `field-name-mapping`, `capture-group`, `clear-by-attachment-type`, `remove-by-mime`,
+`date-normalizing`, `geo-point` and `legacy-key-migration` filters (and `no-op`); there is no default filter. They run on the
+list of documents as it is written (the container first, with `tk:content`, the depth and the embedded paths in it) and, like
+the write limits, only where the output is made: `serializeRmeta`/`rmetaObjects`, every pipes parse mode, `--recursive` JSON and
+the server's endpoints, with Tika's `EmitHandler` choice (the `parse-context` chain, else for `CONTENT_ONLY` the content and the
+container exception, else the top-level chain). Field names are exact and case-sensitive. A request cannot name filters (NG-5).
+The language-detecting and `tika-eval` filters are not built (`tikajs-68os.9.3`, `tikajs-68os.24`).
 
 ## 9. Serialization
 

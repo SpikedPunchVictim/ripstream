@@ -39,7 +39,7 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12, tikajs-68os.6
 
 ## Merged into beads
 
-- `tikajs-68os.9.2`: CFG-007, CFG-041, CFG-042. Metadata filters: selection by config and the filter interface.
+- `tikajs-68os.9.2`: CFG-007, CFG-041, CFG-042 (done). Metadata filters: the section is read, checked when the config loads and run on the rmeta, pipes, CLI (recursive JSON) and server output paths with Tika's EmitHandler choice. CFG-007 and CFG-041 are implemented; CFG-042 stays partial for the per-request wire alone (NG-5).
 - `tikajs-68os.9.4`: CFG-009, CFG-046, CFG-067. Renderers, pages block and the metadata limiter budgets.
 - `tikajs-68os.9.1`: CFG-043, CFG-118. Digesters and --digest.
 - `tikajs-68os.9.3`: CFG-051. Language detection selection by name.
@@ -53,7 +53,7 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12, tikajs-68os.6
 - `tikajs-68os.6.6`: CFG-019, CFG-020, CFG-021, CFG-022, CFG-137, CFG-138, CFG-139, CFG-140. Cloud and search fetchers, emitters, iterators and reporters. The JVM-client-only iterators (kafka, jdbc, solr, graph) are already proposed as non-goals in tikajs-68os.24.
 - `tikajs-68os.6`: CFG-023. Pipes section: see the pipes rows.
 - `tikajs-68os.8.13`: CFG-014, CFG-053, CFG-055, CFG-057, CFG-058, CFG-060, CFG-061, CFG-063, CFG-064. Limits that need new engine behavior (stop-and-flag mode, XML depth, output:input ratio, stall timeout) and the auto-detect-parser section; refused by name meanwhile. A design reserve: built only if someone asks. The bead was closed as a deferred non-goal on 2026-11-10 (owner); each key stays refused by name and the bead is reopened if someone asks.
-- `tikajs-68os.9.1`, `.9.2`, `.7.6` and NG-5: CFG-015. The parse-context limit blocks are applied (tikajs-68os.8.8); the other parse-context components follow their own beads.
+- `tikajs-68os.9.1`, `.9.2`, `.7.6` and NG-5: CFG-015. The parse-context limit blocks are applied (tikajs-68os.8.8), and so are the digester factories (.9.1) and the metadata-filters list (.9.2); the other parse-context components follow their own beads.
 - `tikajs-68os.6`: CFG-092. `server.allowPipes: true` is refused by name in the server section (tikajs-68os.8.9): /pipes needs an authenticate function and path roots only code can supply. The pipes group decides what a file form could be.
 - `tikajs-68os.8.12`: CFG-110. `--flag=value` on the CLI.
 

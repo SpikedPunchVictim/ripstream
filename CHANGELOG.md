@@ -4,6 +4,40 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Metadata filters: the `metadata-filters` section is read and run (`tikajs-68os.9.2`)
+
+Added: `metadata-filters` (and `metadata-filters` under `parse-context`) in a Tika configuration builds a chain of Tika's filters
+(`include-field-metadata-filter`, `exclude-field-metadata-filter`, `field-name-mapping-filter`,
+`capture-group-metadata-filter`, `clear-by-attachment-type-metadata-filter`, `remove-by-mime-metadata-filter`,
+`date-normalizing-metadata-filter`, `geo-point-metadata-filter`, `legacy-key-migration-filter`, `no-op-filter`) that runs on the
+metadata list as it is written, with `tk:content`, the depth and the embedded paths already in it. It runs where Tika's emit
+runs it: `serializeRmeta` and `rmetaObjects` (`metadataFilter`), every `pipes` mode (the parse-context chain, else for
+`CONTENT_ONLY` the content and the container exception, else the configured chain), `ripstream --recursive` (the configured
+chain, as `TikaCLI` does, and no other command), and `ripstream serve` (`/rmeta`, `/meta`, `/meta/{field}`, `/unpack`'s
+`rmeta.json`, `/tika/json`, `?handler=meta|json`; the text routes run the parse-context chain alone; `/pipes` and `/async` run
+their settings'). No section, or an empty one, runs nothing and every output is what it was. A configuration is checked when it
+loads and every problem is reported at once. New core exports: `createMetadataFilter`, `emitMetadataFilter`,
+`metadataFiltersOf`, `filterDocument`, `filterRmetaObjects`, `MetadataFilterBase`, `CompositeMetadataFilter`, `NoOpFilter`,
+the nine filters and their option types, `LegacyKeyMigrationFilter`, `parseTikaDate`, `normalizeTikaDate` and the
+`EmitMetadataFilters`, `MetadataFilterEntry` and `FilteredDocument` types. `createRipstreamServer` takes `metadataFilters`,
+`PipesEngineOptions` takes `metadataFilters`, `EmittedDocument` has `objects` (the list as it is written, filtered) and
+`PipesSettings` has `metadataFilters` and `parseContextMetadataFilters`.
+
+Breaking: `MetadataFilter` is Tika's, `filter(list, context): void` over the whole list, where it was `filter(metadata): Metadata`;
+`IncludeExcludeFilter` and `IncludeExcludeOptions` are removed (globs, case-insensitive) for `IncludeFieldMetadataFilter` and
+`ExcludeFieldMetadataFilter` (exact, case-sensitive names, as Tika's). Typed `rmetaObjects` output has `tk:embedded-depth` as a
+number, as it has every other integer key. The camelCase `metadataFilters` key is still refused, now as an unknown key. Fixed on
+the way: a type error in the CLI (`emitter.onExists` read from the union of all emitters, which the S3 and search emitters made) that stopped
+`tsc -b`; the warning it belongs to is for file-system emitters, the ones with that setting.
+
+Refused by name: `charsoup-metadata-filter` (a parse does not detect languages: `tikajs-68os.9.3`), `optimaize-metadata-filter`,
+`open-nlp-metadata-filter` and `tika-eval-metadata-filter` (proposed non-goals, `tikajs-68os.24`). Not the same as Tika, read from
+its source (there is no Java here to run it): a request cannot name filters (`NG-5`); a filter that throws fails the input where
+Tika logs and goes on; a regex with no capture group is refused at load; a value that is not a date is left without the warning;
+region zone ids use the runtime's time zone data; `legacy-key-migration-filter`'s `table` is accepted only as Tika's own default
+(a library caller passes `rows`); enum values are exact-case and settings are strictly typed (`NG-6`). `clear-by-attachment-type-metadata-filter`
+matches `tk:embedded-resource-type`, which no ripstream parser writes yet (`tikajs-68os.35`). See `docs/migration.md`.
+
 ### Digesters: the `parse-context` digester factories make `tk:digest:*` (`tikajs-68os.9.1`)
 
 Added: `commons-digester-factory` and `bouncy-castle-digester-factory` are read from `parse-context` (`digests` of

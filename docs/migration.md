@@ -110,6 +110,70 @@ Tika's has none (`dig-embedded-translators` in `tasks/parity/audits/filters-inve
 an embedded document has a digest, not what it is. Tika's `DigestSink`, which digests an embedded stream as a parser writes it
 to save a second read, is not built: the values are the same.
 
+## Metadata filters
+
+The `metadata-filters` section of a Tika configuration is read and run (`tikajs-68os.9.2`). Before this a configuration with
+it was refused (`CFG-014`), and the library's one filter, `IncludeExcludeFilter`, matched globs and ignored case.
+
+```json
+{ "metadata-filters": [
+    { "remove-by-mime-metadata-filter": { "mimes": ["image/png"] } },
+    { "exclude-field-metadata-filter": { "exclude": ["X-TIKA:parse_time_millis"] } },
+    "no-op-filter" ] }
+```
+
+- **An entry is a filter's name or an object with that one name as its key,** and the order is the order they run in, each on
+  what the one before left. The filters are Tika's: `include-field-metadata-filter` (`include`), `exclude-field-metadata-filter`
+  (`exclude`), `field-name-mapping-filter` (`mappings`, `excludeUnmapped`, true by default, so an unmapped key is dropped),
+  `capture-group-metadata-filter` (`regex`, `sourceField`, `targetField`), `clear-by-attachment-type-metadata-filter`
+  (`types`), `remove-by-mime-metadata-filter` (`mimes`), `date-normalizing-metadata-filter` (`defaultTimeZone`, UTC by default),
+  `geo-point-metadata-filter` (`geoPointFieldName`), `legacy-key-migration-filter` (`direction`, V4_TO_V3 by default) and
+  `no-op-filter`. Names are exact and field names are exact and case-sensitive, with no globs, as in Tika.
+- **There is no default filter,** as in Tika's loader: no section, or an empty list, runs nothing, and a server, the CLI or
+  `pipes` then answers as it did before.
+- **A filter sees the list as it is written:** every document, the container first, with `tk:content` (the text, if it is not
+  blank), `tk:embedded-depth`, the embedded paths and `tk:parsed-by-full-set` already in it, and may drop keys, change them,
+  add them and take a document out of the list. Values are text to a filter; with typed metadata they are typed afterwards.
+- **Where it runs, as Tika's `EmitHandler` picks the chain:** the `parse-context` section's `metadata-filters`, if it has any,
+  replace the top-level ones; for `CONTENT_ONLY` the top-level chain is not consulted and only the content and the container
+  exception are kept; otherwise it is the top-level chain.
+  - *Library:* `rmetaObjects` and `serializeRmeta` take `metadataFilter`; `metadataFiltersOf(config)` gives the two chains of
+    a configuration and `emitMetadataFilter(filters, contentOnly)` picks one. A parse is not filtered by itself: the filters run
+    where the output is made, because the content, the depth and the handler are only keys of the list there.
+  - *`pipes`:* every parse mode, on what is emitted (`NO_PARSE` and `UNPACK` as well). In `UNPACK` each embedded document's
+    bytes stay with the document they came from, whatever a filter does to the ids or the list.
+  - *CLI:* `ripstream --recursive` (JSON and JSONL) runs the top-level chain, and nothing else of the CLI does, as Tika's
+    `TikaCLI` filters only the recursive JSON it writes.
+  - *Server (`ripstream serve`):* `/rmeta`, `/meta` and `/meta/{field}` (a field a filter took out is 404), `/unpack` (its
+    `rmeta.json`, and the manifest describes that file), `/tika/json` and `?handler=meta` and `?handler=json` run the
+    configured chain; `/tika` and its text routes run the `parse-context` chain alone, so a configured chain never changes the
+    text. `/pipes` and `/async` run the filters of their settings. `createRipstreamServer` takes them as `metadataFilters`.
+- **A configuration is checked when it loads,** and every problem is reported at once: an unknown filter or setting, a setting of
+  the wrong type (a number for a string, a string for the boolean), a missing required setting and what a filter itself refuses
+  (an unknown attachment type, a zone that is not one, a `mimes` entry that could never match). Tika finds some of these on
+  the first document, or never.
+- **Four filters Tika has are refused by name:** `charsoup-metadata-filter` (a parse does not detect languages;
+  `tikajs-68os.9.3`), `optimaize-metadata-filter`, `open-nlp-metadata-filter` and `tika-eval-metadata-filter` (proposed as
+  non-goals in `tikajs-68os.24`).
+
+Not the same, read from Tika's source (there is no Java here to run it and compare):
+
+- A request cannot name filters of its own (the per-request JSON, `NG-5`).
+- A filter that throws fails the input. Tika's emit logs a warning (`failed to filter metadata list`) and goes on with the list as the filter left it.
+- A text route (`/tika`) answers 422 for a container that failed by the parse's own exception, not by what the filters left.
+- `capture-group-metadata-filter` refuses a regex with no capture group when the config loads, where Tika accepts it and fails on
+  the first document it matches; `(?i)` folds case by Unicode, where Java's is ASCII unless `(?u)`.
+- `date-normalizing-metadata-filter` leaves a value that is not a date as it is without the warning Tika logs, and a region
+  zone id (`America/Los_Angeles`) has the rules of the runtime's time zone data, not the JDK's.
+- `legacy-key-migration-filter`'s `table` names a classpath resource in Tika; here only Tika's own default is accepted, and the
+  library takes a table as `rows`.
+- Enum values (`direction`) are exact-case and the types are strict (`NG-6`).
+- The camelCase `metadataFilters` key is still refused, now as an unknown key; the name is `metadata-filters`. `IncludeExcludeFilter` and
+  `IncludeExcludeOptions` are gone: `IncludeFieldMetadataFilter` and `ExcludeFieldMetadataFilter` match exact names.
+- `clear-by-attachment-type-metadata-filter` matches on `tk:embedded-resource-type`, which no ripstream parser writes yet
+  (`tikajs-68os.35`), so on ripstream's own output it clears nothing.
+- Typed `/rmeta` output now types `tk:embedded-depth` as a number, as it types every other integer key (it was a string).
+
 ## A document that cannot be read
 
 Tika's server does not fail a request over one unreadable document, and neither does `createRipstreamServer`. For a
@@ -267,8 +331,8 @@ await engine.run();
   components are built in and there is no forked JVM, so nothing they set could change what is emitted.
 - **Refused by name, with why:** a component type ripstream lacks (the cloud, database and search ones are tracked in
   `tikajs-68os.6.6`), `emitStrategy` PASSBACK_ALL, `emitIntermediateResults` true, `extractFileSystemMetadata` true,
-  `maxFilesProcessedPerProcess`, `configStore*`, any `http-fetcher` setting, and every key ripstream does not know. `content-handler-factory`, `auto-detect-parser` and `metadata-filters` change
-  output, so a configuration that has them is refused too (`CFG-014`). Every issue is reported at once and nothing loads.
+  `maxFilesProcessedPerProcess`, `configStore*`, any `http-fetcher` setting, and every key ripstream does not know. `content-handler-factory` and `auto-detect-parser` change
+  output, so a configuration that has them is refused too (`CFG-014`); `metadata-filters` is read (see Metadata filters). Every issue is reported at once and nothing loads.
 - **Tika's `file-system-fetcher` confinement holds.** A key that leaves `basePath`, one with a NUL byte, and (with
   `confineSymlinks`, the default) a symbolic link that resolves outside `basePath` are refused.
 - **Tika's `file-system-emitter` is Tika's** (`tikajs-68os.6.3`). The output is `basePath/emitKey` with the directories

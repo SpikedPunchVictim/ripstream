@@ -274,20 +274,20 @@
   "kind": "metadata-filter",
   "upstream": "MetadataFilter.filter(List<Metadata>, ParseContext) + MetadataFilterBase (per-Metadata filter(Metadata)); trusted write bracket for reserved tk: keys",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/MetadataFilterBase.java:30",
-  "ripstream": "packages/core/src/metadata-utils.ts:4-6",
-  "status": "partial",
-  "evidence": "source: ripstream interface is filter(Metadata): Metadata; no list, no context, no trusted writes",
-  "note": "Cannot express list-level filters (RemoveByMime) or reserved-key writes (GeoPoint, LegacyKeyMigration)."
+  "ripstream": "packages/core/src/metadata-filter.ts (MetadataFilter: filter(list, context), in place; MetadataFilterBase: one document at a time)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter.test.ts (a filter is given the whole list and may change its length; each filter sees what the one before produced)",
+  "note": "The list-level shape Tika has, so a filter can drop a document (RemoveByMime) or write a derived key (GeoPoint, LegacyKeyMigration). Ripstream has no reserved-key guard on Metadata writes, so there is no separate trusted write. Replaces the per-Metadata `MetadataFilter` and `IncludeExcludeFilter` of metadata-utils.ts, which are removed (breaking, see CHANGELOG)."
  },
  {
   "id": "mf-composite",
   "kind": "metadata-filter",
   "upstream": "CompositeMetadataFilter (ordered chain)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/CompositeMetadataFilter.java:27",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "No chain object anywhere in ripstream."
+  "ripstream": "packages/core/src/metadata-filter.ts (CompositeMetadataFilter); packages/core/src/metadata-filter-config.ts (createMetadataFilter: an empty list is NoOp, else a composite)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter.test.ts (order, same context for every filter, an empty composite changes nothing); packages/core/test/metadata-filter-config.test.ts",
+  "note": "As in Tika's loader (`wrapWith`): empty list is the NoOp filter, a non-empty one a composite, run in the order given."
  },
  {
   "id": "mf-default",
@@ -295,119 +295,118 @@
   "upstream": "DefaultMetadataFilter (ServiceLoader-discovered filters, sorted by class name)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/DefaultMetadataFilter.java:24",
   "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Needs a registry/ordering rule if filters become pluggable."
+  "status": "non-goal-candidate",
+  "evidence": "read: tika-core/.../DefaultMetadataFilter.java and tika-serialization/.../TikaLoader.java:128-134, not run",
+  "note": "Reason: DefaultMetadataFilter is the JVM ServiceLoader's static providers sorted by class name; the 4.x loader does not use it (its `metadata-filters` default provider is the NoOp filter), and ripstream has no class path to scan. What the loader does is matched: no section or an empty list runs nothing. Listed in tikajs-68os.24 for the owner."
  },
  {
   "id": "mf-noop",
   "kind": "metadata-filter",
   "upstream": "NoOpFilter",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/NoOpFilter.java:30",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Trivial."
+  "ripstream": "packages/core/src/metadata-filter.ts (NoOpFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-config.test.ts (`no-op-filter` by name; a chain of it filters nothing, on every output path)",
+  "note": "Accepted by name in `metadata-filters`; a chain that is only the no-op filter is treated as none, so as the parse-context chain it also keeps CONTENT_ONLY's own default away, as Tika's NoOp does."
  },
  {
   "id": "mf-include",
   "kind": "metadata-filter",
   "upstream": "IncludeFieldMetadataFilter (config include[]; exact, case-sensitive name match; removes all other keys)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/IncludeFieldMetadataFilter.java:29",
-  "ripstream": "packages/core/src/metadata-utils.ts:14-32",
-  "status": "partial",
-  "evidence": "run: IncludeExcludeFilter({include:['author']}) on keys Author, author, dc:creator kept [Author, author]; compileGlob uses the 'i' flag (metadata-utils.ts:122-125)",
-  "note": "Behavior differs: ripstream matches globs case-insensitively, Tika exact/case-sensitive. A literal include could keep keys Tika would drop."
+  "ripstream": "packages/core/src/metadata-filter.ts (IncludeFieldMetadataFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts; packages/core/test/metadata-filter-emit.test.ts (on the whole list, `tk:content` included)",
+  "note": "Exact, case-sensitive names, no globs, as Tika's. `include` must be an array of strings (stricter than Jackson, refused when the config loads)."
  },
  {
   "id": "mf-exclude",
   "kind": "metadata-filter",
   "upstream": "ExcludeFieldMetadataFilter (config exclude[]; exact name match)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/ExcludeFieldMetadataFilter.java:29",
-  "ripstream": "packages/core/src/metadata-utils.ts:14-32",
-  "status": "partial",
-  "evidence": "run: same class and 'i'-flag glob as mf-include",
-  "note": "Same case-sensitivity divergence; ripstream also accepts globs, Tika does not."
+  "ripstream": "packages/core/src/metadata-filter.ts (ExcludeFieldMetadataFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts; packages/core/test/metadata-filter-emit.test.ts",
+  "note": "Exact, case-sensitive names, no globs, as Tika's; `exclude` must be an array of strings."
  },
  {
   "id": "mf-field-mapping",
   "kind": "metadata-filter",
   "upstream": "FieldNameMappingFilter (config mappings{from:to}, excludeUnmapped=true by default)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/FieldNameMappingFilter.java:27",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Default drops every unmapped key, easy to get wrong."
+  "ripstream": "packages/core/src/metadata-filter.ts (FieldNameMappingFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts (excludeUnmapped true by default; a rename onto a name the document has appends to its values; every value of a renamed name, in order; an unmapped name dropped even when a rename made it)",
+  "note": "Tika's behaviour including its order dependence: names are handled in document order, so a rename's target is judged as a name the document has. `mappings` must be a map of strings."
  },
  {
   "id": "mf-capture-group",
   "kind": "metadata-filter",
   "upstream": "CaptureGroupMetadataFilter (config regex, sourceField, targetField; first group of first match on first value; no-op if no match/no source; overwrites target)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/CaptureGroupMetadataFilter.java:54",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Pure string logic."
+  "ripstream": "packages/core/src/metadata-filter.ts (CaptureGroupMetadataFilter); packages/core/src/java-regex.ts (compileJavaRegex: Java syntax, \\A \\z \\Z, possessive and atomic forms, POSIX classes)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts; packages/core/test/java-regex.test.ts",
+  "note": "First group of the first match of the first value of sourceField replaces every value of targetField; no source, a blank one or no match writes nothing. Deviations: Tika accepts a regex with no capture group and fails on the first document that matches, ripstream refuses it when the config loads; case folding of (?i) is Unicode where Java's is ASCII unless (?u)."
  },
  {
   "id": "mf-clear-by-attachment",
   "kind": "metadata-filter",
   "upstream": "ClearByAttachmentTypeMetadataFilter (config types[] validated against EmbeddedResourceType; clears all keys of an embedded doc whose tk embedded-resource-type matches)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/ClearByAttachmentTypeMetadataFilter.java:36",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "ripstream rmeta uses X-TIKA:embedded_resource_path/depth (rmeta.ts:49-57); embedded-resource-type enum parity not verified."
+  "ripstream": "packages/core/src/metadata-filter.ts (ClearByAttachmentTypeMetadataFilter; `types` checked against EMBEDDED_RESOURCE_TYPES, packages/core/src/tika-keys.ts)",
+  "status": "partial",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts (the filter, on documents carrying tk:embedded-resource-type)",
+  "note": "The filter is Tika's: it empties the metadata of a document whose `tk:embedded-resource-type` is listed, keeps the document, and refuses an unknown type when the config loads. Partial because no ripstream parser writes `tk:embedded-resource-type` (Tika sets it in 45 classes), so on ripstream's own output it matches nothing yet: tikajs-68os.35."
  },
  {
   "id": "mf-remove-by-mime",
   "kind": "metadata-filter",
   "upstream": "RemoveByMimeMetadataFilter (config mimes[]; removes whole Metadata objects from the list when Content-Type base type matches)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/RemoveByMimeMetadataFilter.java:38",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "List-level filter; needs mf-spi change. Base type = parameters stripped."
+  "ripstream": "packages/core/src/metadata-filter.ts (RemoveByMimeMetadataFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts; packages/core/test/metadata-filter-emit.test.ts (a removed document is gone from rmeta, the CLI, the pipes emit and the server); packages/pipes/test/metadata-filters.test.ts (UNPACK keeps each embedded document's bytes with its document)",
+  "note": "Compares the base type of `Content-Type` in lower case, parameters stripped; a document with no Content-Type, or one that is not a media type, stays. A `mimes` entry that is not a media type, or could never match (it has parameters or upper case), is refused when the config loads rather than ignored."
  },
  {
   "id": "mf-date-normalizing",
   "kind": "metadata-filter",
   "upstream": "DateNormalizingMetadataFilter (config defaultTimeZone=UTC; rewrites every DATE-typed property to yyyy-MM-dd'T'HH:mm:ss'Z'; date-only = midday; partial dates take minimum fields; unparseable left as is)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/DateNormalizingMetadataFilter.java:51",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Depends on the property value-type table; ripstream has generated schema valueType (metadata-schema.ts)."
+  "ripstream": "packages/core/src/metadata-filter.ts (DateNormalizingMetadataFilter); packages/core/src/tika-dates.ts (parseTikaDate and Tika's date tables); packages/core/src/zone-id.ts and civil-time.ts (Java's zone ids and offsets)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-date.test.ts; packages/core/test/tika-dates.test.ts (Tika's normalize, rejected and stored-form tables); packages/core/test/zone-id.test.ts",
+  "note": "Every value of every date-typed key to yyyy-MM-dd'T'HH:mm:ss'Z' in UTC; defaultTimeZone is UTC; an offset is honoured, a date-only value is midday, a partial date is invented not dropped. Deviations: Tika logs a warning for a value that is not a date and ripstream's core has no logger, so it is left as it is silently; region zone ids and their rules are the runtime's tzdata, not the JDK's, so a historic offset can differ."
  },
  {
   "id": "mf-geopoint",
   "kind": "metadata-filter",
   "upstream": "GeoPointMetadataFilter (config geoPointFieldName='location'; writes 'lat,lng' via setTrusted when both present)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/GeoPointMetadataFilter.java:33",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source only",
-  "note": "Needs trusted write for reserved target names."
+  "ripstream": "packages/core/src/metadata-filter.ts (GeoPointMetadataFilter)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts",
+  "note": "`geo:lat` and `geo:long` to `lat,long` in geoPointFieldName (default `location`) when both are there; no trusted write is needed (see mf-spi)."
  },
  {
   "id": "mf-legacy-key-migration",
   "kind": "metadata-filter",
   "upstream": "LegacyKeyMigrationFilter (direction V4_TO_V3 default | V3_TO_V4; data-driven table of flat renames, drops, egress-only renames, prefix rules incl. digests; unmapped pass through)",
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/LegacyKeyMigrationFilter.java:87",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "source: LegacyKeyMigrationFilter.java:87-89 config; ripstream rmeta emits X-TIKA:* spellings (rmeta.ts:49-57) while Tika 4.2.0 emits tk:*",
-  "note": "Key-spelling divergence is the larger parity issue than the filter itself: ripstream output is already V3-style for X-TIKA keys, so there is no 4.x-key output to migrate."
+  "ripstream": "packages/core/src/legacy-key-migration-filter.ts (LegacyKeyMigrationFilter); packages/core/src/generated/metadata-migration.ts, generated by packages/core/scripts/generate-metadata-migration.ts from packages/core/data/upstream/metadata-migration-3x-4x.json (Tika's own table)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/legacy-key-migration.test.ts (V4_TO_V3 and V3_TO_V4, every row of the table, dropped keys, multi-valued keys in order)",
+  "note": "direction V4_TO_V3 by default; the table is data, taken from Tika. Deviation: Tika's `table` setting names a classpath resource, so in a configuration it is accepted only as Tika's own default path (any other is refused when the config loads); a library caller gives a table of their own as `rows`, and a row with an empty or non-string key is refused by the constructor."
  },
  {
   "id": "mf-charsoup-lang",
   "kind": "metadata-filter",
   "upstream": "CharSoupMetadataFilter (tk:content -> tk:detected-language, -confidence = enum name, -confidence-raw = float; no-op when no content)",
   "upstreamSource": "tika-langdetect/tika-langdetect-charsoup/src/main/java/org/apache/tika/langdetect/charsoup/CharSoupMetadataFilter.java:42",
-  "ripstream": "none",
+  "ripstream": "none (`charsoup-metadata-filter` is refused by name in `metadata-filters`)",
   "status": "gap",
-  "evidence": "source: CharSoupMetadataFilter.java:55-68; schema declares the 3 keys (metadata-schema.ts) but nothing writes them",
-  "note": "Nothing in ripstream calls a LanguageDetector during a parse; only /language and the CLI `language` command use FrancLanguageDetector."
+  "note": "Nothing in ripstream calls a LanguageDetector during a parse; only /language and the CLI `language` command use FrancLanguageDetector. Tracked in tikajs-68os.9.3 (language detection), which owns the three `tk:detected-language*` keys; until then a configuration naming the filter is refused when it loads, with that reason."
  },
  {
   "id": "mf-optimaize-lang",
@@ -417,7 +416,7 @@
   "ripstream": "none",
   "status": "non-goal-candidate",
   "evidence": "source only",
-  "note": "Reason: same output keys as the CharSoup filter, backend-specific; one generic language filter would cover all three."
+  "note": "Reason: same output keys as the CharSoup filter, backend-specific; one generic language filter would cover all three. Refused by name in `metadata-filters` (`optimaize-metadata-filter`); listed in tikajs-68os.24 for the owner."
  },
  {
   "id": "mf-opennlp-lang",
@@ -427,7 +426,7 @@
   "ripstream": "none",
   "status": "non-goal-candidate",
   "evidence": "source only",
-  "note": "Reason: same as mf-optimaize-lang; OpenNLP backend is an ML model stack."
+  "note": "Reason: same as mf-optimaize-lang; OpenNLP backend is an ML model stack. Refused by name in `metadata-filters` (`open-nlp-metadata-filter`); listed in tikajs-68os.24 for the owner."
  },
  {
   "id": "mf-tika-eval",
@@ -437,7 +436,7 @@
   "ripstream": "none",
   "status": "non-goal-candidate",
   "evidence": "source: TikaEvalMetadataFilter.java:46-67 keys; registry upstream-services.ts:117",
-  "note": "Reason: extraction-QA tooling that needs bundled per-language common-token lists and a JunkDetector model; not on the parse path."
+  "note": "Reason: extraction-QA tooling that needs bundled per-language common-token lists and a JunkDetector model; not on the parse path. Refused by name in `metadata-filters` (`tika-eval-metadata-filter`); listed in tikajs-68os.24 for the owner."
  },
  {
   "id": "mf-write-limiter",
@@ -447,17 +446,17 @@
   "ripstream": "packages/core/src/metadata-utils.ts:40-63",
   "status": "partial",
   "evidence": "run: MetadataWriteLimitFilter({maxValueChars:4}) on 'aaaaaaaaaa' -> 'aaaa'; it is a post-hoc filter over a finished Metadata: per-value chars + values per key only",
-  "note": "Missing: total budget, key-size cap, UTF-16 byte accounting, write-time enforcement, always-set protection for Content-Type. A hostile parser can still allocate before the filter runs."
+  "note": "Partial. MetadataWriteLimitFilter (value length and values per key) is a library filter, not a `metadata-filters` entry: Tika's StandardMetadataLimiter is a parse-context factory that limits at write time. Missing: total budget, key-size cap, UTF-16 byte accounting, write-time enforcement, always-set protection for Content-Type; a hostile parser can still allocate before the filter runs. Tracked in tikajs-68os.9.4 (CFG-067)."
  },
  {
   "id": "mf-config-wiring",
   "kind": "metadata-filter",
   "upstream": "metadataFilters config list (tika-config filter chain)",
   "upstreamSource": "n/a",
-  "ripstream": "packages/core/src/config.ts:13,23,56,81,92",
-  "status": "gap",
-  "evidence": "run: grep -rn metadataFilters packages/*/src hits only config.ts (declared, validated, frozen at :92); no consumer",
-  "note": "Accepted and silently ignored, so a user config of filters has no effect."
+  "ripstream": "packages/core/src/config.ts (`metadata-filters` and `parse-context.metadata-filters` read, checked and frozen by loadConfig; RipstreamConfig.metadataFilters, parseContextMetadataFilters); packages/core/src/metadata-filter-config.ts (parseMetadataFilterSection, createMetadataFilter, emitMetadataFilter, metadataFiltersOf)",
+  "status": "implemented",
+  "evidence": "run: packages/core/test/metadata-filter-config.test.ts, packages/core/test/metadata-filter-emit.test.ts; packages/pipes/test/metadata-filters.test.ts; packages/cli/test/metadata-filters.test.ts (recursive json and jsonl, the metadata command and text output untouched, the pipes command, serve); packages/server/test/metadata-filters.test.ts (/rmeta, /meta, /meta/{field}, /tika/json, handler=meta|json, text routes, /unpack, /pipes)",
+  "note": "The section is read, every problem in it reported when the config loads (an unknown filter or setting, a setting of the wrong type, a missing required setting, what the filter itself refuses), and the chain run where metadata is emitted with Tika's EmitHandler choice: the parse-context chain, else (CONTENT_ONLY) the content and the container exception only, else the top-level chain. The CLI filters its recursive JSON only, as TikaCLI does. A request cannot name a filter (NG-5). The camelCase `metadataFilters` key is now an unknown root key."
  },
  {
   "id": "ld-spi",

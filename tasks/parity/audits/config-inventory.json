@@ -93,15 +93,15 @@
     "area": "loader.top-level",
     "upstreamKey": "metadata-filters",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaLoader.java:128-134",
-    "ripstream": "config.metadataFilters validated, never consumed; IncludeExcludeFilter / MetadataWriteLimitFilter exist but are unwired (packages/core/src/metadata-utils.ts:14,40)",
-    "status": "gap",
+    "ripstream": "RipstreamConfig.metadataFilters (packages/core/src/config.ts) holds the `metadata-filters` array as frozen entries; createMetadataFilter and metadataFiltersOf (metadata-filter-config.ts) build the chain (Composite, or NoOp for an empty list); the chain runs where metadata is emitted: rmetaObjects/serializeRmeta (`metadataFilter`), every pipes parse mode (PipesSettings.metadataFilters), `ripstream --recursive` JSON and JSONL, and the server endpoints (ServerOptions.metadataFilters)",
+    "status": "implemented",
     "evidence": "J07,J25",
-    "unknownKeyBehaviour": "kebab key rejected; ripstream key accepted silently incl. nonexistent class",
-    "note": "Filters cannot be selected by config or applied to parse output.",
+    "unknownKeyBehaviour": "loud: an unknown filter name, a setting the filter does not read, a setting of the wrong type, a missing required setting and what the filter itself refuses (a regex with no group, a zone that is not one) are each refused when the config loads; the camelCase `metadataFilters` key is now an unknown root key",
+    "note": "The section is read, the chain built and run on the output paths, with Tika's EmitHandler choice: the parse-context chain, else (CONTENT_ONLY) the content and the container exception only, else the top-level chain; a no-op chain filters nothing. The CLI runs the top-level chain over its recursive JSON alone, as Tika's TikaCLI does (the `metadata` command and the text output do not filter). The server runs it on /rmeta, /meta, /unpack's rmeta.json, /tika/json and the `handler=meta|json` answers; the text routes run the parse-context chain only. Deviations: filters are applied where the output is made, not inside createRipstream or a parse, so a library caller who wants them passes `metadataFilter` to rmetaObjects/serializeRmeta; a filter that throws fails the input (Tika logs a TikaException warning and goes on); the text routes still answer 422 for a failed container by the parse's exception, not by the filtered list. Four filters Tika lists are refused by name because ripstream has no detector behind them: charsoup (a parse does not detect languages; tikajs-68os.9.3), optimaize, open-nlp, tika-eval (candidates for tikajs-68os.24). Enum values (`direction`) are exact-case, as with every ripstream section (NG-6). `legacy-key-migration-filter` `table` names Tika's classpath resource and is accepted only as Tika's own default path.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.9.2",
-      "why": "Metadata filters: selection by config and the filter interface."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.9.2.5 tikajs-68os.9.2.6",
+      "why": "The section is read, validated when the config loads and run on the rmeta, pipes, CLI and server output paths. Read from Tika source (TikaLoader.java, EmitHandler.java, TikaCLI.java, the filters), not run against a Tika: the oracle probe was not permitted."
     }
   },
   {
@@ -235,7 +235,7 @@
     "triage": {
       "disposition": "bead",
       "target": "tikajs-68os.9.1, tikajs-68os.9.2, tikajs-68os.7.6, NG-5",
-      "why": "The limit blocks (embedded-limits, output-limits, timeout-limits) are applied (tikajs-68os.8.8), and unpack-config is read for pipes' UNPACK mode (tikajs-68os.6.7). The other parse-context components are digesters (.9.1), metadata filters (.9.2), content handler factories (.7.6) or classes instantiated from JSON (NG-5, a non-goal); each other key is refused by name."
+      "why": "The limit blocks (embedded-limits, output-limits, timeout-limits) are applied (tikajs-68os.8.8), and unpack-config is read for pipes' UNPACK mode (tikajs-68os.6.7). The digester factories (tikajs-68os.9.1) and the metadata-filters list (tikajs-68os.9.2) are read and applied. The other parse-context components are content handler factories (.7.6) or classes instantiated from JSON (NG-5, a non-goal); each other key is refused by name."
     }
   },
   {
@@ -668,15 +668,15 @@
     "area": "metadata-filters",
     "upstreamKey": "metadata-filters list (composite)",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaLoader.java:128-134",
-    "ripstream": "MetadataFilter interface + IncludeExcludeFilter + MetadataWriteLimitFilter (packages/core/src/metadata-utils.ts:4,14,40) unwired",
-    "status": "gap",
+    "ripstream": "MetadataFilter interface, MetadataFilterBase and the ten filters (packages/core/src/metadata-filter.ts, legacy-key-migration-filter.ts); the list is a CompositeMetadataFilter built by createMetadataFilter, each filter run on what the one before left; an empty list is the NoOp filter; run on every output path (see CFG-007)",
+    "status": "implemented",
     "evidence": "J25",
-    "unknownKeyBehaviour": "silent-ignore for config.metadataFilters",
-    "note": "",
+    "unknownKeyBehaviour": "loud for the top-level section, as CFG-007",
+    "note": "Tika has no default filter, so an absent or empty section runs nothing; ripstream matches, and a server, CLI or pipes run with no chain answers as it did before the filters.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.9.2",
-      "why": "Metadata filters: selection by config and the filter interface."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.9.2.5 tikajs-68os.9.2.6",
+      "why": "The list builds into a chain and is run where metadata is emitted. Read from Tika source, not run against a Tika."
     }
   },
   {
@@ -684,15 +684,15 @@
     "area": "metadata-filters",
     "upstreamKey": "per-request metadata filters",
     "upstreamSource": "docs/modules/ROOT/pages/configuration/metadata-filters.adoc",
-    "ripstream": "none",
-    "status": "gap",
+    "ripstream": "the `parse-context` section of the config file accepts `metadata-filters` (parse-context-config.ts); RipstreamConfig.parseContextMetadataFilters is it, null when absent or empty; metadataFiltersOf builds it and the pipes, rmeta and server output paths run it in place of the top-level chain (CONTENT_ONLY and the server's text routes run it alone)",
+    "status": "partial",
     "evidence": "P11",
-    "unknownKeyBehaviour": "silent-ignore",
-    "note": "",
+    "unknownKeyBehaviour": "loud in the file config; a per-request JSON body is not read at all (NG-5, CFG-069)",
+    "note": "As in Tika a non-empty parse-context list replaces the top-level one for what it covers, and an empty list sets nothing; a parse-context list that is a no-op filter also keeps CONTENT_ONLY's own default away. The per-request wire (a request's own JSON naming filters) is the owner-decided non-goal NG-5 (CFG-068/069/093), so a request cannot name a filter; partial for that reason alone.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.9.2",
-      "why": "Metadata filters: selection by config and the filter interface."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.9.2.6",
+      "why": "The parse-context list is read, replaces the top-level chain on every output path and is the only chain the text routes and CONTENT_ONLY run; a request's own JSON is NG-5, a non-goal. Read from Tika source (EmitHandler.java), not run against a Tika."
     }
   },
   {
