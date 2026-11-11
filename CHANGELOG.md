@@ -4,6 +4,23 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### `tk:embedded-resource-type` (`tikajs-68os.35`)
+
+Added: the parsers that hand embedded documents on now write `tk:embedded-resource-type`, with Tika's values
+(`TikaCoreProperties.EmbeddedResourceType`). A mail part is `INLINE` when its `Content-Disposition` is `inline` (any case) and
+`ATTACHMENT` otherwise, with none or another disposition, as `MailContentHandler` does. An OOXML part (docx, xlsx, pptx) is typed by
+the relationship that reaches it, as `AbstractOOXMLExtractor` does: image is `INLINE`; audio, video, media, package and oleObject
+are `ATTACHMENT`. A PDF's embedded file is `ATTACHMENT`. `clear-by-attachment-type-metadata-filter` now has something to match:
+on Tika's own `test_recursive_embedded.docx` it empties the EMF picture (`INLINE`) or the OLE object (`ATTACHMENT`) and keeps the other.
+
+Differences: ripstream's OOXML parser extracts the parts under `embeddings/` and `media/` whether or not a relationship reaches
+them, where Tika extracts what relationships reach; a part no relationship reaches is extracted without a type, and one reached
+by relationships of different types takes the first relationships file by name (Tika's order is POI's). Archive entries have no
+type, as in Tika. Not typed because ripstream does not extract them: thumbnails, macros, XMP and XFA, PDF JavaScript, incremental
+updates and page renderings, alternate-format chunks, and the embedded documents of ODF, iWork, HTML, EPUB, images, audio and
+video, which Tika types (`EMBEDDED_DOCUMENT_EXTRACTOR` is read only by the archive, OOXML, PDF and mail parsers). Read from Tika
+source, not run against a Tika.
+
 ### Language detection: Tika's CharSoup detector, and the filter that writes `tk:detected-language*` (`tikajs-68os.9.3`)
 
 Added: `CharSoupLanguageDetector` in `@spikedpunch/ripstream-language`, a port of Tika 4.2.0's `CharSoupLanguageDetector`
@@ -75,7 +92,7 @@ its source (there is no Java here to run it): a request cannot name filters (`NG
 Tika logs and goes on; a regex with no capture group is refused at load; a value that is not a date is left without the warning;
 region zone ids use the runtime's time zone data; `legacy-key-migration-filter`'s `table` is accepted only as Tika's own default
 (a library caller passes `rows`); enum values are exact-case and settings are strictly typed (`NG-6`). `clear-by-attachment-type-metadata-filter`
-matches `tk:embedded-resource-type`, which no ripstream parser writes yet (`tikajs-68os.35`). See `docs/migration.md`.
+matches `tk:embedded-resource-type`, which the mail, OOXML and PDF parsers write (`tikajs-68os.35`). See `docs/migration.md`.
 
 ### Digesters: the `parse-context` digester factories make `tk:digest:*` (`tikajs-68os.9.1`)
 

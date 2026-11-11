@@ -38,8 +38,8 @@ that handled the document (ripstream's parser names, not Java class names) and `
 container lists every parser used. `Content-Length` is the size of the input once it has been read in full.
 
 Not the same: the per-format keys a parser writes (`img:*`, `exif:*`, page counts) follow `tikajs-68os.10.5`; content is
-plain text by default where Tika 4's default handler is Markdown (see *Content shapes and routes*); `tk:embedded-resource-type`,
-`tk:internal-path` and `tk:embedded-relationship-id` are not written. A failure is noted as `Name: message`, where
+plain text by default where Tika 4's default handler is Markdown (see *Content shapes and routes*); `tk:internal-path` and `tk:embedded-relationship-id`
+are not written, and `tk:embedded-resource-type` only for what the mail, OOXML and PDF parsers extract. A failure is noted as `Name: message`, where
 Tika writes a stack trace. Read from Tika source and its saved responses, not checked against a live Tika.
 
 ## Digests
@@ -179,8 +179,10 @@ Not the same, read from Tika's source (there is no Java here to run it and compa
 - Enum values (`direction`) are exact-case and the types are strict (`NG-6`).
 - The camelCase `metadataFilters` key is still refused, now as an unknown key; the name is `metadata-filters`. `IncludeExcludeFilter` and
   `IncludeExcludeOptions` are gone: `IncludeFieldMetadataFilter` and `ExcludeFieldMetadataFilter` match exact names.
-- `clear-by-attachment-type-metadata-filter` matches on `tk:embedded-resource-type`, which no ripstream parser writes yet
-  (`tikajs-68os.35`), so on ripstream's own output it clears nothing.
+- `clear-by-attachment-type-metadata-filter` matches on `tk:embedded-resource-type`, which the mail, OOXML and PDF parsers write
+  (`tikajs-68os.35`): an email part is `INLINE` or `ATTACHMENT` by its disposition, an OOXML part by the relationship that reaches
+  it (an image is `INLINE`; audio, video, media, package and oleObject are `ATTACHMENT`), a PDF's embedded file `ATTACHMENT`. The
+  embedded documents of other formats, and thumbnails, macros and the like, are not extracted, so they have no type to match.
 - Typed `/rmeta` output now types `tk:embedded-depth` as a number, as it types every other integer key (it was a string).
 
 ## Language detection

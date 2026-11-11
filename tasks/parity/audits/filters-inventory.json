@@ -356,8 +356,8 @@
   "upstreamSource": "tika-core/src/main/java/org/apache/tika/metadata/filter/ClearByAttachmentTypeMetadataFilter.java:36",
   "ripstream": "packages/core/src/metadata-filter.ts (ClearByAttachmentTypeMetadataFilter; `types` checked against EMBEDDED_RESOURCE_TYPES, packages/core/src/tika-keys.ts)",
   "status": "partial",
-  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts (the filter, on documents carrying tk:embedded-resource-type)",
-  "note": "The filter is Tika's: it empties the metadata of a document whose `tk:embedded-resource-type` is listed, keeps the document, and refuses an unknown type when the config loads. Partial because no ripstream parser writes `tk:embedded-resource-type` (Tika sets it in 45 classes), so on ripstream's own output it matches nothing yet: tikajs-68os.35."
+  "evidence": "run: packages/core/test/metadata-filter-fields.test.ts (the filter, on documents carrying tk:embedded-resource-type); packages/cli/test/metadata-filters.test.ts (--recursive on Tika's test_recursive_embedded.docx: INLINE and ATTACHMENT each empty only their own document); packages/parser-office/test/ooxml-embedded-type.test.ts, packages/parsers/test/mail.test.ts, packages/parser-pdf/test/pdf.test.ts (the types written; 20 mutants, all caught)",
+  "note": "The filter is Tika's: it empties the metadata of a document whose `tk:embedded-resource-type` is listed, keeps the document, and refuses an unknown type when the config loads. The key is written by the mail parser (INLINE for an inline disposition, else ATTACHMENT), the OOXML parser (by relationship type: image INLINE; audio, video, media, package, oleObject ATTACHMENT) and the PDF parser (embedded file ATTACHMENT), tikajs-68os.35. Partial because Tika types more kinds than ripstream extracts: thumbnails, macros, XMP/XFA, PDF JavaScript and versions, renderings, alternate-format chunks, and the embedded documents of ODF, iWork, HTML, EPUB, images and audio/video. An OOXML part no relationship reaches is extracted untyped, where Tika would not extract it. Read from Tika source, not run against a Tika."
  },
  {
   "id": "mf-remove-by-mime",
