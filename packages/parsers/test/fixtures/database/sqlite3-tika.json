@@ -1,0 +1,41 @@
+{
+  "description": "Tika testSqlite3b.db through SQLite3Parser: SQLite3ParserTest.testSpacesInBodyContentHandler (a row is its cells separated by tabs, a row ends in a line break, sqlite3:application_id and sqlite3:user_version) and database:table-name for each table (tikajs-68os.64)",
+  "tags": [
+    "database",
+    "sqlite"
+  ],
+  "input": {
+    "file": "testSqlite3b.db"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "0\t2.3\t2.4\tlorem"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "tempor\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.sqlite3:application_id",
+      "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.sqlite3:user_version",
+      "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.database:table-name",
+      "value": "my_table1"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.sqlite:table-count"
+    }
+  ]
+}
