@@ -1,34 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  IncludeExcludeFilter,
   Metadata,
-  MetadataWriteLimitFilter,
   coerceMetadataValue,
   metadataToCsv,
   metadataToXml,
   parseXmpPacket,
   writeXmpPacket,
 } from "../src/index.ts";
-
-test("include/exclude filters select keys", () => {
-  const metadata = new Metadata();
-  metadata.set("dc:title", "Doc");
-  metadata.set("pdf:producer", "Tool");
-  new IncludeExcludeFilter({ include: ["dc:*"], exclude: ["pdf:*"] }).filter(metadata);
-  assert.equal(metadata.get("dc:title"), "Doc");
-  assert.equal(metadata.get("pdf:producer"), null);
-});
-
-test("write limits cap values and counts", () => {
-  const metadata = new Metadata();
-  metadata.add("dc:subject", "one");
-  metadata.add("dc:subject", "two");
-  metadata.add("dc:title", "abcdefgh");
-  new MetadataWriteLimitFilter({ maxValues: 1, maxValueChars: 3 }).filter(metadata);
-  assert.deepEqual(metadata.getAll("dc:subject"), ["one"]);
-  assert.equal(metadata.get("dc:title"), "abc");
-});
 
 test("coerces schema-typed values", () => {
   assert.equal(coerceMetadataValue("meta:page-count", "3"), 3);

@@ -5,17 +5,53 @@ export {
 export { MediaTypeRegistry } from "./media-type-registry.ts";
 export { Metadata, type MetadataValue } from "./metadata.ts";
 export {
-  IncludeExcludeFilter,
-  MetadataWriteLimitFilter,
   coerceMetadataValue,
   metadataToCsv,
   metadataToXml,
   parseXmpPacket,
   writeXmpPacket,
-  type IncludeExcludeOptions,
-  type MetadataFilter,
-  type WriteLimitOptions,
 } from "./metadata-utils.ts";
+export {
+  CaptureGroupMetadataFilter,
+  ClearByAttachmentTypeMetadataFilter,
+  CompositeMetadataFilter,
+  DateNormalizingMetadataFilter,
+  ExcludeFieldMetadataFilter,
+  FieldNameMappingFilter,
+  GeoPointMetadataFilter,
+  IncludeFieldMetadataFilter,
+  MetadataFilterBase,
+  MetadataWriteLimitFilter,
+  NoOpFilter,
+  RemoveByMimeMetadataFilter,
+  type CaptureGroupOptions,
+  type ClearByAttachmentTypeOptions,
+  type DateNormalizingOptions,
+  type ExcludeFieldOptions,
+  type FieldNameMappingOptions,
+  type GeoPointOptions,
+  type IncludeFieldOptions,
+  type MetadataFilter,
+  type RemoveByMimeOptions,
+  type WriteLimitOptions,
+} from "./metadata-filter.ts";
+export {
+  LegacyKeyMigrationFilter,
+  type LegacyKeyMigrationDirection,
+  type LegacyKeyMigrationOptions,
+} from "./legacy-key-migration-filter.ts";
+export { METADATA_MIGRATION_DROPPED, type MetadataMigrationRow } from "./generated/metadata-migration.ts";
+export {
+  inYearBounds,
+  normalizeTikaDate,
+  ParsedTikaDate,
+  parseTikaDate,
+  TIKA_DATES_MAX_YEAR,
+  TIKA_DATES_MIN_YEAR,
+  tikaDateMetadataString,
+  tikaDateMetadataStringKeepPartial,
+  type TikaDatePrecision,
+} from "./tika-dates.ts";
 export {
   RipstreamConfig,
   RipstreamConfigError,
@@ -255,7 +291,7 @@ export {
   type ParseRecord,
 } from "./recursive.ts";
 export { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, digestBytes, digestKey, type DigestAlgorithm, type DigestDef, type DigestEncoding, type DigestSettings } from "./digest.ts";
-export { CONTENT_LENGTH, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
+export { CONTENT_LENGTH, EMBEDDED_RESOURCE_TYPES, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
 export {
   markParseTiming,
   metadataJson,

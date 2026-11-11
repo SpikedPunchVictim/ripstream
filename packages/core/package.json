@@ -22,6 +22,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "generate:metadata-migration": "node scripts/generate-metadata-migration.ts",
     "generate:metadata-schema": "node scripts/generate-metadata-schema.ts",
     "generate:upstream-registry": "node scripts/generate-upstream-registry.ts"
   }

@@ -16,6 +16,7 @@ export const TIKA_KEYS = {
   EMBEDDED_ID: "tk:embedded-id",
   EMBEDDED_ID_PATH: "tk:embedded-id-path",
   EMBEDDED_RESOURCE_PATH: "tk:embedded-resource-path",
+  EMBEDDED_RESOURCE_TYPE: "tk:embedded-resource-type",
   FINAL_EMBEDDED_RESOURCE_PATH: "tk:final-embedded-resource-path",
   CONTAINER_EXCEPTION: "tk:exception:container-exception",
   EMBEDDED_EXCEPTION: "tk:exception:embedded-exception",
@@ -24,6 +25,19 @@ export const TIKA_KEYS = {
   WRITE_LIMIT_REACHED: "tk:exception:write-limit-reached",
   IS_ENCRYPTED: "tk:encrypted",
 } as const;
+
+/** The values of `tk:embedded-resource-type` (`TikaCoreProperties.EmbeddedResourceType`), in Tika's order. */
+export const EMBEDDED_RESOURCE_TYPES = [
+  "INLINE",
+  "ATTACHMENT",
+  "MACRO",
+  "METADATA",
+  "FONT",
+  "THUMBNAIL",
+  "RENDERING",
+  "VERSION",
+  "ALTERNATE_FORMAT_CHUNK",
+] as const;
 
 /** `tk:content-handler-type` for text output (Tika's BasicContentHandlerFactory.HANDLER_TYPE enum name). */
 export const TEXT_HANDLER_TYPE = "TEXT";

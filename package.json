@@ -19,6 +19,7 @@
     "test:explain": "cbd explain",
     "test:stats": "cbd stats",
     "test:gc": "cbd gc",
+    "generate:metadata-migration": "pnpm --filter @spikedpunch/ripstream-core run generate:metadata-migration",
     "generate:metadata-schema": "pnpm --filter @spikedpunch/ripstream-core run generate:metadata-schema",
     "generate:upstream-registry": "pnpm --filter @spikedpunch/ripstream-core run generate:upstream-registry",
     "parity:matrix": "node scripts/parity-matrix.ts",
