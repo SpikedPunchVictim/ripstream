@@ -120,23 +120,24 @@ test("a type no Tika parser claims is ripstream's own coverage: it follows the m
   assert.deepEqual(await taking(withMarker, "text/plain"), []);
   assert.deepEqual(await claiming(withMarker, "application/json"), ["TextParser"]);
   // Without the marker nothing but the named parsers is loaded, ripstream's own types included. (JSON still reaches
-  // TextParser through its supertype text/plain, as it reaches Tika's text-and-csv-parser.)
+  // CsvParser, which reads it as text, through its supertype text/plain, as it reaches Tika's text-and-csv-parser.)
   const named = parserList(["text-and-csv-parser"]);
   assert.deepEqual(await claiming(named, "application/json"), []);
-  assert.deepEqual(await taking(named, "application/json"), ["TextParser"]);
+  assert.deepEqual(await taking(named, "application/json"), ["CsvParser"]);
   // A marker filter reaches it too.
   assert.deepEqual(await claiming(parserList([{ "default-parser": { "_mime-exclude": ["application/json"] } }]), "application/json"), []);
 });
 
 test("a catch-all goes once a type in its range is excluded, so it cannot turn that type back on", async () => {
-  // TextParser claims text/* as well as text/plain. Tika's fallback for an unknown text type runs through its text parser.
-  assert.deepEqual(await taking(DEFAULT, "text/x-never-heard-of"), ["TextParser"]);
+  // TextParser claims text/*. Tika's fallback for an unknown text type runs through its text parser: CsvParser (text/plain's
+  // supertype route), which reads it as text, and then the catch-all.
+  assert.deepEqual(await taking(DEFAULT, "text/x-never-heard-of"), ["CsvParser", "TextParser"]);
   const without = parserList([{ "default-parser": { exclude: ["text-and-csv-parser"] } }]);
   assert.deepEqual(await taking(without, "text/x-never-heard-of"), []);
   assert.deepEqual(await taking(without, "text/plain"), []);
   // Excluding something outside text/ leaves the catch-all alone.
   const other = parserList([{ "default-parser": { exclude: ["pdf-parser"] } }]);
-  assert.deepEqual(await taking(other, "text/x-never-heard-of"), ["TextParser"]);
+  assert.deepEqual(await taking(other, "text/x-never-heard-of"), ["CsvParser", "TextParser"]);
 });
 
 test("an alias a ripstream parser claims is the same type as the one Tika names", () => {

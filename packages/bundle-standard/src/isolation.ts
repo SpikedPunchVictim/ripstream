@@ -40,8 +40,9 @@ export function isolationChildPath(): string {
 
 /**
  * The parsers behind `DEFAULT_IN_PROCESS_TYPES` (isolation-node, routing.ts), and nothing else:
- *   TextParser          text/plain, application/json, application/ld+json, application/manifest+json, text/x-yaml
- *   CsvParser           text/csv, text/tab-separated-values
+ *   TextParser          application/json, application/ld+json, application/manifest+json, text/x-yaml,
+ *                       text/tab-separated-values
+ *   CsvParser           text/plain, text/csv (and text/tsv): sniffs the delimiter, as Tika's TextAndCSVParser does
  *   HtmlDocumentParser  text/html, application/xhtml+xml
  *   MarkdownParser      text/markdown
  *   XmlParser           text/xml, application/xml

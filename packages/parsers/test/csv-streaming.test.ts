@@ -301,7 +301,7 @@ test("differential fuzz: CsvParser output is byte-identical to the buffered rend
     const stream = await chunkedStream(text, random);
     const body = new BodyContentHandler();
     try {
-      await new CsvParser().parse(stream, body, new Metadata(), new ParseContext());
+      await new CsvParser({ delimiter: "," }).parse(stream, body, new Metadata(), new ParseContext());
     } finally {
       await stream.close();
     }
@@ -368,7 +368,7 @@ async function parseCounting(
 }
 
 test("blank rows emit nothing; an empty first cell with a non-empty second cell does", async () => {
-  const ripstream = createRipstream();
+  const ripstream = createRipstream({ csv: { delimiter: "," } });
   const blank = await ripstream.parseToString(encoder.encode("\n\r\n\r\r\n\n"), {
     filename: "blank.csv",
   });
@@ -376,22 +376,22 @@ test("blank rows emit nothing; an empty first cell with a non-empty second cell 
   assert.equal(blank.trim(), "");
 
   const quotedEmpty = counter();
-  await parseCounting(new CsvParser(), repeated('""\n', 3), quotedEmpty);
+  await parseCounting(new CsvParser({ delimiter: "," }), repeated('""\n', 3), quotedEmpty);
   assert.equal(quotedEmpty.rows, 0);
 
   const leading = counter();
-  await parseCounting(new CsvParser(), repeated("\n,x\n\n", 1), leading);
+  await parseCounting(new CsvParser({ delimiter: "," }), repeated("\n,x\n\n", 1), leading);
   assert.equal(leading.rows, 1);
   assert.equal(leading.cells, 2);
   assert.equal(leading.chars, 1);
 
   const onlyDelimiter = counter();
-  await parseCounting(new CsvParser(), repeated(",\n", 1), onlyDelimiter);
+  await parseCounting(new CsvParser({ delimiter: "," }), repeated(",\n", 1), onlyDelimiter);
   assert.equal(onlyDelimiter.rows, 1);
   assert.equal(onlyDelimiter.cells, 2);
 
   const quoted = counter();
-  await parseCounting(new CsvParser(), repeated('"\n"\n', 1), quoted);
+  await parseCounting(new CsvParser({ delimiter: "," }), repeated('"\n"\n', 1), quoted);
   assert.equal(quoted.rows, 1);
   assert.equal(quoted.cells, 1);
   assert.equal(quoted.chars, 1);
@@ -400,7 +400,7 @@ test("blank rows emit nothing; an empty first cell with a non-empty second cell 
 test("a giant unterminated cell streams in bounded pieces instead of buffering", async () => {
   const total = 3 * MB + 17;
   const handler = counter();
-  const parser = new CsvParser({ maxRowChars: total + 1 });
+  const parser = new CsvParser({ delimiter: ",", maxRowChars: total + 1 });
   await parseCounting(parser, repeated("a".repeat(MB + 5), 3), handler);
   assert.equal(handler.rows, 1);
   assert.equal(handler.cells, 1);
@@ -411,7 +411,7 @@ test("a giant unterminated cell streams in bounded pieces instead of buffering",
 
 test("an unclosed quote streams too and is closed at end of input", async () => {
   const handler = counter();
-  await parseCounting(new CsvParser(), repeated('"' + "b,\n".repeat(100_000), 1), handler);
+  await parseCounting(new CsvParser({ delimiter: "," }), repeated('"' + "b,\n".repeat(100_000), 1), handler);
   assert.equal(handler.rows, 1);
   assert.equal(handler.cells, 1);
   assert.equal(handler.chars, 300_000);
@@ -426,7 +426,7 @@ test("caps are configurable product limits: a row wider than the default parses 
   const cells = 1_000_100;
   const handler = counter();
   await parseCounting(
-    new CsvParser({ maxCellsPerRow: 2_000_000 }),
+    new CsvParser({ delimiter: ",", maxCellsPerRow: 2_000_000 }),
     repeated("x,".repeat(50_000), Math.ceil(cells / 50_000)),
     handler,
   );
@@ -436,22 +436,22 @@ test("caps are configurable product limits: a row wider than the default parses 
 
 test("maxRowChars is configurable in both directions", async () => {
   await assert.rejects(
-    parseCounting(new CsvParser({ maxRowChars: 100 }), repeated("a".repeat(101), 1), counter()),
+    parseCounting(new CsvParser({ delimiter: ",", maxRowChars: 100 }), repeated("a".repeat(101), 1), counter()),
     LimitExceededError,
   );
   const exact = counter();
-  await parseCounting(new CsvParser({ maxRowChars: 100 }), repeated("a".repeat(100), 1), exact);
+  await parseCounting(new CsvParser({ delimiter: ",", maxRowChars: 100 }), repeated("a".repeat(100), 1), exact);
   assert.equal(exact.chars, 100);
 
   // Above the 10,000,000 default, accepted once raised.
   const longRow = 10_000_001;
   await assert.rejects(
-    parseCounting(new CsvParser(), repeated("a".repeat(longRow), 1), counter()),
+    parseCounting(new CsvParser({ delimiter: "," }), repeated("a".repeat(longRow), 1), counter()),
     LimitExceededError,
   );
   const raised = counter();
   await parseCounting(
-    new CsvParser({ maxRowChars: 20_000_000 }),
+    new CsvParser({ delimiter: ",", maxRowChars: 20_000_000 }),
     repeated("a".repeat(longRow), 1),
     raised,
   );
@@ -460,23 +460,23 @@ test("maxRowChars is configurable in both directions", async () => {
 
 test("maxCellsPerRow is configurable downward and rejects an over-wide row", async () => {
   await assert.rejects(
-    parseCounting(new CsvParser({ maxCellsPerRow: 1000 }), repeated(",".repeat(1001), 1), counter()),
+    parseCounting(new CsvParser({ delimiter: ",", maxCellsPerRow: 1000 }), repeated(",".repeat(1001), 1), counter()),
     LimitExceededError,
   );
   const exact = counter();
-  await parseCounting(new CsvParser({ maxCellsPerRow: 1000 }), repeated(",".repeat(999), 1), exact);
+  await parseCounting(new CsvParser({ delimiter: ",", maxCellsPerRow: 1000 }), repeated(",".repeat(999), 1), exact);
   assert.equal(exact.cells, 1000);
 });
 
 test("invalid cap options are rejected at construction", () => {
   for (const bad of [0, -1, 1.5, Number.NaN]) {
-    assert.throws(() => new CsvParser({ maxRowChars: bad }), RangeError);
-    assert.throws(() => new CsvParser({ maxCellsPerRow: bad }), RangeError);
+    assert.throws(() => new CsvParser({ delimiter: ",", maxRowChars: bad }), RangeError);
+    assert.throws(() => new CsvParser({ delimiter: ",", maxCellsPerRow: bad }), RangeError);
   }
 });
 
 test("a comma bomb is stopped by the output cap, not by buffering", async () => {
-  const ripstream = createRipstream({ csv: { maxCellsPerRow: 100_000_000 } });
+  const ripstream = createRipstream({ csv: { delimiter: ",", maxCellsPerRow: 100_000_000 } });
   const handler = counter();
   await assert.rejects(
     ripstream.parseToHandler(encoder.encode(",".repeat(5 * MB)), handler, {
@@ -491,7 +491,7 @@ test("a comma bomb is stopped by the output cap, not by buffering", async () => 
 });
 
 test("a newline-free body stops at the output cap with bounded heap and work", async () => {
-  const ripstream = createRipstream({ csv: { maxRowChars: 1_000_000_000 } });
+  const ripstream = createRipstream({ csv: { delimiter: ",", maxRowChars: 1_000_000_000 } });
   const handler = counter();
   const before = retainedHeap();
   await assert.rejects(
@@ -510,7 +510,7 @@ test("a newline-free body stops at the output cap with bounded heap and work", a
 test("unbounded output (-1) streams a newline-free body with flat heap", {
   timeout: 120_000,
 }, async () => {
-  const ripstream = createRipstream({ csv: { maxRowChars: 1_000_000_000 } });
+  const ripstream = createRipstream({ csv: { delimiter: ",", maxRowChars: 1_000_000_000 } });
   const handler = counter(32);
   const piece = "abcdefgh".repeat(128 * 1024); // 1 MiB
   const count = 48;
@@ -529,7 +529,7 @@ test("unbounded output (-1) streams a newline-free body with flat heap", {
 test("unbounded output (-1) streams a multi-row table with ~1x memory", {
   timeout: 120_000,
 }, async () => {
-  const ripstream = createRipstream();
+  const ripstream = createRipstream({ csv: { delimiter: "," } });
   const handler = counter(1000);
   const field = "x".repeat(1000);
   const piece = `${field},${field},${field}\n`.repeat(1300); // ~3.9 MB

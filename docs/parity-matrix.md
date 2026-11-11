@@ -13,9 +13,9 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
 | standard | fallback | 7 |
-| standard | implemented | 40 |
+| standard | implemented | 41 |
 | standard | non-goal | 4 |
-| standard | partial | 26 |
+| standard | partial | 25 |
 | standard | tracked | 12 |
 
 ## Open items
@@ -50,9 +50,8 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | PListParser | standard | application/x-bplist-webarchive | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | AudioParser | standard | audio/basic | none | tracked tikajs-68os.15: Ogg family, au/midi, mp4 alias and HEIF sequences. |
 | MidiParser | standard | application/x-midi | none | tracked tikajs-68os.15: Ogg family, au/midi, mp4 alias and HEIF sequences. |
-| SourceCodeParser | standard | text/x-groovy | fallback via TextParser | accepted-fallback: Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10). |
+| SourceCodeParser | standard | text/x-groovy | fallback via CsvParser | accepted-fallback: Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10). |
 | TSDParser | standard | application/timestamped-data | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| TextAndCSVParser | standard | text/tsv | fallback via TextParser | accepted-fallback: text/tsv is claim-only; both sides detect a.tsv as text/tab-separated-values and TextParser's text equals the oracle's (differential on a generated TSV). |
 | DGN8Parser | standard | image/vnd.dgn; version=8 | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | DIFParser | standard | application/dif+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | EpubParser | standard | application/x-ibooks+zip | fallback via EpubParser | accepted-fallback: application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3). |
@@ -74,7 +73,7 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | JSoupParser | standard | application/vnd.mozilla.xul+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | JSoupParser | standard | application/vnd.wap.xhtml+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | JSoupParser | standard | application/x-asp | none | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| HttpParser | standard | application/x-httpresponse | fallback via TextParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
+| HttpParser | standard | application/x-httpresponse | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | BPGParser | standard | image/bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | BPGParser | standard | image/x-bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | HeifParser | standard | image/heic-sequence | fallback via MP4Parser | tracked tikajs-68os.15: Ogg family, au/midi, mp4 alias and HEIF sequences. |
@@ -104,7 +103,7 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | IWork18PackageParser | standard | application/vnd.apple.keynote.18 | none | tracked tikajs-68os.19: Version-suffixed iWork package types. |
 | IWork18PackageParser | standard | application/vnd.apple.numbers.18 | none | tracked tikajs-68os.19: Version-suffixed iWork package types. |
 | IWork18PackageParser | standard | application/vnd.apple.pages.18 | none | tracked tikajs-68os.19: Version-suffixed iWork package types. |
-| RFC822Parser | standard | message/x-emlx | fallback via TextParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
+| RFC822Parser | standard | message/x-emlx | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | ActiveMimeParser | standard | application/x-activemime | none | non-goal: ActiveMime is a macro-malware container; the useful output is the embedded VBA, which the OLE route already exposes. |
 | ChmParser | standard | application/chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | ChmParser | standard | application/x-chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
@@ -145,9 +144,9 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | OOXMLParser | standard | model/vnd.dwfx+xps | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | PSTMailItemParser | standard | application/x-tika-pst-mail-item | none | non-goal: application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly. |
 | TNEFParser | standard | application/x-tnef | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| MIFParser | standard | application/vnd.mif | fallback via TextParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
+| MIFParser | standard | application/vnd.mif | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | MIFParser | standard | application/x-maker | none | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| MIFParser | standard | application/x-mif | fallback via TextParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
+| MIFParser | standard | application/x-mif | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | MP4Parser | standard | application/mp4 | none | tracked tikajs-68os.15: Ogg family, au/midi, mp4 alias and HEIF sequences. |
 | MP4Parser | standard | video/x-m4v | fallback via MP4Parser | accepted-fallback: Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3). |
 | OpenDocumentParser | standard | application/vnd.oasis.opendocument.chart | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |

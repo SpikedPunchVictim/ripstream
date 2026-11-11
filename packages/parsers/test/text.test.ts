@@ -144,8 +144,9 @@ test("text/* fallback does not take over specialized text parsers", async () => 
     filename: "a.html",
   });
   assert.equal(html.text.trim(), "hi");
-  const csv = await ripstream.parse(encoder.encode("a,b\n1,2\n"), { filename: "a.csv" });
-  assert.match(csv.text, /a\tb/, "csv must be parsed as a table, not raw text");
+  const rows = Array.from({ length: 12 }, (_, row) => `a${row},b${row}`).join("\n");
+  const csv = await ripstream.parse(encoder.encode(rows), { filename: "a.csv" });
+  assert.match(csv.text, /a0\tb0/, "a regular csv must be parsed as a table, not raw text");
 });
 
 test("shell scripts (application/x-sh) parse as text", async () => {

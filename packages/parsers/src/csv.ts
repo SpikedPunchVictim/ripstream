@@ -10,6 +10,13 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
+import {
+  CSV_DELIMITER_NAMES,
+  DEFAULT_CSV_MARK_LIMIT,
+  DEFAULT_CSV_MIN_CONFIDENCE,
+  bestCsvDelimiter,
+} from "./csv-sniffer.ts";
+import { TextParser, writeText } from "./text.ts";
 
 /**
  * Structural events the scanner streams to the XHTML handler. Rows and cells are
@@ -52,6 +59,23 @@ export interface CsvParserOptions {
    * Exceeding it throws LimitExceededError.
    */
   readonly maxCellsPerRow?: number;
+  /**
+   * Characters (not bytes) of the document the sniffer reads to tell a table from text (default 20,000), as Tika's
+   * `TextAndCSVConfig.markLimit`.
+   */
+  readonly markLimit?: number;
+  /**
+   * The confidence (0 to 1) a delimiter needs for the document to be read as a table (default 0.5), as Tika's
+   * `TextAndCSVConfig.minConfidence`. At the default a table needs eleven regular rows, or quoted cells, to be told from
+   * text; Tika's own tests use 0.2.
+   */
+  readonly minConfidence?: number;
+  /**
+   * One character: read every document this parser is given as a table with this delimiter, and sniff nothing. Not in
+   * Tika, whose parser always sniffs unless a document carries a content-type override. For a pipeline known to carry
+   * delimited columns whatever their length or regularity. Metadata is written as for a sniffed table.
+   */
+  readonly delimiter?: string;
 }
 
 function positiveInteger(name: string, value: number): number {
@@ -61,16 +85,25 @@ function positiveInteger(name: string, value: number): number {
   return value;
 }
 
+/** The types Tika's TextAndCSVParser sniffs. */
+const SNIFFED_TYPES: ReadonlySet<string> = new Set(["text/plain", "text/csv", "text/tsv"]);
+
 /**
- * Port of TextAndCSVParser's CSV side. Streaming state machine with delimiter
- * sniffing, quoted fields, doubled quotes, and CRLF support. Cells are streamed to the
- * handler as they complete (long cells in bounded pieces), so memory stays flat for
- * newline-free bodies; the output cap bounds how much of such a body is processed.
+ * Port of TextAndCSVParser, for `text/plain`, `text/csv` and `text/tsv`: it sniffs the start of the document (Tika's
+ * CSVSniffer, see {@link bestCsvDelimiter}) and reads a table when it finds regular delimited columns, and text
+ * otherwise. A table is a streaming state machine with quoted fields, doubled quotes and CRLF support; cells are
+ * streamed to the handler as they complete (long cells in bounded pieces), so memory stays flat for newline-free bodies;
+ * the output cap bounds how much of such a body is processed. Other text types, `text/tab-separated-values` among them,
+ * are {@link TextParser}'s and are not sniffed.
  */
 export class CsvParser implements Parser {
   readonly name = "CsvParser";
   readonly #maxRowChars: number;
   readonly #maxCellsPerRow: number;
+  readonly #markLimit: number;
+  readonly #minConfidence: number;
+  readonly #delimiter: string | null;
+  readonly #text = new TextParser();
 
   constructor(options: CsvParserOptions = {}) {
     this.#maxRowChars = positiveInteger(
@@ -81,33 +114,73 @@ export class CsvParser implements Parser {
       "maxCellsPerRow",
       options.maxCellsPerRow ?? DEFAULT_MAX_CSV_CELLS_PER_ROW,
     );
+    this.#markLimit = positiveInteger("markLimit", options.markLimit ?? DEFAULT_CSV_MARK_LIMIT);
+    this.#minConfidence = options.minConfidence ?? DEFAULT_CSV_MIN_CONFIDENCE;
+    if (!Number.isFinite(this.#minConfidence)) {
+      throw new RangeError(`minConfidence must be a finite number, got ${this.#minConfidence}`);
+    }
+    const delimiter = options.delimiter ?? null;
+    if (delimiter !== null && (delimiter.length !== 1 || delimiter === '"' || delimiter === "\n" || delimiter === "\r")) {
+      throw new RangeError(`delimiter must be one character other than a quote or a line break, got ${JSON.stringify(delimiter)}`);
+    }
+    this.#delimiter = delimiter;
   }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
-    return new Set([
-      MediaType.parse("text/csv")!,
-      MediaType.parse("text/tab-separated-values")!,
-    ]);
+    return new Set([...SNIFFED_TYPES].map((type) => MediaType.parse(type)!));
+  }
+
+  /** The delimiter of the table the start of the document is, or null when it is text. */
+  #sniff(head: Uint8Array, charset: string): string | null {
+    const window = createDecoder(charset).decoder.decode(head).slice(0, this.#markLimit);
+    return bestCsvDelimiter(window, { markLimit: this.#markLimit, minConfidence: this.#minConfidence });
   }
 
   async parse(
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
-    const prefix = await stream.peek(64 * 1024);
-    const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
+    // The registry hands this parser every subtype of text/plain that has none of its own (as Tika's does), and Tika does
+    // not sniff a type other than text/plain, text/csv and text/tsv: it reads it as text and keeps the type.
+    const incoming = MediaType.parse(metadata.get("Content-Type"))?.getBaseType().toString();
+    if (incoming !== undefined && !SNIFFED_TYPES.has(incoming)) {
+      await this.#text.parse(stream, handler, metadata, ctx);
+      return;
+    }
+    // Enough bytes for the sniffer's window at up to four bytes a character; the encoding is detected from the first 64 KiB.
+    const head = await stream.peek(this.#markLimit * 4);
+    const { decoder, charset } = createDecoder(detectEncoding(head.subarray(0, 64 * 1024)).charset);
     metadata.set("Content-Encoding", charset);
-    metadata.set("Content-Type", withCharset(metadata.get("Content-Type"), "text/csv", charset));
+
+    const delimiter = this.#delimiter ?? this.#sniff(head, charset);
+    if (delimiter === null) {
+      // Tika rebuilds the type from text/plain whatever came in: a text/csv that is not a table is text/plain.
+      metadata.set("Content-Type", withCharset(null, "text/plain", charset));
+      await writeText(stream, handler, metadata, decoder);
+      return;
+    }
+    // Tika names the delimiters it knows, and writes the code of any other in Content-Type (and no csv:delimiter).
+    const delimiterName = CSV_DELIMITER_NAMES.get(delimiter);
+    metadata.set(
+      "Content-Type",
+      MediaType.parseOrThrow(delimiter === "\t" ? "text/tsv" : "text/csv")
+        .withParameters({ charset, delimiter: delimiterName ?? String(delimiter.charCodeAt(0)) })
+        .toString(),
+    );
+    if (delimiterName !== undefined) metadata.set("csv:delimiter", delimiterName);
 
     const scanner = new CsvScanner({
       maxRowChars: this.#maxRowChars,
       maxCellsPerRow: this.#maxCellsPerRow,
     });
+    scanner.setDelimiter(delimiter);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     let tableOpen = false;
+    let rows = 0;
+    let firstRowCells = 0;
 
     // XHTMLContentHandler serializes calls and does no nesting validation, so each
     // event is forwarded (and awaited) the moment the scanner produces it.
@@ -122,6 +195,7 @@ export class CsvParser implements Parser {
             await xhtml.startElement("tr");
             break;
           case "startCell":
+            if (rows === 0) firstRowCells++;
             await xhtml.startElement("td");
             break;
           case "text":
@@ -132,37 +206,20 @@ export class CsvParser implements Parser {
             break;
           case "endRow":
             await xhtml.endElement("tr");
+            if (rows++ === 0) metadata.setInt("csv:num-columns", firstRowCells);
             break;
         }
       }
     };
 
-    let buffered = "";
-    let delimiter: string | null = null;
-
     for await (const chunk of stream) {
-      buffered += decoder.decode(chunk, { stream: true });
-      if (delimiter === null) {
-        const firstLine = findFirstLine(buffered);
-        if (firstLine === null && buffered.length < 64 * 1024) continue;
-        delimiter = sniffDelimiter(firstLine ?? buffered);
-        scanner.setDelimiter(delimiter);
-      }
-      const text = buffered;
-      buffered = "";
-      await drain(scanner.write(text));
+      await drain(scanner.write(decoder.decode(chunk, { stream: true })));
     }
-
-    buffered += decoder.decode();
-    if (buffered.length > 0) {
-      if (delimiter === null) {
-        delimiter = sniffDelimiter(findFirstLine(buffered) ?? buffered);
-        scanner.setDelimiter(delimiter);
-      }
-      await drain(scanner.write(buffered));
-    }
+    const rest = decoder.decode();
+    if (rest.length > 0) await drain(scanner.write(rest));
     await drain(scanner.end());
     if (tableOpen) await xhtml.endElement("table");
+    metadata.setInt("csv:num-rows", rows);
     await xhtml.endDocument();
   }
 }
@@ -340,38 +397,4 @@ export class CsvScanner {
     this.rowChars = 0;
     this.skipLf = false;
   }
-}
-
-function findFirstLine(text: string): string | null {
-  let quoted = false;
-  for (let index = 0; index < text.length; index++) {
-    const char = text[index]!;
-    if (char === '"') quoted = !quoted;
-    else if (!quoted && (char === "\n" || char === "\r")) return text.slice(0, index);
-  }
-  return null;
-}
-
-function sniffDelimiter(line: string): string {
-  const candidates = [",", ";", "\t", "|"];
-  let best = ",";
-  let bestCount = -1;
-  for (const candidate of candidates) {
-    const count = countOutsideQuotes(line, candidate);
-    if (count > bestCount) {
-      best = candidate;
-      bestCount = count;
-    }
-  }
-  return best;
-}
-
-function countOutsideQuotes(line: string, needle: string): number {
-  let quoted = false;
-  let count = 0;
-  for (const char of line) {
-    if (char === '"') quoted = !quoted;
-    else if (!quoted && char === needle) count++;
-  }
-  return count;
 }

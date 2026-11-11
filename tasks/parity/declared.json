@@ -94,12 +94,6 @@
     },
 
     {
-      "id": "af-tsv",
-      "match": { "class": "\\.TextAndCSVParser$", "type": "^text/tsv$" },
-      "status": "accepted-fallback",
-      "reason": "text/tsv is claim-only; both sides detect a.tsv as text/tab-separated-values and TextParser's text equals the oracle's (differential on a generated TSV)."
-    },
-    {
       "id": "af-groovy",
       "match": { "class": "\\.SourceCodeParser$", "type": "^text/x-groovy$" },
       "status": "accepted-fallback",
