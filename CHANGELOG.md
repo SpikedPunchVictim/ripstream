@@ -4,6 +4,93 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Native FLAC, OGM and Ogg RGB, AudioParser input cap (`tikajs-68os.60`, `.61`, `.62`, `.68`)
+
+Changed, in `@spikedpunch/ripstream-parser-media`:
+
+- `FlacParser` now also reads native FLAC files (`audio/flac`, `audio/x-flac`), told from Ogg FLAC by the `fLaC` magic: the
+  Vorbis comment block, the picture blocks (embedded documents, typed by the picture type) and the stream info (sample rate,
+  channels, duration from the 36-bit sample count). `AudioParser` no longer claims the two FLAC types. The metadata read is
+  capped (`DEFAULT_MAX_FLAC_METADATA_BYTES`, 64 MiB, `FlacParserOptions.maxMetadataBytes`), `LimitExceededError` past it.
+- `AudioParser` takes `maxBytes` (`DEFAULT_MAX_AUDIO_BYTES`, 64 MiB): music-metadata's MPEG sync scan costs about 3 s of CPU and
+  70 bytes of heap per input byte on 0xFF data and no option of it bounds that, so the input is read to the cap and a larger
+  one is a `LimitExceededError` before music-metadata sees it. The non-AU branch now writes its empty document, so the
+  metadata reaches the head, as `AudioParser.java` does for every type.
+- The Ogg stream table (`packages/mime/src/containers/ogg.ts`) gains the OGM (`video/x-ogm`) and Ogg RGB (`video/x-oggrgb`)
+  signatures and is exported; parser-media keeps its copy (it depends only on core) and a drift test fails when they differ.
+
+Read from Tika source, not run against a Tika. The OGM and RGB packet starts (`\x01video`, `\x01RGB`, 28 bytes) are not
+confirmed: Tika's registry magic puts `video` at byte 28 for OGM, and vorbis-java's identifier is not in the tree. Revert
+the two table entries if a Tika run shows those streams are unknown to it (`tikajs-68os.55`). New exports:
+`AudioParserOptions`, `DEFAULT_MAX_AUDIO_BYTES`, `FlacParserOptions`, `DEFAULT_MAX_FLAC_METADATA_BYTES`.
+
+### EXIF tag-value amplification and PNG/GIF/BMP image keys (`tikajs-e42s`, `tikajs-68os.45`)
+
+Fixed, in `@spikedpunch/ripstream-parser-media`: exifr allocates a typed array or string of the declared `valueCount` for every
+numeric or ASCII tag without checking that the values are distinct bytes of the file, so overlapping tags are free to an
+attacker (one tag can ask for 16 GB), and it runs synchronously, so no time limit interrupts it. `guardExifAmplification`
+now walks the IFDs exifr will parse (IFD0, Exif, GPS and Interop) in TIFF, JPEG APP1, PNG eXIf and HEIF/AVIF Exif items, with
+no allocation of its own, before `exifr.parse`. Caps, all `LimitExceededError`: 4096 entries per IFD, 4 MiB declared per
+copied tag, and at most min(16 MiB, file size + 64 KiB) copied in total. BYTE and UNDEFINED tags are not counted (exifr
+returns views of the file for them). An Exif or GPS pointer tag that is not a single SHORT or LONG is now a
+`MalformedDocumentError` instead of being read leniently.
+
+- Hostile inputs are asserted to allocate zero typed-array elements; the guard rejected none of 2,117 real files (Tika test
+  images, macOS system images, personal photos) before the last fixes and none of 249 after them.
+- The guard ports exifr 7.1.3 internals (the JPEG segment scan, the HEIF item lookup), pinned only by `^7.1.3`. IPTC parsing
+  was not audited for amplification. Process isolation (`tikajs-zgg2`) remains the stronger defence.
+- Mutation testing found four places where the guard walked a different structure than exifr: HEIF 64-bit box sizes, an
+  extent of zero length, a zero-size JPEG or PNG segment (exifr reads 64 KiB), and the Interop IFD.
+
+Added: PNG, GIF and BMP now write `tk:num-images`, `tiff:ImageWidth`, `tiff:ImageLength`, `img:width` and `img:height`, as
+`ImageParser.extractMetadata` does (JPEG, TIFF and WebP are not in Tika's list and write none). A GIF is sized by its first
+image descriptor and counted by descriptors; a truncated GIF keeps the frames seen, where Tika throws. The first-frame size
+is from memory of the JDK `GIFImageReader`. Not fixed: a BMP with an OS/2 12-byte header still gets wrong dimensions.
+
+### Memory before reject: xlsx, mbox and RTF (`tikajs-kpkn`)
+
+Fixed:
+
+- xlsx: a sheet is read with saxes and its cells counted as they arrive, holding only the one `c` element being read, so the
+  1,000,000-cell cap fires before the rest of the sheet is read (a 4M-cell sheet: 1.5 GB RSS and 9 s before, 0.9 GB and 2.3 s
+  now; the inflated part is still held whole). A cap of 1,048,576 rows is new (Excel's limit): empty `<row/>` elements were
+  never counted. A `row` inside a `row` is ignored.
+- mbox: read chunk by chunk, each message parsed and written when the next `From ` line closes it, so memory is one message
+  and the output cap or an error fires after a bounded read. A message over `maxEmbeddedResourceBytes` (counted in raw bytes,
+  CRLF as two) is a `LimitExceededError`. An input with no message is still refused before any output.
+- RTF: read with `readFully(maxEmbeddedResourceBytes)` and the tokenizer output collected in 8192-character pieces, not
+  character by character (20 MB RTF: 837 MB RSS before, 306 MB now).
+
+Not done: RTF still tokenizes the whole capped input before its first write, so its output cap does not fire early; a
+streaming tokenizer has to solve the head metadata (`\info` can come late). Whole-mailbox size is not capped: the cap is per
+message. No new public option: both caps reuse `maxEmbeddedResourceBytes`, which is large by default (512 MB).
+
+### SQLite3, WARC, XLIFF and ODF follow Tika's output (`tikajs-68os.48`, `.49`, `.50`, `.64`)
+
+Changed:
+
+- `SqliteParser` now writes what `SQLite3Parser` does: `database:table-name` per table, `sqlite3:application_id` and
+  `sqlite3:user_version` in base 16, a `<table>` with `thead` and `tbody`, Java-style float, boolean and double text, empty
+  cells for NULL, and every BLOB as an embedded document. It shares a core with `GeoPkgParser` (`sqlite-tables.ts`).
+  `sqlite:table-count` and the `h1`/`p` output are gone. New caps (`LimitExceededError`): 256 MiB file, 10,000 tables, 500
+  columns per table, 1,000,000 rows; a database over 256 MiB that parsed before now fails. Still different: 100 rows per
+  table and 4,096 characters per TEXT cell (Tika reads all), sql.js for sqlite-jdbc.
+- `WarcParser` writes only `response` records, as `WARCParser.processRecord` does; other records are read past. The
+  `div`/`h1`/`p` wrapper around each response is still written (Tika writes none), and the `warc:*` metadata on embedded
+  documents is not set.
+- `XliffParser` sends XLIFF 1.2 to the `XLIFF12ContentHandler` port that XLZ uses: a `div` per file, `h1`, a `div` per unit, `p
+  lang=` per source and target, and `file-count`, `tu-count`, `source-language`, `target-language`. A root `version="2.x"` (found
+  in the first 4 KiB) keeps the old flat reader, which Tika has no equivalent for.
+- ODF `meta.xml` is read by `odf-meta.ts`, a namespace-aware port of `OpenDocumentMetaParser`: keywords joined into
+  `meta:keyword` and `dc:subject`, the subject copied to an empty description, `initial-creator` and `dc:creator` interleaved
+  in document order, `custom:*`, statistics (also `xmpTPg:NPages`), `odf:version`, normalised dates, OpenOffice 1.x element
+  namespaces. The four older keys `pdf:Keywords`, `meta:initial-creator`, `meta:generator` and `meta:editing-cycles` are kept
+  beside Tika's; they are not Tika keys and are an owner decision to drop. A `meta.xml` that is not well-formed is a
+  `MalformedDocumentError`.
+
+Read from Tika source and tests, not run against a Tika or sqlite-jdbc. The Java type rules for sqlite-jdbc cell types are
+from memory (`tikajs-68os.55`); a declared type such as `BOOLEAN (3)` with a space before the parenthesis is unresolved.
+
 ### Ogg family, AU and the media claims (`tikajs-68os.15`)
 
 Added, in `@spikedpunch/ripstream-parser-media`: an Ogg demuxer (RFC 3533 pages and lacing, one pass, bounded memory) and

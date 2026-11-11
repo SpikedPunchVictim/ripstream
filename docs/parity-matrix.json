@@ -1516,7 +1516,6 @@
    "exact": 2,
    "open": [],
    "implementedBy": [
-    "AudioParser",
     "FlacParser"
    ],
    "declared": null

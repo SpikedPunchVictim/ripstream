@@ -109,7 +109,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 
 | Format | Upstream | TS | Prio |
 |---|---|---|---|
-| RTF | `RTFParser` | Streaming tokenizer: groups, control words, `\uN` escapes, code pages, font/color tables, `\bin` skipping, embedded objects, pictures (`\pict`) as embedded | P1 |
+| RTF | `RTFParser` | Tokenizer over the input capped at `maxEmbeddedResourceBytes` (output collected in pieces; not streamed): groups, control words, `\uN` escapes, code pages, font/color tables, `\bin` skipping, embedded objects, pictures (`\pict`) as embedded | P1 |
 | WordPerfect 5-6, 7-8 | `WordPerfectParser` | Custom WPD prefix/stream parser; text + metadata | P3 |
 
 ---
@@ -118,7 +118,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 
 | Formats | Upstream | TS approach | Prio |
 |---|---|---|---|
-| ODT, ODS, ODP, ODG, ODF templates, flat XML (`fodt`/`fods`/`fodp`) | `OpenDocumentParser`, `FlatOpenDocumentParser` | ZIP + `content.xml`, `styles.xml`, `meta.xml`; tables/slides/pages; embedded objects; flat variants via XML. Also `vnd.sun.xml.writer` and the chart, image, formula, text-master and text-web types and templates (the `x-vnd.oasis.*` spellings are aliases); a chart gives its titles and data table | P0 (ODT), P1 (rest) |
+| ODT, ODS, ODP, ODG, ODF templates, flat XML (`fodt`/`fods`/`fodp`) | `OpenDocumentParser`, `FlatOpenDocumentParser` | ZIP + `content.xml`, `styles.xml`, `meta.xml` (namespace-aware, as `OpenDocumentMetaParser`: keywords, subject, creators, `custom:*`, statistics, `odf:version`); tables/slides/pages; embedded objects; flat variants via XML. Also `vnd.sun.xml.writer` and the chart, image, formula, text-master and text-web types and templates (the `x-vnd.oasis.*` spellings are aliases); a chart gives its titles and data table | P0 (ODT), P1 (rest) |
 | GeoGebra (`.ggb`, `.ggs`, `.ggt`), InDesign IDML | `GeoGebraParser`, `IDMLParser` | `boundedUnzip` + saxes. GeoGebra: text objects, `geogebra:*` and `dc:*` metadata, tool names, slides ordered by `structure.json`, thumbnail, scripts and pictures as embedded documents. IDML: `Content` text, `idml:*` and `meta:page-count`; XMP is a narrow port of `XmpExtractor` limited to `xmp:CreateDate`, `ModifyDate`, `MetadataDate` and `CreatorTool` (the full extractor is `tikajs-68os.44`) | P3 |
 | StarOffice 5-7 | `OpenOfficeParser` | Legacy binary probe; text best-effort | P3 |
 | iWork 09 (Pages/Numbers/Keynote) | `IWorkPackageParser` | ZIP + XML index; text | P2 |
@@ -169,12 +169,12 @@ Archive rules:
 | Formats | Upstream | TS approach | Prio |
 |---|---|---|---|
 | EML / RFC 822 / MIME | `RFC822Parser` | `mailparser` (or custom MIME parser) with streaming multipart; headers → metadata; preferred HTML body, fallback text; attachments recursive; nested `message/rfc822` | P0 |
-| mbox / Maildir | `MailboxParser` (3.x+) | Streaming envelope splitter; per-message RFC 822 parse | P1 |
+| mbox / Maildir | `MailboxParser` (3.x+) | Streaming envelope splitter (one message in memory, capped at `maxEmbeddedResourceBytes`); per-message RFC 822 parse | P1 |
 | vCard | `VCardParser` if present | Streaming/line parser; contact fields as metadata | P2 |
 | iCalendar / ICS | `ICalParser` if present | `ical.js`; events/tasks as text + metadata | P2 |
-| WARC, ARC | `WARCParser` | Custom record reader; HTTP payload detection; embedded records. Claims `warc`, `warc+gz`, `arc+gz` and `x-internet-archive`: a gzip of any number of members is inflated first (bounded), data opening with `filedesc://` is read as ARC, and only an ARC record whose body is an HTTP response becomes a document. The ARC reader follows the published format, not jwarc | P1 |
+| WARC, ARC | `WARCParser` | Custom record reader; HTTP payload detection; only `response` records are written, as in Tika (others are read past); embedded records. Claims `warc`, `warc+gz`, `arc+gz` and `x-internet-archive`: a gzip of any number of members is inflated first (bounded), data opening with `filedesc://` is read as ARC, and only an ARC record whose body is an HTTP response becomes a document. The ARC reader follows the published format, not jwarc | P1 |
 | WACZ | `WACZParser` | ZIP; each entry under `archive/` is an embedded document, a gzip one inflated first (first member only, bounded; the total counts); `datapackage.json`, pages and indexes are not read, as in Tika | P3 |
-| XLIFF 1.2/2.0 | `XLIFFParser` | `saxes`; trans-unit source/target, notes, state; XLIFF inline tags stripped | P2 |
+| XLIFF 1.2/2.0 | `XLIFFParser` | 1.2 through the XLZ handler port (`div` per file and unit, `p lang=` per source/target, `file-count`, `tu-count`, languages); a root `version="2.x"` keeps a flat reader (`saxes`; trans-unit source/target, notes, state; inline tags stripped) | P2 |
 | TMX | `TMXParser` | `saxes`; translation units, languages | P2 |
 | XLZ | `XLZParser` | ZIP of XLIFF 1.2 files (every entry named `.xlf`); a `div` per file and trans-unit, `p` per source/target, `file-count`, `tu-count` and the languages | P3 |
 | DIF, MIF, HTTP response, emlx | `DIFParser`, `MIFParser`, `HttpParser`, `RFC822Parser` | DIF: `dif:` element-path keys, title and spatial text. MIF: text, page counts, typed `application/x-mif`. HTTP: the `Content-Length` payload as an embedded document; header reading follows jwarc's leniency, not its source. emlx: count line and plist dropped. XUL, WAP XHTML and x-asp go to the HTML parser, as `JSoupParser` | P3 |
@@ -228,7 +228,8 @@ interface OcrConfig {
 |---|---|---|---|
 | Ogg (Vorbis, Opus, Speex, Theora, Ogg FLAC) | `OggParser`, `VorbisParser`, `OpusParser`, `SpeexParser`, `TheoraParser`, `FlacParser` | RFC 3533 demux, first packet per stream, Vorbis comments (`vorbis:*`, `xmpDM:*`, track/disc, cover art), duration from the last granule; caps of 1000 open streams and 32 MiB held. Header offsets and Opus pre-skip from memory of vorbis-java. Native FLAC is `tikajs-68os.61` | P2 |
 | AU (`audio/basic`) | `AudioParser` | 24-byte header: rate, channels, encoding; from memory of the JDK reader | P3 |
-| MP3 (ID3v1/v2), M4A/AAC, FLAC, WAV, AIFF, AMR, WMA/ASF | `Mp3Parser`, `AudioParser` | `music-metadata` streaming: tags, duration, bitrate, sample rate, channels, codec | P1 |
+| MP3 (ID3v1/v2), M4A/AAC, WAV, AIFF, AMR, WMA/ASF | `Mp3Parser`, `AudioParser` | `music-metadata` over a buffered input capped at `maxBytes` (64 MiB; larger is `LimitExceededError`): tags, duration, bitrate, sample rate, channels, codec; writes its empty document | P1 |
+| FLAC (native, `audio/flac`, `audio/x-flac`) | `FlacParser` | Own block walk: Vorbis comments, picture blocks as embedded documents, stream info (rate, channels, 36-bit sample count); metadata capped at 64 MiB; the Ogg FLAC half is in the Ogg row | P1 |
 | MIDI | `MidiParser` | Header, tracks, tempo, instrument names | P3 |
 | Audible/AA, APE, WavPack | — | Metadata only or unsupported | P3 |
 
@@ -285,7 +286,7 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 | PKCS#7/CMS, PKCS#12 | `CryptoParser` | Signer certs, encrypted content detection | P3 |
 | ASN.1/DER fallback | `CryptoParser` | Structure dump with depth limit | P3 |
 | DBF (dBASE) | `DBFParser` | Header, field descriptors, records; render as table/text | P2 |
-| SQLite | (none upstream) | Optional `sql.js`; schema + row dump bounded | P3 |
+| SQLite | `SQLite3Parser` | Optional `sql.js` (shared core with GeoPackage): `database:table-name`, `sqlite3:application_id` and `user_version` in hex, a table per SQLite table, Java-style typed cells, BLOBs as embedded documents; 100 rows per table, 4,096 characters per TEXT cell, 256 MiB / 10,000 tables / 500 columns / 1M rows caps | P3 |
 | GeoPackage | `GeoPkgParser` | Same `sql.js` loader as SQLite; `gpkg_*` header integers, then every table with Java-style typed cell text; blobs through the embedded extractor | P3 |
 | Parquet / ORC / Avro | — | Detect; unsupported error | P3 gap |
 | MSI | — | Detect; unsupported | P3 gap |
