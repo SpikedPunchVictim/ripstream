@@ -13,12 +13,20 @@ interface Signature {
   readonly types: readonly string[];
   readonly magic: readonly number[] | string;
   readonly format: string;
+  /** The Content-Type the document reports whichever of `types` it was parsed as (ChmParser sets it the same way). */
+  readonly reportedType?: string;
 }
 
 const FORMATS: readonly Signature[] = [
   { types: ["application/x-hwp", "application/x-hwp-v5"], magic: "HWP Document File", format: "HWP" },
   { types: ["application/winhlp"], magic: [0x3f, 0x5f], format: "WinHelp" },
-  { types: ["application/vnd.ms-htmlhelp"], magic: "ITSF", format: "CHM" },
+  // ChmParser.SUPPORTED_TYPES: the two aliases are not in Tika's MIME database, so only a caller's Content-Type reaches them.
+  {
+    types: ["application/vnd.ms-htmlhelp", "application/chm", "application/x-chm"],
+    magic: "ITSF",
+    format: "CHM",
+    reportedType: "application/vnd.ms-htmlhelp",
+  },
   { types: ["application/vnd.wordperfect", "application/wordperfect5.1"], magic: [0xff, 0x57, 0x50, 0x43], format: "WordPerfect" },
   { types: ["application/x-tika-staroffice", "application/x-staroffice-template"], magic: [0xd0, 0xcf, 0x11, 0xe0], format: "StarOffice" },
 ];
@@ -53,6 +61,7 @@ export class LegacyFormatParser implements Parser {
       throw new MalformedDocumentError("Unrecognized legacy format");
     }
     metadata.set("legacy:format", format.format);
+    if (format.reportedType !== undefined) metadata.set("Content-Type", format.reportedType);
     const strings = printableStrings(data).slice(0, 500);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();

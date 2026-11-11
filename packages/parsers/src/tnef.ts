@@ -49,7 +49,11 @@ export class TnefParser implements Parser {
   readonly name = "TNEFParser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
-    return new Set([MediaType.parse("application/vnd.ms-tnef")!]);
+    // TNEFParser.SUPPORTED_TYPES. application/ms-tnef is an alias of the first in the MIME database; application/x-tnef
+    // is not there at all, so only a caller's Content-Type reaches it.
+    return new Set(
+      ["application/vnd.ms-tnef", "application/ms-tnef", "application/x-tnef"].map((type) => MediaType.parse(type)!),
+    );
   }
 
   async parse(

@@ -19,9 +19,17 @@ export class PlistParser implements Parser {
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
-      ["application/x-plist", "application/x-bplist", "application/x-itunes-bplist"].map(
-        (type) => MediaType.parse(type)!,
-      ),
+      [
+        "application/x-plist",
+        "application/x-bplist",
+        "application/x-itunes-bplist",
+        // PListParser.SUPPORTED_TYPES also names the three subtypes BPListDetector gives a binary plist by its root keys.
+        // They are not in Tika's MIME database, so only the detector or a caller's Content-Type reaches them. The parser
+        // reads the bytes, not the type, so a variant is parsed as any other binary plist (Tika does the same).
+        "application/x-bplist-itunes",
+        "application/x-bplist-memgraph",
+        "application/x-bplist-webarchive",
+      ].map((type) => MediaType.parse(type)!),
     );
   }
 
@@ -39,7 +47,7 @@ export class PlistParser implements Parser {
       try {
         assertBplistExpansionBounded(data);
         const [parsed] = parseBuffer(Buffer.from(data));
-        await xhtml.element("p", JSON.stringify(parsed));
+        await xhtml.element("p", JSON.stringify(parsed, dataAsBase64));
       } catch (error) {
         if (error instanceof LimitExceededError || error instanceof MalformedDocumentError) {
           throw error;
@@ -53,6 +61,17 @@ export class PlistParser implements Parser {
 
     await xhtml.endDocument();
   }
+}
+
+/**
+ * JSON.stringify replacer that writes an NSData value as its base64 text, which is what Tika's PListParser does
+ * (`handleData` writes `getBase64EncodedData()`). Buffer.toJSON runs before a replacer and would otherwise leave
+ * `{"type":"Buffer","data":[...]}`, four characters or more per byte: a real web archive then overruns the output limit.
+ * The replacer reads the original value from its holder, because `value` is already the toJSON form.
+ */
+function dataAsBase64(this: unknown, key: string, value: unknown): unknown {
+  const original = (this as Record<string, unknown>)[key];
+  return Buffer.isBuffer(original) ? original.toString("base64") : value;
 }
 
 const VALUE_TAGS = new Set([
@@ -109,7 +128,7 @@ function startsWith(data: Uint8Array, prefix: string): boolean {
 const MAX_EXPANDED_NODES = 1_000_000;
 /**
  * Cap on materialized string/data payload (chars or bytes, per reference followed).
- * Data is charged 4x because JSON.stringify renders each Buffer byte as ~3-4 chars.
+ * Data is charged 4x: Buffer.toJSON still materializes one array element per byte before dataAsBase64 swaps it for text.
  */
 const MAX_EXPANDED_BYTES = 256 * 1024 * 1024;
 const BPLIST_HEADER_LENGTH = 8;
