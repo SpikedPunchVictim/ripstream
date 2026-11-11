@@ -271,16 +271,18 @@ function readZip64Extra(
     const size = view.getUint16(position + 2, true);
     position += 4;
     if (id === 0x0001) {
+      // A block may declare more than the extra field holds: read only what is there.
+      const end = Math.min(position + size, extra.byteLength);
       let cursor = position;
-      if (uncompressedSize === 0xffffffff && cursor + 8 <= position + size) {
+      if (uncompressedSize === 0xffffffff && cursor + 8 <= end) {
         uncompressedSize = Number(view.getBigUint64(cursor, true));
         cursor += 8;
       }
-      if (compressedSize === 0xffffffff && cursor + 8 <= position + size) {
+      if (compressedSize === 0xffffffff && cursor + 8 <= end) {
         compressedSize = Number(view.getBigUint64(cursor, true));
         cursor += 8;
       }
-      if (localOffset === 0xffffffff && cursor + 8 <= position + size) {
+      if (localOffset === 0xffffffff && cursor + 8 <= end) {
         localOffset = Number(view.getBigUint64(cursor, true));
       }
       break;

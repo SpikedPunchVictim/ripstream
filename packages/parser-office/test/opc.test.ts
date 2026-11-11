@@ -81,3 +81,27 @@ test("lying uncompressed size cannot exceed the entry budget", async () => {
     await stream.close();
   }
 });
+
+function le(bytes: number, value: number): number[] {
+  return Array.from({ length: bytes }, (_, i) => Math.floor(value / 2 ** (8 * i)) % 256);
+}
+
+// tikajs-00bw: a ZIP64 extra block that declares more bytes than the extra field holds.
+test("a ZIP64 extra block longer than its field is a malformed package, not a RangeError", async () => {
+  const name = new TextEncoder().encode("[Content_Types].xml");
+  const extra = [...le(2, 1), ...le(2, 32)];
+  const local = [...le(4, 0x04034b50), ...le(2, 20), ...Array(22).fill(0), ...le(2, name.length), ...le(2, 0), ...name];
+  const central = [
+    ...le(4, 0x02014b50), ...le(2, 20), ...le(2, 20), ...Array(8).fill(0), ...le(4, 0), ...le(4, 0), ...le(4, 0xffffffff),
+    ...le(2, name.length), ...le(2, extra.length), ...le(2, 0), ...le(2, 0), ...le(2, 0), ...le(4, 0), ...le(4, 0), ...name, ...extra,
+  ];
+  const end = [...le(4, 0x06054b50), ...le(2, 0), ...le(2, 0), ...le(2, 1), ...le(2, 1), ...le(4, central.length), ...le(4, local.length), ...le(2, 0)];
+  const stream = await RipstreamInputStream.from(new Uint8Array([...local, ...central, ...end]));
+  try {
+    await assert.rejects(OpcPackage.open(stream, new ParseContext().limits), (error: unknown) => {
+      return error instanceof MalformedDocumentError || error instanceof LimitExceededError;
+    });
+  } finally {
+    await stream.close();
+  }
+});
