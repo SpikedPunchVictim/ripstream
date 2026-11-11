@@ -72,6 +72,89 @@ test("extracts ODP slides and speaker notes", async () => {
   assert.match(result.text, /Speaker note/);
 });
 
+const OFFICE_NS = 'xmlns:office="o" xmlns:text="t" xmlns:table="tb" xmlns:chart="c"';
+
+test("supports the ODF types Tika's OpenDocumentParser registers beyond the original eight (tikajs-68os.12)", () => {
+  const supported = new Set([...new OpenDocumentParser().getSupportedTypes()].map((type) => type.toString()));
+  for (const extra of [
+    "application/vnd.sun.xml.writer",
+    "application/vnd.oasis.opendocument.chart",
+    "application/vnd.oasis.opendocument.chart-template",
+    "application/vnd.oasis.opendocument.image",
+    "application/vnd.oasis.opendocument.image-template",
+    "application/vnd.oasis.opendocument.formula",
+    "application/vnd.oasis.opendocument.formula-template",
+    "application/vnd.oasis.opendocument.text-master",
+    "application/vnd.oasis.opendocument.text-web",
+  ]) {
+    assert.ok(supported.has(extra), `${extra} is supported`);
+  }
+});
+
+test("extracts an ODF chart's titles and its data table through the header and body row groups", async () => {
+  const result = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.chart",
+    "content.xml":
+      `<office:document-content ${OFFICE_NS}><office:body><office:chart><chart:chart>` +
+      "<chart:title><text:p>Quarterly sales</text:p></chart:title>" +
+      "<chart:subtitle><text:p>Fiscal 2024</text:p></chart:subtitle>" +
+      "<chart:plot-area><chart:axis><chart:title><text:p>Revenue axis</text:p></chart:title></chart:axis>" +
+      "<table:table>" +
+      "<table:table-header-rows><table:table-row><table:table-cell><text:p>Region</text:p></table:table-cell><table:table-cell><text:p>Q1</text:p></table:table-cell></table:table-row></table:table-header-rows>" +
+      "<table:table-rows><table:table-row><table:table-cell><text:p>North</text:p></table:table-cell><table:table-cell><text:p>42</text:p></table:table-cell></table:table-row></table:table-rows>" +
+      "</table:table></chart:plot-area></chart:chart></office:chart></office:body></office:document-content>",
+    "meta.xml":
+      '<office:document-meta xmlns:office="o" xmlns:dc="d"><office:meta><dc:title>Sales chart</dc:title></office:meta></office:document-meta>',
+  });
+  for (const expected of ["Quarterly sales", "Fiscal 2024", "Revenue axis", "Region", "Q1", "North", "42"]) {
+    assert.ok(result.text.includes(expected), `${expected} in ${JSON.stringify(result.text)}`);
+  }
+  assert.equal(result.metadata.get("dc:title"), "Sales chart");
+});
+
+test("extracts the rows of a table whose rows sit in header, body and group wrappers", async () => {
+  const result = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.text",
+    "content.xml":
+      `<office:document-content ${OFFICE_NS}><office:body><office:text><table:table>` +
+      "<table:table-header-rows><table:table-row><table:table-cell><text:p>Head</text:p></table:table-cell></table:table-row></table:table-header-rows>" +
+      "<table:table-row-group><table:table-row><table:table-cell><text:p>Grouped</text:p></table:table-cell></table:table-row></table:table-row-group>" +
+      "<table:table-rows><table:table-row><table:table-cell><text:p>Body</text:p></table:table-cell></table:table-row></table:table-rows>" +
+      "</table:table></office:text></office:body></office:document-content>",
+  });
+  for (const expected of ["Head", "Grouped", "Body"]) {
+    assert.ok(result.text.includes(expected), `${expected} in ${JSON.stringify(result.text)}`);
+  }
+});
+
+test("a formula document has no text, as Tika's does not (MathML is not rendered)", async () => {
+  const result = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.formula",
+    "content.xml":
+      '<math:math xmlns:math="http://www.w3.org/1998/Math/MathML"><math:semantics><math:mi>x</math:mi></math:semantics></math:math>',
+    "meta.xml":
+      '<office:document-meta xmlns:office="o" xmlns:dc="d"><office:meta><dc:title>Pangram</dc:title></office:meta></office:document-meta>',
+  });
+  assert.equal(result.text.trim(), "");
+  assert.equal(result.metadata.get("dc:title"), "Pangram");
+});
+
+test("an ODF text master and a StarOffice 6 writer file (no mimetype entry) give their paragraphs", async () => {
+  const master = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.text-master",
+    "content.xml":
+      `<office:document-content ${OFFICE_NS}><office:body><office:text><text:section><text:p>Master text</text:p></text:section></office:text></office:body></office:document-content>`,
+  });
+  assert.match(master.text, /Master text/);
+  const sxw = await run(new OpenDocumentParser(), {
+    "content.xml":
+      `<office:document-content ${OFFICE_NS}><office:body><text:p>Writer six</text:p></office:body></office:document-content>`,
+    "meta.xml": '<office:document-meta xmlns:office="o" xmlns:dc="d"><office:meta><dc:title>Old writer</dc:title></office:meta></office:document-meta>',
+  });
+  assert.match(sxw.text, /Writer six/);
+  assert.equal(sxw.metadata.get("dc:title"), "Old writer");
+});
+
 test("extracts EPUB spine text and OPF metadata", async () => {
   const result = await run(new EpubParser(), {
     "META-INF/container.xml":

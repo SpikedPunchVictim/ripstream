@@ -18,10 +18,12 @@ import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, Brotli
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
 import { AsfParser, AudioParser, AviParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
 import { ColumnarParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
-import { EpubParser, ExcelBinaryParser, IWork09Parser, IWork13Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser } from "@spikedpunch/ripstream-parser-office";
+import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser } from "@spikedpunch/ripstream-parser-office";
 import { FeedParser } from "./feed.ts";
 import { MarkdownParser } from "./markdown.ts";
 import { TmxParser, WarcParser, XliffParser } from "./web.ts";
+import { WACZParser } from "./wacz.ts";
+import { XLZParser } from "./xlz.ts";
 import { MailParser } from "./mail.ts";
 import { MboxParser } from "./mbox.ts";
 import { JavaClassParser } from "./java-class.ts";
@@ -58,6 +60,8 @@ export {
 export { FeedParser } from "./feed.ts";
 export { MarkdownParser } from "./markdown.ts";
 export { TmxParser, WarcParser, XliffParser } from "./web.ts";
+export { WACZParser } from "./wacz.ts";
+export { XLZParser } from "./xlz.ts";
 export { MailParser } from "./mail.ts";
 export { MboxParser } from "./mbox.ts";
 export { JavaClassParser } from "./java-class.ts";
@@ -160,10 +164,14 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new PstParser(),
       new OpenDocumentParser(),
       new EpubParser(),
+      new GeoGebraParser(),
+      new IDMLParser(),
       new FeedParser(),
       new MarkdownParser(),
       new WarcParser(),
+      new WACZParser(),
       new XliffParser(),
+      new XLZParser(),
       new TmxParser(),
       new MailParser(),
       new MboxParser(),

@@ -49,6 +49,17 @@ const ODF_TYPES = [
   "application/vnd.oasis.opendocument.presentation-template",
   "application/vnd.oasis.opendocument.graphics",
   "application/vnd.oasis.opendocument.graphics-template",
+  // The rest of OpenDocumentParser.SUPPORTED_TYPES in Tika 4.2.0 (tikajs-68os.12). Its x-vnd.oasis.* spellings are
+  // aliases of these in the media type registry, so they resolve here without being listed.
+  "application/vnd.sun.xml.writer",
+  "application/vnd.oasis.opendocument.chart",
+  "application/vnd.oasis.opendocument.chart-template",
+  "application/vnd.oasis.opendocument.image",
+  "application/vnd.oasis.opendocument.image-template",
+  "application/vnd.oasis.opendocument.formula",
+  "application/vnd.oasis.opendocument.formula-template",
+  "application/vnd.oasis.opendocument.text-master",
+  "application/vnd.oasis.opendocument.text-web",
 ];
 
 /** OpenDocument text/spreadsheet/presentation/drawing parser. */
@@ -151,7 +162,13 @@ async function renderOdfBlocks(
       name === "header" ||
       name === "footer" ||
       name === "table-cell" ||
-      name === "table-row"
+      name === "table-row" ||
+      // A chart document (.odc) holds its titles and data table under office:chart/chart:chart.
+      name === "chart" ||
+      name === "plot-area" ||
+      name === "axis" ||
+      name === "title" ||
+      name === "subtitle"
     ) {
       await renderOdfBlocks(child, xhtml);
     }
@@ -217,7 +234,7 @@ async function renderOdfTable(
   xhtml: XHTMLContentHandler,
 ): Promise<void> {
   await xhtml.startElement("table");
-  for (const row of childrenNamed(table, "table-row")) {
+  for (const row of odfTableRows(table)) {
     await xhtml.startElement("tr");
     for (const cell of childrenNamed(row, "table-cell")) {
       await xhtml.startElement("td");
@@ -231,6 +248,19 @@ async function renderOdfTable(
     await xhtml.endElement("tr");
   }
   await xhtml.endElement("table");
+}
+
+const ODF_ROW_WRAPPERS = new Set(["table-header-rows", "table-rows", "table-row-group"]);
+
+/** The rows of a table in document order, whether they are its children or sit in a header, body or group wrapper. */
+function odfTableRows(node: XmlNode): XmlNode[] {
+  const rows: XmlNode[] = [];
+  for (const child of node.children) {
+    const name = localName(child.name);
+    if (name === "table-row") rows.push(child);
+    else if (ODF_ROW_WRAPPERS.has(name)) rows.push(...odfTableRows(child));
+  }
+  return rows;
 }
 
 async function renderOdfPage(

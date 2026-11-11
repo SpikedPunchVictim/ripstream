@@ -1,5 +1,9 @@
 export { OoxmlParser } from "./ooxml.ts";
 export { EpubParser, OpenDocumentParser } from "./document.ts";
+export { GeoGebraParser } from "./geogebra.ts";
+export { IDMLParser } from "./idml.ts";
+export { boundedUnzip, type BoundedZip } from "./bounded-unzip.ts";
+export { parseXmlChunked, type XmlEvents } from "./xml-events.ts";
 export { CompoundFile, hasSignature } from "./cfb.ts";
 export { WordBinaryParser } from "./word-binary.ts";
 export { ExcelBinaryParser } from "./excel-binary.ts";
