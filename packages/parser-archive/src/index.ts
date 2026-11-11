@@ -7,5 +7,6 @@ export { AppleSingleParser } from "./apple-single.ts";
 export { UnixCompressParser } from "./unix-compress.ts";
 export { Iso9660Parser } from "./iso9660.ts";
 export { ArParser, CpioParser } from "./cpio-ar.ts";
+export { UnixDumpParser } from "./dump.ts";
 export { ArchiveMetadataParser } from "./archive-metadata.ts";
 export { parseEntry, readAll, withXhtml } from "./util.ts";
