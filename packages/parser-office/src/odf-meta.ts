@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   tikaDateMetadataString,
   type Metadata,
@@ -299,6 +300,9 @@ function mapOldNamespace(uri: string): string {
   return uri.startsWith(OLD_NS) ? `${NEW_NS}${uri.slice(OLD_NS.length)}:1.0` : uri;
 }
 
+/** Real meta.xml nests three levels. saxes resolves namespaces per element, which is quadratic in the depth (40,000 deep took 9.8 s). */
+export const MAX_ODF_META_DEPTH = 2000;
+
 /**
  * OpenDocumentMetaParser.parse: reads meta.xml into `metadata`, then copies dc:subject to dc:description when the
  * description is empty (OpenOffice 2), and makes dc:subject hold the keywords first and the subjects after them.
@@ -311,6 +315,7 @@ export function applyOdfMetadata(metadata: Metadata, xml: string): void {
     throw new MalformedDocumentError(`Malformed ODF meta.xml: ${error.message}`, { cause: error });
   });
   parser.on("opentag", (tag: SaxesTagNS) => {
+    if (depth >= MAX_ODF_META_DEPTH) throw new LimitExceededError(`ODF meta.xml nests deeper than ${MAX_ODF_META_DEPTH} elements`);
     const uri = mapOldNamespace(tag.uri);
     const attributes = Object.values(tag.attributes);
     for (const handler of handlers) handler.start(uri, tag.local, attributes, depth);

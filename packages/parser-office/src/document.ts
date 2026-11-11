@@ -10,6 +10,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { boundedUnzip, type BoundedZip } from "./bounded-unzip.ts";
+import { emitEmbeddedItems, isChapter, readPackageDocument, type ManifestItem } from "./epub-package.ts";
 import { applyOdfMetadata } from "./odf-meta.ts";
 import { SaxesParser } from "saxes";
 import {
@@ -308,15 +309,17 @@ export class EpubParser implements Parser {
       ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1)
       : "";
 
-    const manifest = epubManifest(opfXml, base);
-    const spine = spineHrefs(opfXml, manifest, files);
-    applyEpubNavigation(metadata, files, manifest);
+    const document = readPackageDocument(opfXml, base);
+    applyEpubNavigation(metadata, files, document.manifest);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    for (const href of spine) {
-      const chapter = files.get(href);
+    const chapterIds = new Set<string>();
+    for (const id of document.spine) {
+      const item = document.manifest.get(id);
+      const chapter = item !== undefined && isChapter(item) ? files.get(item.href) : undefined;
       if (chapter === undefined) continue;
+      chapterIds.add(id);
       await xhtml.startElement("div", "class", "chapter");
       for (const block of htmlBlocks(decode(chapter))) {
         await xhtml.startElement("p");
@@ -325,6 +328,7 @@ export class EpubParser implements Parser {
       }
       await xhtml.endElement("div");
     }
+    await emitEmbeddedItems(document, chapterIds, files, xhtml, metadata, ctx);
     await xhtml.endDocument();
   }
 }
@@ -340,52 +344,6 @@ function rootfilePath(xml: string): string | null {
   });
   parser.write(xml).close();
   return path;
-}
-
-interface ManifestItem {
-  readonly href: string;
-  readonly properties: string;
-  readonly mediaType: string;
-}
-
-function epubManifest(
-  opfXml: string,
-  base: string,
-): Map<string, ManifestItem> {
-  const manifest = new Map<string, ManifestItem>();
-  const parser = new SaxesParser({ xmlns: false });
-  parser.on("opentag", (tag) => {
-    if (localName(tag.name) !== "item") return;
-    const attributes = tag.attributes as Record<string, string>;
-    const id = attributes.id;
-    const href = attributes.href;
-    if (id !== undefined && href !== undefined) {
-      manifest.set(id, {
-        href: resolve(base, href.split("#")[0]!),
-        properties: attributes.properties ?? "",
-        mediaType: attributes["media-type"] ?? "",
-      });
-    }
-  });
-  parser.write(opfXml).close();
-  return manifest;
-}
-
-function spineHrefs(
-  opfXml: string,
-  manifest: Map<string, ManifestItem>,
-  files: BoundedZip,
-): string[] {
-  const spine: string[] = [];
-  const parser = new SaxesParser({ xmlns: false });
-  parser.on("opentag", (tag) => {
-    if (localName(tag.name) !== "itemref") return;
-    const idref = (tag.attributes as Record<string, string>).idref;
-    const item = idref === undefined ? undefined : manifest.get(idref);
-    if (item !== undefined) spine.push(item.href);
-  });
-  parser.write(opfXml).close();
-  return spine.filter((href) => files.has(href));
 }
 
 function applyEpubNavigation(
@@ -435,18 +393,27 @@ function navigationLabels(xml: string): string[] {
   return labels;
 }
 
-function resolve(base: string, href: string): string {
-  const parts = `${base}${href}`.split("/");
-  const stack: string[] = [];
-  for (const part of parts) {
-    if (part === "..") stack.pop();
-    else if (part !== "." && part.length > 0) stack.push(part);
-  }
-  return stack.join("/");
-}
+/** The Dublin Core elements DcXMLParser reads, each as a list of distinct values. */
+const DC_BAGS = [
+  "title",
+  "subject",
+  "creator",
+  "description",
+  "publisher",
+  "contributor",
+  "type",
+  "identifier",
+  "language",
+  "source",
+  "rights",
+] as const;
 
+/**
+ * The OPF's metadata as Tika's OPFParser (a DcXMLParser) reads it: a list of distinct values for each Dublin Core bag, and for
+ * the two single-valued elements the last value that differs, dc:date as dcterms:created and dc:format. dcterms:modified
+ * from an EPUB 3 meta element is not Tika's; it is kept.
+ */
 function applyOpfMetadata(metadata: Metadata, xml: string): void {
-  const values: Record<string, string[]> = {};
   const root = parseXmlTree(xml);
   const metadataNode =
     root.children.find((child) => localName(child.name) === "metadata") ??
@@ -454,39 +421,27 @@ function applyOpfMetadata(metadata: Metadata, xml: string): void {
   if (metadataNode === undefined) return;
 
   for (const child of metadataNode.children) {
-    const attributes = child.attributes;
-    const key =
-      attributes.property !== undefined
-        ? attributes.property
-        : localName(child.name);
     const value = child.text.trim();
-    if (value.length > 0) (values[key] ??= []).push(value);
-  }
-
-  maybe(metadata, "dc:title", values.title?.[0]);
-  maybe(metadata, "dc:language", values.language?.[0]);
-  maybe(metadata, "dc:identifier", values.identifier?.[0]);
-  maybe(metadata, "dc:publisher", values.publisher?.[0]);
-  maybe(metadata, "dc:description", values.description?.[0]);
-  maybe(metadata, "dc:date", values.date?.[0]);
-  maybe(metadata, "dc:rights", values.rights?.[0]);
-  maybe(metadata, "dcterms:modified", values["dcterms:modified"]?.[0]);
-
-  for (const creator of values.creator ?? []) {
-    if (creator.length > 0) metadata.add("dc:creator", creator);
-  }
-  for (const subject of values.subject ?? []) {
-    if (subject.length > 0) metadata.add("dc:subject", subject);
+    if (value.length === 0) continue;
+    const property = child.attributes.property;
+    if (property === "dcterms:modified") {
+      metadata.set("dcterms:modified", value);
+      continue;
+    }
+    const term = localName(child.name);
+    if ((DC_BAGS as readonly string[]).includes(term)) addDistinct(metadata, `dc:${term}`, value);
+    else if (term === "date") metadata.set("dcterms:created", value);
+    else if (term === "format") metadata.set("dc:format", value);
   }
 }
 
-function maybe(metadata: Metadata, key: string, value: string | undefined): void {
-  if (value !== undefined && value.length > 0) metadata.set(key, value);
+function addDistinct(metadata: Metadata, key: string, value: string): void {
+  if (!metadata.getAll(key).includes(value)) metadata.add(key, value);
 }
 
 function htmlBlocks(xml: string): string[] {
   const blocks: string[] = [];
-  const root = parseXmlTree(xml);
+  const root = parseXmlTree(xml, { skipEntitiesOfExternalDtd: true });
   const body =
     root.children
       .flatMap((child) => descendantsNamed(child, "body"))

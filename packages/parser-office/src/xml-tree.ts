@@ -25,11 +25,21 @@ export function attribute(
   return undefined;
 }
 
+export interface XmlTreeOptions {
+  /**
+   * An entity the document does not define is skipped, not refused, when its DOCTYPE names an external DTD: a parser that does
+   * not read the DTD cannot know the entity is undefined (Xerces reports it as skipped, as Tika's SAX parsing does for the
+   * `&nbsp;` of an XHTML chapter). Without such a DOCTYPE an undefined entity is still malformed.
+   */
+  readonly skipEntitiesOfExternalDtd?: boolean;
+}
+
 /** Builds a minimal element tree for a document part. */
-export function parseXmlTree(xml: string): XmlNode {
+export function parseXmlTree(xml: string, options: XmlTreeOptions = {}): XmlNode {
   const root: XmlNode = { name: "#document", attributes: {}, children: [], text: "" };
   const stack: XmlNode[] = [root];
   const parser = new SaxesParser({ xmlns: false });
+  if (options.skipEntitiesOfExternalDtd === true) skipEntitiesOfExternalDtd(parser);
 
   parser.on("opentag", (tag) => {
     if (stack.length > MAX_XML_DEPTH) {
@@ -71,4 +81,21 @@ export function descendantsNamed(node: XmlNode, name: string): XmlNode[] {
   };
   visit(node);
   return result;
+}
+
+const ENTITY_NAME = /^[A-Za-z_:][\w.:-]*$/;
+const EXTERNAL_DTD = /\b(?:PUBLIC|SYSTEM)\b/;
+
+function skipEntitiesOfExternalDtd(parser: SaxesParser): void {
+  let externalDtd = false;
+  parser.on("doctype", (doctype) => {
+    externalDtd = EXTERNAL_DTD.test(doctype);
+  });
+  parser.ENTITIES = new Proxy(parser.ENTITIES, {
+    get(entities, name) {
+      const defined = entities[name as string];
+      if (defined !== undefined || !externalDtd || typeof name !== "string" || !ENTITY_NAME.test(name)) return defined;
+      return "";
+    },
+  });
 }

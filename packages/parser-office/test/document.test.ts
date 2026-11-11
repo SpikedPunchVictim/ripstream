@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BodyContentHandler,
+  CONTEXT_KEYS,
   LimitExceededError,
   MalformedDocumentError,
   Metadata,
@@ -10,7 +11,8 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { strToU8, zipSync } from "fflate";
 import { EpubParser, OpenDocumentParser } from "../src/index.ts";
-import { applyOdfMetadata } from "../src/odf-meta.ts";
+import { MAX_ODF_META_DEPTH, applyOdfMetadata } from "../src/odf-meta.ts";
+import { Recorder } from "./iwork-harness.ts";
 
 async function run(
   parser: OpenDocumentParser | EpubParser,
@@ -21,7 +23,10 @@ async function run(
   const stream = await RipstreamInputStream.from(zipSync(archive));
   const handler = new BodyContentHandler();
   const metadata = new Metadata();
-  await parser.parse(stream, handler, metadata, new ParseContext());
+  // An EPUB hands its non-chapter items to the extractor, and a bare context has no parser to give the default one.
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, new Recorder());
+  await parser.parse(stream, handler, metadata, context);
   await stream.close();
   return { text: handler.toString(), metadata };
 }
@@ -328,6 +333,13 @@ test("ODF metadata in elements of another namespace is not read", async () => {
 
 test("a meta.xml that is not well-formed is a MalformedDocumentError", async () => {
   await assert.rejects(odfMetadata(`<office:document-meta ${NS}><office:meta><dc:title>cut`), MalformedDocumentError);
+});
+
+test("ODF meta.xml nested to the depth limit is read, one level more is a LimitExceededError (tikajs-68os.27)", async () => {
+  const nested = (levels: number): string =>
+    `<office:document-meta ${NS}>${"<x:a xmlns:x='urn:x'>".repeat(levels - 1)}${"</x:a>".repeat(levels - 1)}</office:document-meta>`;
+  await odfMetadata(nested(MAX_ODF_META_DEPTH));
+  await assert.rejects(odfMetadata(nested(MAX_ODF_META_DEPTH + 1)), LimitExceededError);
 });
 
 // Pins found by mutating odf-meta.ts (tikajs-68os.48): each behaviour below was read from the Tika handlers, not run.
