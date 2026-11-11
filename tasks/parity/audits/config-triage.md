@@ -42,7 +42,7 @@ Rows marked implemented were resolved by tikajs-68os.8.1 to .8.12, tikajs-68os.6
 - `tikajs-68os.9.2`: CFG-007, CFG-041, CFG-042 (done). Metadata filters: the section is read, checked when the config loads and run on the rmeta, pipes, CLI (recursive JSON) and server output paths with Tika's EmitHandler choice. CFG-007 and CFG-041 are implemented; CFG-042 stays partial for the per-request wire alone (NG-5).
 - `tikajs-68os.9.4`: CFG-009, CFG-046, CFG-067. Renderers, pages block and the metadata limiter budgets.
 - `tikajs-68os.9.1`: CFG-043, CFG-118. Digesters and --digest.
-- `tikajs-68os.9.3`: CFG-051. Language detection selection by name.
+- `tikajs-68os.9.3`: CFG-051 (done). Language detection: CharSoup is the detector behind /language, `language` and `charsoup-metadata-filter`; CFG-051 stays partial for choosing another detector by name (other filters refused by name, tikajs-68os.24).
 - `tikajs-68os.7.6`: CFG-008, CFG-044 (done). Every handler type is a library option and a server route or `?handler=`; CFG-044 is implemented (partial: the default stays text where Tika's is Markdown, by the owner's decision) and CFG-008, a configured default type, is proposed as a non-goal (refused by name), awaiting the owner.
 - CFG-028 (tikajs-68os.8.10: a parsers entry sets the PDFParserConfig properties ripstream has an option for, sortByPosition and extractAnnotationText, as true or false; every other parser setting is refused by name. Partial: the rest of the properties have no ripstream counterpart.)
 - `tikajs-68os.7.5`: CFG-045. Write limit: reaching it truncates and flags, as Tika does (done; ParseOptions.onOutputLimit, and the server always truncates).

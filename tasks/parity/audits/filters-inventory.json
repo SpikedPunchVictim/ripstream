@@ -404,9 +404,10 @@
   "kind": "metadata-filter",
   "upstream": "CharSoupMetadataFilter (tk:content -> tk:detected-language, -confidence = enum name, -confidence-raw = float; no-op when no content)",
   "upstreamSource": "tika-langdetect/tika-langdetect-charsoup/src/main/java/org/apache/tika/langdetect/charsoup/CharSoupMetadataFilter.java:42",
-  "ripstream": "none (`charsoup-metadata-filter` is refused by name in `metadata-filters`)",
-  "status": "gap",
-  "note": "Nothing in ripstream calls a LanguageDetector during a parse; only /language and the CLI `language` command use FrancLanguageDetector. Tracked in tikajs-68os.9.3 (language detection), which owns the three `tk:detected-language*` keys; until then a configuration naming the filter is refused when it loads, with that reason."
+  "ripstream": "packages/core/src/language-metadata-filter.ts (LanguageDetectionMetadataFilter, `charsoup-metadata-filter` in `metadata-filters`; the identifier is injected as MetadataFilterServices.languageIdentifier); packages/core/src/java-double.ts (Double.toString for the raw score)",
+  "status": "implemented",
+  "note": "Reads tk:content (null or empty: no-op; blank text is detected and answers NONE), writes tk:detected-language, tk:detected-language-confidence (the enum name) and tk:detected-language-confidence-raw (Java Double.toString of the float, 0.0 for NONE) with metadata.set, as the Tika source does. `maxLength` defaults to 100,000 as Tika's does. Deviations: `maxLength` below 1 is refused when the config loads (Tika accepts it and writes NONE); a chain that names the filter without a language identifier throws when it is built; Double.toString matches JDK 19+ (JDK 17 can differ on rare doubles). The pipes, CLI and server paths pass CharSoup as the identifier; a library caller passes `metadataFilterServices`.",
+  "evidence": "run: packages/core/test/language-filter.test.ts, java-double.test.ts, metadata-filter-config.test.ts; packages/pipes/test/metadata-filters.test.ts; packages/server/test/metadata-filters.test.ts; packages/cli/test/language-filter.test.ts (tikajs-68os.9.3.2, commit 0039f60). Mutation check: 31 changes, all caught. Not run against a Tika: no JDK, the oracle probe was not permitted"
  },
  {
   "id": "mf-optimaize-lang",
@@ -483,10 +484,10 @@
   "kind": "langdetect",
   "upstream": "CharSoupLanguageDetector (default detector in server; 204 languages; ServiceLoader class-name order picks it first)",
   "upstreamSource": "tika-langdetect/tika-langdetect-charsoup/src/main/java/org/apache/tika/langdetect/charsoup/CharSoupLanguageDetector.java:63",
-  "ripstream": "packages/language/src/index.ts:5-21",
+  "ripstream": "packages/language/src/charsoup.ts (CharSoupLanguageDetector: LDM1 v2 INT8 model, 204 languages, Tika's model file and pipeline); used by the server /language and the CLI `language` command and as the identifier of `charsoup-metadata-filter`",
   "status": "partial",
-  "evidence": "run: 38-input differential, oracle correct 37/38, ripstream (franc, minLength 10) correct 31/38, agree 30/38 (78.9%); long 19/19 agree, short 11/19",
-  "note": "ripstream returns ISO 639-3 (franc), oracle ISO 639-1. Optional Cld3LanguageDetector exists (cld3.ts:8) but is not used by server or CLI."
+  "evidence": "run: packages/language/test/charsoup.test.ts and charsoup-features.test.ts; packages/server/test/routes.test.ts and packages/cli/test/cli.test.ts (/language and `language` answer from CharSoup). Not run against a Tika: no JDK, the oracle probe was not permitted. The earlier franc differential (oracle 37/38, franc 31/38) no longer applies",
+  "note": "Tika's own model and pipeline: confidence is sigmoid(top - second), HIGH above 0.9, MEDIUM above 0.7 when entropy is under 2, LOW above 0.5, else NONE; confusable groups are collapsed. Measured: the model is 6,687,361 bytes; the first call, loading it, took 5.1 ms; a call took 0.14 ms at 100 characters, 0.48 ms at 10,000 and 4.09 ms at 100,000. Partial because the answers were validated against Tika's own tests and the model's format, not by an oracle differential; text is normalised with Node's Unicode 17 where Java 17 has Unicode 13; and the helpers Tika has beside the detector are not ported. The franc and Cld3 detectors remain as library classes; neither is used by the server or CLI."
  },
  {
   "id": "ld-optimaize",
@@ -533,10 +534,10 @@
   "kind": "langdetect",
   "upstream": "PUT/POST /language (text/plain body; response text/plain ISO 639-1 via toIso1; first 100000 chars only; '' when undetermined)",
   "upstreamSource": "tika-server/tika-server-core/src/main/java/org/apache/tika/server/core/resource/LanguageResource.java:39",
-  "ripstream": "packages/server/src/index.ts:378-390",
-  "status": "partial",
-  "evidence": "run: both endpoints called with 43 inputs; contract differs: oracle text/plain '639-1', ripstream application/json {language(639-3), confidence, isReasonablyCertain}; edge-empty oracle '' vs ripstream 'und'; no 100k sample cap in ripstream (only maxBodyBytes)",
-  "note": "Clients written for Tika's /language break on ripstream's JSON. Oracle 4.2.0 has no /language/string route (404)."
+  "ripstream": "packages/server/src/index.ts (the /language route)",
+  "status": "implemented",
+  "evidence": "run: server-inventory U22 (the saved r153-r159 responses, replayed before CharSoup); packages/server/test/routes.test.ts (ISO 639-1 text/plain, an empty body for NONE, the 100,000-character cap). Not run against a live Tika",
+  "note": "Answers the bare ISO 639-1 code as text/plain with an empty body when undetermined, as Tika does; `Accept: application/json` answers the detector's whole result where Tika answers 406, by the owner's decision (see server-inventory U22). The earlier contract differences listed here were closed by tikajs-68os.7.8 and the detector is CharSoup (tikajs-68os.9.3.3). Oracle 4.2.0 has no /language/string route (404)."
  },
  {
   "id": "ld-handler-writer",
@@ -563,10 +564,10 @@
   "kind": "langdetect",
   "upstream": "Language detection during a parse (filter writes tk:detected-language*)",
   "upstreamSource": "n/a",
-  "ripstream": "none",
-  "status": "gap",
-  "evidence": "run: no producer of tk:detected-language* in packages/*/src; detectors used only by server /language and CLI `language` (cli/src/main.ts:166-172)",
-  "note": "Same gap as mf-charsoup-lang from the detector side."
+  "ripstream": "packages/core/src/language-metadata-filter.ts; packages/pipes/src/index.ts, packages/cli/src/main.ts, packages/server/src/index.ts (the chain is built with the CharSoup identifier)",
+  "status": "implemented",
+  "evidence": "run: packages/pipes/test/metadata-filters.test.ts, packages/server/test/metadata-filters.test.ts, packages/cli/test/language-filter.test.ts (a configuration naming `charsoup-metadata-filter` writes tk:detected-language* on the pipes, server and CLI --recursive paths)",
+  "note": "Same work as mf-charsoup-lang from the detector side (tikajs-68os.9.3.2). Detection happens when metadata is emitted, as with every filter, not inside the parse."
  },
  {
   "id": "tr-spi",

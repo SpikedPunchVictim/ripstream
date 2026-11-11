@@ -212,7 +212,7 @@ Built entirely on the library; request handlers are exported so any framework (F
 | `/detect/stream` | PUT | Not in tika-server 4.2.0 (404, saved response r150) and not served here: `/detect` is the route |
 | `/detect` | PUT | Media type |
 | `/unpack` | PUT, POST multipart | The embedded resources as Tika's data package: a zip of `datapackage.json`, `rmeta.json` and `unpacked/<id><ext>` (`Accept: application/zip` only; `/unpack/all[/{handler}]` adds the request's own bytes as `unpacked/0`; raw POST 415). Bytes kept are held to `maxUnpackBytes` (`tikajs-68os.7.4`); `/unpack/preset/{name}` is a 4.2.0 variant that is not served |
-| `/language` | PUT, POST | Language detection: the ISO 639-1 code as `text/plain` (Tika's answer; `und` is an empty body); `Accept: application/json` is the detector's whole answer. Reads the first 100,000 characters (`tikajs-68os.7.8`). Tika has no `/language/stream` |
+| `/language` | PUT, POST | Language detection with Tika's CharSoup model: the ISO 639-1 code as `text/plain` (Tika's answer; `und`, a blank body, is an empty body); `Accept: application/json` is the detector's whole answer. Reads the first 100,000 characters (`tikajs-68os.7.8`, `tikajs-68os.9.3`). Tika has no `/language/stream` |
 | `/translate?target=` | PUT, POST | A ripstream extension: tika-server 4.2.0 has no translate routes (404 for `/translate/all/...`, which were 3.x). Translates the body into `target` (default `en`); 501 until a translator is configured |
 | `/pipes`, `/async` | POST | Requires `allowPipes` (4.x) / `enableUnsecureFeatures` (3.x). Here: off unless `pipes` is given, and `pipes` needs `authenticate`. With `pipes.settings` they are Tika's: `/pipes` takes one `FetchEmitTuple` and answers `{status, message?}` with Tika's HTTP status; `/async` takes `{"tuples": [...]}` and queues them for a background run (`tikajs-68os.6.5`, below) |
 | `/status` | GET | Engine status; same gating |
@@ -275,9 +275,10 @@ export interface LanguageDetector {
 }
 ```
 
-- Backends: `franc` (default, many languages, fast), optional CLD3 wasm, optional upstream-compatible naive-Bayes profile for score parity.
-- Short text (< 20 chars) returns `unknown` unless a whitelist narrows the choice.
-- Scores are backend-specific; the SPI is compatible, numeric parity with upstream is not promised.
+- Backends: `CharSoupLanguageDetector` (default: a port of Tika 4.2.0's detector running Tika's own 204-language model, `tikajs-68os.9.3`), `franc` and CLD3 wasm (optional, not used by the server or the CLI).
+- CharSoup answers a short text with its best guess and says how far to trust it (`confidence` `HIGH`, `MEDIUM`, `LOW` or `NONE`, and the raw score); it answers `NONE` only for a blank text or one whose best language does not lead the next.
+- The `charsoup-metadata-filter` writes `tk:detected-language`, `tk:detected-language-confidence` and `tk:detected-language-confidence-raw` from `tk:content` in a `metadata-filters` chain; core takes the detector as a service (`MetadataFilterServices.languageIdentifier`).
+- Scores are Tika's model's, not checked against a running Tika (`docs/migration.md`, Language detection).
 - Streaming API: `LanguageDetectorStream` accumulates up to `maxChars`, returns result at end or on threshold.
 
 ---

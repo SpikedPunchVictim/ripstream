@@ -25,7 +25,7 @@ console.log(result.metadata.get("Content-Type"), result.text);
 | `@spikedpunch/ripstream-parser-archive` | ZIP, TAR, GZIP, BZIP2, Brotli, XZ, LZ4, Snappy, .Z, plist |
 | `@spikedpunch/ripstream-parser-pdf` | pdf.js parser (runs on the calling thread; isolate untrusted PDFs, see [docs/isolation.md](docs/isolation.md)) |
 | `@spikedpunch/ripstream-parser-media` | Images, audio, MP4 metadata |
-| `@spikedpunch/ripstream-language` | franc language detection |
+| `@spikedpunch/ripstream-language` | language detection: Tika's CharSoup model (what `/language`, `ripstream language` and `charsoup-metadata-filter` use), franc, CLD3 |
 | `@spikedpunch/ripstream-cli` | `ripstream` command |
 | `@spikedpunch/ripstream-parity`, `@spikedpunch/ripstream-test-corpus` | Tika differential harness and corpus |
 

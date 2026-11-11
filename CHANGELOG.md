@@ -4,6 +4,45 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Language detection: Tika's CharSoup detector, and the filter that writes `tk:detected-language*` (`tikajs-68os.9.3`)
+
+Added: `CharSoupLanguageDetector` in `@spikedpunch/ripstream-language`, a port of Tika 4.2.0's `CharSoupLanguageDetector`
+(`tika-langdetect-charsoup`) that runs Tika's own model, `langdetect-20260320.bin` (204 languages, 6,687,361 bytes, shipped
+in the package's `data/`; `NOTICE` carries the attribution). `identify(text, { maxLength })` answers as Tika's `detect` does
+(`language` as ISO 639-3, or `""`; `confidence` `HIGH`, `MEDIUM`, `LOW` or `NONE`; `rawScore`, a 32-bit float), and `detect(text)`
+is the `LanguageDetector` answer (`und` when there is none, the raw score as the confidence, `isReasonablyCertain` for `HIGH`).
+`charsoup-metadata-filter` is accepted in `metadata-filters` (and under `parse-context`): from `tk:content` it writes
+`tk:detected-language`, `tk:detected-language-confidence` (the confidence's name) and `tk:detected-language-confidence-raw` (the
+score as Java's `Double.toString` writes it, `0.0` for `NONE`), replacing what the document had, and leaves a document with no
+or empty content alone. Its one setting, `maxLength` (a whole number from 1 to 2147483647), is how many characters it reads;
+Tika reads 100,000 by default. Measured here, on one core: the first call, which reads the model, takes 5 ms; a text of 100
+characters takes 0.14 ms and of 100,000 characters 4.1 ms.
+
+Core has no dependencies, so the filter is built with a detector that whoever builds the chain hands in:
+`createMetadataFilter(entries, services)` and `metadataFiltersOf(config, services)` take `MetadataFilterServices`
+(`languageIdentifier`), `PipesSettingsRunOptions` and `AsyncProcessorOptions` take `metadataFilterServices`, and
+`createRipstreamServer` takes `metadataFilterServices` and defaults to CharSoup. `ripstream --recursive`, `pipes` and `serve` use
+CharSoup. A chain that names the filter and has no identifier fails when it is built (a server, when it starts), never on the
+first document. New core exports: `LanguageDetectionMetadataFilter`, `MetadataFilterServices`, `LanguageIdentifier`,
+`LanguageIdentification`, `LanguageConfidenceName` and `TIKA_KEYS.DETECTED_LANGUAGE`, `DETECTED_LANGUAGE_CONFIDENCE` and
+`DETECTED_LANGUAGE_CONFIDENCE_RAW`.
+
+Changed (breaking): `PUT /language`, `POST /language` and `ripstream language` detect with CharSoup, not franc. The answer for the
+same text can differ, and a short text gets the detector's best guess, as Tika's `/language` gives it, where franc said `und`
+below 10 characters (`Bonjour` is `fr`, with a raw score of 0.75 and `LOW`; an empty or blank body is still an empty answer, and
+`und` as JSON). The JSON `confidence` is the raw score, a number above 0.5, where franc's was a constant 0.9, and
+`isReasonablyCertain` is true for `HIGH` only, a score above 0.9. `FrancLanguageDetector` and `Cld3LanguageDetector` are still
+exported.
+
+Not the same as Tika, and not checked against it: there is no JDK here and the probe of a running Tika was declined, so the
+detector is checked against Tika's own tests (the 20 sentences of `LangIdRegressionTest`, the cases of
+`CharSoupFeatureExtractorTest`) and by mutation, not by running both on the same texts. The letter, mark and script tables
+are Node's (Unicode 17 on Node 24) where Java 17's are Unicode 13, and a Tika on a later JDK has that JDK's: a character
+assigned since can be a letter here and not there, which changes that text's features. `Double.toString` is the shortest-digits form of JDK 19 and later; JDK 17 gives a
+few doubles an extra digit, which no score here is. `maxLength` below 1 is refused when the configuration loads, where Tika
+accepts it and writes `NONE` for every document. Script gating, which Tika's detector leaves a no-op, and its
+charset-comparison helpers are not ported. See `docs/migration.md`.
+
 ### Metadata filters: the `metadata-filters` section is read and run (`tikajs-68os.9.2`)
 
 Added: `metadata-filters` (and `metadata-filters` under `parse-context`) in a Tika configuration builds a chain of Tika's filters
@@ -30,8 +69,8 @@ number, as it has every other integer key. The camelCase `metadataFilters` key i
 the way: a type error in the CLI (`emitter.onExists` read from the union of all emitters, which the S3 and search emitters made) that stopped
 `tsc -b`; the warning it belongs to is for file-system emitters, the ones with that setting.
 
-Refused by name: `charsoup-metadata-filter` (a parse does not detect languages: `tikajs-68os.9.3`), `optimaize-metadata-filter`,
-`open-nlp-metadata-filter` and `tika-eval-metadata-filter` (proposed non-goals, `tikajs-68os.24`). Not the same as Tika, read from
+Refused by name: `optimaize-metadata-filter`, `open-nlp-metadata-filter` and `tika-eval-metadata-filter` (proposed non-goals,
+`tikajs-68os.24`); `charsoup-metadata-filter` was refused until `tikajs-68os.9.3`, see Language detection above. Not the same as Tika, read from
 its source (there is no Java here to run it): a request cannot name filters (`NG-5`); a filter that throws fails the input where
 Tika logs and goes on; a regex with no capture group is refused at load; a value that is not a date is left without the warning;
 region zone ids use the runtime's time zone data; `legacy-key-migration-filter`'s `table` is accepted only as Tika's own default

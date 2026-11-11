@@ -230,7 +230,7 @@ Rules: no GPL/AGPL in the default install; LGPL only optional and dynamically lo
 | `tika-detectors` | `@spikedpunch/ripstream-mime` | full |
 | `tika-metadata-schema` | generated into core | full key/type schema |
 | `tika-serialization` | handlers + serializers | JSON/XML/CSV |
-| `tika-langdetect` | `@spikedpunch/ripstream-langdetect` | SPI + backends, scores differ |
+| `tika-langdetect` | `@spikedpunch/ripstream-language` | SPI + backends; CharSoup is a port with Tika's model, not compared with a running Tika; franc and CLD3 score differently |
 | `tika-translate` | `@spikedpunch/ripstream-translate` | SPI + provider adapters |
 | `tika-pipes` | `@spikedpunch/ripstream-pipes` | engine + core components; cloud components optional |
 | `tika-server` | `@spikedpunch/ripstream-server` | endpoint parity, 4.x primary |

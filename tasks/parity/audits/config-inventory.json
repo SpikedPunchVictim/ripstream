@@ -97,7 +97,7 @@
     "status": "implemented",
     "evidence": "J07,J25",
     "unknownKeyBehaviour": "loud: an unknown filter name, a setting the filter does not read, a setting of the wrong type, a missing required setting and what the filter itself refuses (a regex with no group, a zone that is not one) are each refused when the config loads; the camelCase `metadataFilters` key is now an unknown root key",
-    "note": "The section is read, the chain built and run on the output paths, with Tika's EmitHandler choice: the parse-context chain, else (CONTENT_ONLY) the content and the container exception only, else the top-level chain; a no-op chain filters nothing. The CLI runs the top-level chain over its recursive JSON alone, as Tika's TikaCLI does (the `metadata` command and the text output do not filter). The server runs it on /rmeta, /meta, /unpack's rmeta.json, /tika/json and the `handler=meta|json` answers; the text routes run the parse-context chain only. Deviations: filters are applied where the output is made, not inside createRipstream or a parse, so a library caller who wants them passes `metadataFilter` to rmetaObjects/serializeRmeta; a filter that throws fails the input (Tika logs a TikaException warning and goes on); the text routes still answer 422 for a failed container by the parse's exception, not by the filtered list. Four filters Tika lists are refused by name because ripstream has no detector behind them: charsoup (a parse does not detect languages; tikajs-68os.9.3), optimaize, open-nlp, tika-eval (candidates for tikajs-68os.24). Enum values (`direction`) are exact-case, as with every ripstream section (NG-6). `legacy-key-migration-filter` `table` names Tika's classpath resource and is accepted only as Tika's own default path.",
+    "note": "The section is read, the chain built and run on the output paths, with Tika's EmitHandler choice: the parse-context chain, else (CONTENT_ONLY) the content and the container exception only, else the top-level chain; a no-op chain filters nothing. The CLI runs the top-level chain over its recursive JSON alone, as Tika's TikaCLI does (the `metadata` command and the text output do not filter). The server runs it on /rmeta, /meta, /unpack's rmeta.json, /tika/json and the `handler=meta|json` answers; the text routes run the parse-context chain only. Deviations: filters are applied where the output is made, not inside createRipstream or a parse, so a library caller who wants them passes `metadataFilter` to rmetaObjects/serializeRmeta; a filter that throws fails the input (Tika logs a TikaException warning and goes on); the text routes still answer 422 for a failed container by the parse's exception, not by the filtered list. `charsoup-metadata-filter` is implemented (tikajs-68os.9.3); three filters Tika lists are refused by name because ripstream has no detector behind them: optimaize, open-nlp, tika-eval (candidates for tikajs-68os.24). Enum values (`direction`) are exact-case, as with every ripstream section (NG-6). `legacy-key-migration-filter` `table` names Tika's classpath resource and is accepted only as Tika's own default path.",
     "triage": {
       "disposition": "implemented",
       "resolvedBy": "tikajs-68os.9.2.5 tikajs-68os.9.2.6",
@@ -834,15 +834,15 @@
     "area": "language-detection",
     "upstreamKey": "language detectors by name in parse-context (charsoup-language-detector)",
     "upstreamSource": "docs advanced/language-detection.adoc:147-150; CharSoupLanguageDetector.java:63",
-    "ripstream": "language detector built into server/CLI (packages/language); /language endpoint",
+    "ripstream": "`charsoup-metadata-filter` in `metadata-filters` (packages/core/src/language-metadata-filter.ts) writes the tk:detected-language* keys; the server /language endpoint and the CLI `language` command use CharSoupLanguageDetector (packages/language/src/charsoup.ts). There is no `language-detectors` selection by name",
     "status": "partial",
-    "evidence": "C04",
+    "evidence": "C04; run: packages/core/test/metadata-filter-config.test.ts, packages/server/test/routes.test.ts, packages/cli/test/cli.test.ts",
     "unknownKeyBehaviour": "n/a",
-    "note": "No top-level `language-detectors` key exists upstream either (KNOWN_KEYS); selection happens by name in parse-context. No config surface found in packages/language (only TranslationConfig); unverified beyond that grep.",
+    "note": "No top-level `language-detectors` key exists upstream either (KNOWN_KEYS); selection happens by name in parse-context. Ripstream has one detector behind the server and CLI, CharSoup (Tika's default), and the filter that names it is configured the way Tika's is. What is left is choosing another detector by name: Tika's optimaize, open-nlp, mitll and lingo24 detectors have no ripstream counterpart (optimaize, open-nlp and tika-eval filters are refused by name; candidates for tikajs-68os.24, left to the owner). Read from Tika source, not run against a Tika.",
     "triage": {
-      "disposition": "bead",
-      "target": "tikajs-68os.9.3",
-      "why": "Language detection selection by name."
+      "disposition": "implemented",
+      "resolvedBy": "tikajs-68os.9.3",
+      "why": "CharSoup is the detector on the server, the CLI and the filter, and `charsoup-metadata-filter` is configured by name as in Tika. Other detectors stay refused by name; whether to keep them out is tikajs-68os.24's, the owner's. Validated against Tika's own tests, not run against a Tika."
     }
   },
   {

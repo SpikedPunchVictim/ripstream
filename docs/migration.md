@@ -152,9 +152,18 @@ it was refused (`CFG-014`), and the library's one filter, `IncludeExcludeFilter`
   the wrong type (a number for a string, a string for the boolean), a missing required setting and what a filter itself refuses
   (an unknown attachment type, a zone that is not one, a `mimes` entry that could never match). Tika finds some of these on
   the first document, or never.
-- **Four filters Tika has are refused by name:** `charsoup-metadata-filter` (a parse does not detect languages;
-  `tikajs-68os.9.3`), `optimaize-metadata-filter`, `open-nlp-metadata-filter` and `tika-eval-metadata-filter` (proposed as
-  non-goals in `tikajs-68os.24`).
+- **`charsoup-metadata-filter` detects the language of `tk:content`** with Tika's CharSoup model and writes
+  `tk:detected-language`, `tk:detected-language-confidence` (`HIGH`, `MEDIUM`, `LOW` or `NONE`) and
+  `tk:detected-language-confidence-raw` (the score, written as Java's `Double.toString` does: `0.8999999761581421`, and `0.0`
+  for `NONE`), each replacing what the document had. A document with no `tk:content`, or an empty one, is left alone; one that
+  is only whitespace is detected, and is `NONE`. Its one setting, `maxLength` (1 to 2147483647), is the number of characters
+  read; Tika reads 100,000 unless told otherwise, and so does this. A `maxLength` below 1 is refused when the configuration
+  loads: Tika accepts it and writes `NONE` for every document. Core has no detector, so a chain built from a configuration needs
+  one handed in (`createMetadataFilter(entries, { languageIdentifier })`, `metadataFilterServices` on the pipes options and on
+  `createRipstreamServer`); `ripstream --recursive`, `pipes` and `serve` hand in CharSoup, and a chain that names the filter
+  without one fails when it is built, a server when it starts. A parse that runs no chain does not read the 6.7 MB model.
+- **Three filters Tika has are refused by name:** `optimaize-metadata-filter`, `open-nlp-metadata-filter` and
+  `tika-eval-metadata-filter` (proposed as non-goals in `tikajs-68os.24`).
 
 Not the same, read from Tika's source (there is no Java here to run it and compare):
 
@@ -173,6 +182,44 @@ Not the same, read from Tika's source (there is no Java here to run it and compa
 - `clear-by-attachment-type-metadata-filter` matches on `tk:embedded-resource-type`, which no ripstream parser writes yet
   (`tikajs-68os.35`), so on ripstream's own output it clears nothing.
 - Typed `/rmeta` output now types `tk:embedded-depth` as a number, as it types every other integer key (it was a string).
+
+## Language detection
+
+`@spikedpunch/ripstream-language` has Tika 4.2.0's detector, `CharSoupLanguageDetector`: Tika's own model
+(`langdetect-20260320.bin`, 204 languages, 6,687,361 bytes, in the package's `data/`, Apache 2.0, in the package's `NOTICE`)
+and Tika's pipeline (strip URLs and addresses, NFC, character n-grams of two to four letters, script counts, word bigrams,
+confusable languages scored as a group). It is what the `charsoup-metadata-filter`, `PUT /language` and `ripstream language`
+use. The model is read when a text is first detected, not when the package is loaded; the first call takes 5 ms, and a text of
+100 characters 0.14 ms, of 100,000 characters 4.1 ms (one core, measured).
+
+- `identify(text, { maxLength })` is Tika's `detect`: `language` as ISO 639-3 (or `be-x-old`, `cdo-x-rom`, `hak-x-rom`, as
+  Tika's labels are), or `""`; `confidence` `HIGH` (raw score above 0.9), `MEDIUM` (above 0.7 and an entropy under 2 bits),
+  `LOW` (above 0.5, or above 0.7 with an entropy of 2 bits or more) or `NONE`; `rawScore`, a 32-bit float. `detect(text)` is the `LanguageDetector` answer.
+- `ripstream language` prints the ISO 639-3 code (`und` when there is none) and, with `--json`, `{ language, confidence,
+  isReasonablyCertain }`, as before; `confidence` is now the raw score.
+- `FrancLanguageDetector` and `Cld3LanguageDetector` stay exported for a caller who wants them; nothing in ripstream uses them.
+
+Not the same, and not checked against Tika. There is no JDK here, and the probe of a running Tika was declined, so the answers
+for the same text have never been compared with Tika's. What the port is checked against is Tika's own tests, ported: the 20
+sentences of `LangIdRegressionTest` (each its language, with a raw score of at least 0.5), the URL and address stripping against
+the regular expressions it replaced (on Tika's cases and 5,000 random ones), the feature extractor's n-grams, scripts and
+hashing against an independent hash, and a mutation check of ten changes to the pipeline, none of which survives. Where it can differ:
+
+- The letter, mark and script tables are Node's, Unicode 17 on Node 24; Java 17's are Unicode 13, and a Tika on a later JDK
+  has that JDK's. A character assigned since can be a letter here and not there, which changes the features of a text that has
+  it. The script of a character is the category the model's script features use (`ScriptCategory`), by Unicode script.
+- Java's `float` is kept 32-bit with `Math.fround` where Java rounds. The weighted sums Tika keeps in a `long` are kept in a
+  `Float64`, which holds them exactly: they stay far below 2^53.
+- The raw score is written as Java's `Double.toString` of the `float`: the shortest digits that read back (JDK 19 and later).
+  JDK 17 gives a few doubles one digit more; which scores that touches, if any, has not been checked (there is no JDK here).
+- Script gating, which Tika's detector leaves a no-op (`applyScriptGate` returns its input), is left out, and so is the rest of
+  the detector's API beyond `detect`: `detectAll`, `setPriors`, `hasEnoughText`, `getDistributionEntropy` and the
+  charset-comparison helpers `compareLanguageSignal`, `topShortTextLanguages` and `junkRatio`, which only Tika's own
+  `SjisLangSignalTest` calls from outside the detector.
+- A `maxLength` below 1 is an error where Tika reads no characters and answers `NONE` (see the filter above).
+- A short text is detected, and its answer is a guess: `Hello world` is `ita` (0.63, `LOW`), `plain text here` is `yor` (0.65,
+  `LOW`) and `ok` is `diq` (0.78, `LOW`). That is the model's answer, and Tika's `/language` gives it; use `confidence` to
+  tell a verdict from a guess.
 
 ## A document that cannot be read
 
@@ -239,7 +286,7 @@ body, markdown, md, ignore`.
 | `POST /meta/form`, `POST /rmeta/form[/{handler}]` | the same, for a multipart form upload |
 | `GET /`, `GET /tika` | a welcome page, and Tika's greeting, both naming ripstream |
 | `GET /mime-types[/{type}/{subtype}]` | the media types: HTML by default, JSON or (the list) text by `Accept`; one type as HTML or JSON |
-| `PUT /language`, `POST /language` | the language as its ISO 639-1 code, as `text/plain` with no newline (`en`); an empty answer when the text is too short to tell. By `Accept: application/json`, the detector's whole answer (`{ language, confidence, isReasonablyCertain }`, with the ISO 639-3 code) |
+| `PUT /language`, `POST /language` | the language as its ISO 639-1 code, as `text/plain` with no newline (`en`); an empty answer when the text is blank. By `Accept: application/json`, the detector's whole answer (`{ language, confidence, isReasonablyCertain }`, with the ISO 639-3 code, the raw score as the confidence, and `und` for a blank text) |
 
 A trailing slash names the same route; a path with a `.` or `..` segment is a 404 and one that starts with `//` a 400, and
 the dots are not folded into another route. `HEAD` is the headers of a `GET` route's answer, `OPTIONS` is a 200 with
@@ -283,8 +330,10 @@ Not the same:
   not gzip). Other encodings are not decoded.
 - `POST` is accepted on `/tika`, `/rmeta`, `/meta` and `/detect` with a raw body, where Tika answers 405 there (it takes
   `POST` on `/rmeta/form`, `/meta/form`, `/unpack` and `/language`).
-- `/language` detects with franc, not Tika's detector: the answer for the same text can differ, `zh-CN` is `zh`, and a
-  language with no two-letter code keeps its three-letter one, as Tika's does.
+- `/language` detects with Tika's own CharSoup model, as Tika's does, ported (see below), and gives the answer Tika's `toIso1`
+  gives: the two-letter code, or the three-letter one for a language that has none (`ceb`, `yue`). A short text gets the
+  detector's best guess however low its confidence, as Tika's does: `Bonjour` is `fr` (raw score 0.75, `LOW`), where
+  ripstream before this answered with franc, and said nothing below 10 characters.
 - `/pipes` runs a batch and answers `200` when the run finished, with `count`, `stats` (`byStatus` counts every input by
   Tika's result status) and `failures`: the inputs whose status is not in Tika's SUCCESS category, up to 1000, with
   `failuresOmitted` for the rest. A document that cannot be read is not a failure there, as in Tika: it is emitted with

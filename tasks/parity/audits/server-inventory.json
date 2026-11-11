@@ -232,12 +232,12 @@
   "id": "U22",
   "upstream": "PUT/POST /language",
   "upstreamSource": "tika-server-core/src/main/java/org/apache/tika/server/core/resource/LanguageResource.java:39,44,51",
-  "ripstream": "packages/server/src/index.ts:378-390",
+  "ripstream": "packages/server/src/index.ts (the /language route; CharSoupLanguageDetector, toIso6391)",
   "status": null,
   "evidence": "r153-r158,r227,r228",
-  "divergence": "PUT and POST /language answer the bare ISO 639-1 code as text/plain with no newline, as the oracle does (r153, r154, r155, r227, r228 identical bodies 'en', 'de'; r156 an empty body is an empty 200; r159 GET is 405). Differences: Content-Type charset (utf-8, oracle iso-8859-1); franc is the detector, so the answer for other text can differ, and a body under 10 characters is an empty answer where the oracle guesses (r157 'ts'); franc's `cmn` is `zh` where Tika's profile says `zh-CN`; a language with no two-letter code keeps its three-letter one (Tika's toIso1 does the same). Reads the first 100,000 characters, as Tika does. `Accept: application/json` is the detector's whole answer where the oracle answers 406 (r158), by the owner's decision.",
-  "note": "tikajs-68os.7.8: packages/language/src/iso639.ts (182 two-letter languages, checked against ICU, plus the macrolanguage codes franc names); packages/server/test/routes.test.ts. Replayed against the saved responses on the CLI server; not run against a live Tika.",
-  "resolvedBy": "tikajs-68os.7.8"
+  "divergence": "PUT and POST /language answer the bare ISO 639-1 code as text/plain with no newline, as the oracle does (r153, r154, r155, r227, r228 identical bodies 'en', 'de'; r156 an empty body is an empty 200; r159 GET is 405), as of the franc detector; the saved responses were not replayed against CharSoup. Differences: Content-Type charset (utf-8, oracle iso-8859-1); the detector is now Tika's CharSoup model, so an answer for other text is expected to match but was not compared with a Tika; a language with no two-letter code keeps its three-letter one (Tika's toIso1 does the same); an undetermined text (confidence NONE) answers an empty body. Reads the first 100,000 characters, as Tika does. `Accept: application/json` is the detector's whole answer where the oracle answers 406 (r158), by the owner's decision.",
+  "note": "tikajs-68os.7.8: packages/language/src/iso639.ts, packages/server/test/routes.test.ts. tikajs-68os.9.3.3: the detector is CharSoup, tests in packages/server/test/routes.test.ts. Replayed against the saved responses on the CLI server before that change; not run against a live Tika.",
+  "resolvedBy": "tikajs-68os.7.8 tikajs-68os.9.3.3"
  },
  {
   "id": "U23",
