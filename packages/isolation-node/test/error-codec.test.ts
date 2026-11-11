@@ -231,7 +231,7 @@ test("an error with a throwing message getter still encodes", () => {
   assert.equal(encodeChildError(hostile).kind, "crash");
 });
 
-for (const message of ["Invalid string length", "Array buffer allocation failed"]) {
+for (const message of ["Invalid string length", "Array buffer allocation failed", "Invalid typed array length: 9007199254740992"]) {
   test(`RangeError "${message}" is a limit (the child caught what the exit classifier would have matched on stderr)`, () => {
     const parent = crossBoundary(new RangeError(message));
     assert.ok(parent instanceof LimitExceededError);
@@ -239,6 +239,54 @@ for (const message of ["Invalid string length", "Array buffer allocation failed"
     assert.equal(cliExitCodeFor(parent), 3);
   });
 }
+
+// core's CompositeParser wraps whatever a parser leaks in a MalformedDocumentError whose cause is the original, so an
+// allocator RangeError from a parser reaches the child's encoder one level down.
+for (const message of ["Array buffer allocation failed", "Invalid typed array length: 4294967296", "Invalid string length"]) {
+  test(`a MalformedDocumentError caused by the RangeError "${message}" is a limit`, () => {
+    const wrapped = new MalformedDocumentError(`Parser P failed: ${message}`, { cause: new RangeError(message) });
+    const parent = crossBoundary(wrapped);
+    assert.ok(parent instanceof LimitExceededError, String(parent));
+    assert.equal(httpStatusForError(parent), 422);
+  });
+}
+
+test("a RangeError caused two levels down is found, but only within a few levels", () => {
+  const root = new RangeError("Array buffer allocation failed");
+  const twice = new MalformedDocumentError("outer", { cause: new MalformedDocumentError("inner", { cause: root }) });
+  assert.ok(crossBoundary(twice) instanceof LimitExceededError);
+  let deep: unknown = root;
+  for (let i = 0; i < 10; i++) deep = new MalformedDocumentError(`level ${i}`, { cause: deep });
+  assert.ok(crossBoundary(deep) instanceof MalformedDocumentError);
+});
+
+test("a MalformedDocumentError is still malformed when its cause is not an allocator RangeError", () => {
+  const causes: unknown[] = [
+    new RangeError("Offset is outside the bounds of the DataView"),
+    new TypeError("Array buffer allocation failed"),
+    new Error("Invalid typed array length: 4"),
+    "Array buffer allocation failed",
+    undefined,
+  ];
+  for (const cause of causes) {
+    const wrapped = new MalformedDocumentError("Parser P failed: x", cause === undefined ? undefined : { cause });
+    assert.ok(crossBoundary(wrapped) instanceof MalformedDocumentError, String(cause));
+  }
+});
+
+test("a cyclic or hostile cause chain does not hang or throw", () => {
+  const a = new MalformedDocumentError("a");
+  const b = new MalformedDocumentError("b", { cause: a });
+  Object.defineProperty(a, "cause", { value: b });
+  assert.ok(crossBoundary(a) instanceof MalformedDocumentError);
+  const hostile = new MalformedDocumentError("h");
+  Object.defineProperty(hostile, "cause", {
+    get(): never {
+      throw new Error("no");
+    },
+  });
+  assert.ok(crossBoundary(hostile) instanceof RipstreamError);
+});
 
 test("a TypeError with the same text is not a limit", () => {
   assert.ok(crossBoundary(new TypeError("Invalid string length")) instanceof IsolationError);

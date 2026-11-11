@@ -111,7 +111,31 @@ export function decodableCodes(): string[] {
 
 // RangeErrors V8 throws when an allocation gives up; the parent's exit classifier knows the same texts from stderr
 // (classify.ts) for the case where the process dies instead of catching them.
-const EXHAUSTION = /invalid string length|array buffer allocation failed/i;
+// "Invalid typed array length" is also what V8 says for a view that runs past its buffer, so a malformed offset in a
+// document can read as a limit; both are the document's own failure and cross as the same 422-class answer.
+const EXHAUSTION = /invalid string length|array buffer allocation failed|invalid typed array length/i;
+
+/** How many `cause`s down an allocator RangeError is looked for under a MalformedDocumentError. */
+const MAX_CAUSE_DEPTH = 4;
+
+function isExhaustion(value: unknown): boolean {
+  return value instanceof RangeError && EXHAUSTION.test(describeThrown(value).message);
+}
+
+/**
+ * core's CompositeParser wraps whatever a parser leaks in a MalformedDocumentError whose `cause` is the original, so
+ * an allocator RangeError from a parser reaches the encoder one level down. A hostile `cause` getter throws out of
+ * here into encodeChildError's guard, which answers with a crash.
+ */
+function malformedByExhaustion(thrown: unknown): boolean {
+  if (!(thrown instanceof MalformedDocumentError)) return false;
+  let current: unknown = thrown;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+    current = current instanceof Error ? current.cause : undefined;
+    if (isExhaustion(current)) return true;
+  }
+  return false;
+}
 
 function describeThrown(value: unknown): { name: string; message: string } {
   try {
@@ -135,6 +159,9 @@ export function encodeChildError(thrown: unknown): ErrorFrame {
 }
 
 function encodeChildErrorUnchecked(thrown: unknown): ErrorFrame {
+  if (malformedByExhaustion(thrown)) {
+    return { t: "error", kind: "limit", message: oneLineText(describeThrown(thrown).message) };
+  }
   if (thrown instanceof RipstreamError) {
     const code: unknown = thrown.code;
     const crossing = typeof code === "string" ? CROSSING_BY_CODE.get(code) : undefined;
@@ -150,7 +177,7 @@ function encodeChildErrorUnchecked(thrown: unknown): ErrorFrame {
     }
   }
   const described = describeThrown(thrown);
-  if (thrown instanceof RangeError && EXHAUSTION.test(described.message)) {
+  if (isExhaustion(thrown)) {
     return { t: "error", kind: "limit", message: oneLineText(described.message) };
   }
   return crashFrame(described);
