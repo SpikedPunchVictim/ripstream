@@ -14,7 +14,7 @@ import { TextParser } from "./text.ts";
 import { HtmlDocumentParser } from "./html.ts";
 import { XmlParser } from "./xml.ts";
 import { CsvParser, type CsvParserOptions } from "./csv.ts";
-import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, GzipParser, Iso9660Parser, Lz4Parser, PlistParser, SnappyParser, TarParser, UnixCompressParser, XzParser, ZipParser } from "@spikedpunch/ripstream-parser-archive";
+import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, Deflate64Parser, GzipParser, Iso9660Parser, Lz4Parser, LzmaParser, PlistParser, SnappyParser, TarParser, UnixCompressParser, XzParser, ZipParser, ZlibParser } from "@spikedpunch/ripstream-parser-archive";
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
 import { AsfParser, AudioParser, AviParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
 import { ColumnarParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
@@ -129,6 +129,9 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new XzParser(),
       new Lz4Parser(),
       new SnappyParser(),
+      new ZlibParser(),
+      new LzmaParser(),
+      new Deflate64Parser(),
       new UnixCompressParser(),
       new Iso9660Parser(),
       new CpioParser(),

@@ -57,3 +57,24 @@ test("rejects truncated Snappy frames", async () => {
   );
   await stream.close();
 });
+
+test("claims application/x-snappy, the type Tika's CompressorParser claims for framed Snappy", () => {
+  const types = [...new SnappyParser().getSupportedTypes()].map((type) => type.toString());
+  assert.ok(types.includes("application/x-snappy"), types.join(", "));
+});
+
+test("every prefix of a framed Snappy stream parses or is refused as malformed", async () => {
+  const valid = frame(new TextEncoder().encode("hello snappy"), false);
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.PARSER, plainText);
+  for (let length = 0; length <= valid.byteLength; length++) {
+    const stream = await RipstreamInputStream.from(valid.subarray(0, length));
+    try {
+      await new SnappyParser().parse(stream, new BodyContentHandler(), new Metadata(), context);
+    } catch (error) {
+      assert.ok(error instanceof MalformedDocumentError, `prefix of ${length} bytes: ${String(error)}`);
+    } finally {
+      await stream.close();
+    }
+  }
+});

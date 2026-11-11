@@ -1,7 +1,7 @@
 export { ZipParser } from "./zip.ts";
 export { GzipParser } from "./gzip.ts";
 export { TarParser } from "./tar.ts";
-export { Bzip2Parser, BrotliParser, Lz4Parser, SnappyParser, XzParser } from "./compressor.ts";
+export { Bzip2Parser, BrotliParser, Deflate64Parser, Lz4Parser, LzmaParser, SnappyParser, XzParser, ZlibParser, inflateLimits } from "./compressor.ts";
 export { PlistParser } from "./plist.ts";
 export { AppleSingleParser } from "./apple-single.ts";
 export { UnixCompressParser } from "./unix-compress.ts";

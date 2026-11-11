@@ -12,6 +12,8 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import bzip from "seek-bzip";
+import { decodeDeflate64 } from "./deflate64.ts";
+import { decodeLzma } from "./lzma.ts";
 import { checkDecompression, parseEntry, readAll, withXhtml } from "./util.ts";
 
 /** Output cap for a decompressor, derived from the parse context limits. */
@@ -133,6 +135,54 @@ export class Bzip2Parser extends CompressorParser {
   }
 }
 
+/**
+ * `application/zlib`: an RFC 1950 stream, which Tika opens with commons-compress's DeflateCompressorInputStream
+ * (zlib header on). The stream carries no name, so the entry is named after the container.
+ */
+export class ZlibParser extends CompressorParser {
+  readonly name = "ZlibParser";
+  readonly types = ["application/zlib"] as const;
+  protected readonly extension = /\.zlib$/i;
+
+  protected decompress(
+    data: Uint8Array,
+    _budget: OutputBudget,
+    ctx: ParseContext,
+  ): Uint8Array {
+    return inflateBounded(data, "deflate", inflateLimits(ctx));
+  }
+}
+
+/**
+ * `application/x-lzma`: the LZMA-alone format. Tika's setName strips .bz/.gz/.bz2/.xz/.zlib/.pack/.br and then falls
+ * back to commons-compress's GzipUtils, which does not know .lzma, so the entry keeps the container's name.
+ */
+export class LzmaParser extends CompressorParser {
+  readonly name = "LzmaParser";
+  readonly types = ["application/x-lzma"] as const;
+  protected readonly extension = /(?!)/;
+
+  protected decompress(data: Uint8Array, budget: OutputBudget): Uint8Array {
+    return decodeLzma(data, budget);
+  }
+}
+
+/**
+ * `application/deflate64`: a raw Deflate64 stream. Tika's CompressorParser claims this type (CompressorConstants.DEFLATE64)
+ * but has no MIMES_TO_NAME entry for it, so it never opens one; its own CompressorParserTest lists the type as not
+ * covered. This parser goes beyond that and decodes the public format. Nothing detects a raw stream (it has no
+ * signature), so it is reached by an explicit content type.
+ */
+export class Deflate64Parser extends CompressorParser {
+  readonly name = "Deflate64Parser";
+  readonly types = ["application/deflate64"] as const;
+  protected readonly extension = /(?!)/;
+
+  protected decompress(data: Uint8Array, budget: OutputBudget): Uint8Array {
+    return decodeDeflate64(data, budget);
+  }
+}
+
 export class BrotliParser extends CompressorParser {
   readonly name = "BrotliParser";
   readonly types = ["application/x-brotli"] as const;
@@ -223,9 +273,14 @@ export class Lz4Parser extends CompressorParser {
   }
 }
 
+/**
+ * Framed Snappy. Tika's CompressorParser claims `application/x-snappy` (CompressorConstants.SNAPPY_FRAMED), which is
+ * also what the compressor-signature detector reports; `application/x-snappy-framed` is the registry's glob-only
+ * spelling (*.sz) that Tika leaves unclaimed and that this parser has always taken.
+ */
 export class SnappyParser extends CompressorParser {
   readonly name = "SnappyParser";
-  readonly types = ["application/x-snappy-framed"] as const;
+  readonly types = ["application/x-snappy", "application/x-snappy-framed"] as const;
   protected readonly extension = /\.(sz|snappy)$/i;
 
   protected async decompress(
