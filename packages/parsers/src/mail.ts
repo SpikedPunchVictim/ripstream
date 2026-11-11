@@ -28,13 +28,18 @@ interface Entity {
   readonly body: Uint8Array;
 }
 
-/** RFC 822 / MIME email parser with multipart and message/rfc822 recursion. */
+/**
+ * RFC 822 / MIME email parser with multipart and message/rfc822 recursion.
+ *
+ * Like Tika's RFC822Parser it also reads Apple Mail's emlx (`message/x-emlx`): a first line carrying the message's byte
+ * count, then the message, then an XML plist. See {@link stripEmlxFraming}.
+ */
 export class MailParser implements Parser {
   readonly name = "RFC822Parser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
-      ["message/rfc822", "application/x-eml"].map(
+      ["message/rfc822", "message/x-emlx", "application/x-eml"].map(
         (type) => MediaType.parse(type)!,
       ),
     );
@@ -59,7 +64,7 @@ export class MailParser implements Parser {
       offset += chunk.byteLength;
     }
 
-    const root = splitEntity(data);
+    const root = splitEntity(stripEmlxFraming(data));
     if (root.headers.length === 0) {
       throw new MalformedDocumentError("Email message has no headers");
     }
@@ -71,6 +76,41 @@ export class MailParser implements Parser {
     await renderEntity(root, xhtml, metadata, ctx, 0);
     await xhtml.endDocument();
   }
+}
+
+// A digit run, Apple Mail's space padding to 10 columns, then the newline: at most 11 bytes (RFC822Parser.EMLX_COUNT_LINE_MAX).
+const EMLX_COUNT_LINE_MAX = 11;
+const PLIST_START = [0x3c, 0x3f, 0x78, 0x6d, 0x6c]; // "<?xml"
+
+/**
+ * Port of RFC822Parser.stripEmlxFraming: drops the byte-count line when the data starts with one, and bounds the message
+ * to that count when the plist really starts there. A count that does not land on `<?xml` (an edited file) is not
+ * trusted: the message is taken whole, so it is never cut. Only the first 11 bytes are read as a count line.
+ */
+function stripEmlxFraming(data: Uint8Array): Uint8Array {
+  let count = 0;
+  let digits = 0;
+  let padding = false;
+  let lineLength = -1;
+  const head = Math.min(data.length, EMLX_COUNT_LINE_MAX);
+  for (let index = 0; index < head; index++) {
+    const byte = data[index]!;
+    if (byte >= 0x30 && byte <= 0x39 && !padding) {
+      count = count * 10 + (byte - 0x30);
+      digits++;
+    } else if (byte === 0x20 && digits > 0) {
+      padding = true;
+    } else if (byte === 0x0a && digits > 0) {
+      lineLength = index + 1;
+      break;
+    } else {
+      break;
+    }
+  }
+  if (lineLength < 0) return data;
+  const plistAt = lineLength + count;
+  const verified = plistAt + PLIST_START.length <= data.length && PLIST_START.every((byte, offset) => data[plistAt + offset] === byte);
+  return verified ? data.subarray(lineLength, plistAt) : data.subarray(lineLength);
 }
 
 async function renderEntity(

@@ -40,6 +40,9 @@ import { IccParser } from "./icc.ts";
 import { AnpaParser } from "./anpa.ts";
 import { ScienceMetadataParser } from "./science.ts";
 import { RtfParser } from "./rtf.ts";
+import { DifParser } from "./dif.ts";
+import { MifParser } from "./mif.ts";
+import { HttpParser } from "./http.ts";
 import { applyParserConfig } from "./parser-config.ts";
 
 export { applyParserConfig } from "./parser-config.ts";
@@ -73,6 +76,9 @@ export { IccParser } from "./icc.ts";
 export { AnpaParser } from "./anpa.ts";
 export { ScienceMetadataParser } from "./science.ts";
 export { RtfParser } from "./rtf.ts";
+export { DifParser, DEFAULT_MAX_DIF_DEPTH, type DifParserOptions } from "./dif.ts";
+export { MifParser, DEFAULT_MAX_MIF_LINE_CHARS, DEFAULT_MAX_MIF_OPEN_CHARS, type MifParserOptions } from "./mif.ts";
+export { HttpParser, DEFAULT_MAX_HTTP_HEADER_BYTES, type HttpParserOptions } from "./http.ts";
 
 export interface DefaultParserOptions {
   readonly parsers?: readonly Parser[];
@@ -177,6 +183,9 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new AnpaParser(),
       new ScienceMetadataParser(),
       new RtfParser(),
+      new DifParser(),
+      new MifParser(),
+      new HttpParser(),
     ];
   return new CompositeParser({ registry, parsers: section === null ? parsers : applyParserConfig(parsers, section, registry) });
 }

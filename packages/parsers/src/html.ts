@@ -53,9 +53,13 @@ export class HtmlDocumentParser implements Parser {
   }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
+    // Tika's JSoupParser. XUL leans on entities from chrome:// DTDs, which strict XML parsing rejects, so it is read as HTML.
     return new Set([
       MediaType.TEXT_HTML,
       MediaType.parse("application/xhtml+xml")!,
+      MediaType.parse("application/vnd.wap.xhtml+xml")!,
+      MediaType.parse("application/x-asp")!,
+      MediaType.parse("application/vnd.mozilla.xul+xml")!,
     ]);
   }
 
@@ -70,12 +74,17 @@ export class HtmlDocumentParser implements Parser {
     const prefix = await stream.peek(64 * 1024);
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
-    // Tika's JSoupParser builds the type from a constant by the incoming type's prefix, and leaves any other type alone.
+    // Tika's JSoupParser builds the type from a constant by the incoming type's prefix, and leaves any other type alone
+    // (application/vnd.mozilla.xul+xml among them).
     const previous = metadata.get("Content-Type");
     if (previous === null || previous.startsWith("text/html")) {
       metadata.set("Content-Type", withCharset(null, "text/html", charset));
     } else if (previous.startsWith("application/xhtml+xml")) {
       metadata.set("Content-Type", withCharset(null, "application/xhtml+xml", charset));
+    } else if (previous.startsWith("application/vnd.wap.xhtml+xml")) {
+      metadata.set("Content-Type", withCharset(null, "application/vnd.wap.xhtml+xml", charset));
+    } else if (previous.startsWith("application/x-asp")) {
+      metadata.set("Content-Type", withCharset(null, "application/x-asp", charset));
     }
 
     const events: Event[] = [];
