@@ -10,6 +10,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { XmlNamespaceScope } from "@spikedpunch/ripstream-mime";
 import { SaxesParser } from "saxes";
 import { detectXmlEncoding } from "./xml-encoding.ts";
 
@@ -66,20 +67,23 @@ export class XmlParser implements Parser {
     const stack: Array<{ localName: string; namespaceURI: string; text: string }> = [];
     let failed: Error | null = null;
 
-    const parser = new SaxesParser({ xmlns: true });
+    // Namespaces are resolved by XmlNamespaceScope: saxes with xmlns:true is quadratic in nesting depth.
+    const scope = new XmlNamespaceScope();
+    const parser = new SaxesParser({ xmlns: false });
     const addText = (text: string): void => {
       const current = stack.at(-1);
       if (current !== undefined) current.text += text;
       pending.push(text);
     };
     parser.on("opentag", (tag) => {
-      const nsTag = tag as unknown as { local: string; uri: string };
-      stack.push({ localName: nsTag.local, namespaceURI: nsTag.uri, text: "" });
+      const element = scope.open(tag.name, tag.attributes);
+      stack.push({ localName: element.local, namespaceURI: element.uri, text: "" });
       pending.push(" ");
     });
     parser.on("text", addText);
     parser.on("cdata", addText);
     parser.on("closetag", () => {
+      scope.close();
       const current = stack.pop();
       if (
         current !== undefined &&

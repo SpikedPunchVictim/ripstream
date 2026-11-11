@@ -9,6 +9,7 @@ export {
 export { parseCustomMimeTypes, readCustomMimeTypesFile } from "./custom-mimetypes.ts";
 export { MagicDetector, type MagicCandidate } from "./magic.ts";
 export { extractXmlRoot, type XmlRoot } from "./xml-root.ts";
+export { NamespaceScope as XmlNamespaceScope } from "./containers/xml-parse.ts";
 export {
   decodeText,
   detectEncoding,

@@ -70,8 +70,10 @@ class XmlRefused extends Error {}
  * Namespace bindings in scope, as one stack of URIs per prefix plus the prefixes each open element declared, so that a
  * lookup is constant time however deeply the elements nest. Raises on what Namespaces in XML 1.0 forbids (an unbound
  * prefix, a rebound `xml` or `xmlns`, a prefix bound to nothing, two attributes with the same expanded name).
+ *
+ * Call `open` for each start tag and `close` for each end tag, over a SaxesParser made with `xmlns: false`.
  */
-class NamespaceScope {
+export class NamespaceScope {
   private readonly bindings = new Map<string, string[]>([
     ["xml", [XML_NAMESPACE]],
     ["xmlns", [XMLNS_NAMESPACE]],
