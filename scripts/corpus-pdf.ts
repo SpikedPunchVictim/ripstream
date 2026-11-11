@@ -162,7 +162,7 @@ async function inspect(file: string, timeout: number): Promise<Result> {
       milliseconds: elapsed(start),
       textLength,
       metadataCount: countMetadata(metadata),
-      pageCount: metadata.get("pdf:PageCount") ?? undefined,
+      pageCount: metadata.get("xmpTPg:NPages") ?? undefined,
       title: metadata.get("dc:title") ?? undefined,
       sample: sample.length === 0 ? undefined : sample,
     };
@@ -177,7 +177,7 @@ async function inspect(file: string, timeout: number): Promise<Result> {
       milliseconds: elapsed(start),
       textLength,
       metadataCount: countMetadata(metadata),
-      pageCount: metadata.get("pdf:PageCount") ?? undefined,
+      pageCount: metadata.get("xmpTPg:NPages") ?? undefined,
     };
   } finally {
     clearTimeout(timer);

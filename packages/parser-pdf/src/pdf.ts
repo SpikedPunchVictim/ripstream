@@ -124,7 +124,7 @@ export class PdfParser implements Parser {
 
       applyInfo(metadata, ready.info);
       applyXmp(metadata, ready.xmp);
-      metadata.set("pdf:PageCount", ready.numPages);
+      metadata.set("xmpTPg:NPages", ready.numPages);
 
       const xhtml = new XHTMLContentHandler(handler, metadata);
       await xhtml.startDocument();

@@ -32,7 +32,9 @@ test("extracts PDF text and metadata", async () => {
   assert.match(handler.toString(), /Hello PDF/);
   assert.equal(metadata.get("dc:title"), "Sample");
   assert.equal(metadata.get("dc:creator"), "Ada");
-  assert.equal(metadata.get("pdf:PageCount"), "1");
+  // Tika's PDFParser writes PagedText.N_PAGES ("xmpTPg:NPages") and no pdf:PageCount. Read from Tika source, not run against a Tika.
+  assert.equal(metadata.get("xmpTPg:NPages"), "1");
+  assert.equal(metadata.get("pdf:PageCount"), null);
   assert.match(metadata.get("pdf:charsPerPage") ?? "", /^\d+$/);
   assert.match(metadata.get("dcterms:created") ?? "", /^2024-01-01/);
 });
