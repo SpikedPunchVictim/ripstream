@@ -37,8 +37,8 @@ export class FeedParser implements Parser {
     const chunks: Uint8Array[] = [];
     for await (const chunk of stream) chunks.push(chunk);
     const data = concat(chunks);
-    const { decoder, charset } = createDecoder(detectXmlEncoding(data));
-    metadata.set("Content-Encoding", charset);
+    // Tika's news parser writes no Content-Encoding.
+    const { decoder } = createDecoder(detectXmlEncoding(data));
     const xml = decoder.decode(data);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);

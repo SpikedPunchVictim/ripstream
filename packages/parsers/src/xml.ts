@@ -93,8 +93,8 @@ export class XmlParser implements Parser {
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
 
-    const { decoder, charset } = createDecoder(detectXmlEncoding(prefix));
-    metadata.set("Content-Encoding", charset);
+    // Tika's XMLParser writes no Content-Encoding and no charset in Content-Type.
+    const { decoder } = createDecoder(detectXmlEncoding(prefix));
     try {
       for await (const chunk of stream) {
         parser.write(decoder.decode(chunk, { stream: true }));

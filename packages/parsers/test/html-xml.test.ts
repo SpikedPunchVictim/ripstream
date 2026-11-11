@@ -110,7 +110,16 @@ test("honours the XML declaration encoding", async () => {
   ]);
   const result = await ripstream.parse(latin1, { filename: "doc.xml" });
   assert.match(result.text, /café/);
-  assert.equal(result.metadata.get("Content-Encoding"), "ISO-8859-1");
+  // Tika's XMLParser never writes Content-Encoding (nor a charset in Content-Type); only its text, HTML and Markdown parsers do.
+  assert.equal(result.metadata.get("Content-Encoding"), null);
+});
+
+test("XML and SVG carry no Content-Encoding, as Tika's XML parser writes none", async () => {
+  const xml = await ripstream.parse(encoder.encode("<doc><p>Hello</p></doc>"), { filename: "doc.xml" });
+  assert.equal(xml.metadata.get("Content-Encoding"), null);
+  assert.equal(xml.metadata.get("Content-Type"), "application/xml");
+  const svg = await ripstream.parse(encoder.encode('<svg xmlns="http://www.w3.org/2000/svg"><text>Hi</text></svg>'), { filename: "i.svg" });
+  assert.equal(svg.metadata.get("Content-Encoding"), null);
 });
 
 test("parses SVG as XML text", async () => {

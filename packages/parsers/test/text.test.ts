@@ -119,7 +119,8 @@ test("splits lines across chunk boundaries including split CRLF", async () => {
 test("falls back to UTF-8 for an unsupported charset label", async () => {
   const doc = '<?xml version="1.0" encoding="UTF-32"?><rss version="2.0"><channel><title>t</title></channel></rss>';
   const result = await ripstream.parse(encoder.encode(doc));
-  assert.equal(result.metadata.get("Content-Encoding"), "utf-8");
+  assert.equal(result.metadata.get("dc:title"), "t", "the document is read, not refused");
+  assert.equal(result.metadata.get("Content-Encoding"), null, "Tika's news parser writes no Content-Encoding");
 });
 
 test("createDecoder falls back to utf-8 for labels TextDecoder rejects", async () => {
