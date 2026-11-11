@@ -4,6 +4,30 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Text and CSV: the sniffer decides (`tikajs-68os.36`)
+
+Changed: `CsvParser` now serves `text/plain`, `text/csv` and `text/tsv`, as Tika 4.2.0's `TextAndCSVParser` does, and sniffs the first 20,000
+characters (Tika's `CSVSniffer`: comma, tab, pipe and semicolon, each scored by how regular its row widths are, with a bonus for quoted
+cells; a delimiter needs a confidence of 0.50). A table now carries `Content-Type: text/csv; charset=X; delimiter=comma` (`semicolon`, `pipe`;
+`text/tsv` and `delimiter=tab` for tabs), `csv:delimiter`, `csv:num-columns` (the first row's cells), `csv:num-rows` and `Content-Encoding`.
+A document the sniffer does not take for a table is `text/plain; charset=X`, even when it came in as `text/csv`, and has no `csv:*` keys.
+
+What a client will see, at the default confidence (computed from the formula, not run against a Tika):
+- A small CSV is text. Ten regular rows score 0.499 and eleven 0.513, so a table with no quoted cells needs eleven rows; three score 0.281.
+  Quoted cells lift a short table over the line (three rows of two quoted cells score 0.582). A table whose rows are so wide that
+  fewer than eleven fit in 20,000 characters is text.
+- A `.tsv` is text: Tika's text parser does not sniff `text/tab-separated-values`, which keeps that type and gains the charset.
+- A `text/plain` document with regular columns, whatever its name, is a table.
+- Any other text subtype (`text/x-python`, `application/json`) is read as text and keeps its type, as before.
+
+Added, ripstream's own: `csv: { markLimit, minConfidence, delimiter }`. `markLimit` and `minConfidence` are Tika's `TextAndCSVConfig`
+(Tika's own tests lower the confidence to 0.2); `delimiter` is one character that reads every document of those types as a table and sniffs
+nothing. A delimiter Tika has no name for is written in `Content-Type` as its character code, with no `csv:delimiter`.
+
+Differences, read from Tika source and not run against a Tika: Tika's per-request `tk:content-type-override` path, custom delimiters and
+its colon rule are not ported. `csv:num-rows` counts the rows ripstream's scanner emits, which skips blank lines; Tika's commons-csv
+may count them, and that was not measured. A hostile table is still bounded by `maxRowChars` and `maxCellsPerRow`.
+
 ### `/language` keeps only the start of the body (`tikajs-68os.9.5`)
 
 Changed: `/language` reads the first 100,000 characters of a body and ignores the rest, as Tika does. It now keeps only the first
@@ -51,9 +75,8 @@ Differences, read from Tika 4.2.0 source and not run against a Tika; the first f
   0x7f falls between the two is `windows-1252` in Tika and `UTF-8` here. A file that is ASCII for the whole 64 KiB and then holds
   UTF-8 is decoded as `windows-1252`, as Tika would decode it: the later text comes out as mojibake.
 - 7-bit ISO-2022-JP, -KR and -CN text is detected structurally by Tika, not here.
-- CSV: Tika's parser for text/plain and text/csv sniffs the delimiter, and writes `; delimiter=comma` (`tab` for TSV),
-  `csv:delimiter`, `csv:num-columns` and `csv:num-rows`; ripstream writes the charset only. The same sniffer decides whether a
-  `.txt` is a table, and Tika reads a `.tsv` as text, so this is more than a parameter (`tikajs-68os.36`).
+- CSV: Tika's parser for text/plain and text/csv sniffs the delimiter and decides whether a `.txt` is a table, and reads a
+  `.tsv` as text. Fixed by `tikajs-68os.36`, above.
 
 ### `tk:embedded-resource-type` (`tikajs-68os.35`)
 

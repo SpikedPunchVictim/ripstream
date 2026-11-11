@@ -42,6 +42,14 @@ plain text by default where Tika 4's default handler is Markdown (see *Content s
 are not written, and `tk:embedded-resource-type` only for what the mail, OOXML and PDF parsers extract. A failure is noted as `Name: message`, where
 Tika writes a stack trace. Read from Tika source and its saved responses, not checked against a live Tika.
 
+**Text and CSV.** As in Tika, a `text/plain`, `text/csv` or `text/tsv` document is sniffed (`tikajs-68os.36`): regular delimited columns
+in its first 20,000 characters make it a table, with `Content-Type: text/csv; charset=X; delimiter=comma` (`text/tsv` and `tab` for
+tabs), `csv:delimiter`, `csv:num-columns` and `csv:num-rows`; anything else is `text/plain; charset=X`. At Tika's default confidence
+(0.50) a table with no quoted cells needs eleven rows, so a short CSV is text, a `.tsv` (`text/tab-separated-values`) is text, and a
+`.txt` that is a regular table is a table. `csv: { minConfidence, markLimit }` are Tika's `TextAndCSVConfig` (its own tests use
+0.2); `csv: { delimiter }` is ripstream's: it reads every such document as a table. Not ported: the `tk:content-type-override` path,
+custom delimiters and the colon rule. Read from Tika source, not run against a Tika.
+
 ## Digests
 
 A `parse-context` digester factory makes the digests Tika makes, under Tika's keys (`tikajs-68os.9.1`). Before this a

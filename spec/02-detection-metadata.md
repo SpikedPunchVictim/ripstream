@@ -270,6 +270,7 @@ Three distinct values are tracked and available in events:
 - `Content-Type` — final type after overrides (what parsers used).
 - `X-TIKA:detected_content_type` — raw detector result.
 - `Content-Encoding` — detected charset for text.
+- For `text/plain`, `text/csv` and `text/tsv` the parser sniffs the first 20,000 characters for a delimiter (`CSVSniffer`, minimum confidence 0.50). A table sets `Content-Type` to `text/csv; charset=X; delimiter=<name>` (`text/tsv` for tab), and `csv:delimiter`, `csv:num-columns`, `csv:num-rows`; otherwise `Content-Type` is `text/plain; charset=X` (`tikajs-68os.36`).
 
 Server parity headers (`Content-Disposition` filename, request `Content-Type`) are copied into metadata only when `trustRequestHeaders` is enabled. They never influence detection unless configured.
 
