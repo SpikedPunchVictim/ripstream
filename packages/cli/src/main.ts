@@ -27,6 +27,7 @@ import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
 import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
 import { createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
+import { formatDoctor, runDoctor, type DoctorProbes } from "./doctor.ts";
 import { serverMimeTypes } from "./mime-types.ts";
 import {
   IsolationSettingsError,
@@ -121,6 +122,8 @@ function exitCodeFor(error: unknown): number {
 export interface CliDeps {
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly createIsolation?: typeof createStandardIsolation;
+  /** What `doctor` inspects; a test replaces it so the answer does not depend on the machine. */
+  readonly doctorProbes?: DoctorProbes;
 }
 
 export async function main(
@@ -143,6 +146,11 @@ export async function main(
     io.stdout("ripstream 0.0.0\n");
     return 0;
   }
+  if (options.command === "doctor") {
+    const report = await runDoctor(deps.doctorProbes);
+    io.stdout(options.json || options.output === "json" ? `${JSON.stringify(report)}\n` : formatDoctor(report));
+    return report.ok ? 0 : EXIT_ENVIRONMENT;
+  }
   let settings: CliSettings;
   try {
     settings = await resolveSettings(options, deps.env ?? process.env);
@@ -158,6 +166,15 @@ export async function main(
     return serve(options, settings, deps, io);
   }
   if (options.command === "pipes") return pipes(options, settings, deps, io);
+  if (options.command === "formats") {
+    const types = serverMimeTypes(settings.config?.customMimeTypes ?? null);
+    io.stdout(
+      options.json || options.output === "json"
+        ? `${JSON.stringify(types)}\n`
+        : types.map((t) => `${[t.type, ...(t.extensions ?? [])].join("\t")}\n`).join(""),
+    );
+    return 0;
+  }
   if (settings.isolation.config.mode !== "off" && options.password !== null && ["parse", "metadata"].includes(options.command)) {
     io.stderr("ripstream: --password cannot be used with isolation: the password cannot cross the isolation boundary\n");
     return EXIT_USAGE;
@@ -544,10 +561,10 @@ async function resolveSettings(
       : { ...(depth === null ? {} : { maxNodeDepth: depth }), ...(count === null ? {} : { maxEmbeddedResources: count }) };
   // detect and language run in this process whatever is set, so what is set cannot make them fail. Detection reads the
   // `detectors` section; neither runs a parser, so a `parsers` section has nothing to change for them.
-  if (options.command === "detect" || options.command === "language") {
+  if (options.command === "detect" || options.command === "language" || options.command === "formats") {
     return {
       isolation: { config: { mode: "off" }, modeSource: "default" },
-      config: options.command === "detect" ? config : null,
+      config: options.command === "language" ? null : config,
       maxOutputChars: null,
       limits: null,
       retryAttempts: null,
@@ -576,7 +593,7 @@ async function resolveSettings(
   }
 }
 
-const COMMANDS: readonly string[] = ["parse", "detect", "metadata", "language", "serve", "pipes", "help", "version"];
+const COMMANDS: readonly string[] = ["parse", "detect", "metadata", "language", "formats", "doctor", "serve", "pipes", "help", "version"];
 
 function parseArgs(argv: readonly string[]): Options {
   const command = argv[0] !== undefined && COMMANDS.includes(argv[0]) ? argv[0] : "parse";
@@ -710,6 +727,8 @@ function usage(): string {
     "  detect      Detect media type",
     "  metadata    Print metadata JSON",
     "  language    Detect text language",
+    "  formats     List the media types ripstream knows and their extensions (-c adds custom-mimetypes)",
+    "  doctor      Check Node version and optional dependencies (pdfjs-dist, cld3-asm, tesseract); exit 4 if a requirement fails",
     "  serve       Start the HTTP server (-p/--port, -h/--host; Tika's spellings)",
     "  pipes       Run the pipes sections of --config: the iterator's inputs, fetched, parsed and emitted",
     "",
