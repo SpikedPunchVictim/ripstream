@@ -161,7 +161,8 @@ How it differs from Tika:
 - **Keys with no counterpart are refused by name**, with the reason: `maxXmlDepth` (ripstream has no limit on XML
   element nesting among its parse limits), `maxPackageEntryDepth` (deprecated in Tika), `zipBombThreshold` and
   `zipBombRatio` (Tika compares output characters with input bytes once a character threshold is passed; ripstream's
-  `maxDecompressionRatio` compares decompressed with compressed bytes per archive entry, which is another check) and
+  `maxDecompressionRatio` compares decompressed with compressed bytes per archive entry, once the entry holds more than 1,000,000
+  bytes as Tika's threshold does, which is another check) and
   `progressTimeoutMillis` (no stall detector). A block other than the three, an unknown setting, and a value that is
   not an integer in range are refused too; Tika's loader would coerce a string or a fraction.
 - **The defaults are ripstream's, not Tika's.** A limit the section does not set keeps ripstream's default (for

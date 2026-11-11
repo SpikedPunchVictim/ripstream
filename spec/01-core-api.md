@@ -256,7 +256,7 @@ export interface ParseLimits {
   maxTaskMillis: number;              // per parser task; cooperative + worker kill
   maxMetadataValueChars: number;      // default 1_000_000
   maxZipEntries: number;              // default 10_000
-  maxXmlEntityExpansions: number;     // default 0 (DTDs disabled)
+  maxXmlEntityExpansions: number;     // default 0 (a DOCTYPE is accepted, its DTD is never read)
 }
 ```
 

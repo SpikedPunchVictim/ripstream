@@ -4,6 +4,34 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### XML documents write a space per element and accept a DOCTYPE (`tikajs-68os.10.4`)
+
+Changed: the XML parser puts one space at every start tag, as Tika's `XMLParser` does (its `TextContentHandler` adds space between elements),
+so adjacent elements no longer run together; CDATA text is now kept and counts for the Dublin Core elements. A DOCTYPE is accepted, as in
+Tika: its DTD is never read, nothing is fetched, and only the five predefined entities expand, so the billion-laughs and file-leak
+documents are still refused as malformed. Limit: a reference to an entity the DTD declares (an Illustrator SVG's `&ns_extend;`) is still
+malformed XML, where Tika expands it within JAXP limits. Read from Tika source, not run against a Tika.
+
+### ZIP ratio limit and xlsx empty cells (`tikajs-68os.10.9`)
+
+Changed: `maxDecompressionRatio` applies to a ZIP entry only above 1,000,000 uncompressed bytes (Tika's `zipBombThreshold`), so a blank bitmap no
+longer trips it. The xlsx renderer writes a cell only when it has a value, as Tika's `TikaSheetXMLHandler` does, so styled empty cells no longer fill
+the output cap (the bead's other claim, that Tika's cap ignores whitespace, is wrong: it counts it). Limit: a real file over 1,000,000 bytes
+that compresses past the ratio is still refused. The same per-entry check is in the OPC reader, the bounded unzip and `util.ts`, unchanged.
+
+### Metadata keys match Tika's for PDF, OOXML and MP4 (`tikajs-68os.10.5`)
+
+Changed: PDF writes `xmpTPg:NPages` (was `pdf:PageCount`). OOXML `docProps/app.xml` writes Tika's `xmpTPg:NPages`, `meta:*-count`,
+`extended-properties:*`, `doc-security-string` and `dc:publisher` keys; `extended-properties:Pages`, `Words`, `Characters` and `Slides` are gone.
+MP4/MOV writes `xmpDM:duration`, `dcterms:created`, `dcterms:modified` and `tiff:ImageWidth`/`ImageLength` in place of `audio:spi-duration`.
+There is no alias for a removed key: the project has no release. A client that read `pdf:PageCount` now reads `xmpTPg:NPages`.
+
+Not done: audio sample rate, channels, frame rate and codec keys, geo keys and the brand-derived `Content-Type` for MP4/MOV; AVI, ASF and MKV
+still write `audio:spi-duration` and were not checked against Tika; the 90% key-equality criterion needs a corpus comparison, and no corpus is
+here. The MP4 creation time of 0 (1904-01-01) and the video size offsets are from the ISO layout, not from Tika's metadata-extractor
+library, which is not in the source cache. ripstream reads `docProps/app.xml` by its fixed path where Tika follows the relationship, and a
+malformed `app.xml` still fails where Tika ignores it. Read from Tika source, not run against a Tika.
+
 ### Unix dump and ZIP Unicode Path names; parity-gap type strings pinned (`tikajs-68os.20`, `.26`, `.15`, `.17`, `.18`, `.19`)
 
 Added: a Unix dump header (a little-endian 60012 at offset 24 of at least 32 bytes) is detected as `application/x-tika-unix-dump`, checked

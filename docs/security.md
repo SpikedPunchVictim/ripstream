@@ -32,13 +32,13 @@ throw `LimitExceededError` (or `ParseTimeoutError` for time).
 | `maxEmbeddedResources` | 10,000 | Count of embedded documents/attachments per parse |
 | `maxEmbeddedResourceBytes` | 512 MiB | Size of any single embedded resource |
 | `maxTotalEmbeddedBytes` | 1 GiB | Sum of all embedded resource bytes |
-| `maxDecompressionRatio` | 100 | Compressed-to-expanded ratio for ZIP/OPC and other inflated streams |
+| `maxDecompressionRatio` | 100 | Compressed-to-expanded ratio for ZIP/OPC and other inflated streams. A ZIP entry is checked only once it holds more than 1,000,000 uncompressed bytes (Tika's `zipBombThreshold`); its byte limits apply from the first byte |
 | `maxZipEntries` | 10,000 | Entries in a ZIP/OPC container (checked before extraction) |
 | `maxNodeDepth` | 100 | Embedded-document recursion depth |
 | `maxParseMillis` | 60,000 | Wall-clock parse time (aborts via `ctx.signal`) |
 | `maxTaskMillis` | 60,000 | Wall-clock budget of one isolated request (default of `isolation.maxTaskMillis`) |
 | `maxMetadataValueChars` | 1,000,000 | Metadata values are truncated at this length |
-| `maxXmlEntityExpansions` | 0 | Moot: DTDs are rejected outright and saxes expands only the predefined entities |
+| `maxXmlEntityExpansions` | 0 | Moot: a DOCTYPE is accepted but its DTD is never read, and saxes expands only the predefined entities, so a reference to a DTD-declared entity is malformed XML |
 
 Parser-specific caps outside `ParseLimits`:
 
