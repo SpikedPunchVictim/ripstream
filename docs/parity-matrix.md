@@ -12,11 +12,11 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | opt-in | implemented | 5 |
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
-| standard | fallback | 7 |
-| standard | implemented | 41 |
+| standard | fallback | 1 |
+| standard | implemented | 57 |
 | standard | non-goal | 4 |
-| standard | partial | 25 |
-| standard | tracked | 12 |
+| standard | partial | 18 |
+| standard | tracked | 9 |
 
 ## Open items
 
@@ -53,38 +53,12 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | SourceCodeParser | standard | text/x-groovy | fallback via CsvParser | accepted-fallback: Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10). |
 | TSDParser | standard | application/timestamped-data | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | DGN8Parser | standard | image/vnd.dgn; version=8 | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| DIFParser | standard | application/dif+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | EpubParser | standard | application/x-ibooks+zip | fallback via EpubParser | accepted-fallback: application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3). |
-| ExecutableParser | standard | application/x-coredump | fallback via ExecutableParser | accepted-fallback: ELF core/object/shared-library are subtypes of application/x-executable; same ExecutableParser through the supertype (tikajs-68os.3). |
-| ExecutableParser | standard | application/x-mach-o-core | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-dsym | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-dylib-stub | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-dylinker | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-fvmlib | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-kext-bundle | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-object | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-mach-o-preload | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| ExecutableParser | standard | application/x-object | fallback via ExecutableParser | accepted-fallback: ELF core/object/shared-library are subtypes of application/x-executable; same ExecutableParser through the supertype (tikajs-68os.3). |
-| ExecutableParser | standard | application/x-sharedlib | fallback via ExecutableParser | accepted-fallback: ELF core/object/shared-library are subtypes of application/x-executable; same ExecutableParser through the supertype (tikajs-68os.3). |
-| UniversalExecutableParser | standard | application/x-mach-o-universal | none | tracked tikajs-68os.17: Detected and tested; the parser claims and UniversalExecutableParser remain. |
-| GeoGebraParser | standard | application/vnd.geogebra.file | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |
-| GeoGebraParser | standard | application/vnd.geogebra.slides | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |
-| GeoGebraParser | standard | application/vnd.geogebra.tool | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |
-| JSoupParser | standard | application/vnd.mozilla.xul+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| JSoupParser | standard | application/vnd.wap.xhtml+xml | fallback via XMLParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| JSoupParser | standard | application/x-asp | none | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| HttpParser | standard | application/x-httpresponse | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | BPGParser | standard | image/bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | BPGParser | standard | image/x-bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | HeifParser | standard | image/heic-sequence | fallback via MP4Parser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | HeifParser | standard | image/heif-sequence | fallback via MP4Parser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| ICNSParser | standard | image/icns | none | tracked tikajs-68os.16: Image formats with no registration. |
-| ICOParser | standard | image/x-win-bitmap | none | tracked tikajs-68os.16: Image formats with no registration. |
-| ImageParser | standard | image/vnd.wap.wbmp | none | tracked tikajs-68os.16: Image formats with no registration. |
-| ImageParser | standard | image/x-jbig2 | none | tracked tikajs-68os.16: Image formats with no registration. |
-| ImageParser | standard | image/x-portable-pixmap | none | tracked tikajs-68os.16: Image formats with no registration. |
-| ImageParser | standard | image/x-xcf | none | tracked tikajs-68os.16: Image formats with no registration. |
-| JXLParser | standard | image/jxl | none | tracked tikajs-68os.16: Image formats with no registration. |
+| JXLParser | standard | image/jxl | none | tracked tikajs-68os.44: JPEG XL: the XMP packet scanner and extractor are not ported. |
 | RawTiffParser | standard | image/x-raw-adobe | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-epson | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-kodak | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
@@ -95,7 +69,6 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | RawTiffParser | standard | image/x-raw-pentax | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-samsung | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-sony | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
-| IDMLParser | standard | application/vnd.adobe.indesign-idml-package | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |
 | IWork13PackageParser | standard | application/vnd.apple.keynote.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
 | IWork13PackageParser | standard | application/vnd.apple.numbers.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
 | IWork13PackageParser | standard | application/vnd.apple.pages.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
@@ -103,7 +76,6 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | IWork18PackageParser | standard | application/vnd.apple.keynote.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
 | IWork18PackageParser | standard | application/vnd.apple.numbers.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
 | IWork18PackageParser | standard | application/vnd.apple.pages.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| RFC822Parser | standard | message/x-emlx | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | ActiveMimeParser | standard | application/x-activemime | none | non-goal: ActiveMime is a macro-malware container; the useful output is the embedded VBA, which the OLE route already exposes. |
 | ChmParser | standard | application/chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | ChmParser | standard | application/x-chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
@@ -144,28 +116,8 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | OOXMLParser | standard | model/vnd.dwfx+xps | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | PSTMailItemParser | standard | application/x-tika-pst-mail-item | none | non-goal: application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly. |
 | TNEFParser | standard | application/x-tnef | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| MIFParser | standard | application/vnd.mif | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| MIFParser | standard | application/x-maker | none | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
-| MIFParser | standard | application/x-mif | fallback via CsvParser | tracked tikajs-68os.14: Text/XML-based formats parsed by a generic parser. |
 | MP4Parser | standard | application/mp4 | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | MP4Parser | standard | video/x-m4v | fallback via MP4Parser | accepted-fallback: Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3). |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.chart | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.chart-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.formula | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.formula-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.image | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.image-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.text-master | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.oasis.opendocument.text-web | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/vnd.sun.xml.writer | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.chart | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.chart-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.formula | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.formula-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.image | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.image-template | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.text-master | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
-| OpenDocumentParser | standard | application/x-vnd.oasis.opendocument.text-web | fallback via ZipParser | tracked tikajs-68os.12: ODF chart/formula/image/text-master/text-web and x-vnd aliases fall back to ZipParser. |
 | FlacParser | standard | audio/x-oggflac | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | OggParser | standard | application/kate | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | OggParser | standard | application/ogg | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
@@ -181,17 +133,8 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | SpeexParser | standard | audio/speex | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | TheoraParser | standard | video/theora | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | VorbisParser | standard | audio/vorbis | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| CompressorParser | standard | application/deflate64 | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
 | CompressorParser | standard | application/x-java-pack200 | none | non-goal: Pack200 is a JVM-only JAR compression removed from the JDK in 14; no JS decoder. |
-| CompressorParser | standard | application/x-lzma | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
-| CompressorParser | standard | application/x-snappy | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
-| CompressorParser | standard | application/zlib | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
-| PackageParser | standard | application/x-tika-unix-dump | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
+| PackageParser | standard | application/x-tika-unix-dump | none | tracked tikajs-68os.47: Detected, but no parser reads the Unix dump format. |
 | PRTParser | standard | application/x-prt | none | non-goal: Siemens/Creo PRT is proprietary and Tika's parser only reads a header; low value, decline unless a user needs it. |
 | SAS7BDATParser | standard | application/x-sas-data | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| WACZParser | standard | application/x-wacz | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |
-| WARCParser | standard | application/arc+gz | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
-| WARCParser | standard | application/warc+gz | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
-| WARCParser | standard | application/x-internet-archive | none | tracked tikajs-68os.20: Unix dump detected; stream decoders, a dump parser and WARC gz remain. |
 | QuattroProParser | standard | application/x-quattro-pro; version=9 | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| XLZParser | standard | application/x-xliff+zip | fallback via ZipParser | tracked tikajs-68os.13: ZIP-based formats parsed by the generic ZipParser. |

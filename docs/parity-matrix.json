@@ -12,11 +12,11 @@
   "opt-in.implemented": 5,
   "opt-in.non-goal": 10,
   "opt-in.tracked": 2,
-  "standard.fallback": 7,
-  "standard.implemented": 41,
+  "standard.fallback": 1,
+  "standard.implemented": 57,
   "standard.non-goal": 4,
-  "standard.partial": 25,
-  "standard.tracked": 12
+  "standard.partial": 18,
+  "standard.tracked": 9
  },
  "parsers": [
   {
@@ -587,19 +587,12 @@
    "class": "org.apache.tika.parser.dif.DIFParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/dif+xml",
-     "resolution": "fallback",
-     "by": "XMLParser",
-     "declared": "gap-text-xml"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "XMLParser"
+    "DIFParser"
    ],
    "declared": null
   },
@@ -640,77 +633,10 @@
    "class": "org.apache.tika.parser.executable.ExecutableParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-code-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 18,
-   "exact": 7,
-   "open": [
-    {
-     "type": "application/x-coredump",
-     "resolution": "fallback",
-     "by": "ExecutableParser",
-     "declared": "af-executable-elf"
-    },
-    {
-     "type": "application/x-mach-o-core",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-dsym",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-dylib-stub",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-dylinker",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-fvmlib",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-kext-bundle",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-object",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-mach-o-preload",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    },
-    {
-     "type": "application/x-object",
-     "resolution": "fallback",
-     "by": "ExecutableParser",
-     "declared": "af-executable-elf"
-    },
-    {
-     "type": "application/x-sharedlib",
-     "resolution": "fallback",
-     "by": "ExecutableParser",
-     "declared": "af-executable-elf"
-    }
-   ],
+   "exact": 18,
+   "open": [],
    "implementedBy": [
     "ExecutableParser"
    ],
@@ -720,18 +646,13 @@
    "class": "org.apache.tika.parser.executable.UniversalExecutableParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-code-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-mach-o-universal",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-executable"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "UniversalExecutableParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -777,31 +698,12 @@
    "class": "org.apache.tika.parser.geogebra.GeoGebraParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.geogebra.file",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    },
-    {
-     "type": "application/vnd.geogebra.slides",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    },
-    {
-     "type": "application/vnd.geogebra.tool",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    }
-   ],
+   "exact": 3,
+   "open": [],
    "implementedBy": [
-    "ZipParser"
+    "GeoGebraParser"
    ],
    "declared": null
   },
@@ -809,32 +711,12 @@
    "class": "org.apache.tika.parser.html.JSoupParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-html-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 5,
-   "exact": 2,
-   "open": [
-    {
-     "type": "application/vnd.mozilla.xul+xml",
-     "resolution": "fallback",
-     "by": "XMLParser",
-     "declared": "gap-text-xml"
-    },
-    {
-     "type": "application/vnd.wap.xhtml+xml",
-     "resolution": "fallback",
-     "by": "XMLParser",
-     "declared": "gap-text-xml"
-    },
-    {
-     "type": "application/x-asp",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-text-xml"
-    }
-   ],
+   "exact": 5,
+   "open": [],
    "implementedBy": [
-    "HTMLParser",
-    "XMLParser"
+    "HTMLParser"
    ],
    "declared": null
   },
@@ -842,19 +724,12 @@
    "class": "org.apache.tika.parser.http.HttpParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-webarchive-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-httpresponse",
-     "resolution": "fallback",
-     "by": "CsvParser",
-     "declared": "gap-text-xml"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "CsvParser"
+    "HttpParser"
    ],
    "declared": null
   },
@@ -926,35 +801,23 @@
    "class": "org.apache.tika.parser.image.ICNSParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-image-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "image/icns",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "ImageParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
    "class": "org.apache.tika.parser.image.ICOParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-image-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 2,
-   "open": [
-    {
-     "type": "image/x-win-bitmap",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    }
-   ],
+   "exact": 3,
+   "open": [],
    "implementedBy": [
     "ImageParser"
    ],
@@ -964,35 +827,10 @@
    "class": "org.apache.tika.parser.image.ImageParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-image-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 10,
-   "exact": 6,
-   "open": [
-    {
-     "type": "image/vnd.wap.wbmp",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    },
-    {
-     "type": "image/x-jbig2",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    },
-    {
-     "type": "image/x-portable-pixmap",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    },
-    {
-     "type": "image/x-xcf",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    }
-   ],
+   "exact": 10,
+   "open": [],
    "implementedBy": [
     "ImageParser"
    ],
@@ -1146,19 +984,12 @@
    "class": "org.apache.tika.parser.indesign.IDMLParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.adobe.indesign-idml-package",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "ZipParser"
+    "IDMLParser"
    ],
    "declared": null
   },
@@ -1260,19 +1091,11 @@
    "class": "org.apache.tika.parser.mail.RFC822Parser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-mail-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "message/x-emlx",
-     "resolution": "fallback",
-     "by": "CsvParser",
-     "declared": "gap-text-xml"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
-    "CsvParser",
     "RFC822Parser"
    ],
    "declared": null
@@ -1786,31 +1609,12 @@
    "class": "org.apache.tika.parser.mif.MIFParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.mif",
-     "resolution": "fallback",
-     "by": "CsvParser",
-     "declared": "gap-text-xml"
-    },
-    {
-     "type": "application/x-maker",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-text-xml"
-    },
-    {
-     "type": "application/x-mif",
-     "resolution": "fallback",
-     "by": "CsvParser",
-     "declared": "gap-text-xml"
-    }
-   ],
+   "exact": 3,
+   "open": [],
    "implementedBy": [
-    "CsvParser"
+    "MIFParser"
    ],
    "declared": null
   },
@@ -1870,116 +1674,12 @@
    "class": "org.apache.tika.parser.odf.OpenDocumentParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 33,
-   "exact": 16,
-   "open": [
-    {
-     "type": "application/vnd.oasis.opendocument.chart",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.chart-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.formula",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.formula-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.image",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.image-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.text-master",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.oasis.opendocument.text-web",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/vnd.sun.xml.writer",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.chart",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.chart-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.formula",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.formula-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.image",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.image-template",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.text-master",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    },
-    {
-     "type": "application/x-vnd.oasis.opendocument.text-web",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-odf"
-    }
-   ],
+   "exact": 33,
+   "open": [],
    "implementedBy": [
-    "OpenDocumentParser",
-    "ZipParser"
+    "OpenDocumentParser"
    ],
    "declared": null
   },
@@ -2174,46 +1874,26 @@
    "tier": "standard",
    "status": "partial",
    "typeCount": 13,
-   "exact": 8,
+   "exact": 12,
    "open": [
-    {
-     "type": "application/deflate64",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    },
     {
      "type": "application/x-java-pack200",
      "resolution": "none",
      "by": null,
      "declared": "ng-pack200"
-    },
-    {
-     "type": "application/x-lzma",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    },
-    {
-     "type": "application/x-snappy",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    },
-    {
-     "type": "application/zlib",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
     }
    ],
    "implementedBy": [
     "BrotliParser",
     "Bzip2Parser",
     "CompressorParser",
+    "Deflate64Parser",
     "GzipParser",
     "Lz4Parser",
-    "XzParser"
+    "LzmaParser",
+    "SnappyParser",
+    "XzParser",
+    "ZlibParser"
    ],
    "declared": null
   },
@@ -2345,19 +2025,12 @@
    "class": "org.apache.tika.parser.wacz.WACZParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-webarchive-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-wacz",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "ZipParser"
+    "WACZParser"
    ],
    "declared": null
   },
@@ -2365,29 +2038,10 @@
    "class": "org.apache.tika.parser.warc.WARCParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-webarchive-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 4,
-   "exact": 1,
-   "open": [
-    {
-     "type": "application/arc+gz",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    },
-    {
-     "type": "application/warc+gz",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    },
-    {
-     "type": "application/x-internet-archive",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    }
-   ],
+   "exact": 4,
+   "open": [],
    "implementedBy": [
     "WARCParser"
    ],
@@ -2441,19 +2095,12 @@
    "class": "org.apache.tika.parser.xliff.XLZParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-xml-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-xliff+zip",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-zip-formats"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "ZipParser"
+    "XLZParser"
    ],
    "declared": null
   },

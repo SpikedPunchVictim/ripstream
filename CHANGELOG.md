@@ -4,6 +4,129 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Compression streams: zlib, LZMA, Deflate64, snappy, gzipped WARC and ARC (`tikajs-68os.20`)
+
+Added, in `@spikedpunch/ripstream-parser-archive`: `ZlibParser` (`application/zlib`), `LzmaParser` (`application/x-lzma`) and
+`Deflate64Parser` (`application/deflate64`). `SnappyParser` now also claims `application/x-snappy`, which is the type Tika
+claims (it had only the registry's `x-snappy-framed`). In `@spikedpunch/ripstream-parsers`, `WarcParser` now also claims
+`application/warc+gz`, `application/arc+gz` and `application/x-internet-archive`: it inflates every gzip member (crawlers
+write one per record) and reads ARC records as well as WARC ones; only an ARC record whose body is an HTTP response becomes
+a document, as in Tika's `testARC`.
+
+- **zlib** is `node:zlib` through the bounded inflate. **LZMA** (LZMA-alone, `.lzma`) is a hand-written range decoder,
+  checked against output of a real encoder (Python's `lzma`), with Tika's 100,000 KiB memory limit (over it is a
+  `LimitExceededError`, where Tika throws `TikaMemoryLimitException`). **Deflate64** is a hand-written decoder.
+- Every decoder counts each byte against the output budget before it stores it, so a bomb stops at the cap, and every
+  prefix of a valid input parses or is a `MalformedDocumentError`.
+- The `.lzma` extension is not stripped from the entry name, because Tika's `setName` does not know it.
+
+Not from Tika source: **Deflate64**, which Tika claims but cannot open (its `CompressorParserTest` lists the type as not
+covered), so this goes beyond it. The decoder is written from the PKWARE appnote and zlib's `puff.c`, and has not been checked
+against a real Deflate64 encoder (none was at hand): its tests use an encoder written here, so a misreading shared by both
+would pass. Nothing detects a raw Deflate64 stream, so it is reached by an explicit content type only, and ZIP method 9 does
+not use it. The **ARC** reader and the **LZMA** decoder's internals follow the published formats, not commons-compress, xz-java
+or jwarc, whose source is not in Tika's tree. Not done: the Unix dump (`application/x-tika-unix-dump`) stays detected but
+unparsed (`tikajs-68os.47`), and Pack200 is a declared non-goal.
+
+### Executables: Mach-O variants and universal binaries (`tikajs-68os.17`)
+
+Changed: `ExecutableParser` now follows Tika 4.2.0's. It reads at most the first 4 KiB, writes no text, and sets
+`machine:architectureBits`, `machine:platform`, `machine:machineType` and `machine:endian`, the `Content-Type` of the ELF or
+Mach-O header, and the PE `dcterms:created`. An unknown magic gives an empty document, not an error. It claims all 18 of
+Tika's executable types, including the eight Mach-O types that had no parser (object, dylib stub, dylinker, fvmlib, kext,
+preload, core, dsym). It no longer names ARM64 PE or AArch64 ELF machines, which Tika does not, and it reproduces Tika's
+quirks (Mach-O sets 64 bits only, an ELF byte order other than 1 reads big-endian).
+
+Added: `UniversalExecutableParser` (`application/x-mach-o-universal`) reads fat Mach-O files (32- and 64-bit tables, either
+byte order) and gives each architecture to the embedded document extractor in offset order, with `Content-Length` as its
+only metadata. Architectures are streamed, never allocated from the size the table declares; a table of over 1000
+architectures, a bad offset, a size over 500,000,000, an overlap or a file that ends early is a `MalformedDocumentError`.
+
+Read from Tika source, not run against a Tika. Not done: `PEIconExtractor` (the icons of a PE file) and
+`ExecutableParserConfig`. Seven of Tika's test binaries are vendored under `packages/parsers/test/fixtures/executable`, with
+their Apache 2.0 provenance in a README there.
+
+### ODF types, GeoGebra, IDML, WACZ and XLZ (`tikajs-68os.12`, `.13`)
+
+Added: the rest of Tika 4.2.0's `OpenDocumentParser` types and four ZIP-based formats that resolved no parser. Every package
+is read through `boundedUnzip` (entry count, per-entry size and the ratio limit), and a limit is a `LimitExceededError`, never
+a record in the metadata; a package that is not a readable ZIP, or a part that is not well-formed XML where Tika fails on it,
+is a `MalformedDocumentError`.
+
+- **OpenDocument** now also handles `application/vnd.sun.xml.writer`, chart, image, formula, text-master and text-web (and
+  templates), with the `x-vnd.oasis.*` spellings as aliases. Charts give their titles and data table; the rows of a table
+  are read through its header, body and group wrappers.
+- **GeoGebra** (`GeoGebraParser`: worksheets `.ggb`, Notes/Slides `.ggs`, tools `.ggt`) gives the text objects (literals of
+  expressions, captions, the text runs of rich-text `content`), the `geogebra:*` and `dc:*` construction metadata, the tool
+  names and help, and each slide as a `div`. `structure.json` orders the slides (ignored over 1 MiB or when it is not JSON);
+  thumbnails, scripts and pictures are embedded documents, a tool's icon being its thumbnail.
+- **IDML** (`IDMLParser`, `application/vnd.adobe.indesign-idml-package`) gives the `Content` of the stories as paragraphs and
+  `idml:spread-page-count`, `idml:master-spread-page-count` and `meta:page-count`. A spread without a `Spread` or
+  `MasterSpread` element is a `MalformedDocumentError`, where Tika's `parseInt(null)` throws. Its XMP is read by a narrow
+  port of `XmpExtractor` (`xmp-basic.ts`): `xmp:CreateDate`, `ModifyDate`, `MetadataDate` and `CreatorTool` only, with the
+  dates normalised as `TikaDates` does and `dcterms:created`/`modified` filled when unset. Every other XMP property is
+  dropped, and so are language alternatives. A malformed packet is a `tk:exception:warn` record, not a failure.
+- **WACZ** (`WACZParser`, `application/x-wacz`) gives each entry under `archive/` as an embedded document, a gzip one
+  inflated first (the first member only, as Tika's reader does, with its header read per RFC 1952). What the gzip entries
+  inflate to counts against `maxTotalEmbeddedBytes` in all. `datapackage.json`, the pages and the indexes are not read, as in
+  Tika.
+- **XLZ** (`XLZParser`, `application/x-xliff+zip`) reads every entry whose name contains `.xlf` as XLIFF 1.2: a `div` per file
+  with its `original` as a heading, a `div` per trans-unit and a `p` per source and target, `file-count`, `tu-count`, and the
+  languages. Tika adds the source language under `original` as well, and so does this.
+
+Read from Tika source, not run against a Tika, and none of Tika's own fixture files (`testGeoGebra.ggb`, `testIndesign.idml`,
+the XLZ and WACZ samples) are in the tests: the archives are built in the tests. Not done: iBooks stays routed to the EPUB
+parser, and the XMP of IDML is not the full `XmpExtractor` (`tikajs-68os.44` has the rest).
+
+### Text and XML formats with a parser of their own: DIF, MIF, HTTP responses, emlx, XUL (`tikajs-68os.14`)
+
+Added, in `@spikedpunch/ripstream-parsers`: `DifParser` (`application/dif+xml`, NASA GCMD records), `MifParser`
+(`application/vnd.mif`, `application/x-maker`, `application/x-mif`, Adobe FrameMaker) and `HttpParser`
+(`application/x-httpresponse`), each ported from Tika 4.2.0's parser of the same name. `MailParser` now also claims
+`message/x-emlx`, and the HTML parser claims `application/vnd.mozilla.xul+xml`, `application/vnd.wap.xhtml+xml` and
+`application/x-asp`, as Tika's `JSoupParser` does (XUL no longer goes to the XML parser).
+
+- **DIF** writes a `dif:` value per leaf element under the path of element names joined with `-` (`dif:DIF-Entry_ID`), and the
+  text is what Tika's handler writes: an `h3` "Title: ..." for `Entry_Title` and a "Geographic Data: " table of the four
+  bounds. A name over 1024 characters is skipped and so is a new one after 10,000 distinct names, as `Metadata` does. Nesting
+  past 2000 is a `LimitExceededError`. A DOCTYPE's DTD is never read, so a reference to an entity it declares is a malformed
+  document.
+- **MIF** gives the text of its `String` statements and the counts `meta:page-count`, `mif:master-page-count`,
+  `mif:reference-page-count` and `mif:total-page-count`, and types the document `application/x-mif`. A line over 10,000,000
+  characters and open-element names over 1,000,000 characters are a `LimitExceededError`. The text is XML-escaped before it
+  is written, as Tika does, so a text output holds `&lt;` where the file had `<`.
+- **HTTP** parses the `Content-Length` bytes after the headers as an embedded document with a fresh `Metadata`, and sets
+  nothing from the headers; a response with no `Content-Length` has no payload, as in Tika. The container keeps the bare
+  `application/x-httpresponse` (the text parser used to add a charset). Headers over 1 MiB are a `LimitExceededError`.
+- **emlx** drops the byte-count line and, when the count lands on the plist's `<?xml`, the plist; a count that does not is not
+  trusted and the message is read whole.
+
+Read from Tika source, not run against a Tika. Not from Tika's source: how the HTTP headers are read (jwarc's source is not in
+Tika's tree, so this is a lenient reading of an HTTP response, with a second `Content-Length` refused as malformed) and MIF's
+XML escaping (commons-lang3's table, written from memory). Not done: general RFC 822 metadata for emlx (`Message:From-Email`,
+UTC-normalised dates, raw headers and the choice between multipart alternatives) differs from Tika's, and the XUL, WAP XHTML and
+x-asp types are tokenised by htmlparser2, not jsoup.
+
+### Images: ICNS, ICO/CUR, WBMP, PPM, JBIG2 and XCF (`tikajs-68os.16`)
+
+Added: image types that resolved no parser now have one in `@spikedpunch/ripstream-parser-media`. Each reads the header and
+never the pixels, is bounded by the bytes present, and refuses a hostile size with `MalformedDocumentError` or
+`LimitExceededError`. The type is dispatched on before the stream is read whole.
+
+- **ICNS** (`image/icns`) and **ICO/CUR** (`image/vnd.microsoft.icon`, `image/x-win-bitmap`) follow Tika 4.2.0's `ICNSParser`
+  and `ICOParser`: their keys (`Icon count`, `Icon details`, `Masked icon count`, `Masked icon details`; `icon:images`,
+  `icon:image-count`, the cursor hotspot, `tiff:*`), their limits (10 MiB of ICNS, 16 MiB and 65535 px of ICO) and the rule
+  that the largest image sets the size. Differences: Tika puts a Java stack trace in `tk:exception:warn`, this a
+  `MalformedDocumentError: message` line.
+- **WBMP**, **PPM/PNM** (`P1` to `P6`) and **JBIG2** write `tiff:ImageWidth`, `tiff:ImageLength`, `img:width`, `img:height`
+  and `tk:num-images` for the first image, as `ImageParser` does for an ImageIO reader. Tika's source holds none of these
+  three readers (ImageIO and jai-imageio own them), so they follow the public format headers; the reader's own IIOMetadata
+  attributes are not written. A JBIG2 page of unknown height (striped) is typed but not measured.
+- **XCF** is typed and nothing more, as in Tika: `ImageParser` has no reader for it.
+
+Not done: **JPEG XL** stays unsupported (it needs Tika's XMP packet scanner and extractor, `tikajs-68os.44`). Read from Tika
+source where Tika has the source, not run against a Tika.
+
 ### Pipes: GCS, Azure Blob and Solr components and the Elasticsearch and OpenSearch reporters (`tikajs-68os.31` to `.34`)
 
 Added: Tika's `gcs-fetcher`, `gcs-emitter` and `gcs-pipes-iterator`, `az-blob-fetcher`, `az-blob-emitter` and

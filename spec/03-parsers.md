@@ -117,7 +117,8 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 
 | Formats | Upstream | TS approach | Prio |
 |---|---|---|---|
-| ODT, ODS, ODP, ODG, ODF templates, flat XML (`fodt`/`fods`/`fodp`) | `OpenDocumentParser`, `FlatOpenDocumentParser` | ZIP + `content.xml`, `styles.xml`, `meta.xml`; tables/slides/pages; embedded objects; flat variants via XML | P0 (ODT), P1 (rest) |
+| ODT, ODS, ODP, ODG, ODF templates, flat XML (`fodt`/`fods`/`fodp`) | `OpenDocumentParser`, `FlatOpenDocumentParser` | ZIP + `content.xml`, `styles.xml`, `meta.xml`; tables/slides/pages; embedded objects; flat variants via XML. Also `vnd.sun.xml.writer` and the chart, image, formula, text-master and text-web types and templates (the `x-vnd.oasis.*` spellings are aliases); a chart gives its titles and data table | P0 (ODT), P1 (rest) |
+| GeoGebra (`.ggb`, `.ggs`, `.ggt`), InDesign IDML | `GeoGebraParser`, `IDMLParser` | `boundedUnzip` + saxes. GeoGebra: text objects, `geogebra:*` and `dc:*` metadata, tool names, slides ordered by `structure.json`, thumbnail, scripts and pictures as embedded documents. IDML: `Content` text, `idml:*` and `meta:page-count`; XMP is a narrow port of `XmpExtractor` limited to `xmp:CreateDate`, `ModifyDate`, `MetadataDate` and `CreatorTool` (the full extractor is `tikajs-68os.44`) | P3 |
 | StarOffice 5-7 | `OpenOfficeParser` | Legacy binary probe; text best-effort | P3 |
 | iWork 09 (Pages/Numbers/Keynote) | `IWorkPackageParser` | ZIP + XML index; text | P2 |
 | iWork 13+ / 18+ (IWA) | `IWork13PackageParser`, `IWork18PackageParser` | Snappy-decompressed protobuf; metadata + preview images only, matching upstream's documented limitation | P3 |
@@ -136,14 +137,18 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | GZIP | `CompressorParser` | `node:zlib` / DecompressionStream | ✅ | P0 |
 | TAR | `PackageParser` | `tar-stream`; PAX/GNU long names; symlinks not followed | ✅ | P0 |
 | BZIP2 | `CompressorParser` | `seek-bzip` streaming | ✅ | P1 |
-| XZ / LZMA | `CompressorParser` | `xz-decompress`; LZMA-alone header | ✅ | P1 |
+| XZ | `CompressorParser` | `xz-decompress` | ✅ | P1 |
+| LZMA (`.lzma`, LZMA-alone) | `CompressorParser` | Hand-written range decoder, bounded; xz-java's dictionary rounding and 100,000 KiB memory limit (over it is a `LimitExceededError`, where Tika throws `TikaMemoryLimitException`) | ✅ | P1 |
+| zlib | `CompressorParser` | `node:zlib` through the bounded inflate | ✅ | P2 |
+| Deflate64 | `CompressorParser` | Hand-written decoder after `puff.c` (64 KiB window, 16-bit length for code 285, distance codes 30 and 31); reached by an explicit content type only; not checked against a real encoder; ZIP method 9 does not use it | ✅ | P3 |
 | Brotli | `CompressorParser` | `node:zlib` / `DecompressionStream('deflate')` where brotli absent → wasm | ✅ | P1 |
 | Unix compress (`.Z`) | `CompressorParser` | LZW decoder | ✅ | P2 |
 | LZ4 frame | `CompressorParser` | `lz4js` | ✅ | P2 |
-| Snappy framed/raw | `CompressorParser` | `snappyjs` (also used by iWork) | ✅ | P2 |
+| Snappy framed/raw | `CompressorParser` | `snappyjs` (also used by iWork); claims `application/x-snappy` as Tika does, and the registry's `x-snappy-framed` | ✅ | P2 |
 | 7z | `SevenZipParser` | Optional `7z-wasm`; LGPL path, optional peer; not in default bundle | ⚠️ | P2 |
 | RAR / RAR5 | `RarParser` | Optional wasm; unrar licensing restricts redistribution — document as external/optional | ⚠️ | P2 |
-| AR, ARJ, CPIO, dump | `PackageParser` | Custom readers | ✅ | P3 |
+| AR, ARJ, CPIO | `PackageParser` | Custom readers | ✅ | P3 |
+| Unix dump | `PackageParser` | Detected as `application/x-tika-unix-dump`; no reader yet (`tikajs-68os.47`) | ❌ | P3 |
 | ISO 9660 | `Iso9660Parser` | Directory record walker | ⚠️ | P3 |
 | AppleSingle / AppleDouble | `AppleSingleFileParser` | Header + entry parser | ⚠️ | P3 |
 | Apple plist (XML/binary) | `PListParser` | `bplist-parser` + XML plist; nested dict/array rendering | ✅ | P1 |
@@ -166,10 +171,12 @@ Archive rules:
 | mbox / Maildir | `MailboxParser` (3.x+) | Streaming envelope splitter; per-message RFC 822 parse | P1 |
 | vCard | `VCardParser` if present | Streaming/line parser; contact fields as metadata | P2 |
 | iCalendar / ICS | `ICalParser` if present | `ical.js`; events/tasks as text + metadata | P2 |
-| WARC, ARC, WACZ | `WARCParser` | Custom record reader; HTTP payload detection; embedded records; WACZ = ZIP + CDXJ | P1 |
+| WARC, ARC | `WARCParser` | Custom record reader; HTTP payload detection; embedded records. Claims `warc`, `warc+gz`, `arc+gz` and `x-internet-archive`: a gzip of any number of members is inflated first (bounded), data opening with `filedesc://` is read as ARC, and only an ARC record whose body is an HTTP response becomes a document. The ARC reader follows the published format, not jwarc | P1 |
+| WACZ | `WACZParser` | ZIP; each entry under `archive/` is an embedded document, a gzip one inflated first (first member only, bounded; the total counts); `datapackage.json`, pages and indexes are not read, as in Tika | P3 |
 | XLIFF 1.2/2.0 | `XLIFFParser` | `saxes`; trans-unit source/target, notes, state; XLIFF inline tags stripped | P2 |
 | TMX | `TMXParser` | `saxes`; translation units, languages | P2 |
-| XLF/XLZ | via XLIFF | ZIP wrapper | P3 |
+| XLZ | `XLZParser` | ZIP of XLIFF 1.2 files (every entry named `.xlf`); a `div` per file and trans-unit, `p` per source/target, `file-count`, `tu-count` and the languages | P3 |
+| DIF, MIF, HTTP response, emlx | `DIFParser`, `MIFParser`, `HttpParser`, `RFC822Parser` | DIF: `dif:` element-path keys, title and spatial text. MIF: text, page counts, typed `application/x-mif`. HTTP: the `Content-Length` payload as an embedded document; header reading follows jwarc's leniency, not its source. emlx: count line and plist dropped. XUL, WAP XHTML and x-asp go to the HTML parser, as `JSoupParser` | P3 |
 | IPTC ANPA | `IPTCANPAParser` | Line-based wire format | P3 |
 
 Mail details:
@@ -191,6 +198,7 @@ Mail details:
 | PNG | `PngParser` | Chunk walker: IHDR, pHYs, tEXt/zTXt/iTXt, eXIf, XMP | P1 |
 | GIF | `ImageParser` | Header, frames, comment, XMP | P1 |
 | BMP, ICO/CUR, WebP, HEIF/HEIC, AVIF, JPEG 2000, BPG | `ImageParser` family | Header/metadata readers; HEIF via `heic-decode`-class optional dep | P2 |
+| ICNS, WBMP, PPM/PNM, JBIG2, XCF | `ICNSParser`, `ImageParser` | Header readers, never the pixels. ICNS and ICO/CUR follow Tika's source; WBMP, PPM and JBIG2 follow the public headers (Tika has no source for them); XCF is typed only, as Tika. JPEG XL needs an XMP extractor and is not ported (`tikajs-68os.44`) | P3 |
 | SVG | via XML | XML parse; text content + metadata | P1 |
 | PSD | `PSDParser` | Header, image resources, XMP | P3 |
 | ICC profiles | `IccParser` | Header/tag reader | P3 |
@@ -258,9 +266,10 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 
 | Formats | Upstream | TS approach | Prio |
 |---|---|---|---|
-| PE/COFF (.exe/.dll/.sys) | `ExecutableParser` | DOS/PE headers, machine, sections, imports, resources, version info, signature presence | P2 |
-| ELF | `ExecutableParser` | Class/endianness, machine, type, interpreter, sections, build-id | P2 |
-| Mach-O (thin/fat) | `ExecutableParser` | Load commands, architectures, UUID, dylibs | P2 |
+| PE/COFF (.exe/.dll/.sys) | `ExecutableParser` | The first 4 KiB only, metadata only, no text: `machine:architectureBits`, `machine:platform`, `machine:machineType`, `machine:endian`, `Content-Type`, and the PE `dcterms:created`; an unknown magic gives an empty document. `PEIconExtractor` and `ExecutableParserConfig` are not ported | P2 |
+| ELF (executable, object, shared library, core) | `ExecutableParser` | Same header read, dispatched on the first 4 bytes; claims all 18 of Tika's executable types | P2 |
+| Mach-O (thin: object, dylib, dylib stub, dylinker, fvmlib, kext, preload, core, dsym) | `ExecutableParser` | Same header read; reproduces Tika's quirks (Mach-O sets 64 bits only, an ELF byte order other than 1 reads big-endian) | P2 |
+| Mach-O universal (fat) | `UniversalExecutableParser` | 32- and 64-bit tables, either byte order; each architecture is streamed to the embedded document extractor in offset order, with `Content-Length` as its only metadata; over 1000 architectures, a bad offset, a size over 500,000,000, an overlap or a short file is a `MalformedDocumentError` | P2 |
 | Java `.class` | `ClassParser` | Constant pool, access flags, class/super, methods/fields counts | P1 |
 | PGP messages/keys | `PGPParser` | Packet parser; literal data; signatures; key IDs. No decryption without keys | P3 |
 | X.509 certificates | `CryptoParser` | `@peculiar/x509` + `asn1js`: subject, issuer, serial, validity, SANs, key usage, fingerprints | P2 |
