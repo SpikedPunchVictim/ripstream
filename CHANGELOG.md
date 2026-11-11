@@ -4,6 +4,80 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Parquet bounds, allocator limits, XmlParser, ZIP64 clamp and the stream read (`tikajs-5bg6`, `zcs2`, `68os.27`, `00bw`, `0vn4`)
+
+Fixed:
+
+- `@spikedpunch/ripstream-parser-db`: hyparquet has no limits of its own. `checkParquetFooter` and `checkParquetPages`
+  (`parquet-limits.ts`) run before it reads: more than 5,000 schema elements, a schema deeper than 100, more than 10,000 row
+  groups, or a data page claiming more than 4,194,304 values (or more values than its chunk) is a `LimitExceededError`; a
+  schema whose root claims children it lacks, a bad page header or a page past its chunk is a `MalformedDocumentError`.
+  Options: `ColumnarParserOptions` and four `DEFAULT_MAX_PARQUET_*` constants. Measured before: a 123-byte file with a 3-byte
+  RLE page claiming 2^26 values took 5.7 s and 484 MiB; after, a limit error in under 10 ms. Not done: the footer is still
+  decoded whole before the check, there is no total-values budget across pages, and the page walk uses hyparquet 1.17.1
+  internals (pinned exactly). The limits are picks, not measured against real corpora.
+- `@spikedpunch/ripstream-isolation-node`: an allocator `RangeError` that core's backstop had wrapped in a
+  `MalformedDocumentError` answered as MALFORMED_DOCUMENT; the codec now looks four causes down and answers LIMIT_EXCEEDED,
+  and "Invalid typed array length" is on the list. A view that runs past its buffer says the same, so such a document is now
+  a limit rather than malformed (both 422-class).
+- `XmlParser` runs saxes with `xmlns: false` and the per-prefix stack `@spikedpunch/ripstream-mime` uses
+  (`XmlNamespaceScope`, now exported): 40,000 nested elements went from 8-12 s to 0.32 s. Namespace violations are still
+  `MalformedDocumentError("Malformed XML")`. `dif` and `iso19139` keep their 2,000-element depth cap.
+- `@spikedpunch/ripstream-parser-office`: a ZIP64 extra block longer than its field no longer throws a raw `RangeError`. The two
+  POI fuzz files that bead named did not reproduce (both answer MALFORMED_DOCUMENT); the bug was found on a synthetic input. A
+  `localOffset` above 2^53 can still throw a different `RangeError` (not fixed).
+- `@spikedpunch/ripstream-core`: iterating a `RipstreamInputStream` of tiny chunks was quadratic (160,000 one-byte chunks:
+  56.6 s). `readAt` now resumes from the chunk the last read started in: 0.19 s. A differential run against the old class
+  (450,000 operations) matched.
+
+### EPUB as Tika reads it, and ODF meta depth (`tikajs-68os.51`, `.27`)
+
+Changed, in `@spikedpunch/ripstream-parser-office`: `EpubParser` hands the manifest items that are not chapters, and the
+cover (typed THUMBNAIL), to the embedded document extractor in Tika's order (`epub-package.ts` ports ContentOrderScraper;
+`java-hash-order.ts` reproduces HashMap iteration over the manifest ids). `dc:contributor`, `dc:source` and `dc:type` are
+written, every Dublin Core element keeps all its distinct values, and `dc:date` is `dcterms:created`. Spine items are chapters
+only when their media type contains html (or has none and the name ends htm/html/xml); hrefs are percent-decoded with `+` as a
+space. A chapter whose DOCTYPE has an external subset skips undefined entities (`testEPUB_xml_ext.epub`). ODF `meta.xml` nesting
+is capped at 2,000 (`LimitExceededError`).
+
+Behaviour changes: `dc:date` is no longer set; an EPUB with non-chapter manifest items needs an extractor in the context; an
+invalid percent sequence in a manifest href is `MalformedDocumentError`. Tika writes no TOC or cover metadata; `epub:toc` and
+`epub:cover` are untouched (owner decision). The HashMap order and URLDecoder behaviour are from memory, not run against a Tika.
+Not done: `epub:version`, `rendition:layout`, DRM, the `mimetype` override, the missing-OPF fallback.
+
+### Unix dump, XMP packet scanner (`tikajs-68os.47`, `.44`)
+
+Added: `UnixDumpParser` (`@spikedpunch/ripstream-parser-archive`, `application/x-tika-unix-dump`) reads the volume header, the
+CLRI and BITS maps and the directory blocks, and emits each non-directory inode as an embedded document named by its path.
+Entry bytes, total bytes, entry count, directory entries, path depth and hole inflation are capped; compressed dumps are
+`UnsupportedFormatError`. The offsets and constants are from memory of commons-compress and no real `dump(8)` volume was read,
+so the tests (a builder that defines the layout) show self-consistency only. Inodes with no name are skipped (Tika returns them
+unreadable). Not done: compressed dumps, a real dump fixture.
+
+`scanXmpPacket` (`parser-media`, internal, not exported) ports XMPPacketScanner including Java's `skipAfter` quirk, with a 64 MiB
+cap. The JPEG XL extractor and `JXLParser` need an XML parser parser-media lacks, an owner decision; `tikajs-68os.44` stays open.
+
+### Mail, PKCS#7, SAS7BDAT layouts, `tk:detected-encoding` (`tikajs-68os.65`, `.70`, `.69`, `.46`, `.52`)
+
+Changed, in `@spikedpunch/ripstream-parsers`:
+
+- `MailParser` reads the headers as Tika's MailContentHandler does (RFC 2047 words, odd From, i18n headers, `message:raw-header:*`),
+  walks multipart structure (alternative with a mixed child, related, inline body, single-part and multipart emlx), and caps the
+  header block (`DEFAULT_MAX_MAIL_HEADER_BYTES`, `MailParserOptions`). Fixtures are Tika's mail test files with the values its
+  tests assert. mime4j is not in the tree: address and date parsing is from memory, and a list it would accept may be rejected
+  here (the fallback is Tika's own).
+- `Pkcs7Parser` claims `application/pkcs7-mime` and `application/pkcs7-signature` (`Asn1Parser` no longer does): the content
+  type OID labels the message and a `signedData` body is parsed as an embedded document. The bead's premise was wrong; the
+  missing record was PKCS7, not BER indefinite lengths. CMS `compressedData` is labelled and gives an empty document.
+- Text, CSV, HTML, Markdown, MIF, ENVI and ISA-Tab write `tk:detected-encoding` (one repro fixture each) through a shared
+  `LineSplitter`. `tk:encoding-detector` is not written (owner decision).
+- `Sas7bdatParser` reads 64-bit, big-endian, RLE (`SASYZCRL`) and RDC (`SASYZCR2`) files; `readSasFile` and `SasReadOptions`
+  are internal (not exported from the package) and `SasProperties` is wider. These layouts are written from memory of parso, pandas and ReadStat and tested
+  against synthetic files only; `tikajs-68os.69` stays open until a real file is vendored.
+- Real GeoGebra, IDML, WACZ and XLZ samples from Tika now have fixtures and facade tests.
+
+Not verified against a Tika: all of the above is read from source or written from memory; none was compared with Tika output.
+
 ### Native FLAC, OGM and Ogg RGB, AudioParser input cap (`tikajs-68os.60`, `.61`, `.62`, `.68`)
 
 Changed, in `@spikedpunch/ripstream-parser-media`:

@@ -123,7 +123,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | StarOffice 5-7 | `OpenOfficeParser` | Legacy binary probe; text best-effort | P3 |
 | iWork 09 (Pages/Numbers/Keynote) | `IWorkPackageParser` | ZIP + XML index; text | P2 |
 | iWork 13+ / 18+ (IWA) | `IWork13PackageParser`, `IWork18PackageParser` | ZIP entries and plist metadata (version history, properties, document identifier); previews and thumbnails to the embedded extractor; no IWA body, matching upstream's documented limitation. A non-ZIP input is a `MalformedDocumentError` | P3 |
-| EPUB 2/3 | `EpubParser` | ZIP + OPF spine order; XHTML chapters; NCX/nav; cover image; metadata | P0 |
+| EPUB 2/3 | `EpubParser` | ZIP + OPF spine order; XHTML chapters; NCX/nav; metadata (all Dublin Core values, `dc:date` as `dcterms:created`); non-chapter manifest items and the cover as embedded documents in Tika's order | P0 |
 | FictionBook 2 (FB2) | `FictionBookParser` | XML; sections, titles, poems, notes | P2 |
 | CHM | `CHMParser` | ITSF/ITSP + LZX decompression; HTML entries; index/toc | P3 (wasm or port) |
 | WinHelp (HLP) | `WinHelpParser` if present | Detect; unsupported error acceptable | P3 gap |
@@ -149,7 +149,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | 7z | `SevenZipParser` | Optional `7z-wasm`; LGPL path, optional peer; not in default bundle | ⚠️ | P2 |
 | RAR / RAR5 | `RarParser` | Optional wasm; unrar licensing restricts redistribution — document as external/optional | ⚠️ | P2 |
 | AR, ARJ, CPIO | `PackageParser` | Custom readers | ✅ | P3 |
-| Unix dump | `PackageParser` | Detected as `application/x-tika-unix-dump`; no reader yet (`tikajs-68os.47`) | ❌ | P3 |
+| Unix dump | `PackageParser` | `UnixDumpParser`: header, CLRI/BITS maps, directory blocks; each non-directory inode an embedded document by path; capped; compressed dumps refused. Layout from memory, no real volume read | ⚠️ | P3 |
 | ISO 9660 | `Iso9660Parser` | Directory record walker | ⚠️ | P3 |
 | AppleSingle / AppleDouble | `AppleSingleFileParser` | Header + entry parser | ⚠️ | P3 |
 | Apple plist (XML/binary) | `PListParser` | `bplist-parser` + XML plist; nested dict/array rendering | ✅ | P1 |
@@ -262,7 +262,7 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 | ISO 19139 geographic metadata | `GeographicInformationParser` | `saxes` read of the gmd/gco/gmx elements mapped to `dc:*` and prefixed keys; the mapping follows Apache SIS from memory of its elements (`tikajs-68os.55`) | P3 |
 | ENVI header (`.hdr`) | `EnviHeaderParser` | `key = value` lines with `{ }` multi-line values; reached by a direct call, the registry gives only the glob | P3 |
 | ISA-Tab | `ISArchiveParser` | Study file (`s_*.txt`) as a table; sibling files of the archive are not read (`tikajs-68os.66`) | P3 |
-| SAS7BDAT | `Sas7bdatParser` | **Partial**: 32-bit little-endian uncompressed files; 64-bit, big-endian and compressed are `UnsupportedFormatError`. Cell formatting is the port's own (`tikajs-68os.69`) | P3 |
+| SAS7BDAT | `Sas7bdatParser` | **Partial**: 32/64-bit, either byte order, uncompressed, RLE and RDC, all checked against synthetic files only (`tikajs-68os.69`). Cell formatting is the port's own | P3 |
 | Time-stamped data (TSD, RFC 3161) | `TsdParser` | Bounded BER reader; TSTInfo fields as `Time-Stamp-n.<i> - <field>`; embedded document handed on. Indefinite lengths: `tikajs-68os.70` | P3 |
 | Quattro Pro (QPW 9, v7-8) | `QuattroProParser` | OLE streams; version 9 claimed through `exact-version.ts`; v7-8 route through the supertype to the OLE container parser (metadata only) | P3 |
 | DWG | `DWGParser` | Optional `libredwg` wasm; text entities + layers | P3 |
@@ -283,7 +283,7 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 | Java `.class` | `ClassParser` | Constant pool, access flags, class/super, methods/fields counts | P1 |
 | PGP messages/keys | `PGPParser` | Packet parser; literal data; signatures; key IDs. No decryption without keys | P3 |
 | X.509 certificates | `CryptoParser` | `@peculiar/x509` + `asn1js`: subject, issuer, serial, validity, SANs, key usage, fingerprints | P2 |
-| PKCS#7/CMS, PKCS#12 | `CryptoParser` | Signer certs, encrypted content detection | P3 |
+| PKCS#7/CMS, PKCS#12 | `Pkcs7Parser`, `CryptoParser` | `Pkcs7Parser`: content type OID labels the message, a `signedData` body is an embedded document (`compressedData` is labelled, not extracted). Signer certs, encrypted content detection | P3 |
 | ASN.1/DER fallback | `CryptoParser` | Structure dump with depth limit | P3 |
 | DBF (dBASE) | `DBFParser` | Header, field descriptors, records; render as table/text | P2 |
 | SQLite | `SQLite3Parser` | Optional `sql.js` (shared core with GeoPackage): `database:table-name`, `sqlite3:application_id` and `user_version` in hex, a table per SQLite table, Java-style typed cells, BLOBs as embedded documents; 100 rows per table, 4,096 characters per TEXT cell, 256 MiB / 10,000 tables / 500 columns / 1M rows caps | P3 |

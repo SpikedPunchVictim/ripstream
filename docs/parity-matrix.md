@@ -12,9 +12,9 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | opt-in | implemented | 5 |
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
-| standard | implemented | 76 |
+| standard | implemented | 77 |
 | standard | non-goal | 4 |
-| standard | partial | 8 |
+| standard | partial | 7 |
 | standard | tracked | 1 |
 
 ## Open items
@@ -84,5 +84,4 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | PSTMailItemParser | standard | application/x-tika-pst-mail-item | none | non-goal: application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly. |
 | MP4Parser | standard | video/x-m4v | fallback via MP4Parser | accepted-fallback: Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3). |
 | CompressorParser | standard | application/x-java-pack200 | none | non-goal: Pack200 is a JVM-only JAR compression removed from the JDK in 14; no JS decoder. |
-| PackageParser | standard | application/x-tika-unix-dump | none | tracked tikajs-68os.47: Detected, but no parser reads the Unix dump format. |
 | PRTParser | standard | application/x-prt | none | non-goal: Siemens/Creo PRT is proprietary and Tika's parser only reads a header; low value, decline unless a user needs it. |

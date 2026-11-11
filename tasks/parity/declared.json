@@ -95,7 +95,6 @@
     },
 
     { "id": "gap-image", "match": { "class": "\\.JXLParser$" }, "status": "tracked", "bead": "tikajs-68os.44", "reason": "JPEG XL: the XMP packet scanner and extractor are not ported." },
-    { "id": "gap-streams", "match": { "class": "\\.PackageParser$", "type": "^application/x-tika-unix-dump$" }, "status": "tracked", "bead": "tikajs-68os.47", "reason": "Detected, but no parser reads the Unix dump format." },
     { "id": "gap-extended", "match": {"class": "\\.GribParser$"}, "status": "tracked", "bead": "tikajs-68os.66", "reason": "GRIB1/2 reads through netcdf-java's model, which is not portable, and the GRIB2 type is undetectable in Tika too. Owner decision pending (tikajs-68os.66)." },
     { "id": "gap-opt-in-utility", "match": { "class": "\\.(RegexCaptureParser|XMLProfiler)$" }, "status": "tracked", "bead": "tikajs-68os.23", "reason": "Opt-in utility parsers." }
   ],

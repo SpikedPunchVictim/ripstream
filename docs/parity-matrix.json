@@ -12,9 +12,9 @@
   "opt-in.implemented": 5,
   "opt-in.non-goal": 10,
   "opt-in.tracked": 2,
-  "standard.implemented": 76,
+  "standard.implemented": 77,
   "standard.non-goal": 4,
-  "standard.partial": 8,
+  "standard.partial": 7,
   "standard.tracked": 1
  },
  "parsers": [
@@ -491,7 +491,7 @@
    "exact": 2,
    "open": [],
    "implementedBy": [
-    "ASN1Parser"
+    "Pkcs7Parser"
    ],
    "declared": null
   },
@@ -1633,22 +1633,16 @@
    "class": "org.apache.tika.parser.pkg.PackageParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-pkg-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 5,
-   "exact": 4,
-   "open": [
-    {
-     "type": "application/x-tika-unix-dump",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-streams"
-    }
-   ],
+   "exact": 5,
+   "open": [],
    "implementedBy": [
     "ArParser",
     "ArchiveMetadataParser",
     "CpioParser",
-    "TarParser"
+    "TarParser",
+    "UnixDumpParser"
    ],
    "declared": null
   },
