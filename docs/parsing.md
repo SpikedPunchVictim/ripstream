@@ -205,6 +205,7 @@ How it differs from Tika:
 | `endpoints` | Exactly the endpoints served, by Tika's names: `tika rmeta meta unpack detect language mime-types version status async` (`mime` is Tika's other name for `mime-types` and is taken as it). Naming one does not add it to a default. An empty list is the default. `/health` is always served. `/status/<job>` belongs to `async`. A disabled endpoint answers 404. |
 | `cors` | `Access-Control-Allow-Origin` (`createRipstreamServer({ corsOrigin })`). |
 | `maxRequestSizeBytes` | The request body limit (413 over it). Default 100 MiB, where Tika's is 1 GiB. Positive: ripstream always bounds a body, where Tika lets a negative value lift the limit. A body up to 16 MiB over the limit is read and thrown away, so the 413 comes on a connection that carries the next request; a body announced as larger than that is refused unread, with `Connection: close`. |
+| `maxUnpackBytes` | Ripstream's own, not a Tika key, so Tika's loader refuses a file that has it. The most embedded-document bytes `/unpack` keeps for one request (default 100 MiB, at most 2 GiB, and with isolation at most `unpackCeiling`, see [isolation.md](isolation.md)). Whole bytes, 0 or more. A value over either bound stops `serve` with exit 2. |
 | `requestLogLevel` | `debug` or `info`: each request's method and URI go to stderr. The server's own info lines (the concurrency gate) are shown with them. |
 | `maxRequestReadMillis` | How long receiving a whole request may take (408 after); negative: no deadline; not zero. Node's `requestTimeout`. |
 | `idleTimeoutMillis` | Closes a connection with no bytes moving for this long. A request whose body is in and whose response has not begun is waiting on its parse and is not closed (as in Jetty's idle timeout). |
@@ -223,6 +224,19 @@ refused in `endpoints`, as Tika refuses an unrecognized one. An unknown setting 
 The CLI's flags follow Tika's for `serve`: `-h <host>` and `-p <port>`. Everywhere else `-h` is help and `-p` the password;
 `-?` and `--help` print help in every command. Only `serve` reads the section; `createRipstream` and the other commands
 ignore it.
+
+### Environment references
+
+In the `--config` file a string value may name an environment variable as `${env:NAME}`, alone or inside a longer string, in
+every section, as Tika 4.2.0 does when it loads its configuration (`EnvInterpolator`). Only that form, with an ASCII name, is
+replaced: `${NAME}`, `$NAME`, `${env:}` and keys stay as written. It is one pass: a value that holds `${env:OTHER}` is not
+expanded again. There is no escape. A variable that is not set stops the command with exit 2 and a message that names the
+variable and the JSON path, never a value; one set to an empty string counts as set. The value is always a string, so a numeric
+setting such as `server.port` cannot be set from a variable.
+
+`loadConfig(source, { env })` does the same for a library caller. Without `env` nothing is replaced: the library never reads
+`process.env` itself. Load only a configuration the operator wrote this way: a reference reads the server's environment, and
+a request is never interpolated. Read from Tika source, not run against a Tika.
 
 Read from Tika's source, not checked against a running Tika 4.2.0.
 

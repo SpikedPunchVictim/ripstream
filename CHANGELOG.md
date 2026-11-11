@@ -4,6 +4,25 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### `ripstream serve` sets the `/unpack` byte budget (`tikajs-68os.28`)
+
+Added: `server.maxUnpackBytes` in the configuration's `server` section is the most embedded-document bytes `/unpack` keeps for one request (the
+server's `maxUnpackBytes` option, default 100 MiB). It is whole bytes, 0 or more; a value over 2 GiB, or over what an isolation's children can
+hold, stops `serve` with exit 2 naming it. It is not a Tika key (Tika bounds `/unpack` by a 10 GiB constant), so a configuration that has it is
+one Tika's own loader refuses. Config key only: there is no flag or environment variable.
+
+### `${env:NAME}` in configuration (`tikajs-68os.30`)
+
+Changed: a string value in the `--config` file may name an environment variable as `${env:NAME}`, alone or inside a longer string, in every
+section, as Tika 4.2.0's `TikaJsonConfig.load` does (`EnvInterpolator`). Only that form is replaced: `${NAME}`, `$NAME` and keys are not, a
+value is not expanded again, and a variable that is not set stops the command with exit 2, naming the variable and the JSON path and never a
+value. `loadConfig(source, { env })` does the same for a library caller; without `env` nothing is replaced. Read from Tika source, not run
+against a Tika.
+
+Limits: the value is always a string, so a numeric setting such as `server.port` cannot be set from a variable. A reference reads the
+server's environment, so load only a configuration the operator wrote (`docs/security.md`); a validation message may quote a value that was
+already interpolated.
+
 ### Text and CSV: the sniffer decides (`tikajs-68os.36`)
 
 Changed: `CsvParser` now serves `text/plain`, `text/csv` and `text/tsv`, as Tika 4.2.0's `TextAndCSVParser` does, and sniffs the first 20,000

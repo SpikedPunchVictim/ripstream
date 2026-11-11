@@ -91,7 +91,8 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
 - `authenticate(request)`: optional gate applied to every request.
 - `maxLimits: { maxOutputChars, maxEmbeddedResources }`: server-side ceilings. Client query
   parameters of the same names (and preset values) are clamped to these.
-- `maxUnpackBytes` (default 100 MiB): the most embedded-document bytes `/unpack` keeps for one request, so the zip it
+- `maxUnpackBytes` (default 100 MiB; `ripstream serve` takes it from `server.maxUnpackBytes`): the most embedded-document
+  bytes `/unpack` keeps for one request, so the zip it
   answers cannot outgrow it; a document past it is left out of the zip and stays in `rmeta.json`. A client cannot set
   it. With isolation it may not exceed the children's `unpackCeiling` (see `docs/isolation.md`). Entry names in the zip
   are `unpacked/<id><extension>`, never a name from the document, so a hostile name cannot become a path; the name
@@ -108,6 +109,10 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
 - `maxJobs` (default 1000): maximum retained `/async` jobs. Finished jobs are evicted first; new
   jobs get 503 when all retained jobs are still running.
 - `jobTtlMs` (default 10 minutes): how long finished `/async` jobs are retained.
+- Configuration values may read the server's environment: `${env:NAME}` in a `--config` file is replaced by the variable's
+  value (see [parsing.md](parsing.md#environment-references)). Never load a configuration an untrusted party wrote; a request
+  is never interpolated. Messages name the variable and the path, never a value, but a validation message may quote a value
+  that was already interpolated, so a secret placed in a field that is validated by quoting it can reach stderr.
 
 ### `POST /pipes`
 

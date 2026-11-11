@@ -2433,8 +2433,8 @@
   "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaObjectMapperFactory.java:179-190; tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:165-179",
   "ripstream": null,
   "status": "gap",
-  "evidence": "Tika: TikaObjectMapperFactory.java:179-190, TikaJsonConfig.java:165-179. ripstream: validateConfig is the only strictness (packages/core/src/config.ts:127,:144, unknown ROOT keys only); no ${env:} handling for pipes (none in packages/pipes/src).",
-  "note": "Unverified against a live Tika (oracle has no pipes). The CLI has RIPSTREAM_* env vars for isolation (packages/cli/src/isolation-config.ts) but not for pipes. Tracked as tikajs-68os.30 (tikajs-68os.6.2): until then a ${env:NAME} value is read literally and fails at the first read of that path.",
+  "evidence": "Tika: TikaObjectMapperFactory.java:179-190, TikaJsonConfig.java:165-179. ripstream: validateConfig is the only strictness (packages/core/src/config.ts:127,:144, unknown ROOT keys only); ${env:NAME} is replaced by loadConfig(source, { env }) (packages/core/src/env-interpolation.ts), which the CLI calls with its environment.",
+  "note": "Unverified against a live Tika (oracle has no pipes). The CLI has RIPSTREAM_* env vars for isolation (packages/cli/src/isolation-config.ts) but not for pipes. ${env:NAME} interpolation is implemented (tikajs-68os.30: loadConfig(source, { env }), packages/core/src/env-interpolation.ts; read from Tika source, not run against a Tika). The duplicate-key check was already covered; the unknown-key strictness of Tika's mapper is the part still open.",
   "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
   "ripstreamVerification": "searched; not found"
  },

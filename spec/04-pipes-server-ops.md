@@ -110,7 +110,10 @@ As built (`tikajs-68os.6.2`): the engine takes `FetchEmitTuple`s (`id`, `fetcher
 engine does not need (a component that cannot be built throws when the engine is made). A tuple naming a fetcher or emitter
 that is not registered is `FETCHER_NOT_FOUND` or `EMITTER_NOT_FOUND` for that tuple. Tika's pipes configuration loads
 through `loadConfig(...).pipes` and `createEngineFromSettings`; docs/migration.md lists what loads, what is accepted with a
-notice and what is refused. The evidence for the model is `tasks/parity/audits/pipes-model-spike.md`.
+notice and what is refused. A string value in the `--config` file may name an environment variable as `${env:NAME}`, as in
+Tika's `TikaJsonConfig.load` (`tikajs-68os.30`): only that form, one pass, in values and never keys; an unset variable stops the
+command with exit 2, naming the variable and the path. `loadConfig(source, { env })` does it for a library caller, and
+without `env` nothing is replaced. The evidence for the model is `tasks/parity/audits/pipes-model-spike.md`.
 
 ### 1.4 Built-in components
 
@@ -211,7 +214,7 @@ Built entirely on the library; request handlers are exported so any framework (F
 | `/mime-types`, `/mime-types/{type}/{subtype}` | GET | The media types the server was given (`ripstream serve` passes the standard registry and the configured custom types): HTML by default, JSON or (the list) text by `Accept`; 404 for an unknown type |
 | `/detect/stream` | PUT | Not in tika-server 4.2.0 (404, saved response r150) and not served here: `/detect` is the route |
 | `/detect` | PUT | Media type |
-| `/unpack` | PUT, POST multipart | The embedded resources as Tika's data package: a zip of `datapackage.json`, `rmeta.json` and `unpacked/<id><ext>` (`Accept: application/zip` only; `/unpack/all[/{handler}]` adds the request's own bytes as `unpacked/0`; raw POST 415). Bytes kept are held to `maxUnpackBytes` (`tikajs-68os.7.4`); `/unpack/preset/{name}` is a 4.2.0 variant that is not served |
+| `/unpack` | PUT, POST multipart | The embedded resources as Tika's data package: a zip of `datapackage.json`, `rmeta.json` and `unpacked/<id><ext>` (`Accept: application/zip` only; `/unpack/all[/{handler}]` adds the request's own bytes as `unpacked/0`; raw POST 415). Bytes kept are held to `maxUnpackBytes` (`tikajs-68os.7.4`), which `server.maxUnpackBytes` sets in `ripstream serve --config` (`tikajs-68os.28`); `/unpack/preset/{name}` is a 4.2.0 variant that is not served |
 | `/language` | PUT, POST | Language detection with Tika's CharSoup model: the ISO 639-1 code as `text/plain` (Tika's answer; `und`, a blank body, is an empty body); `Accept: application/json` is the detector's whole answer. Reads the first 100,000 characters (`tikajs-68os.7.8`, `tikajs-68os.9.3`) and keeps only the first 400,000 bytes of an uncompressed body, so its memory does not grow with the body (`tikajs-68os.9.5`); the rest still counts against `maxBodyBytes`. Tika has no `/language/stream` |
 | `/translate?target=` | PUT, POST | A ripstream extension: tika-server 4.2.0 has no translate routes (404 for `/translate/all/...`, which were 3.x). Translates the body into `target` (default `en`); 501 until a translator is configured |
 | `/pipes`, `/async` | POST | Requires `allowPipes` (4.x) / `enableUnsecureFeatures` (3.x). Here: off unless `pipes` is given, and `pipes` needs `authenticate`. With `pipes.settings` they are Tika's: `/pipes` takes one `FetchEmitTuple` and answers `{status, message?}` with Tika's HTTP status; `/async` takes `{"tuples": [...]}` and queues them for a background run (`tikajs-68os.6.5`, below) |

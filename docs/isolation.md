@@ -251,8 +251,8 @@ A PDF whose parser faults inside the child is a `crash` (500). Before isolation 
 malformed document (422). A clearly malformed PDF is still a 422.
 
 **`/unpack` and its byte budget.** `/unpack` answers a zip of the embedded documents, so the parse keeps their bytes
-until the package is written. `maxUnpackBytes` (a server option; default 100 MiB; `ripstream serve` cannot set it yet,
-`tikajs-68os.28`) is the most it keeps per request. A document that would take the total past it is left out of the zip
+until the package is written. `maxUnpackBytes` (a server option; default 100 MiB; `ripstream serve --config` sets it
+with `server.maxUnpackBytes`) is the most it keeps per request. A document that would take the total past it is left out of the zip
 and still has its record in `rmeta.json`; there is no query parameter, so a client cannot raise it. With isolation the
 bytes cross the boundary as `bytes` frames after their record, counted against `maxResultBytes`, and the budget may not
 exceed what a child can hold: `min(256 MiB, perChildMb / 4)`, shown in `/status` as `isolation.limits.unpackCeiling`. A
