@@ -1,30 +1,44 @@
 import {
-  LimitExceededError,
   MalformedDocumentError,
   MediaType,
-  Metadata,
-  ParserDeclinedError,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
+  type Metadata,
   type ParseContext,
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { boundedUnzip } from "./bounded-unzip.ts";
+import type { BoundedZip } from "./bounded-unzip.ts";
+import { isFatal } from "./failures.ts";
+import { emitPackageEntry, entryMetadata, openPackage } from "./iwork-package.ts";
+import { parsePlist, plistText } from "./plist.ts";
 
-const TYPES = [
-  "application/vnd.apple.keynote",
-  "application/vnd.apple.pages",
-  "application/vnd.apple.numbers",
-  "application/vnd.apple.iwork",
-];
+/*
+ * Port of Tika 4.2.0's IWork13PackageParser: the iWork '13 layout (a ZIP of Index/*.iwa parts, Metadata/ plists and
+ * previews). The .iwa parts are Snappy-compressed protobuf that Tika does not decode, so this gives no text of the
+ * document: metadata from three Metadata/ entries, the preview as a thumbnail, and every other entry as an embedded
+ * document. Read from that source and its IWork13ParserTest; not run against a Tika.
+ */
 
-/** iWork '13+ IWA metadata and best-effort strings. */
+const PROPERTIES = "Metadata/Properties.plist";
+const BUILD_VERSION_HISTORY = "Metadata/BuildVersionHistory.plist";
+const DOCUMENT_IDENTIFIER = "Metadata/DocumentIdentifier";
+const PREVIEW = "preview.jpg";
+const SKIPPED_PREVIEWS = new Set(["preview-micro.jpg", "preview-web.jpg"]);
+const IWORKS_PREFIX = "iwork:";
+const DOCUMENT_ID_BYTES = 36;
+
+const KEYNOTE = "application/vnd.apple.keynote.13";
+const NUMBERS = "application/vnd.apple.numbers.13";
+const PAGES = "application/vnd.apple.pages.13";
+const UNKNOWN = "application/vnd.apple.unknown.13";
+
 export class IWork13Parser implements Parser {
   readonly name = "IWork13PackageParser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
-    return new Set(TYPES.map((type) => MediaType.parse(type)!));
+    return new Set([KEYNOTE, NUMBERS, PAGES, UNKNOWN].map((type) => MediaType.parseOrThrow(type)));
   }
 
   async parse(
@@ -33,91 +47,97 @@ export class IWork13Parser implements Parser {
     metadata: Metadata,
     ctx: ParseContext,
   ): Promise<void> {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    let total = 0;
-    for (const chunk of chunks) total += chunk.byteLength;
-    const data = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      data.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    const files = boundedUnzip(data, ctx.limits);
-    const iwa = files.names.filter(
-      (name) => name.startsWith("Index/") && name.endsWith(".iwa"),
-    );
-    if (iwa.length === 0) throw new ParserDeclinedError("Not an iWork 13+ package");
-    metadata.set("iwork:iwa-parts", String(iwa.length));
-    metadata.set(
-      "iwork:preview",
-      files.names.some((name) => name.startsWith("QuickLook/Preview")) ? "true" : "false",
-    );
-
-    const snappy = (await import("snappyjs")) as unknown as {
-      default?: { uncompress?: (value: Uint8Array) => Uint8Array };
-      uncompress?: (value: Uint8Array) => Uint8Array;
-    };
-    const uncompress = snappy.default?.uncompress ?? snappy.uncompress;
-    const strings: string[] = [];
-    for (const name of iwa.slice(0, 64)) {
-      const bytes = files.get(name)!;
-      try {
-        const decoded = uncompress === undefined ? bytes : decodeIwa(bytes, uncompress);
-        appendStrings(strings, printable(decoded));
-      } catch (error) {
-        if (error instanceof LimitExceededError) throw error; // cap must stay a loud 422
-        appendStrings(strings, printable(bytes));
-      }
-    }
+    const files = await openPackage(stream, ctx);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    for (const value of [...new Set(strings)].slice(0, 500)) {
-      await xhtml.element("p", value);
+
+    // Tika goes on after an entry fails and reports the last failure once every entry has been tried.
+    let failure: unknown;
+    for (const name of files.names) {
+      ctx.throwIfAborted();
+      try {
+        await processEntry(files, name, xhtml, metadata, ctx);
+      } catch (error) {
+        if (isFatal(error, ctx)) throw error;
+        failure = error;
+      }
     }
+    if (failure !== undefined) {
+      throw new MalformedDocumentError("Problem processing the iWork package", { cause: failure });
+    }
+    metadata.set("Content-Type", documentType(files.names, metadata));
     await xhtml.endDocument();
   }
 }
 
-function decodeIwa(
-  data: Uint8Array,
-  uncompress: (value: Uint8Array) => Uint8Array,
-): Uint8Array {
-  const pieces: Uint8Array[] = [];
-  let offset = 0;
-  while (offset + 4 <= data.length) {
-    const length = data[offset + 1]! | (data[offset + 2]! << 8) | (data[offset + 3]! << 16);
-    offset += 4;
-    if (length <= 0 || offset + length > data.length) break;
-    pieces.push(uncompress(data.subarray(offset, offset + length)));
-    offset += length;
-  }
-  if (pieces.length === 0) return data;
-  let total = 0;
-  for (const piece of pieces) total += piece.byteLength;
-  const result = new Uint8Array(total);
-  let position = 0;
-  for (const piece of pieces) {
-    result.set(piece, position);
-    position += piece.byteLength;
-  }
-  return result;
-}
-
-const MAX_STRINGS = 1_000_000;
-
-function appendStrings(target: string[], source: readonly string[]): void {
-  for (const value of source) {
-    if (target.length >= MAX_STRINGS) {
-      throw new LimitExceededError(`Extracted string count exceeds ${MAX_STRINGS}`);
-    }
-    target.push(value);
+async function processEntry(
+  files: BoundedZip,
+  name: string,
+  xhtml: XHTMLContentHandler,
+  metadata: Metadata,
+  ctx: ParseContext,
+): Promise<void> {
+  if (name === PROPERTIES) {
+    addProperties(files.get(name)!, metadata);
+  } else if (name === BUILD_VERSION_HISTORY) {
+    addVersionHistory(files.get(name)!, metadata);
+  } else if (name === DOCUMENT_IDENTIFIER) {
+    addDocumentIdentifier(files.get(name)!, metadata);
+  } else if (name === PREVIEW) {
+    await emitPackageEntry(xhtml, files.get(name)!, entryMetadata(name, "THUMBNAIL"), metadata, ctx);
+  } else if (SKIPPED_PREVIEWS.has(name) || name.endsWith(".iwa")) {
+    // Not read: the parts are protobuf Tika does not decode, and the small previews add nothing to the large one.
+  } else {
+    await emitPackageEntry(xhtml, files.get(name)!, entryMetadata(name), metadata, ctx);
   }
 }
 
-function printable(data: Uint8Array): string[] {
-  const text = new TextDecoder("latin1").decode(data);
-  return [...text.matchAll(/[ -~]{5,}/g)]
-    .map((match) => match[0]!.trim())
-    .filter((value) => /[A-Za-z]/.test(value));
+/** Each key of the properties dictionary as an iwork: field; any other root is ignored, as in Tika. */
+function addProperties(bytes: Uint8Array, metadata: Metadata): void {
+  const root = parsePlist(bytes);
+  if (root.kind !== "dict") return;
+  for (const [key, value] of root.value) metadata.add(IWORKS_PREFIX + key, plistText(value));
+}
+
+function addVersionHistory(bytes: Uint8Array, metadata: Metadata): void {
+  const root = parsePlist(bytes);
+  if (root.kind !== "array") return;
+  for (const item of root.value) metadata.add(`${IWORKS_PREFIX}build-version-history`, plistText(item));
+}
+
+/**
+ * The document's UUID: the first 36 bytes as ISO-8859-1, and nothing at all if the entry is shorter. Not TextDecoder("latin1"),
+ * which the Encoding Standard makes windows-1252: it would turn a byte of 0x80 to 0x9F into a character Java's ISO_8859_1 does not.
+ */
+function addDocumentIdentifier(bytes: Uint8Array, metadata: Metadata): void {
+  if (bytes.byteLength < DOCUMENT_ID_BYTES) return;
+  metadata.set(`${IWORKS_PREFIX}document-id`, String.fromCharCode(...bytes.subarray(0, DOCUMENT_ID_BYTES)));
+}
+
+/**
+ * Only a Keynote package has parts that say what it is (Slide and MasterSlide); the main Document.iwa would need its
+ * protobuf decoded. The rest are typed by the file name, if the caller gave one.
+ */
+function documentType(names: readonly string[], metadata: Metadata): string {
+  for (const name of names) if (isKeynotePart(name)) return KEYNOTE;
+  return typeByExtension(metadata.get(TIKA_KEYS.RESOURCE_NAME));
+}
+
+function isKeynotePart(name: string): boolean {
+  if (!name.endsWith(".iwa")) return false;
+  return (
+    name === "Index/MasterSlide.iwa" ||
+    name.startsWith("Index/MasterSlide-") ||
+    name === "Index/Slide.iwa" ||
+    name.startsWith("Index/Slide-")
+  );
+}
+
+function typeByExtension(fileName: string | null): string {
+  if (fileName === null) return UNKNOWN;
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".numbers")) return NUMBERS;
+  if (lower.endsWith(".pages")) return PAGES;
+  if (lower.endsWith(".key")) return KEYNOTE;
+  return UNKNOWN;
 }

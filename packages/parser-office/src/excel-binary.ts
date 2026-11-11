@@ -224,7 +224,7 @@ function firstRecordAt(records: RecordWithOffset[], offset: number): number {
 function readRecords(data: Uint8Array): RecordWithOffset[] {
   const records: RecordWithOffset[] = [];
   let offset = 0;
-  while (offset + 4 <= data.byteLength && records.length < 2_000_000) {
+  while (offset + 4 <= data.byteLength && records.length < MAX_BIFF_RECORDS) {
     const type = readUInt16(data, offset);
     const length = readUInt16(data, offset + 2);
     if (offset + 4 + length > data.byteLength) break;
@@ -418,7 +418,9 @@ function readSheet(
 
 const MAX_COLUMNS = 16_384;
 /** Cap on materialized (real plus padding) cells per sheet. */
-const MAX_SHEET_CELLS = 1_000_000;
+export const MAX_SHEET_CELLS = 1_000_000;
+/** Cap on the BIFF records of one stream; OldExcelParser shares it. */
+export const MAX_BIFF_RECORDS = 2_000_000;
 
 function toRows(
   cells: Map<number, Map<number, Cell>>,
@@ -479,7 +481,7 @@ function dateFmt(
   return custom !== undefined && isDateFormat(custom);
 }
 
-function decodeRk(rk: number): number {
+export function decodeRk(rk: number): number {
   let value: number;
   if ((rk & 0x02) !== 0) {
     value = rk >> 2;
@@ -509,7 +511,7 @@ function readBiff8String(
   return readAnsi(data, position, length, codepage);
 }
 
-function readAnsi(
+export function readAnsi(
   data: Uint8Array,
   offset: number,
   length: number,
@@ -660,18 +662,18 @@ class ChunkCursor {
   }
 }
 
-function readDouble(data: Uint8Array, offset: number): number {
+export function readDouble(data: Uint8Array, offset: number): number {
   return new DataView(data.buffer, data.byteOffset + offset, 8).getFloat64(
     0,
     true,
   );
 }
 
-function readUInt16(data: Uint8Array, offset: number): number {
+export function readUInt16(data: Uint8Array, offset: number): number {
   return (data[offset] ?? 0) | ((data[offset + 1] ?? 0) << 8);
 }
 
-function readUInt32(data: Uint8Array, offset: number): number {
+export function readUInt32(data: Uint8Array, offset: number): number {
   return (
     (data[offset] ?? 0) |
     ((data[offset + 1] ?? 0) << 8) |
