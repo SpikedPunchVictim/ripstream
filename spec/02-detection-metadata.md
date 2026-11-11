@@ -143,7 +143,7 @@ Order:
 
 1. BOM: UTF-8, UTF-16LE, UTF-16BE, UTF-32LE/BE.
 2. Null-byte density and control-character ratio → binary if above threshold.
-3. UTF-8 validity check on the prefix; valid multi-byte sequences raise confidence.
+3. A prefix under two bytes, or pure ASCII (no byte over 0x7f), is `windows-1252`, as Tika 4.2.0's `MojibusterEncodingDetector` answers it; this is why an ASCII-only text file reports `windows-1252`, not `UTF-8`. Otherwise a UTF-8 validity check on the prefix; valid multi-byte sequences raise confidence.
 4. Statistical detector (`@spikedpunch/ripstream-mime` bundles a port of the upstream juniversalchardet models, or an equivalent MIT detector) for legacy encodings.
 5. Fallback: `windows-1252` with low confidence, matching upstream behavior for Latin-1-ish bytes.
 6. HTML: `meta charset`, then BOM, then statistical; XML: declaration encoding.

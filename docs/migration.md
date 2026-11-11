@@ -321,9 +321,9 @@ Not the same:
   `filename` of the request). It answered the `/rmeta` JSON before, so a client that read records from it reads
   `rmeta.json` now. It takes `Accept: application/zip` (`*/*`) only, and a raw `POST` is a 415. A document that cannot
   be opened is a 422 with the failure as the body; one inside it that cannot be read stays in `rmeta.json`. The bytes
-  kept are held to `maxUnpackBytes` (100 MiB; a document past it is not in the zip). Differences from Tika: the
-  extension of a text or HTML document is its type's (`.txt`, `.html`) where Tika's, finding a charset in the
-  `Content-Type`, is `.bin` (`tikajs-68os.29`); an entry named `../x` or `/x` in a zip is skipped by the archive
+  kept are held to `maxUnpackBytes` (100 MiB; a document past it is not in the zip). A text, HTML or Markdown document is named
+  `.bin`, as Tika names it: its `Content-Type` carries a charset (`text/plain; charset=windows-1252`), which Tika's
+  registry does not know as a type (`tikajs-68os.29`). Differences from Tika: an entry named `../x` or `/x` in a zip is skipped by the archive
   parser, not unpacked under its id; a truncated zip is not salvaged; `/unpack/preset/{name}` and the config routes
   are not served; the response is not gzipped.
 - A response of text, JSON or XML of 32 bytes or more is gzipped for a client that sends `Accept-Encoding: gzip`

@@ -4,6 +4,33 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### The text parsers write the charset into `Content-Type` (`tikajs-68os.29`)
+
+Changed: a text document's `Content-Type` is now `<type>; charset=<charset>`, as Tika's text parsers write it. That covers plain
+text and its subtypes (`text/plain`, `application/json`, `text/x-python`, ...), HTML (`text/html`, `application/xhtml+xml`),
+Markdown (`text/markdown`) and CSV and TSV. Java and C++ source keep the bare type, as Tika's `SourceCodeParser` leaves it. An
+ASCII-only document, or one under two bytes, now detects as `windows-1252` (what Tika 4.2.0's `MojibusterEncodingDetector`
+answers) where it detected as `UTF-8`: `Content-Encoding` says so too. The text decodes the same, since ASCII is ASCII in both.
+Valid UTF-8 with a byte over 0x7f is still `UTF-8`, and a BOM, a `meta` charset or an XML declaration still wins.
+
+Visible: the `Content-Type` and `Content-Encoding` of every text-family record from `/rmeta`, `/meta`, `/tika` and the pipes
+emitters. `/unpack` and pipes UNPACK with `suffixStrategy: DETECTED` name a text, HTML or Markdown file `.bin`, as Tika does, because
+its registry has no extension for a type with parameters; this was `tikajs-68os.7.4`'s difference (1). A client that compared
+`metadata.get("Content-Type") === "text/plain"` must now read the base type (`MediaType.parse(value).getBaseType()`).
+`ParseRecord.mediaType` and `MetricsCollector.byMediaType` stay the bare type (`text/plain`), so neither splits by charset.
+
+Differences, read from Tika 4.2.0 source and not run against a Tika; the first four are `tikajs-68os.38`:
+- There is no Mojibuster port. Non-ASCII text that is not valid UTF-8 is still detected by chardet, so legacy-charset text can
+  report another charset name, and decode differently, than Tika's.
+- An incoming charset (a request's `Content-Type: text/plain; charset=x`) is not read. Tika reads it before it detects.
+- Tika probes 16 KiB of content (up to 512 KiB of raw bytes for markup); ripstream probes 64 KiB. A file whose first byte over
+  0x7f falls between the two is `windows-1252` in Tika and `UTF-8` here. A file that is ASCII for the whole 64 KiB and then holds
+  UTF-8 is decoded as `windows-1252`, as Tika would decode it: the later text comes out as mojibake.
+- 7-bit ISO-2022-JP, -KR and -CN text is detected structurally by Tika, not here.
+- CSV: Tika also writes `; delimiter=comma` (`tab` for TSV) and `csv:delimiter`; ripstream writes the charset only
+  (`tikajs-68os.36`).
+- ripstream's XML and feed parsers write `Content-Encoding`; Tika's do not (`tikajs-68os.37`).
+
 ### `tk:embedded-resource-type` (`tikajs-68os.35`)
 
 Added: the parsers that hand embedded documents on now write `tk:embedded-resource-type`, with Tika's values
@@ -319,9 +346,9 @@ frames after their record, counted in `maxResultBytes`; the parent reserves twic
 the bytes). `DerivedLimits.unpackCeiling` and `ServerIsolationStatus.limits.unpackCeiling` say what a budget may be.
 
 Differences from Tika, measured against the saved 4.2.0 responses (r164-r177, r224, r225): ids, resource names, media
-types, byte counts and sha256 match document by document, and so does the manifest layout. A text or HTML document is
+types, byte counts and sha256 match document by document, and so does the manifest layout. A text or HTML document was
 `unpacked/N.txt` / `N.html` where Tika's is `N.bin`, because its `Content-Type` carries a charset that its extension
-lookup does not find and ours has none (`tikajs-68os.29`). A zip entry named `../x` or `/x` is skipped by the archive
+lookup does not find and ours had none (closed by `tikajs-68os.29`, above). A zip entry named `../x` or `/x` is skipped by the archive
 parser (Tika unpacks it under its id). A truncated zip is not salvaged (r169). `/unpack/preset/{name}` and the config
 routes are not served. The response is not gzipped. `ripstream serve` has no setting for `maxUnpackBytes`
 (`tikajs-68os.28`).
