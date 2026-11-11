@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### XML and feed documents carry no `Content-Encoding` (`tikajs-68os.37`)
+
+Changed: the XML parser (XML, SVG and the types it serves) and the feed parser no longer write `Content-Encoding`. Tika 4.2.0's
+`XMLParser` and news parsers never set it; of Tika's parsers only the text, HTML, Markdown, CSV, source-code, mail, mbox,
+PDF, DBF, MIF, SAS7BDAT and ENVI parsers do. The charset is still detected and used to decode; it is not reported. A client
+that read `Content-Encoding` from an XML or RSS record gets none, as it would from Tika. Read from Tika source, not run against
+a Tika: no saved Tika response of an XML document is in the repository to compare with.
+
 ### The text parsers write the charset into `Content-Type` (`tikajs-68os.29`)
 
 Changed: a text document's `Content-Type` is now `<type>; charset=<charset>`, as Tika's text parsers write it. That covers plain
@@ -29,7 +37,6 @@ Differences, read from Tika 4.2.0 source and not run against a Tika; the first f
 - 7-bit ISO-2022-JP, -KR and -CN text is detected structurally by Tika, not here.
 - CSV: Tika also writes `; delimiter=comma` (`tab` for TSV) and `csv:delimiter`; ripstream writes the charset only
   (`tikajs-68os.36`).
-- ripstream's XML and feed parsers write `Content-Encoding`; Tika's do not (`tikajs-68os.37`).
 
 ### `tk:embedded-resource-type` (`tikajs-68os.35`)
 
