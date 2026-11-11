@@ -520,6 +520,29 @@ test("/language looks at the first 100,000 characters and ignores the rest", asy
   });
 });
 
+test("/language answers from the start of a body far longer than the part it reads", async () => {
+  await withServer(async (base) => {
+    const french = "Ceci est une phrase française sur les documents et leurs métadonnées. ";
+    const body = `${`${ENGLISH} `.repeat(6000)}${french.repeat(14000)}`;
+    assert.ok(Buffer.byteLength(body) > 1_000_000);
+    assert.equal(await (await put(base, "/language", { body })).text(), "en");
+    const gzipped = await put(base, "/language", { body: gzipSync(body), headers: { "content-encoding": "gzip" } });
+    assert.equal(await gzipped.text(), "en");
+  });
+});
+
+test("/language keeps enough of a body to hold 100,000 characters of text that takes two bytes a character", async () => {
+  await withServer(async (base) => {
+    const russian = "Это предложение написано по-русски и рассказывает о документах и их метаданных. ";
+    const greek = "Αυτή η πρόταση είναι γραμμένη στα ελληνικά και μιλά για έγγραφα και τα μεταδεδομένα τους. ";
+    const first = russian.repeat(Math.ceil(30_000 / russian.length)).slice(0, 30_000);
+    const rest = greek.repeat(Math.ceil(70_000 / greek.length)).slice(0, 70_000);
+    const body = `${first}${rest}${greek.repeat(5000)}`;
+    // The first 100,000 characters are 30,000 Russian and 70,000 Greek; the first 100,000 bytes would be mostly Russian.
+    assert.equal(await (await put(base, "/language", { body })).text(), "el");
+  });
+});
+
 test("a route answers 406, with no body, for an Accept it cannot meet: what it writes is all it offers", async () => {
   await withServer(async (base) => {
     const json = { accept: "application/json" };

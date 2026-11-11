@@ -79,6 +79,27 @@ test("a body a little over the cap is refused with 413 and the connection carrie
   });
 });
 
+test("/language, which keeps only the start of a body, refuses one over the cap the same way", async () => {
+  await withServer(async (port, agent) => {
+    const body = Buffer.alloc(2 * MiB, 97);
+    const refused = await request(port, agent, "PUT", "/language", { "content-length": body.length }, (req) => req.end(body));
+    assert.equal(refused.status, 413);
+    assert.match(refused.body, /Request exceeds 1048576 bytes/);
+    assert.notEqual(refused.connection, "close");
+    const next = await version(port, agent);
+    assert.equal(next.status, 200);
+    assert.equal(next.reusedSocket, true, "the connection the 413 was answered on carries the next request");
+
+    const chunk = Buffer.alloc(512 * 1024, 97);
+    const chunked = await request(port, agent, "PUT", "/language", {}, (req) => {
+      for (let i = 0; i < 6; i++) req.write(chunk);
+      req.end();
+    });
+    assert.equal(chunked.status, 413);
+    assert.equal((await version(port, agent)).reusedSocket, true);
+  });
+});
+
 test("a chunked body over the cap, whose size is not announced, is refused the same way", async () => {
   await withServer(async (port, agent) => {
     const chunk = Buffer.alloc(512 * 1024, 97);

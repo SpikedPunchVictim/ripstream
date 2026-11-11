@@ -1,6 +1,6 @@
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { gunzip, gzip } from "node:zlib";
+import { gzip } from "node:zlib";
 import {
   Metadata,
   SERVER_ENDPOINTS,
@@ -51,6 +51,7 @@ import {
   type ServerMimeType,
 } from "./mime-types.ts";
 import { HttpError } from "./http-error.ts";
+import { readBody, readBodyPrefix } from "./request-body.ts";
 import { TikaPipes, type TikaPipesAnswer } from "./tika-pipes.ts";
 import { extensionFor } from "./unpack.ts";
 
@@ -824,8 +825,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         notAcceptable(response);
         return;
       }
-      const body = await readBody(request, maxBodyBytes);
-      // Tika reads the first 100,000 characters and ignores the rest: detection saturates well before that.
+      // Tika reads the first 100,000 characters and ignores the rest: detection saturates well before that, so only
+      // the bytes that can hold them are kept (the rest of the body still counts against the cap).
+      const body = await readBodyPrefix(request, maxBodyBytes, LANGUAGE_SAMPLE_CHARS * 4);
       const sample = new TextDecoder("utf-8", { fatal: false }).decode(body.subarray(0, LANGUAGE_SAMPLE_CHARS * 4));
       const result = languageDetector.detect(sample.slice(0, LANGUAGE_SAMPLE_CHARS));
       if (kind === "application/json") sendJson(response, 200, result);
@@ -1437,95 +1439,6 @@ async function buildPipesConfig(
     if (error instanceof PipesPathError) throw new HttpError(403, error.message);
     throw error;
   }
-}
-
-/**
- * How much of a body over the cap is read and thrown away, and for how long, so the 413 can be answered on a
- * connection that lives on. A body past that is not read at all: the 413 closes the connection.
- */
-const DRAIN_BYTES = 16 * 1024 * 1024;
-const DRAIN_MILLIS = 5_000;
-
-/**
- * The request body, inflated when it is sent with `Content-Encoding: gzip`, as Tika's server does. `limit` bounds the
- * body on the wire and again what it inflates to, so a small gzip cannot become a large document.
- */
-async function readBody(request: IncomingMessage, limit: number): Promise<Uint8Array> {
-  const raw = await readRawBody(request, limit);
-  const encoding = String(request.headers["content-encoding"] ?? "").trim().toLowerCase();
-  if ((encoding !== "gzip" && encoding !== "x-gzip") || raw.length === 0) return raw;
-  return new Promise((resolve, reject) => {
-    gunzip(raw, { maxOutputLength: limit }, (error, inflated) => {
-      if (error === null) {
-        resolve(new Uint8Array(inflated));
-      } else if ((error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
-        reject(new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes once decoded`));
-      } else {
-        reject(new HttpError(400, "Request body is not valid gzip"));
-      }
-    });
-  });
-}
-
-/**
- * The request body as it came, or `REQUEST_TOO_LARGE` when it is over `limit`. A body over the limit is not kept: it
- * is read and discarded up to `DRAIN_BYTES` more, then the error is raised with the request read to its end
- * (`request.complete`), or, when the client sends more than that or too slowly, with the request left unread
- * (`!request.complete`). Never destroys the request: that would take the connection with it before the 413 is written.
- */
-function readRawBody(request: IncomingMessage, limit: number): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    if (request.readableEnded) {
-      resolve(new Uint8Array());
-      return;
-    }
-    const tooLarge = (): RipstreamError => new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes`);
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let discarding = false;
-    let timer: NodeJS.Timeout | undefined;
-
-    const settle = (error: Error | null): void => {
-      clearTimeout(timer);
-      request.off("data", onData);
-      request.off("end", onEnd);
-      request.off("error", onError);
-      request.off("close", onClose);
-      if (error === null) {
-        resolve(new Uint8Array(Buffer.concat(chunks)));
-        return;
-      }
-      request.pause();
-      reject(error);
-    };
-    const startDiscarding = (): void => {
-      discarding = true;
-      chunks.length = 0;
-      timer = setTimeout(() => settle(tooLarge()), DRAIN_MILLIS);
-    };
-    const onData = (chunk: Buffer): void => {
-      total += chunk.length;
-      if (!discarding && total > limit) startDiscarding();
-      if (!discarding) chunks.push(chunk);
-      else if (total > limit + DRAIN_BYTES) settle(tooLarge());
-    };
-    const onEnd = (): void => settle(discarding ? tooLarge() : null);
-    const onError = (error: Error): void => settle(error);
-    const onClose = (): void => {
-      if (!request.readableEnded) settle(new Error("Request aborted before its body was read"));
-    };
-
-    const declared = Number(request.headers["content-length"]);
-    if (declared > limit + DRAIN_BYTES) {
-      reject(tooLarge());
-      return;
-    }
-    if (declared > limit) startDiscarding();
-    request.on("data", onData);
-    request.on("end", onEnd);
-    request.on("error", onError);
-    request.on("close", onClose);
-  });
 }
 
 function extractMultipart(
