@@ -153,9 +153,13 @@ Iterators:
 
 Built (`tikajs-68os.6.6`), with no cloud or search SDK: `s3-fetcher`, `s3-emitter` and `s3-pipes-iterator` (SigV4 over `fetch`, so
 the "optional AWS SDK peer" above was not needed) and `es-emitter` and `opensearch-emitter` (the `_bulk` request over `fetch`).
-Tracked: GCS (`tikajs-68os.31`), Azure Blob (`tikajs-68os.32`), Solr over HTTP (`tikajs-68os.33`) and the search reporters
-(`tikajs-68os.34`). Proposed non-goals awaiting the owner: the JDBC components, Kafka and the other connectors
-(`tikajs-68os.24`). `docs/migration.md` says what each built component does and does not do.
+Built after that, with no SDK either: `gcs-fetcher`, `gcs-emitter` and `gcs-pipes-iterator` (the JSON API over `fetch`, with the
+service-account JWT signed by `node:crypto`, so the "`google-auth-library` peer" above was not needed), `az-blob-fetcher`,
+`az-blob-emitter` and `az-blob-pipes-iterator` (the Blob REST API with a SAS token, so no `@azure/storage-blob` peer), `solr-emitter`
+and `solr-pipes-iterator` over `solrUrls` (JSON update, not javabin) and the `es-pipes-reporter` and `opensearch-pipes-reporter`
+reporters (`tikajs-68os.31` to `.34`). None ran against the real service: the requests are read from Tika's source and checked
+against fakes. Proposed non-goals awaiting the owner: the JDBC components, Kafka and the other connectors (`tikajs-68os.24`).
+`docs/migration.md` says what each built component does and does not do.
 
 Reporters:
 

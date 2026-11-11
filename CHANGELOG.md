@@ -4,6 +4,45 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Pipes: GCS, Azure Blob and Solr components and the Elasticsearch and OpenSearch reporters (`tikajs-68os.31` to `.34`)
+
+Added: Tika's `gcs-fetcher`, `gcs-emitter` and `gcs-pipes-iterator`, `az-blob-fetcher`, `az-blob-emitter` and
+`az-blob-pipes-iterator`, `solr-emitter` and `solr-pipes-iterator`, and the `es-pipes-reporter` and
+`opensearch-pipes-reporter` reporters. Each loads from a Tika-shaped configuration (`fetchers`, `emitters`,
+`pipes-iterator`, `pipes-reporters`) and runs through `createEngineFromSettings`. No dependency was added: each speaks its
+service's HTTP API with `fetch` (GCS also uses `node:crypto` to sign the service-account JWT).
+
+- **GCS.** Objects are read, written and listed through the JSON API. Credentials are Google's application default
+  credentials as Tika's client finds them, two of the sources: the service account key file `GOOGLE_APPLICATION_CREDENTIALS`
+  names, and the metadata server of a Google Cloud VM (`GCE_METADATA_HOST` is honoured). The gcloud user credentials file is
+  not read, and a key file of another type (`authorized_user`, `external_account`) is refused. The fetcher asks for the read-only scope. The emitter writes `prefix/emitKey.fileExtension`
+  and puts the extension on bytes too, as Tika does. The iterator leaves out objects of 0 bytes.
+- **Azure Blob.** SAS token only (`sasToken`, `endpoint`, `container`); Tika's connection-string mode, with the fetch key as
+  the connection string, is refused. A blob name that is empty or has a `.` or `..` segment is refused, since a URL cannot
+  carry it. `overwriteExisting` is false unless set, as Tika's: an existing blob is a 409. One trailing `/` of the iterator's
+  prefix is dropped, as Tika drops it.
+- **Solr.** `solrUrls` only; the first URL that a connection can be made to takes the request. `solrZkHosts`, a proxy and
+  `verifySsl: false` are refused. Documents go to the JSON update handler, one request for each emitted document, where Tika's
+  SolrJ sends javabin. A failure of the iterator's `/select` throws, where Tika logs it and ends the enumeration as complete.
+- **Elasticsearch and OpenSearch reporters.** Each result is upserted as `<keyPrefix>parse_status` and
+  `<keyPrefix>parse_time_ms`. `exit_value` is never written. A report that fails ends the run, where Tika logs and goes on.
+  A `keyPrefix` that starts with `tk:` or `X-TIKA:` is refused (Tika's `Metadata` refuses it too). They refuse a proxy,
+  `verifySsl: false` and, for Elasticsearch, any `authScheme` but basic, as the emitters do.
+
+Every request sets `redirect: "error"`, so a credential never follows a redirect to another host. New run options `gcs`,
+`azBlob` and `solr` replace the network, the clock, the environment or the token (a test's fake, or an emulator's address),
+and `search` now serves the reporters too. Changed (types): `PipesReporterSettings` is now the union
+`JsonlReporterSettings | SearchReporterSettings`; `JsonlReporterSettings` is the old shape, so code that read `.path` without
+narrowing no longer compiles. `PipesFetcherSettings`, `PipesEmitterSettings` and `PipesIteratorSettings` are wider. The pipes
+engine's dispatch is now an exhaustive `switch`, so a settings type that is not wired fails `tsc`. The refusal message lists
+what is still missing: the jdbc and kafka components, the atlassian-jwt, google-drive and microsoft-graph fetchers, and the
+csv and json iterators.
+
+Not run against Google Cloud Storage, Azure Blob Storage, Solr, Elasticsearch or OpenSearch: the requests are read from
+Tika's source and checked against fakes. Items that do not come from Tika's source: the GCS OAuth scopes, the Azure
+`x-ms-version` (`2021-08-06`), reading a base64 `Name` in a blob listing, tolerating a leading `?` on a SAS token, and Solr's
+JSON update format. See `docs/migration.md`.
+
 ### XML documents write a space per element and accept a DOCTYPE (`tikajs-68os.10.4`)
 
 Changed: the XML parser puts one space at every start tag, as Tika's `XMLParser` does (its `TextContentHandler` adds space between elements),

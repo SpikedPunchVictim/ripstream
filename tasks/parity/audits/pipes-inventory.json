@@ -4,10 +4,10 @@
   "kind": "emitter",
   "upstream": "az-blob-emitter",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterFactory.java:49",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"az-blob-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitter.java:70; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
-  "note": "Plausibly valuable in Node: Azure Blob put (SAS); moderate value. Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
+  "ripstream": "packages/pipes/src/azblob/components.ts:57",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"az-blob-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitter.java:70; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.32): AzBlobEmitter (packages/pipes/src/azblob/components.ts:57) writes prefix/emitKey.fileExtension as GcsEmitter does, with If-None-Match: * unless overwriteExisting. AzBlobClient (packages/pipes/src/azblob/client.ts) sends Get Blob, Put Blob (one block blob) and List Blobs (flat, marker) with fetch, the SAS token as the tail of the query, a redirect being an error so the token never follows one; an error's message leaves the URL out. Settings are read by packages/core/src/pipes-azblob-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: SAS token only; Tika's mode with none of sasToken, endpoint and container (the fetch key is a connection string) is refused; a blob name that is empty or has a . or .. segment is refused (fetch resolves it before sending); overwriteExisting is false unless set (Tika's default) and then an existing blob is a 409; spoolToTemp and extractUserMetadata change nothing; the x-ms-version header (2021-08-06), reading a base64 Name in a listing and dropping a leading ? from a SAS token are not from Tika's source. Not run against Azure Blob Storage or Azurite.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitter.java:70",
   "vendorSdks": [
    "com.azure.core",
@@ -51,8 +51,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/emitter/azblob/AZBlobEmitterConfig.java:30"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Azure Blob Storage or Azurite. The requests are checked against a fake Blob service (packages/pipes/test/fixtures/fake-azure-blob.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/azblob.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-azblob-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "emitter/es-emitter",
@@ -189,10 +189,10 @@
   "kind": "emitter",
   "upstream": "gcs-emitter",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterFactory.java:48",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"gcs-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitter.java:64; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
-  "note": "Plausibly valuable in Node: GCS object write; moderate value. Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
+  "ripstream": "packages/pipes/src/gcs/components.ts:80",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"gcs-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterFactory.java:48; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitter.java:64; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.31): GcsEmitter (packages/pipes/src/gcs/components.ts:80) writes prefix/emitKey.fileExtension: the compact JSON list for a metadata document, the content for CONTENT_ONLY, the bytes as they are, the extension on all of them as Tika does; an empty metadata list is refused as Tika's is. GcsClient (packages/pipes/src/gcs/client.ts) sends the JSON API's objects.get (alt=media), objects.insert (uploadType=media) and objects.list (pageToken) with fetch, a redirect being an error so the bearer token never follows one. Credentials (packages/pipes/src/gcs/credentials.ts) are application default credentials, two of the sources: the service-account key file GOOGLE_APPLICATION_CREDENTIALS names (an RS256 JWT signed with node:crypto, exchanged at its token_uri) or the metadata server (GCE_METADATA_HOST read). Settings are read by packages/core/src/pipes-gcs-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: the gcloud user credentials file and key files that are not service_account are not read; the token scopes (devstorage.read_only for the fetcher and iterator, read_write for the emitter) are ripstream's choice, not Tika's, which uses its client library's default; projectId is required as Tika requires it but unused (requests name the bucket); spoolToTemp and extractUserMetadata change nothing; Tika has no endpoint setting, so an emulator is the run option gcs.endpoint. Not run against Google Cloud Storage.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitter.java:64",
   "vendorSdks": [
    "com.google.api",
@@ -224,8 +224,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/emitter/gcs/GCSEmitterConfig.java:28"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Google Cloud Storage or Google's token endpoint. The requests are checked against a fake Cloud Storage (packages/pipes/test/fixtures/fake-gcs.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/gcs.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-gcs-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "emitter/jdbc-emitter",
@@ -626,10 +626,10 @@
   "kind": "emitter",
   "upstream": "solr-emitter",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterFactory.java:49",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"solr-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitter.java:66; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java (17 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). Closest: HttpEmitter (packages/pipes/src/adapters.ts:79) POSTs one {id,text,metadata} JSON body per document to a URL (no bulk, no auth), ModuleEmitter (packages/pipes/src/adapters.ts:46). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.33 for solrUrls over HTTP. solrZkHosts (SolrCloud through ZooKeeper) needs a ZooKeeper client and is a proposed non-goal, the owner's to decide.",
-  "note": "Plausibly valuable in Node: Solr /update over HTTP is plain fetch in Node, no SolrJ needed (17 config fields incl. attachmentStrategy PARENT_CHILD, updateStrategy). Not built yet; tracked in tikajs-68os.33 for solrUrls over HTTP. solrZkHosts (SolrCloud through ZooKeeper) needs a ZooKeeper client and is a proposed non-goal, the owner's to decide.",
+  "ripstream": "packages/pipes/src/solr/components.ts:41",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"solr-emitter\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitter.java:66; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java (17 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.33): SolrEmitter (packages/pipes/src/solr/components.ts:41) indexes the metadata list as one document, or under PARENT_CHILD the container with its embedded documents as children of embeddedFileFieldName, or under SEPARATE_DOCUMENTS one document each with the ids emitKey-<uuid>; under an update strategy each field is {set: value} and the container's _version_ is 1 (UPDATE_MUST_EXIST) or -1 (UPDATE_MUST_NOT_EXIST). SolrClient (packages/pipes/src/solr/client.ts) POSTs the JSON update handler (/<collection>/update, commitWithin, failOnVersionConflicts=false) and GETs /select with fetch, to the first of solrUrls a connection can be made to (only a failure to connect moves on), with basic credentials when set, a redirect being an error. Settings are read by packages/core/src/pipes-solr-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: JSON update where Tika's SolrJ sends javabin, one request for each emitted document; solrZkHosts (SolrCloud through ZooKeeper), a proxy, verifySsl false and authSchemes but basic are refused by name; connectionTimeoutMillis is folded into socketTimeoutMillis, which bounds the whole request; solrZkChroot beside solrUrls changes nothing; the bytes of an unpacked file and CONTENT_ONLY are errors; where Tika logs a failure of /select and ends the enumeration as complete, the iterator throws. Not run against Solr.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitter.java:66",
   "vendorSdks": [
    "org.apache.solr",
@@ -739,8 +739,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/emitter/solr/SolrEmitterConfig.java:44"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against a Solr node. The requests are checked against a fake Solr (packages/pipes/test/fixtures/fake-solr.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/solr.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-solr-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "fetcher/atlassian-jwt-fetcher",
@@ -869,10 +869,10 @@
   "kind": "fetcher",
   "upstream": "az-blob-fetcher",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcherFactory.java:49",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"az-blob-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcher.java:55; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
-  "note": "Plausibly valuable in Node. Tika mode 2 (fetchKey is a full SAS URL) is already approximable with HttpFetcher; mode 1 (endpoint+sasToken+container) needs the Blob REST API. Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
+  "ripstream": "packages/pipes/src/azblob/components.ts:28",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"az-blob-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcher.java:55; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.32): AzBlobFetcher (packages/pipes/src/azblob/components.ts:28) returns the bytes of the blob the fetch key names, as it is. AzBlobClient (packages/pipes/src/azblob/client.ts) sends Get Blob, Put Blob (one block blob) and List Blobs (flat, marker) with fetch, the SAS token as the tail of the query, a redirect being an error so the token never follows one; an error's message leaves the URL out. Settings are read by packages/core/src/pipes-azblob-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: SAS token only; Tika's mode with none of sasToken, endpoint and container (the fetch key is a connection string) is refused; a blob name that is empty or has a . or .. segment is refused (fetch resolves it before sending); overwriteExisting is false unless set (Tika's default) and then an existing blob is a 409; spoolToTemp and extractUserMetadata change nothing; the x-ms-version header (2021-08-06), reading a base64 Name in a listing and dropping a leading ? from a SAS token are not from Tika's source. Not run against Azure Blob Storage or Azurite.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/AZBlobFetcher.java:55",
   "vendorSdks": [
    "com.azure.core",
@@ -910,8 +910,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/fetcher/azblob/config/AZBlobFetcherConfig.java:33"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Azure Blob Storage or Azurite. The requests are checked against a fake Blob service (packages/pipes/test/fixtures/fake-azure-blob.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/azblob.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-azblob-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "fetcher/file-system-fetcher",
@@ -952,10 +952,10 @@
   "kind": "fetcher",
   "upstream": "gcs-fetcher",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcherFactory.java:49",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"gcs-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcher.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). packages/pipes/src/adapters.ts:29 ModuleFetcher / packages/pipes/src/adapters.ts:46 ModuleEmitter load a user module, so a user can supply one; nothing ships. spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
-  "note": "Plausibly valuable in Node. GCS JSON API over fetch with a service-account token. Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
+  "ripstream": "packages/pipes/src/gcs/components.ts:53",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"gcs-fetcher\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcherFactory.java:49; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcher.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java (4 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.31): GcsFetcher (packages/pipes/src/gcs/components.ts:53) returns the bytes of the object the fetch key names, as it is. GcsClient (packages/pipes/src/gcs/client.ts) sends the JSON API's objects.get (alt=media), objects.insert (uploadType=media) and objects.list (pageToken) with fetch, a redirect being an error so the bearer token never follows one. Credentials (packages/pipes/src/gcs/credentials.ts) are application default credentials, two of the sources: the service-account key file GOOGLE_APPLICATION_CREDENTIALS names (an RS256 JWT signed with node:crypto, exchanged at its token_uri) or the metadata server (GCE_METADATA_HOST read). Settings are read by packages/core/src/pipes-gcs-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: the gcloud user credentials file and key files that are not service_account are not read; the token scopes (devstorage.read_only for the fetcher and iterator, read_write for the emitter) are ripstream's choice, not Tika's, which uses its client library's default; projectId is required as Tika requires it but unused (requests name the bucket); spoolToTemp and extractUserMetadata change nothing; Tika has no endpoint setting, so an emulator is the run option gcs.endpoint. Not run against Google Cloud Storage.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/GCSFetcher.java:45",
   "vendorSdks": [
    "com.google.api",
@@ -987,8 +987,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/fetcher/gcs/config/GCSFetcherConfig.java:32"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Google Cloud Storage or Google's token endpoint. The requests are checked against a fake Cloud Storage (packages/pipes/test/fixtures/fake-gcs.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/gcs.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-gcs-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "fetcher/google-drive-fetcher",
@@ -1366,10 +1366,10 @@
   "kind": "iterator",
   "upstream": "az-blob-pipes-iterator",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorFactory.java:47",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"az-blob-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIterator.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
-  "note": "Plausibly valuable in Node: Azure Blob listing. Not built yet; tracked in tikajs-68os.32 (a zero-dependency client over fetch with SAS or Shared Key signing).",
+  "ripstream": "packages/pipes/src/azblob/components.ts:103",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"az-blob-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIterator.java:45; config tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java (5 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.32): AzBlobPipesIterator (packages/pipes/src/azblob/components.ts:103) yields one tuple for each blob under the prefix (one trailing / dropped, as Tika drops it), leaving out blobs of 0 bytes; timeoutMillis bounds each page. AzBlobClient (packages/pipes/src/azblob/client.ts) sends Get Blob, Put Blob (one block blob) and List Blobs (flat, marker) with fetch, the SAS token as the tail of the query, a redirect being an error so the token never follows one; an error's message leaves the URL out. Settings are read by packages/core/src/pipes-azblob-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: SAS token only; Tika's mode with none of sasToken, endpoint and container (the fetch key is a connection string) is refused; a blob name that is empty or has a . or .. segment is refused (fetch resolves it before sending); overwriteExisting is false unless set (Tika's default) and then an existing blob is a 409; spoolToTemp and extractUserMetadata change nothing; the x-ms-version header (2021-08-06), reading a base64 Name in a listing and dropping a leading ? from a SAS token are not from Tika's source. Not run against Azure Blob Storage or Azurite.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIterator.java:45",
   "vendorSdks": [
    "com.azure.core",
@@ -1407,8 +1407,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-az-blob/src/main/java/org/apache/tika/pipes/iterator/azblob/AZBlobPipesIteratorConfig.java:36"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Azure Blob Storage or Azurite. The requests are checked against a fake Blob service (packages/pipes/test/fixtures/fake-azure-blob.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/azblob.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-azblob-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "iterator/csv-pipes-iterator",
@@ -1483,10 +1483,10 @@
   "kind": "iterator",
   "upstream": "gcs-pipes-iterator",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorFactory.java:46",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"gcs-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIterator.java:39; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java (3 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
-  "note": "Plausibly valuable in Node: GCS listing. Not built yet; tracked in tikajs-68os.31 (a zero-dependency client over fetch with a service-account JWT, the same shape as the S3 trio).",
+  "ripstream": "packages/pipes/src/gcs/components.ts:119",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"gcs-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorFactory.java:46; implementation tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIterator.java:39; config tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java (3 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.31): GcsPipesIterator (packages/pipes/src/gcs/components.ts:119) yields one tuple for each object under the prefix in listing order, id, fetch key and emit key the object's name, leaving out objects of 0 bytes. GcsClient (packages/pipes/src/gcs/client.ts) sends the JSON API's objects.get (alt=media), objects.insert (uploadType=media) and objects.list (pageToken) with fetch, a redirect being an error so the bearer token never follows one. Credentials (packages/pipes/src/gcs/credentials.ts) are application default credentials, two of the sources: the service-account key file GOOGLE_APPLICATION_CREDENTIALS names (an RS256 JWT signed with node:crypto, exchanged at its token_uri) or the metadata server (GCE_METADATA_HOST read). Settings are read by packages/core/src/pipes-gcs-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: the gcloud user credentials file and key files that are not service_account are not read; the token scopes (devstorage.read_only for the fetcher and iterator, read_write for the emitter) are ripstream's choice, not Tika's, which uses its client library's default; projectId is required as Tika requires it but unused (requests name the bucket); spoolToTemp and extractUserMetadata change nothing; Tika has no endpoint setting, so an emulator is the run option gcs.endpoint. Not run against Google Cloud Storage.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIterator.java:39",
   "vendorSdks": [
    "com.google.api",
@@ -1512,8 +1512,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-gcs/src/main/java/org/apache/tika/pipes/iterator/gcs/GCSPipesIteratorConfig.java:34"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Google Cloud Storage or Google's token endpoint. The requests are checked against a fake Cloud Storage (packages/pipes/test/fixtures/fake-gcs.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/gcs.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-gcs-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "iterator/jdbc-pipes-iterator",
@@ -1780,10 +1780,10 @@
   "kind": "iterator",
   "upstream": "solr-pipes-iterator",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorFactory.java:47",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"solr-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIterator.java:54; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java (19 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.33 for solrUrls over HTTP. solrZkHosts (SolrCloud through ZooKeeper) needs a ZooKeeper client and is a proposed non-goal, the owner's to decide.",
-  "note": "Plausibly valuable in Node: Solr query-driven work list over HTTP (19 fields); no SolrJ needed in Node. Not built yet; tracked in tikajs-68os.33 for solrUrls over HTTP. solrZkHosts (SolrCloud through ZooKeeper) needs a ZooKeeper client and is a proposed non-goal, the owner's to decide.",
+  "ripstream": "packages/pipes/src/solr/components.ts:106",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"solr-pipes-iterator\" at tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorFactory.java:47; implementation tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIterator.java:54; config tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java (19 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.33): SolrPipesIterator (packages/pipes/src/solr/components.ts:106) reads q=*:* sorted by parsingIdField asc,id asc with the filters as fq, a cursorMark page of rows documents at a time, until Solr gives the cursor back as it was sent; each document is a tuple whose id, fetch key and emit key are the string in its idField. SolrClient (packages/pipes/src/solr/client.ts) POSTs the JSON update handler (/<collection>/update, commitWithin, failOnVersionConflicts=false) and GETs /select with fetch, to the first of solrUrls a connection can be made to (only a failure to connect moves on), with basic credentials when set, a redirect being an error. Settings are read by packages/core/src/pipes-solr-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: JSON update where Tika's SolrJ sends javabin, one request for each emitted document; solrZkHosts (SolrCloud through ZooKeeper), a proxy, verifySsl false and authSchemes but basic are refused by name; connectionTimeoutMillis is folded into socketTimeoutMillis, which bounds the whole request; solrZkChroot beside solrUrls changes nothing; the bytes of an unpacked file and CONTENT_ONLY are errors; where Tika logs a failure of /select and ends the enumeration as complete, the iterator throws. Not run against Solr.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIterator.java:54",
   "vendorSdks": [
    "org.apache.solr",
@@ -1905,18 +1905,18 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-solr/src/main/java/org/apache/tika/pipes/iterator/solr/SolrPipesIteratorConfig.java:52"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against a Solr node. The requests are checked against a fake Solr (packages/pipes/test/fixtures/fake-solr.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/solr.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-solr-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "reporter/es-pipes-reporter",
   "kind": "reporter",
   "upstream": "es-pipes-reporter",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterFactory.java:44",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"es-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESPipesReporter.java:53; config tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java (7 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.34 (P4: the jsonl reporter covers the audit trail, and the emitters' wire is reusable).",
-  "note": "Gap, lower value than file reporters: status docs into Elasticsearch via plain HTTP (ESPipesReporter.java:53, 7 fields). Blocked behind a per-tuple result model (see result-status items). Not built yet; tracked in tikajs-68os.34 (P4: the jsonl reporter covers the audit trail, and the emitters' wire is reusable).",
+  "ripstream": "packages/pipes/src/search/reporter.ts:32",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"es-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESPipesReporter.java:53; config tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java (7 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.34): SearchPipesReporter (packages/pipes/src/search/reporter.ts:32) upserts one document for each result the includes/excludes filter lets through, found by the emit key of the input: <keyPrefix>parse_status (the status name) and <keyPrefix>parse_time_ms, as an update action with retry_on_conflict 3 and doc_as_upsert, routed by the id under includeRouting, POSTed to <url>/_bulk with fetch (a redirect is an error). Settings are read by packages/core/src/pipes-search-reporter-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: exit_value is never written (a ripstream result carries no metadata for it); where Tika logs a report that failed and goes on, a failure here throws and the engine ends the run; a keyPrefix that starts with tk: or X-TIKA: is refused (Tika's Metadata refuses such a key); a proxy, verifySsl false and, for Elasticsearch, authSchemes but basic are refused by name; an apiKey (Elasticsearch only) is sent as Authorization: ApiKey and wins over a user name. Not run against Elasticsearch or OpenSearch.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESPipesReporter.java:53",
   "vendorSdks": [
    "org.apache.http"
@@ -1965,8 +1965,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-es/src/main/java/org/apache/tika/pipes/reporter/es/ESReporterConfig.java:29"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Elasticsearch or OpenSearch. The requests are checked against a fetch fake that records the _bulk request (packages/pipes/test/search-reporter.test.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/search-reporter.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-search-reporter-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "reporter/file-system-jsonl-reporter",
@@ -2123,10 +2123,10 @@
   "kind": "reporter",
   "upstream": "opensearch-pipes-reporter",
   "upstreamSource": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterFactory.java:44",
-  "ripstream": null,
-  "status": "gap",
-  "evidence": "Tika: factory NAME \"opensearch-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchPipesReporter.java:40; config tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream: no such class among the packages/pipes exports (22 names listed on line 1 of parity/pipes/out-run-ripstream-pipes.txt). spec/04-pipes-server-ops.md:89-136 (section 1.4 lists it as planned) Declared in tikajs-68os.6.6: Not built yet; tracked in tikajs-68os.34 (P4: the jsonl reporter covers the audit trail, and the emitters' wire is reusable).",
-  "note": "Gap, lower value than file reporters: status docs into OpenSearch via plain HTTP (alpha, 6 fields). Blocked behind a per-tuple result model (see result-status items). Not built yet; tracked in tikajs-68os.34 (P4: the jsonl reporter covers the audit trail, and the emitters' wire is reusable).",
+  "ripstream": "packages/pipes/src/search/reporter.ts:32",
+  "status": "partial",
+  "evidence": "Tika: factory NAME \"opensearch-pipes-reporter\" at tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterFactory.java:44; implementation tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchPipesReporter.java:40; config tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java (6 fields; line numbers for record configs are the record header). Source-only, never executed. ripstream (tikajs-68os.34): SearchPipesReporter (packages/pipes/src/search/reporter.ts:32) upserts one document for each result the includes/excludes filter lets through, found by the emit key of the input: <keyPrefix>parse_status (the status name) and <keyPrefix>parse_time_ms, as an update action with retry_on_conflict 3 and doc_as_upsert, routed by the id under includeRouting, POSTed to <url>/_bulk with fetch (a redirect is an error). Settings are read by packages/core/src/pipes-search-reporter-config.ts and wired in packages/pipes/src/index.ts.",
+  "note": "Deviations: exit_value is never written (a ripstream result carries no metadata for it); where Tika logs a report that failed and goes on, a failure here throws and the engine ends the run; a keyPrefix that starts with tk: or X-TIKA: is refused (Tika's Metadata refuses such a key); a proxy, verifySsl false and, for Elasticsearch, authSchemes but basic are refused by name; an apiKey (Elasticsearch only) is sent as Authorization: ApiKey and wins over a user name. Not run against Elasticsearch or OpenSearch.",
   "implClass": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchPipesReporter.java:40",
   "vendorSdks": [
    "org.apache.http"
@@ -2169,8 +2169,8 @@
     "line": "tika-pipes/tika-pipes-plugins/tika-pipes-opensearch/src/main/java/org/apache/tika/pipes/reporter/opensearch/OpenSearchReporterConfig.java:25"
    }
   ],
-  "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
-  "ripstreamVerification": "ran code (see out-*.txt)"
+  "tikaVerification": "source-only; unverified live (no oracle for /pipes). Nothing here ran against Elasticsearch or OpenSearch. The requests are checked against a fetch fake that records the _bulk request (packages/pipes/test/search-reporter.test.ts).",
+  "ripstreamVerification": "ran code: packages/pipes/test/search-reporter.test.ts, packages/pipes/test/cloud-settings.test.ts, packages/core/test/pipes-search-reporter-config.test.ts, packages/core/test/pipes-cloud-config.test.ts"
  },
  {
   "id": "fetcher/spi-Fetcher-RangeFetcher",
@@ -2409,8 +2409,8 @@
   "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:165-179; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/AbstractComponentManager.java:115-190; tika-pipes/tika-pipes-core/src/main/java/org/apache/tika/pipes/core/reporter/ReporterManager.java:36",
   "ripstream": "packages/core/src/pipes-config.ts:387",
   "status": "partial",
-  "evidence": "Tika: component sections are objects keyed by instance id -> {type-name: {config}} (AbstractComponentManager.java:115-190); pipes-iterator is {type-name: {..., fetcherId, emitterId}}. ripstream run: core.validateConfig on that exact shape returned [\"unknown top-level key \\\"fetchers\\\"\", ... \"emitters\", \"pipes-iterator\", \"pipes-reporters\", \"pipes\"] (parity/pipes/out-cfg_probe.txt; ALLOWED_ROOT_KEYS packages/core/src/config.ts:18, check :144). ripstream (tikajs-68os.6.2): core.loadConfig reads Tika's five pipes sections (fetchers, emitters, pipes-iterator, pipes-reporters, pipes) with Tika's shapes ({id: {type: cfg}} for fetchers and emitters, {type: cfg} for the other three) through parsePipesSections (packages/core/src/pipes-config.ts:387) into RipstreamConfig.pipes, and packages/pipes createEngineFromSettings builds the engine from them. Types and keys that map load; what only changes the JVM, `plugin-roots` and the emit-batching knobs load with a notice that they change nothing; every other key and every component type ripstream lacks is refused by name, with the reason and for the cloud components the bead that tracks them (tikajs-68os.6.6). tasks/parity/audits/pipes-model-spike.md Q1 measured what blocks the rest of Tika's own test configs. Measured with the shipped loader over Tika's own 103 pipes configurations (tasks/parity/audits/pipes-model-spike/loader.mjs): 3 load (1 of the 40 documented), because a configuration is refused for anything it asks for that ripstream lacks: parse-context progressTimeoutMillis (38), content-handler-factory and other root sections (37), the emitter's fileExtension and onExists (tikajs-68os.6.3), server.allowPipes (12), configStore* and the cloud components.",
-  "note": "The bespoke {mode, concurrency, source, sink} shape stays as a shorthand over the same engine (createEngine). The file-system emitter takes all seven of its settings (tikajs-68os.6.3). Still refused: content-handler-factory, auto-detect-parser and metadata-filters (CFG-014: they change output), configStore*, maxFilesProcessedPerProcess, and the cloud, database and search components (tikajs-68os.6.6).",
+  "evidence": "Tika: component sections are objects keyed by instance id -> {type-name: {config}} (AbstractComponentManager.java:115-190); pipes-iterator is {type-name: {..., fetcherId, emitterId}}. ripstream run: core.validateConfig on that exact shape returned [\"unknown top-level key \\\"fetchers\\\"\", ... \"emitters\", \"pipes-iterator\", \"pipes-reporters\", \"pipes\"] (parity/pipes/out-cfg_probe.txt; ALLOWED_ROOT_KEYS packages/core/src/config.ts:18, check :144). ripstream (tikajs-68os.6.2): core.loadConfig reads Tika's five pipes sections (fetchers, emitters, pipes-iterator, pipes-reporters, pipes) with Tika's shapes ({id: {type: cfg}} for fetchers and emitters, {type: cfg} for the other three) through parsePipesSections (packages/core/src/pipes-config.ts:387) into RipstreamConfig.pipes, and packages/pipes createEngineFromSettings builds the engine from them. Types and keys that map load; what only changes the JVM, `plugin-roots` and the emit-batching knobs load with a notice that they change nothing; every other key and every component type ripstream lacks is refused by name, with the reason (tikajs-68os.6.6). tikajs-68os.31 to .34 added the GCS, Azure Blob and Solr components and the Elasticsearch and OpenSearch reporters, so pipes-reporters is no longer jsonl-only (packages/core/src/pipes-config.ts reporters()). tasks/parity/audits/pipes-model-spike.md Q1 measured what blocks the rest of Tika's own test configs. Measured with the shipped loader over Tika's own 103 pipes configurations (tasks/parity/audits/pipes-model-spike/loader.mjs): 3 load (1 of the 40 documented), because a configuration is refused for anything it asks for that ripstream lacks: parse-context progressTimeoutMillis (38), content-handler-factory and other root sections (37), the emitter's fileExtension and onExists (tikajs-68os.6.3), server.allowPipes (12), configStore* and the cloud components.",
+  "note": "The bespoke {mode, concurrency, source, sink} shape stays as a shorthand over the same engine (createEngine). The file-system emitter takes all seven of its settings (tikajs-68os.6.3). Still refused: content-handler-factory, auto-detect-parser and metadata-filters (CFG-014: they change output), configStore*, maxFilesProcessedPerProcess, and the jdbc and kafka components, the atlassian-jwt, google-drive and microsoft-graph fetchers and the csv and json iterators (tikajs-68os.6.6, tikajs-68os.24).",
   "tikaVerification": "source-only; unverified live (oracle http://127.0.0.1:9998 returns 404 for /pipes, /async, /status)",
   "ripstreamVerification": "ran code: packages/pipes/test/tuples.test.ts, packages/pipes/test/pipes.test.ts, packages/core/test/pipes-config.test.ts"
  },

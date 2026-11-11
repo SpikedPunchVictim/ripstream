@@ -436,11 +436,47 @@ await engine.run();
     server's CA with `NODE_EXTRA_CA_CERTS`) and any `authScheme` but basic. These emitters index metadata: the bytes of an
     unpacked file and `CONTENT_ONLY` are errors. A whole request that is rejected (429, 5xx) is retried; `errors: true` in a
     200 answer is an error with the answer and is not.
-  - **Not built, and tracked or declared.** GCS (`tikajs-68os.31`) and Azure Blob (`tikajs-68os.32`) are the same shape as
-    S3 and are next; Solr over `solrUrls` is `tikajs-68os.33` and the Elasticsearch and OpenSearch reporters
-    `tikajs-68os.34`. The JDBC emitter, iterator and reporter are a proposed non-goal, awaiting the owner: Node has no
-    generic JDBC, so each database is its own client dependency. Kafka and the other connector components were already
-    proposed non-goals (`tikajs-68os.24`). A configuration that names one of these is refused with what ripstream has.
+  - **GCS** (`tikajs-68os.31`). `gcs-fetcher`, `gcs-emitter` and `gcs-pipes-iterator` speak the JSON API with `fetch`; the
+    service-account JWT is signed with `node:crypto`. `bucket` and `projectId` are required (Tika requires both); the project
+    id is not used, since the requests are for the bucket by name, and the configuration says so. Credentials are Google's
+    application default credentials, two of the sources: the key file `GOOGLE_APPLICATION_CREDENTIALS` names, or the
+    metadata server (`GCE_METADATA_HOST` is read). The gcloud user credentials are not read and a key file that is not a
+    `service_account` one is refused. Tika has no endpoint setting, so a storage emulator is the run option `gcs.endpoint`,
+    not a configuration key. The emitter writes `prefix/emitKey.fileExtension` (the extension on bytes too, so an unpacked
+    file is `<emitKey>-embed/<id>.json` with Tika's default; set `fileExtension` blank to avoid that) and refuses an empty
+    metadata list. The iterator leaves out objects of 0 bytes. `spoolToTemp` and `extractUserMetadata` change nothing and
+    the configuration says so. A token endpoint's answer carries its status, so 5xx and 429 are retried and 400 and 403 are
+    not. A redirect is an error, so the token never goes to another host.
+  - **Azure Blob** (`tikajs-68os.32`). `az-blob-fetcher`, `az-blob-emitter` and `az-blob-pipes-iterator` speak the Blob REST
+    API with a SAS token (`sasToken`, `endpoint`, `container`, all required). Tika's mode with none of the three, where the
+    fetch key is a connection string, is refused. A blob name that is empty or has a `.` or `..` segment is refused: `fetch`
+    would resolve it before sending, so another blob would be asked for. `overwriteExisting` is false unless set (Tika's
+    default), which makes writing over a blob a 409 `BlobAlreadyExists`. One trailing `/` of the iterator's prefix is dropped,
+    as Tika does, so `docs/` also lists `docs-old/`; blobs of 0 bytes are left out. `timeoutMillis` (360000) bounds each page
+    of the listing. An error's message leaves the URL out, since it ends with the token.
+  - **Solr** (`tikajs-68os.33`). `solr-emitter` and `solr-pipes-iterator` over `solrUrls`: the first URL a connection can be
+    made to takes the request, and only a failure to connect moves on to the next (a request Solr may have seen is not sent
+    twice). Refused by name: `solrZkHosts` (SolrCloud through ZooKeeper needs a ZooKeeper client), a proxy, `verifySsl: false`
+    and any `authScheme` but basic. The emitter sends the JSON update format, where Tika's SolrJ sends javabin, one request
+    for each emitted document; PARENT_CHILD nests the embedded documents, SEPARATE_DOCUMENTS indexes them beside the
+    container under `emitKey-<uuid>`, and `UPDATE_MUST_EXIST` and `UPDATE_MUST_NOT_EXIST` set `_version_` to 1 and -1. The
+    bytes of an unpacked file and `CONTENT_ONLY` are errors. The iterator reads `q=*:*` sorted by `parsingIdField asc,id asc`
+    a cursor page at a time; where Tika logs a failure of Solr and ends the enumeration as complete, this throws.
+  - **Elasticsearch and OpenSearch reporters** (`tikajs-68os.34`). `es-pipes-reporter` and `opensearch-pipes-reporter` upsert
+    one document for each result the `includes` or `excludes` filter lets through, found by the emit key of the input:
+    `<keyPrefix>parse_status` and `<keyPrefix>parse_time_ms`, routed by the id when `includeRouting` is set. `exit_value`,
+    which Tika copies from an external process's metadata, is never written. Where Tika logs a report that failed and goes
+    on, a failure here ends the run: the operator's record of it must not go missing quietly. A `keyPrefix` that starts with
+    `tk:` or `X-TIKA:` is refused, as Tika's `Metadata` refuses such a key. A proxy, `verifySsl: false` and, for
+    Elasticsearch, any `authScheme` but basic are refused as they are for the emitters.
+  - **Not run against the real services.** Nothing in GCS, Azure Blob, Solr, Elasticsearch or OpenSearch ran against Google
+    Cloud Storage, Azure Blob Storage, a Solr node, Elasticsearch or OpenSearch: the requests are read from Tika's source and
+    checked against fakes. Not from Tika's source: the GCS OAuth scopes, the Azure `x-ms-version` header (`2021-08-06`),
+    reading a base64 `Name` in a listing, a leading `?` on a SAS token, and Solr's JSON update format.
+  - **Not built, and declared.** The JDBC emitter, iterator and reporter are a proposed non-goal, awaiting the owner: Node
+    has no generic JDBC, so each database is its own client dependency. Kafka and the other connector components were
+    already proposed non-goals (`tikajs-68os.24`). A configuration that names one of these, or the atlassian-jwt,
+    google-drive and microsoft-graph fetchers or the csv and json iterators, is refused with what ripstream has.
 - **UNPACK emits Tika's Frictionless package by default** (`tikajs-68os.6.7`). One zip per input at
   `<emitKey>-frictionless.zip` (not at the emit key, and with no `fileExtension` or compression added): `datapackage.json`,
   `rmeta.json` and `unpacked/<id>`, the package `PUT /unpack` answers, built by the same code. It replaces the metadata
