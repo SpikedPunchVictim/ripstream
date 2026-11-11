@@ -231,10 +231,10 @@ function dictionaryBitWidthZero(type: number): Buffer {
   const dict = type === PT.INT32 ? dictPage(1, int32s(7)) : dictPage(1, cat(u32le(1), u8(0x41)));
   return singleColumn(type, 0, cat(dict, dataPage(0x7fffffff, ENC.RLE_DICTIONARY, u8(0))), dict.length);
 }
-/** An OPTIONAL column whose definition levels are ONE RLE run of 2^31-1 values, while the page holds 10. */
+/** An OPTIONAL column whose definition levels are ONE RLE run of 2^31-1 values, while the page holds 3 (the chunk says 3, so the page walk accepts it; with 10 it refuses the file first). */
 function hugeRleRun(): Buffer {
   const levels = cat(varint(0xfffffffe), u8(1));
-  return singleColumn(PT.INT32, 1, dataPage(10, ENC.PLAIN, cat(u32le(levels.length), levels, int32s(1, 2, 3))));
+  return singleColumn(PT.INT32, 1, dataPage(3, ENC.PLAIN, cat(u32le(levels.length), levels, int32s(1, 2, 3))));
 }
 /** DELTA_BINARY_PACKED INT32, 2^31-1 values, block size 2^30, bit width 0 (consumes no input per value). */
 function deltaBitWidthZero(): Buffer {
