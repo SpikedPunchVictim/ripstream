@@ -274,6 +274,46 @@ test("a MalformedDocumentError is still malformed when its cause is not an alloc
   }
 });
 
+test("an allocator RangeError up to four causes down is a limit and five is not", () => {
+  const wrapped = (causes: number): unknown => {
+    let error: unknown = new RangeError("Invalid string length");
+    for (let i = 0; i < causes; i++) error = new MalformedDocumentError(`level ${i}`, { cause: error });
+    return error;
+  };
+  assert.ok(crossBoundary(wrapped(1)) instanceof LimitExceededError);
+  assert.ok(crossBoundary(wrapped(4)) instanceof LimitExceededError);
+  assert.ok(crossBoundary(wrapped(5)) instanceof MalformedDocumentError);
+});
+
+test("the chain is followed through any Error, not only through MalformedDocumentErrors", () => {
+  const root = new RangeError("Array buffer allocation failed");
+  const wrapped = new MalformedDocumentError("outer", { cause: new Error("middle", { cause: root }) });
+  assert.ok(crossBoundary(wrapped) instanceof LimitExceededError);
+});
+
+test("the chain is not followed through a cause that is not an Error", () => {
+  const cause = { cause: new RangeError("Invalid string length") };
+  assert.ok(crossBoundary(new MalformedDocumentError("outer", { cause })) instanceof MalformedDocumentError);
+});
+
+test("only a MalformedDocumentError is looked through: other errors keep their own answer", () => {
+  const exhaustion = new RangeError("Invalid string length");
+  const withCause = { cause: exhaustion };
+  const declined = new ParserDeclinedError("declined");
+  Object.defineProperty(declined, "cause", { value: exhaustion });
+  assert.ok(crossBoundary(new UnsupportedFormatError("x/y", withCause)) instanceof UnsupportedFormatError);
+  assert.ok(crossBoundary(new LimitExceededError("a limit", withCause)) instanceof LimitExceededError);
+  assert.ok(crossBoundary(declined) instanceof ParserDeclinedError);
+  assert.ok(crossBoundary(new Error("plain", withCause)) instanceof IsolationError);
+});
+
+test("a MalformedDocumentError that is a limit carries no code and keeps its own message", () => {
+  const frame = encodeChildError(new MalformedDocumentError("Parser P failed: big", { cause: new RangeError("Invalid string length") }));
+  assert.equal(frame.kind, "limit");
+  assert.equal(frame.code, undefined);
+  assert.equal(frame.message, "Parser P failed: big");
+});
+
 test("a cyclic or hostile cause chain does not hang or throw", () => {
   const a = new MalformedDocumentError("a");
   const b = new MalformedDocumentError("b", { cause: a });
