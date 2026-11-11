@@ -94,17 +94,17 @@
       "reason": "Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10)."
     },
 
-    { "id": "gap-media", "match": { "class": "\\.(OggParser|TheoraParser|VorbisParser|OpusParser|SpeexParser|FlacParser|AudioParser|MidiParser|HeifParser|MP4Parser)$" }, "status": "tracked", "bead": "tikajs-68os.15", "reason": "Detected and tested; Ogg demux and the parser claims remain." },
     { "id": "gap-image", "match": { "class": "\\.JXLParser$" }, "status": "tracked", "bead": "tikajs-68os.44", "reason": "JPEG XL: the XMP packet scanner and extractor are not ported." },
-    { "id": "gap-ole", "match": { "class": "\\.(OldExcelParser|OfficeParser)$" }, "status": "tracked", "bead": "tikajs-68os.18", "reason": "Detected and tested; OldExcelParser (BIFF2-4) remains." },
-    { "id": "gap-iwork", "match": { "class": "\\.(IWork13PackageParser|IWork18PackageParser)$" }, "status": "tracked", "bead": "tikajs-68os.19", "reason": "Detected and tested; the parser claims remain." },
     { "id": "gap-streams", "match": { "class": "\\.PackageParser$", "type": "^application/x-tika-unix-dump$" }, "status": "tracked", "bead": "tikajs-68os.47", "reason": "Detected, but no parser reads the Unix dump format." },
-    { "id": "gap-misc-data", "match": { "class": "\\.(SAS7BDATParser|QuattroProParser|DGN8Parser|TSDParser|PListParser|TNEFParser|ChmParser)$" }, "status": "tracked", "bead": "tikajs-68os.21", "reason": "Single-format parsers with no registration, several claim-only." },
-    { "id": "gap-extended", "match": { "class": "\\.(EnviHeaderParser|GribParser|ISArchiveParser|GeoPkgParser|GeographicInformationParser)$" }, "status": "tracked", "bead": "tikajs-68os.22", "reason": "Extended-module scientific/geo formats." },
+    { "id": "gap-extended", "match": {"class": "\\.GribParser$"}, "status": "tracked", "bead": "tikajs-68os.66", "reason": "GRIB1/2 reads through netcdf-java's model, which is not portable, and the GRIB2 type is undetectable in Tika too. Owner decision pending (tikajs-68os.66)." },
     { "id": "gap-opt-in-utility", "match": { "class": "\\.(RegexCaptureParser|XMLProfiler)$" }, "status": "tracked", "bead": "tikajs-68os.23", "reason": "Opt-in utility parsers." }
   ],
   "implementedBy": {
     "org.apache.tika.parser.DefaultParser": "CompositeParser",
+    "org.apache.tika.parser.envi.EnviHeaderParser": "EnviHeaderParser",
+    "org.apache.tika.parser.geoinfo.GeographicInformationParser": "GeographicInformationParser",
+    "org.apache.tika.parser.isatab.ISArchiveParser": "ISArchiveParser",
+    "org.apache.tika.parser.geopkg.GeoPkgParser": "GeoPkgParser",
     "org.apache.tika.parser.EmptyParser": "EmptyParser",
     "org.apache.tika.parser.ErrorParser": "ErrorParser",
     "org.apache.tika.parser.txt.TXTParser": "TextParser",

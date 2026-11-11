@@ -4,6 +4,90 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Ogg family, AU and the media claims (`tikajs-68os.15`)
+
+Added, in `@spikedpunch/ripstream-parser-media`: an Ogg demuxer (RFC 3533 pages and lacing, one pass, bounded memory) and
+`OggParser`, `VorbisParser`, `OpusParser`, `SpeexParser`, `FlacParser` (Ogg FLAC) and `TheoraParser`, which read the first packet of
+each stream and the Vorbis comment block (`vorbis:*` keys, `xmpDM:*` typed keys, track and disc numbers and totals, cover
+art from `METADATA_BLOCK_PICTURE` with its MIME Base64, thumbnail pick by ID3 picture type) and the duration from the last
+granule position. `AudioParser` now also claims `audio/basic` (the AU header: rate, channels, encoding) and no longer claims
+`audio/ogg`. `MP4Parser` also claims `application/mp4`, `HeifParser` claims the `heic`/`heif` sequence types, and
+`MidiParser` claims `application/x-midi`.
+
+- Caps: 1000 open streams, 32 MiB of held packets (both `LimitExceededError`); a page cut short by the end of the input
+  ends the read and keeps what came before.
+- A stream whose beginning page was not seen is passed over, and a chained stream that reuses the serial number of an ended
+  codec stream is not read as part of it (a mutation-testing find).
+- AU now writes its (empty) document, so the metadata and the warning reach the head, as `AudioParser` does in Tika; the rate
+  is cast the way Java casts a float rate to int.
+
+Read from Tika source, not run against a Tika. The Ogg codec header offsets, the Opus duration (pre-skip) and the AU reader's
+acceptance rules are from memory of vorbis-java and the JDK, not from source in the tree. Not done: native FLAC files
+(`tikajs-68os.61`), the OGM and Ogg RGB signatures in the MIME table. Known and not fixed here: the non-AU branch of
+`AudioParser` also omits the empty document (`tikajs-68os.68`).
+
+### Old Excel, OLE containers and iWork (`tikajs-68os.18`, `.19`)
+
+Added, in `@spikedpunch/ripstream-parser-office`:
+
+- `OldExcelParser` for BIFF2, BIFF3 and BIFF4 worksheets and workspaces (`application/vnd.ms-excel.sheet.2|3|4`, `workspace.3|4`):
+  one `<p>` per cell, Java `Double.toString` text for numbers, the codepage record, a formula's string result from the
+  STRING record after it; record and cell caps as for `.xls`.
+- `OleContainerParser` (named `OfficeParser`): the generic OLE2 containers (`x-tika-msoffice`, `x-tika-msoffice-embedded`,
+  Ole10Native, SolidWorks) give the SummaryInformation and DocumentSummaryInformation metadata and no text; the DRM type and
+  an `EncryptedPackage` entry are `EncryptedDocumentError`.
+- A shared plist reader and `IWork13PackageParser` / `IWork18PackageParser` (Keynote, Pages, Numbers): the package type
+  comes from the entries, the version history and properties go to the metadata, and previews and thumbnails are handed to
+  the embedded extractor. The old IWA scan and the '09 fallback claims are gone, so the `iwork:iwa-parts` and
+  `iwork:preview` metadata keys are no longer written; the `snappyjs` dependency of the package is now unused.
+
+Changed from the previous behaviour: a "PK" prefix without a ZIP structure is no longer an empty iWork package (Tika refuses it
+as not a ZIP archive), the document identifier is read as ISO-8859-1 bytes (bytes 0x80-0x9F were mapped to windows-1252),
+and `application/x-tika-ooxml-protected` is refused as encrypted where Tika decrypts it with the default password
+(`tikajs-68os.56`).
+
+Written from the published BIFF2-4 layouts with Tika's tests as the check: which records `OldExcelExtractor` leaves out is
+inferred. Read from Tika source, not run against a Tika. Open follow-ups: `tikajs-68os.56`, `.57` (the unused `snappyjs` dependency) and `.59`.
+
+### TSD, BER, Quattro Pro, DGN8, SAS7BDAT, bplist variants, TNEF alias (`tikajs-68os.21`)
+
+Added, in `@spikedpunch/ripstream-parsers`: `TsdParser` (RFC 3161 time-stamped data: the TSTInfo fields as
+`Time-Stamp-n.<i> - <field>` metadata, the embedded document handed on; a bounded BER reader and the general-name text),
+`Dgn8Parser` and `QuattroProParser` (OLE streams; `exact-version.ts` guards the parameterised claims, since core selection
+keys a claim by its base type), and `Sas7bdatParser`. The bplist variants (`application/x-bplist-*`) are claimed by the plist
+parser, `base64` data in an XML plist is decoded, and the CHM parser also claims `application/chm` and `application/x-chm` and
+reports `application/vnd.ms-htmlhelp`, and the TNEF parser also claims `application/ms-tnef` and `application/x-tnef` (the
+latter two are not in the MIME database, so only a caller's Content-Type reaches them).
+
+- **SAS7BDAT is partial.** 32-bit little-endian uncompressed files are read; 64-bit, big-endian and compressed files are
+  refused as `UnsupportedFormatError` (they are the common case in the wild). Cell text and the encoding table are this
+  port's own choices where parso's source was not at hand: it is not claimed as parity (`tikajs-68os.69`).
+- TSD differs from Tika where Tika has a bug or a loose end: input that is not TSD is a `MalformedDocumentError` (Tika
+  returns an empty success), more than 1000 tokens is a `LimitExceededError`, and `MANIFEST.XML.TSD` gives 2 records, Tika 3
+  (BER indefinite lengths, `tikajs-68os.70`).
+- A Quattro Pro 7-8 file now routes through the supertype to the OLE container parser (metadata only), as it probably does in
+  Tika; not checked.
+
+Read from Tika source and real fixtures (`testQUATTRO.qpw`, `testDGN8.dgn`, `testSAS.sas7bdat`, `testBPList.bplist`), not run
+against a Tika.
+
+### ENVI, ISA-Tab, ISO 19139 and GeoPackage (`tikajs-68os.22`)
+
+Added: `EnviHeaderParser` (the `.hdr` text with its `{ }` multi-line values and the `envi:` keys), `ISArchiveParser` (the
+study file `s_*.txt` as a table; other files of the archive are not read), `GeographicInformationParser` (ISO 19139
+metadata mapped to `dc:*` and prefixed keys through `KeyPrefixWriter`, and the text as headings, paragraphs and tables) in `@spikedpunch/ripstream-parsers`, and `GeoPkgParser` in
+`@spikedpunch/ripstream-parser-db` (the `gpkg_*` header integers, then every table, with typed cell text as Java writes it).
+`SqliteParser` and `GeoPkgParser` now share one sql.js loader. Number text follows Java (`Double.toString`,
+`Float.toString`) through `java-compat.ts` and `java-number.ts`.
+
+- ENVI is reached by a direct call: the registry gives only the glob `*.hdr`, not content detection.
+- Mutation testing found and fixed: a blank ENVI zone (Java `isBlank`, not `trim`), `parseInt("-0")`, and
+  `Float.MIN_VALUE` text.
+
+Not done: **GRIB2** (`GribParser`): the netcdf-java model is not portable and the type is undetectable in Tika too (owner
+decision, `tikajs-68os.66`). The ISO 19139 mapping follows Apache SIS from memory of the XML elements, not from SIS source
+(`tikajs-68os.55`); the GeoPackage fixture `synthetic-features.gpkg` is made here, not Tika's.
+
 ### Compression streams: zlib, LZMA, Deflate64, snappy, gzipped WARC and ARC (`tikajs-68os.20`)
 
 Added, in `@spikedpunch/ripstream-parser-archive`: `ZlibParser` (`application/zlib`), `LzmaParser` (`application/x-lzma`) and

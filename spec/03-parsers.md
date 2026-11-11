@@ -85,7 +85,7 @@ Upstream: `OOXMLParser`, `XWPFWordExtractor`, `XSSFExcelExtractor`, `XSLFPowerPo
 | XLS (BIFF5/8) | `OfficeParser` / `ExcelExtractor` | `cfb` + BIFF record parser (SST, LABELSST, NUMBER, RK, MULRK, FORMULA cached values, merged cells); date formats | P0 |
 | PPT (97-2003) | `OfficeParser` / `PowerPointExtractor` | `cfb` + PowerPoint binary record parser (SlideListWithText, TextCharsAtom/TextBytesAtom, notes) | P0/P1 |
 | MSG (Outlook) | `OutlookParser` / `MsgParser` | `cfb` property sets; headers, body (plain/RTF/HTML), attachments recursive | P1 |
-| TNEF (winmail.dat) | `TNEFParser` | Custom attribute parser; body + attachments; nested MIME | P2 |
+| TNEF (winmail.dat) | `TNEFParser` | Custom attribute parser; body + attachments; nested MIME. Also claims `application/ms-tnef` and `application/x-tnef` (the latter only through a caller's Content-Type) | P2 |
 | Visio (vsd) | `VisioParser` | `cfb` + Visio stream text; metadata; best-effort shapes | P3 |
 | Publisher (pub) | `PublisherParser` | `cfb` + Publisher text records; best-effort | P3 |
 | OneNote (one) | `OneNoteParser` | MS-ONESTORE parser; note text; P3 risk (large effort) | P3 |
@@ -102,7 +102,8 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | Word 2003 XML (WordML) | `WordMLParser` | `saxes`; `<w:t>`, tables, properties | P2 |
 | Excel 2003 XML (SpreadsheetML) | `SpreadsheetMLParser` | `saxes`; rows/cells; formulas/cached values | P2 |
 | Word 2006 ML | `Word2006MLParser` | Same | P3 |
-| Old Excel (BIFF2-4, pre-OLE) | `OldExcelParser` | Custom record reader | P2 |
+| Old Excel (BIFF2-4, pre-OLE) | `OldExcelParser` | Record reader written from the published BIFF2-4 layouts: a `<p>` per text-bearing cell, Java `Double.toString` text, codepage record, formula string results; record and cell caps. Which records `OldExcelExtractor` skips is inferred | P2 |
+| OLE2 containers with no format parser (`x-tika-msoffice`, `x-tika-msoffice-embedded`, Ole10Native, SolidWorks, DRM, ooxml-protected) | `OleContainerParser` (`OfficeParser`) | SummaryInformation and DocumentSummaryInformation metadata, no text; DRM and `EncryptedPackage` are `EncryptedDocumentError`; ooxml-protected is refused as encrypted where Tika decrypts it (`tikajs-68os.56`) | P3 |
 
 ### 3.4 RTF and WordPerfect
 
@@ -121,7 +122,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | GeoGebra (`.ggb`, `.ggs`, `.ggt`), InDesign IDML | `GeoGebraParser`, `IDMLParser` | `boundedUnzip` + saxes. GeoGebra: text objects, `geogebra:*` and `dc:*` metadata, tool names, slides ordered by `structure.json`, thumbnail, scripts and pictures as embedded documents. IDML: `Content` text, `idml:*` and `meta:page-count`; XMP is a narrow port of `XmpExtractor` limited to `xmp:CreateDate`, `ModifyDate`, `MetadataDate` and `CreatorTool` (the full extractor is `tikajs-68os.44`) | P3 |
 | StarOffice 5-7 | `OpenOfficeParser` | Legacy binary probe; text best-effort | P3 |
 | iWork 09 (Pages/Numbers/Keynote) | `IWorkPackageParser` | ZIP + XML index; text | P2 |
-| iWork 13+ / 18+ (IWA) | `IWork13PackageParser`, `IWork18PackageParser` | Snappy-decompressed protobuf; metadata + preview images only, matching upstream's documented limitation | P3 |
+| iWork 13+ / 18+ (IWA) | `IWork13PackageParser`, `IWork18PackageParser` | ZIP entries and plist metadata (version history, properties, document identifier); previews and thumbnails to the embedded extractor; no IWA body, matching upstream's documented limitation. A non-ZIP input is a `MalformedDocumentError` | P3 |
 | EPUB 2/3 | `EpubParser` | ZIP + OPF spine order; XHTML chapters; NCX/nav; cover image; metadata | P0 |
 | FictionBook 2 (FB2) | `FictionBookParser` | XML; sections, titles, poems, notes | P2 |
 | CHM | `CHMParser` | ITSF/ITSP + LZX decompression; HTML entries; index/toc | P3 (wasm or port) |
@@ -144,7 +145,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 | Brotli | `CompressorParser` | `node:zlib` / `DecompressionStream('deflate')` where brotli absent → wasm | ✅ | P1 |
 | Unix compress (`.Z`) | `CompressorParser` | LZW decoder | ✅ | P2 |
 | LZ4 frame | `CompressorParser` | `lz4js` | ✅ | P2 |
-| Snappy framed/raw | `CompressorParser` | `snappyjs` (also used by iWork); claims `application/x-snappy` as Tika does, and the registry's `x-snappy-framed` | ✅ | P2 |
+| Snappy framed/raw | `CompressorParser` | `snappyjs`; claims `application/x-snappy` as Tika does, and the registry's `x-snappy-framed` | ✅ | P2 |
 | 7z | `SevenZipParser` | Optional `7z-wasm`; LGPL path, optional peer; not in default bundle | ⚠️ | P2 |
 | RAR / RAR5 | `RarParser` | Optional wasm; unrar licensing restricts redistribution — document as external/optional | ⚠️ | P2 |
 | AR, ARJ, CPIO | `PackageParser` | Custom readers | ✅ | P3 |
@@ -225,7 +226,9 @@ interface OcrConfig {
 
 | Formats | Upstream | TS approach | Prio |
 |---|---|---|---|
-| MP3 (ID3v1/v2), M4A/AAC, FLAC, OGG/Vorbis/Opus, WAV, AIFF, AMR, WMA/ASF | `Mp3Parser`, `AudioParser` | `music-metadata` streaming: tags, duration, bitrate, sample rate, channels, codec | P1 |
+| Ogg (Vorbis, Opus, Speex, Theora, Ogg FLAC) | `OggParser`, `VorbisParser`, `OpusParser`, `SpeexParser`, `TheoraParser`, `FlacParser` | RFC 3533 demux, first packet per stream, Vorbis comments (`vorbis:*`, `xmpDM:*`, track/disc, cover art), duration from the last granule; caps of 1000 open streams and 32 MiB held. Header offsets and Opus pre-skip from memory of vorbis-java. Native FLAC is `tikajs-68os.61` | P2 |
+| AU (`audio/basic`) | `AudioParser` | 24-byte header: rate, channels, encoding; from memory of the JDK reader | P3 |
+| MP3 (ID3v1/v2), M4A/AAC, FLAC, WAV, AIFF, AMR, WMA/ASF | `Mp3Parser`, `AudioParser` | `music-metadata` streaming: tags, duration, bitrate, sample rate, channels, codec | P1 |
 | MIDI | `MidiParser` | Header, tracks, tempo, instrument names | P3 |
 | Audible/AA, APE, WavPack | — | Metadata only or unsupported | P3 |
 
@@ -236,7 +239,7 @@ interface OcrConfig {
 | MP4 / MOV / M4V / 3GP | `MP4Parser` | Atom walker or `music-metadata`; tracks, codecs, duration, dimensions, creation date; `mp4:` metadata | P1 |
 | FLV | `FLVParser` | Header + tag scan; codecs, duration | P2 |
 | AVI, MKV/WebM, ASF/WMV | partial upstream | `music-metadata`/EBML reader; metadata only | P2 |
-| MPEG-TS/PS, Ogg video | — | Metadata/unsupported | P3 |
+| MPEG-TS/PS | — | Metadata/unsupported | P3 |
 
 No audio/video transcription in core. ASR is an optional adapter package, not parity.
 
@@ -252,12 +255,18 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 | NetCDF 4 (HDF5) | `NetCDFParser` | `h5wasm` | P3 |
 | HDF4 / HDF5 | `HDFParser` | HDF5 via `h5wasm`; HDF4 gap | P2/P3 |
 | FITS | `FitsParser` | Header cards + table rows; primary/HDU | P2 |
-| GRIB 1/2 | `GribParser` | Custom/wasm decoder; metadata + grid summary | P3 |
+| GRIB 1/2 | `GribParser` | Not done: the netcdf-java model is not portable and GRIB2 is undetectable in Tika too; owner decision `tikajs-68os.66` | P3 |
 | DICOM | `DicomParser` | `dicom-parser`; patient/study/series metadata; pixel data not dumped | P2 |
 | ISO 19115 / GeoTopic | `GeoTopicParser` | Metadata parse; geo enrichment via optional NLP (place names) | P3 |
+| ISO 19139 geographic metadata | `GeographicInformationParser` | `saxes` read of the gmd/gco/gmx elements mapped to `dc:*` and prefixed keys; the mapping follows Apache SIS from memory of its elements (`tikajs-68os.55`) | P3 |
+| ENVI header (`.hdr`) | `EnviHeaderParser` | `key = value` lines with `{ }` multi-line values; reached by a direct call, the registry gives only the glob | P3 |
+| ISA-Tab | `ISArchiveParser` | Study file (`s_*.txt`) as a table; sibling files of the archive are not read (`tikajs-68os.66`) | P3 |
+| SAS7BDAT | `Sas7bdatParser` | **Partial**: 32-bit little-endian uncompressed files; 64-bit, big-endian and compressed are `UnsupportedFormatError`. Cell formatting is the port's own (`tikajs-68os.69`) | P3 |
+| Time-stamped data (TSD, RFC 3161) | `TsdParser` | Bounded BER reader; TSTInfo fields as `Time-Stamp-n.<i> - <field>`; embedded document handed on. Indefinite lengths: `tikajs-68os.70` | P3 |
+| Quattro Pro (QPW 9, v7-8) | `QuattroProParser` | OLE streams; version 9 claimed through `exact-version.ts`; v7-8 route through the supertype to the OLE container parser (metadata only) | P3 |
 | DWG | `DWGParser` | Optional `libredwg` wasm; text entities + layers | P3 |
 | DXF | `DxfParser` maybe | Text/group-code parse; text entities | P2 |
-| DGN | — | Detect; unsupported error | P3 gap |
+| DGN (V8, OLE) | `Dgn8Parser` | OLE summary properties; claims `image/vnd.dgn; version=8`, guarded by `exact-version.ts` because core matches on the base type | P3 |
 | Shapefile | — | DBF + geometry metadata | P3 |
 
 ---
@@ -277,6 +286,7 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 | ASN.1/DER fallback | `CryptoParser` | Structure dump with depth limit | P3 |
 | DBF (dBASE) | `DBFParser` | Header, field descriptors, records; render as table/text | P2 |
 | SQLite | (none upstream) | Optional `sql.js`; schema + row dump bounded | P3 |
+| GeoPackage | `GeoPkgParser` | Same `sql.js` loader as SQLite; `gpkg_*` header integers, then every table with Java-style typed cell text; blobs through the embedded extractor | P3 |
 | Parquet / ORC / Avro | — | Detect; unsupported error | P3 gap |
 | MSI | — | Detect; unsupported | P3 gap |
 
@@ -342,7 +352,7 @@ No audio/video transcription in core. ASR is an optional adapter package, not pa
 
 - Microsoft Access, Project (MPP), and some legacy/enterprise formats: detect + `UnsupportedFormatError`.
 - iWork 13+/18+ body text: upstream itself does not extract it; we match (metadata + previews only).
-- DGN, WinHelp, HDF4, NetCDF-4: unsupported until a suitable permissive decoder exists.
+- WinHelp, HDF4, NetCDF-4: unsupported until a suitable permissive decoder exists.
 - RAR and 7z: optional wasm, licensing/redistribution caveats; excluded from default bundle.
 - Parquet/ORC/Avro, MSI: unsupported.
 - Audio/video transcription: not part of Tika parity.

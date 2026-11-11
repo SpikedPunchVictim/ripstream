@@ -6,30 +6,25 @@ A type is **exact** when the default registry picks a parser for it directly, **
 
 | Tier | Status | Parsers |
 |---|---|---:|
-| extended | implemented | 4 |
+| extended | implemented | 8 |
 | extended | non-goal | 6 |
-| extended | tracked | 5 |
+| extended | tracked | 1 |
 | opt-in | implemented | 5 |
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
-| standard | fallback | 1 |
-| standard | implemented | 57 |
+| standard | implemented | 76 |
 | standard | non-goal | 4 |
-| standard | partial | 18 |
-| standard | tracked | 9 |
+| standard | partial | 8 |
+| standard | tracked | 1 |
 
 ## Open items
 
 | Parser | Tier | Type / class | Resolution | Decision |
 |---|---|---|---|---|
-| EnviHeaderParser | extended | (class) | - | tracked tikajs-68os.22: Extended-module scientific/geo formats. |
 | ExternalParser | extended | (class) | - | non-goal: Shells out to a native binary or service (arbitrary command, gdalinfo, readpst, unrar, dwgread, strings, encode-ocr). A JS library does not ship or spawn these; Tesseract is the one opt-in exception (parser-media TesseractOcrParser, bounded and flagged unsafe). Formats with a JS route are covered by our own parsers (OutlookPSTParser, ArchiveMetadataParser for RAR, ScienceMetadataParser for DWG). |
 | GDALParser | extended | (class) | - | non-goal: Shells out to a native binary or service (arbitrary command, gdalinfo, readpst, unrar, dwgread, strings, encode-ocr). A JS library does not ship or spawn these; Tesseract is the one opt-in exception (parser-media TesseractOcrParser, bounded and flagged unsafe). Formats with a JS route are covered by our own parsers (OutlookPSTParser, ArchiveMetadataParser for RAR, ScienceMetadataParser for DWG). |
 | GeoParser | extended | (class) | - | non-goal: NLP/ML parsers (Lucene geo-gazetteer, GROBID journal extraction, named-entity models) need JVM-resident models or external services; not a parser concern in a JS runtime. |
-| GeographicInformationParser | extended | (class) | - | tracked tikajs-68os.22: Extended-module scientific/geo formats. |
-| GeoPkgParser | extended | (class) | - | tracked tikajs-68os.22: Extended-module scientific/geo formats. |
-| GribParser | extended | (class) | - | tracked tikajs-68os.22: Extended-module scientific/geo formats. |
-| ISArchiveParser | extended | (class) | - | tracked tikajs-68os.22: Extended-module scientific/geo formats. |
+| GribParser | extended | (class) | - | tracked tikajs-68os.66: GRIB1/2 reads through netcdf-java's model, which is not portable, and the GRIB2 type is undetectable in Tika too. Owner decision pending (tikajs-68os.66). |
 | JournalParser | extended | (class) | - | non-goal: NLP/ML parsers (Lucene geo-gazetteer, GROBID journal extraction, named-entity models) need JVM-resident models or external services; not a parser concern in a JS runtime. |
 | Tess4JParser | extended | (class) | - | non-goal: JNI binding to Tesseract. The CLI route (TesseractOcrParser) covers OCR. |
 | AmazonTranscribe | extended | (class) | - | non-goal: Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install. |
@@ -45,19 +40,10 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | GeminiVLMParser | opt-in | (class) | - | non-goal: Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install. |
 | OpenAIVLMParser | opt-in | (class) | - | non-goal: Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install. |
 | XMLProfiler | opt-in | (class) | - | tracked tikajs-68os.23: Opt-in utility parsers. |
-| PListParser | standard | application/x-bplist-itunes | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| PListParser | standard | application/x-bplist-memgraph | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| PListParser | standard | application/x-bplist-webarchive | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| AudioParser | standard | audio/basic | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| MidiParser | standard | application/x-midi | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | SourceCodeParser | standard | text/x-groovy | fallback via CsvParser | accepted-fallback: Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10). |
-| TSDParser | standard | application/timestamped-data | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| DGN8Parser | standard | image/vnd.dgn; version=8 | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
 | EpubParser | standard | application/x-ibooks+zip | fallback via EpubParser | accepted-fallback: application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3). |
 | BPGParser | standard | image/bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | BPGParser | standard | image/x-bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
-| HeifParser | standard | image/heic-sequence | fallback via MP4Parser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| HeifParser | standard | image/heif-sequence | fallback via MP4Parser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | JXLParser | standard | image/jxl | none | tracked tikajs-68os.44: JPEG XL: the XMP packet scanner and extractor are not ported. |
 | RawTiffParser | standard | image/x-raw-adobe | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-epson | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
@@ -69,27 +55,8 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | RawTiffParser | standard | image/x-raw-pentax | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-samsung | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-sony | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
-| IWork13PackageParser | standard | application/vnd.apple.keynote.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork13PackageParser | standard | application/vnd.apple.numbers.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork13PackageParser | standard | application/vnd.apple.pages.13 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork13PackageParser | standard | application/vnd.apple.unknown.13 | fallback via ZipParser | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork18PackageParser | standard | application/vnd.apple.keynote.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork18PackageParser | standard | application/vnd.apple.numbers.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
-| IWork18PackageParser | standard | application/vnd.apple.pages.18 | none | tracked tikajs-68os.19: Detected and tested; the parser claims remain. |
 | ActiveMimeParser | standard | application/x-activemime | none | non-goal: ActiveMime is a macro-malware container; the useful output is the embedded VBA, which the OLE route already exposes. |
-| ChmParser | standard | application/chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| ChmParser | standard | application/x-chm | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| OfficeParser | standard | application/sldworks | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OfficeParser | standard | application/x-tika-msoffice | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OfficeParser | standard | application/x-tika-msoffice-embedded; format=ole10_native | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
 | OfficeParser | standard | application/x-tika-msworks-spreadsheet | fallback via ExcelParser | accepted-fallback: Subtype of application/vnd.ms-excel; Tika's OfficeParser reaches the Excel extractor the same way (tikajs-68os.3). |
-| OfficeParser | standard | application/x-tika-ole-drm-encrypted | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OfficeParser | standard | application/x-tika-ooxml-protected | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OldExcelParser | standard | application/vnd.ms-excel.sheet.2 | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OldExcelParser | standard | application/vnd.ms-excel.sheet.3 | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OldExcelParser | standard | application/vnd.ms-excel.sheet.4 | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OldExcelParser | standard | application/vnd.ms-excel.workspace.3 | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
-| OldExcelParser | standard | application/vnd.ms-excel.workspace.4 | none | tracked tikajs-68os.18: Detected and tested; OldExcelParser (BIFF2-4) remains. |
 | OOXMLParser | standard | application/vnd.ms-excel.addin.macroenabled.12 | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | OOXMLParser | standard | application/vnd.ms-excel.sheet.binary.macroenabled.12 | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | OOXMLParser | standard | application/vnd.ms-excel.sheet.macroenabled.12 | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
@@ -115,26 +82,7 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | OOXMLParser | standard | application/vnd.openxmlformats-officedocument.wordprocessingml.template | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | OOXMLParser | standard | model/vnd.dwfx+xps | fallback via OOXMLParser | accepted-fallback: Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential. |
 | PSTMailItemParser | standard | application/x-tika-pst-mail-item | none | non-goal: application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly. |
-| TNEFParser | standard | application/x-tnef | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| MP4Parser | standard | application/mp4 | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | MP4Parser | standard | video/x-m4v | fallback via MP4Parser | accepted-fallback: Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3). |
-| FlacParser | standard | audio/x-oggflac | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | application/kate | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | application/ogg | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | audio/x-oggpcm | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/daala | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/ogg | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/x-dirac | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/x-oggrgb | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/x-ogguvs | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/x-oggyuv | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OggParser | standard | video/x-ogm | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| OpusParser | standard | audio/opus | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| SpeexParser | standard | audio/speex | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| TheoraParser | standard | video/theora | none | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
-| VorbisParser | standard | audio/vorbis | fallback via AudioParser | tracked tikajs-68os.15: Detected and tested; Ogg demux and the parser claims remain. |
 | CompressorParser | standard | application/x-java-pack200 | none | non-goal: Pack200 is a JVM-only JAR compression removed from the JDK in 14; no JS decoder. |
 | PackageParser | standard | application/x-tika-unix-dump | none | tracked tikajs-68os.47: Detected, but no parser reads the Unix dump format. |
 | PRTParser | standard | application/x-prt | none | non-goal: Siemens/Creo PRT is proprietary and Tika's parser only reads a header; low value, decline unless a user needs it. |
-| SAS7BDATParser | standard | application/x-sas-data | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |
-| QuattroProParser | standard | application/x-quattro-pro; version=9 | none | tracked tikajs-68os.21: Single-format parsers with no registration, several claim-only. |

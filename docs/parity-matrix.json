@@ -6,29 +6,30 @@
   "typeClaims": 287
  },
  "summary": {
-  "extended.implemented": 4,
+  "extended.implemented": 8,
   "extended.non-goal": 6,
-  "extended.tracked": 5,
+  "extended.tracked": 1,
   "opt-in.implemented": 5,
   "opt-in.non-goal": 10,
   "opt-in.tracked": 2,
-  "standard.fallback": 1,
-  "standard.implemented": 57,
+  "standard.implemented": 76,
   "standard.non-goal": 4,
-  "standard.partial": 18,
-  "standard.tracked": 9
+  "standard.partial": 8,
+  "standard.tracked": 1
  },
  "parsers": [
   {
    "class": "org.apache.tika.parser.envi.EnviHeaderParser",
    "module": "tika-parsers/tika-parsers-extended/tika-parser-scientific-module",
    "tier": "extended",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 0,
    "exact": 0,
    "open": [],
-   "implementedBy": [],
-   "declared": "gap-extended"
+   "implementedBy": [
+    "EnviHeaderParser"
+   ],
+   "declared": null
   },
   {
    "class": "org.apache.tika.parser.external.ExternalParser",
@@ -67,23 +68,27 @@
    "class": "org.apache.tika.parser.geoinfo.GeographicInformationParser",
    "module": "tika-parsers/tika-parsers-extended/tika-parser-scientific-module",
    "tier": "extended",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 0,
    "exact": 0,
    "open": [],
-   "implementedBy": [],
-   "declared": "gap-extended"
+   "implementedBy": [
+    "GeographicInformationParser"
+   ],
+   "declared": null
   },
   {
    "class": "org.apache.tika.parser.geopkg.GeoPkgParser",
    "module": "tika-parsers/tika-parsers-extended/tika-parser-sqlite3-module",
    "tier": "extended",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 0,
    "exact": 0,
    "open": [],
-   "implementedBy": [],
-   "declared": "gap-extended"
+   "implementedBy": [
+    "GeoPkgParser"
+   ],
+   "declared": null
   },
   {
    "class": "org.apache.tika.parser.grib.GribParser",
@@ -113,12 +118,14 @@
    "class": "org.apache.tika.parser.isatab.ISArchiveParser",
    "module": "tika-parsers/tika-parsers-extended/tika-parser-scientific-module",
    "tier": "extended",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 0,
    "exact": 0,
    "open": [],
-   "implementedBy": [],
-   "declared": "gap-extended"
+   "implementedBy": [
+    "ISArchiveParser"
+   ],
+   "declared": null
   },
   {
    "class": "org.apache.tika.parser.journal.JournalParser",
@@ -406,29 +413,10 @@
    "class": "org.apache.tika.parser.apple.PListParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-apple-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 5,
-   "exact": 2,
-   "open": [
-    {
-     "type": "application/x-bplist-itunes",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    },
-    {
-     "type": "application/x-bplist-memgraph",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    },
-    {
-     "type": "application/x-bplist-webarchive",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
-   ],
+   "exact": 5,
+   "open": [],
    "implementedBy": [
     "PListParser"
    ],
@@ -451,17 +439,10 @@
    "class": "org.apache.tika.parser.audio.AudioParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 4,
-   "exact": 3,
-   "open": [
-    {
-     "type": "audio/basic",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 4,
+   "open": [],
    "implementedBy": [
     "AudioParser"
    ],
@@ -471,17 +452,10 @@
    "class": "org.apache.tika.parser.audio.MidiParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "application/x-midi",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
     "MidiParser"
    ],
@@ -525,18 +499,13 @@
    "class": "org.apache.tika.parser.crypto.TSDParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-crypto-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/timestamped-data",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "TSDParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -569,18 +538,13 @@
    "class": "org.apache.tika.parser.dgn.DGN8Parser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-cad-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "image/vnd.dgn; version=8",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "DGN8Parser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -774,26 +738,12 @@
    "class": "org.apache.tika.parser.image.HeifParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-image-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 5,
-   "exact": 3,
-   "open": [
-    {
-     "type": "image/heic-sequence",
-     "resolution": "fallback",
-     "by": "MP4Parser",
-     "declared": "gap-media"
-    },
-    {
-     "type": "image/heif-sequence",
-     "resolution": "fallback",
-     "by": "MP4Parser",
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 5,
+   "open": [],
    "implementedBy": [
-    "ImageParser",
-    "MP4Parser"
+    "ImageParser"
    ],
    "declared": null
   },
@@ -1010,37 +960,12 @@
    "class": "org.apache.tika.parser.iwork.iwana.IWork13PackageParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-apple-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 4,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.apple.keynote.13",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    },
-    {
-     "type": "application/vnd.apple.numbers.13",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    },
-    {
-     "type": "application/vnd.apple.pages.13",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    },
-    {
-     "type": "application/vnd.apple.unknown.13",
-     "resolution": "fallback",
-     "by": "ZipParser",
-     "declared": "gap-iwork"
-    }
-   ],
+   "exact": 4,
+   "open": [],
    "implementedBy": [
-    "ZipParser"
+    "IWork13PackageParser"
    ],
    "declared": null
   },
@@ -1048,30 +973,13 @@
    "class": "org.apache.tika.parser.iwork.iwana.IWork18PackageParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-apple-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.apple.keynote.18",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    },
-    {
-     "type": "application/vnd.apple.numbers.18",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    },
-    {
-     "type": "application/vnd.apple.pages.18",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-iwork"
-    }
+   "exact": 3,
+   "open": [],
+   "implementedBy": [
+    "IWork18PackageParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -1161,23 +1069,10 @@
    "class": "org.apache.tika.parser.microsoft.chm.ChmParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 1,
-   "open": [
-    {
-     "type": "application/chm",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    },
-    {
-     "type": "application/x-chm",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
-   ],
+   "exact": 3,
+   "open": [],
    "implementedBy": [
     "LegacyFormatParser"
    ],
@@ -1228,49 +1123,20 @@
    "tier": "standard",
    "status": "partial",
    "typeCount": 13,
-   "exact": 7,
+   "exact": 12,
    "open": [
-    {
-     "type": "application/sldworks",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/x-tika-msoffice",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/x-tika-msoffice-embedded; format=ole10_native",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
     {
      "type": "application/x-tika-msworks-spreadsheet",
      "resolution": "fallback",
      "by": "ExcelParser",
      "declared": "af-msworks-spreadsheet"
-    },
-    {
-     "type": "application/x-tika-ole-drm-encrypted",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/x-tika-ooxml-protected",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
     }
    ],
    "implementedBy": [
     "ExcelParser",
     "LegacyOfficeParser",
     "MsgParser",
+    "OfficeParser",
     "PowerPointParser",
     "WordParser"
    ],
@@ -1280,42 +1146,13 @@
    "class": "org.apache.tika.parser.microsoft.OldExcelParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 5,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/vnd.ms-excel.sheet.2",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/vnd.ms-excel.sheet.3",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/vnd.ms-excel.sheet.4",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/vnd.ms-excel.workspace.3",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    },
-    {
-     "type": "application/vnd.ms-excel.workspace.4",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-ole"
-    }
+   "exact": 5,
+   "open": [],
+   "implementedBy": [
+    "OldExcelParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -1550,17 +1387,10 @@
    "class": "org.apache.tika.parser.microsoft.TNEFParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-microsoft-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 3,
-   "exact": 2,
-   "open": [
-    {
-     "type": "application/x-tnef",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
-   ],
+   "exact": 3,
+   "open": [],
    "implementedBy": [
     "TNEFParser"
    ],
@@ -1637,14 +1467,8 @@
    "tier": "standard",
    "status": "partial",
    "typeCount": 7,
-   "exact": 5,
+   "exact": 6,
    "open": [
-    {
-     "type": "application/mp4",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
     {
      "type": "video/x-m4v",
      "resolution": "fallback",
@@ -1687,19 +1511,13 @@
    "class": "org.apache.tika.parser.ogg.FlacParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "audio/x-oggflac",
-     "resolution": "fallback",
-     "by": "AudioParser",
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
-    "AudioParser"
+    "AudioParser",
+    "FlacParser"
    ],
    "declared": null
   },
@@ -1707,73 +1525,12 @@
    "class": "org.apache.tika.parser.ogg.OggParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 11,
-   "exact": 1,
-   "open": [
-    {
-     "type": "application/kate",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "application/ogg",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "audio/x-oggpcm",
-     "resolution": "fallback",
-     "by": "AudioParser",
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/daala",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/ogg",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/x-dirac",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/x-oggrgb",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/x-ogguvs",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/x-oggyuv",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    },
-    {
-     "type": "video/x-ogm",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 11,
+   "open": [],
    "implementedBy": [
-    "AudioParser"
+    "OggParser"
    ],
    "declared": null
   },
@@ -1781,19 +1538,13 @@
    "class": "org.apache.tika.parser.ogg.OpusParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "audio/opus",
-     "resolution": "fallback",
-     "by": "AudioParser",
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
-    "AudioParser"
+    "OggParser",
+    "OpusParser"
    ],
    "declared": null
   },
@@ -1801,19 +1552,13 @@
    "class": "org.apache.tika.parser.ogg.SpeexParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "audio/speex",
-     "resolution": "fallback",
-     "by": "AudioParser",
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
-    "AudioParser"
+    "OggParser",
+    "SpeexParser"
    ],
    "declared": null
   },
@@ -1821,37 +1566,25 @@
    "class": "org.apache.tika.parser.ogg.TheoraParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "video/theora",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-media"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "TheoraParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
    "class": "org.apache.tika.parser.ogg.VorbisParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-audiovideo-module",
    "tier": "standard",
-   "status": "fallback",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "audio/vorbis",
-     "resolution": "fallback",
-     "by": "AudioParser",
-     "declared": "gap-media"
-    }
-   ],
+   "exact": 1,
+   "open": [],
    "implementedBy": [
-    "AudioParser"
+    "VorbisParser"
    ],
    "declared": null
   },
@@ -1981,18 +1714,13 @@
    "class": "org.apache.tika.parser.sas.SAS7BDATParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-code-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-sas-data",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "SAS7BDATParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
@@ -2051,18 +1779,13 @@
    "class": "org.apache.tika.parser.wordperfect.QuattroProParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "application/x-quattro-pro; version=9",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-misc-data"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "QuattroProParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {
