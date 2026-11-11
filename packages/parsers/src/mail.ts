@@ -6,6 +6,7 @@ import {
   Metadata,
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   LimitExceededError,
   ParseTimeoutError,
@@ -154,6 +155,11 @@ async function dispatchEmbedded(
     dispositionParams(entity.headers).get("filename") ??
     `part-${depth}`;
   partMetadata.set("tk:resource-name", name);
+  // Tika's MailContentHandler: `inline` is INLINE; `attachment`, no disposition and any other fall to ATTACHMENT.
+  partMetadata.set(
+    TIKA_KEYS.EMBEDDED_RESOURCE_TYPE,
+    dispositionType(entity.headers) === "inline" ? "INLINE" : "ATTACHMENT",
+  );
   const subject = headerValue(entity.headers, "subject");
   if (subject !== undefined) partMetadata.set("dc:title", decodeHeader(subject));
 
@@ -241,6 +247,11 @@ function contentTypeOf(headers: readonly HeaderField[]): {
 
 function contentTypeParams(headers: readonly HeaderField[]): Map<string, string> {
   return contentTypeOf(headers).parameters;
+}
+
+function dispositionType(headers: readonly HeaderField[]): string | undefined {
+  const value = headerValue(headers, "content-disposition");
+  return value === undefined ? undefined : parseStructured(value).type;
 }
 
 function dispositionParams(headers: readonly HeaderField[]): Map<string, string> {

@@ -50,6 +50,21 @@ async function recursive(config: unknown, ...flags: string[]): Promise<{ readonl
 
 const keysOf = (records: Records): string[][] => records.map((record) => Object.keys(record).sort());
 
+test("--recursive json: clear-by-attachment-type empties the embedded documents the parsers typed, and keeps the rest", async () => {
+  // test_recursive_embedded.docx holds an OLE object (an ATTACHMENT, by its oleObject relationship) and an EMF picture
+  // (INLINE, by its image relationship), in that order.
+  const clearing = (type: string) => ({ ...OFF, "metadata-filters": [{ "clear-by-attachment-type-metadata-filter": { types: [type] } }] });
+  const inline = (await recursive(clearing("INLINE"))).records;
+  assert.equal(inline.length, 3);
+  assert.ok(Object.keys(inline[0]!).length > 2, "the container has no type, so it is kept");
+  assert.equal(inline[1]!["tk:embedded-resource-type"], "ATTACHMENT");
+  assert.deepEqual(Object.keys(inline[2]!), [], "the INLINE picture is emptied but still listed");
+  const attachment = (await recursive(clearing("ATTACHMENT"))).records;
+  assert.equal(attachment.length, 3);
+  assert.deepEqual(Object.keys(attachment[1]!), [], "the ATTACHMENT object is emptied but still listed");
+  assert.equal(attachment[2]!["tk:embedded-resource-type"], "INLINE");
+});
+
 test("--recursive json: the configured chain runs over every document", async () => {
   const { records } = await recursive({ ...OFF, ...INCLUDE });
   assert.ok(records.length > 1, "the document has embedded documents");

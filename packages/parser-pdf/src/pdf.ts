@@ -7,6 +7,7 @@ import {
   Metadata,
   CONTEXT_KEYS,
   MissingDependencyError,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
@@ -183,6 +184,8 @@ export class PdfParser implements Parser {
         const embeddedMetadata = new Metadata();
         embeddedMetadata.set("tk:resource-name", attachment.filename);
         embeddedMetadata.set("Content-Type", "application/octet-stream");
+        // Tika's AbstractPDF2XHTML types a PDF's embedded file ATTACHMENT.
+        embeddedMetadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_TYPE, "ATTACHMENT");
         const extractor = ctx.get(
           CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR,
         ) as

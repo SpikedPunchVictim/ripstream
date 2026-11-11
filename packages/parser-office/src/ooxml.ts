@@ -14,6 +14,7 @@ import {
   type EmbeddedDocumentExtractor,
   type Parser,
   RipstreamInputStream,
+  TIKA_KEYS,
 } from "@spikedpunch/ripstream-core";
 import { OpcPackage } from "./opc.ts";
 import {
@@ -123,8 +124,11 @@ const XLSX_PARTS =
 const PPTX_PARTS =
   /^ppt\/(presentation)\.xml$|^ppt\/(slides\/slide\d+\.xml|notesSlides\/notesSlide\d+\.xml|charts\/chart\d+\.xml|diagrams\/data\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
 
+// The relationships of any part under word/, xl/ or ppt/: they say what each embedded part is (see embeddedTypesByPart).
+const RELATIONSHIP_PARTS = /^(?:word|xl|ppt)\/(?:.+\/)?_rels\/[^/]+\.rels$/;
+
 function neededPart(name: string): boolean {
-  if (SHARED_PARTS.test(name)) return true;
+  if (SHARED_PARTS.test(name) || RELATIONSHIP_PARTS.test(name)) return true;
   if (name.startsWith("word/")) return DOCX_PARTS.test(name);
   if (name.startsWith("xl/")) return XLSX_PARTS.test(name);
   if (name.startsWith("ppt/")) return PPTX_PARTS.test(name);
@@ -581,11 +585,71 @@ const DIAGRAM_PART = /^(word|ppt)\/diagrams\/data\d+\.xml$/;
 const EMBEDDED_PART = /^(word|xl|ppt)\/embeddings\/([^/]+)$/;
 const MEDIA_PART = /^(word|xl|ppt)\/media\/([^/]+)$/;
 
+const OFFICE_RELATIONSHIPS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+/**
+ * The `tk:embedded-resource-type` Tika's AbstractOOXMLExtractor gives a part by the type of the relationship that
+ * reaches it: an image is INLINE; audio, video, media, package and oleObject are ATTACHMENT.
+ */
+const EMBEDDED_TYPE_OF_RELATIONSHIP: ReadonlyMap<string, string> = new Map([
+  [`${OFFICE_RELATIONSHIPS}/image`, "INLINE"],
+  [`${OFFICE_RELATIONSHIPS}/audio`, "ATTACHMENT"],
+  [`${OFFICE_RELATIONSHIPS}/video`, "ATTACHMENT"],
+  ["http://schemas.microsoft.com/office/2007/relationships/media", "ATTACHMENT"],
+  [`${OFFICE_RELATIONSHIPS}/package`, "ATTACHMENT"],
+  [`${OFFICE_RELATIONSHIPS}/oleObject`, "ATTACHMENT"],
+]);
+
+/**
+ * The type of each part an internal relationship of a known type points to, by part name. A part reached by two
+ * relationships of different types takes the one in the first relationships file by name: Tika's order is POI's, which
+ * is not reproduced. A relationships file that cannot be read types nothing; the parts are still extracted.
+ */
+function embeddedTypesByPart(files: Record<string, Uint8Array>): Map<string, string> {
+  const types = new Map<string, string>();
+  for (const name of Object.keys(files).sort()) {
+    if (!RELATIONSHIP_PARTS.test(name)) continue;
+    const sourceFolder = name.slice(0, name.lastIndexOf("/_rels/"));
+    let relationships: XmlNode[];
+    try {
+      relationships = descendantsNamed(parseXmlTree(decode(files[name]!)), "Relationship");
+    } catch {
+      continue;
+    }
+    for (const relationship of relationships) {
+      const type = EMBEDDED_TYPE_OF_RELATIONSHIP.get(attribute(relationship, "Type") ?? "");
+      const target = attribute(relationship, "Target");
+      if (type === undefined || target === undefined) continue;
+      if (attribute(relationship, "TargetMode") === "External") continue;
+      const part = resolveTarget(sourceFolder, target);
+      if (!types.has(part)) types.set(part, type);
+    }
+  }
+  return types;
+}
+
+/** A relationship target as a part name: absolute from the package root, else from the source part's folder. */
+function resolveTarget(sourceFolder: string, target: string): string {
+  let path = target;
+  try {
+    path = decodeURIComponent(target);
+  } catch {
+    // A target that is not valid percent-encoding is read as written.
+  }
+  const segments = path.startsWith("/") ? [] : sourceFolder.split("/");
+  for (const segment of path.split("/")) {
+    if (segment === "..") segments.pop();
+    else if (segment !== "." && segment !== "") segments.push(segment);
+  }
+  return segments.join("/");
+}
+
 async function renderEmbeddedParts(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
   ctx: ParseContext,
 ): Promise<void> {
+  const types = embeddedTypesByPart(files);
   for (const name of Object.keys(files).sort()) {
     if (DIAGRAM_PART.test(name)) {
       await xhtml.startElement("div", "class", "diagram");
@@ -604,7 +668,7 @@ async function renderEmbeddedParts(
     const bytes = files[name]!;
     await xhtml.startElement("div", "class", "embedded");
     await xhtml.element("h1", embedded[2] ?? name);
-    await parseEmbeddedPart(xhtml, embedded[2] ?? name, bytes, ctx);
+    await parseEmbeddedPart(xhtml, embedded[2] ?? name, bytes, ctx, types.get(name));
     await xhtml.endElement("div");
   }
 }
@@ -614,6 +678,7 @@ async function parseEmbeddedPart(
   name: string,
   bytes: Uint8Array,
   ctx: ParseContext,
+  type: string | undefined,
 ): Promise<void> {
   const extractor =
     (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as
@@ -622,6 +687,7 @@ async function parseEmbeddedPart(
   if (extractor === undefined) return;
   const metadata = new Metadata();
   metadata.set("tk:resource-name", name);
+  if (type !== undefined) metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_TYPE, type);
   const stream = await RipstreamInputStream.from(bytes, { context: ctx });
   try {
     await extractor.parseEmbedded(stream, handler, metadata, ctx);

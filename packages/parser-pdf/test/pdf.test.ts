@@ -179,6 +179,22 @@ test("extracts PDF attachments", async () => {
   );
 });
 
+test("a PDF attachment is an ATTACHMENT (Tika's AbstractPDF2XHTML)", async () => {
+  const document = await PDFDocument.create();
+  document.addPage();
+  await document.attach(new TextEncoder().encode("attached text"), "note.txt", { mimeType: "text/plain" });
+  const stream = await RipstreamInputStream.from(await document.save());
+  const resources = new EmbeddedDocumentBytesHandler();
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, resources);
+  await new PdfParser().parse(stream, new BodyContentHandler(), new Metadata(), context);
+  await stream.close();
+  assert.deepEqual(
+    resources.resources.map((resource) => resource.metadata.get("tk:embedded-resource-type")),
+    ["ATTACHMENT"],
+  );
+});
+
 test("accepts password providers for encrypted inputs", async () => {
   const { EmptyPasswordProvider } = await import("@spikedpunch/ripstream-core");
   const stream = await RipstreamInputStream.from(await samplePdf());

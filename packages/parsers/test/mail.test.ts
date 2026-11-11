@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BodyContentHandler,
+  CONTEXT_KEYS,
+  EmbeddedDocumentBytesHandler,
   Metadata,
   ParseContext,
   RipstreamInputStream,
@@ -124,4 +126,37 @@ test("rejects pathologically nested multipart with LimitExceededError", async ()
     parse(`Subject: deep\r\n${body}`),
     (error: Error) => error.name === "LimitExceededError",
   );
+});
+
+// Tika's MailContentHandler: `inline` is INLINE, `attachment` is ATTACHMENT, and a part with no disposition falls back to
+// ATTACHMENT in handleEmbedded.
+async function embeddedTypes(parts: readonly string[]): Promise<Array<string | null>> {
+  const lines = ["Subject: parts", 'Content-Type: multipart/mixed; boundary="b"', ""];
+  for (const part of parts) lines.push("--b", part, "");
+  lines.push("--b--", "");
+  const resources = new EmbeddedDocumentBytesHandler();
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, resources);
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(lines.join("\r\n")));
+  await new MailParser().parse(stream, new BodyContentHandler(), new Metadata(), context);
+  await stream.close();
+  return resources.resources.map((resource) => resource.metadata.get("tk:embedded-resource-type"));
+}
+
+const pdf = (disposition: string[]): string =>
+  ["Content-Type: application/pdf", ...disposition, "Content-Transfer-Encoding: base64", "", "AAAA"].join("\r\n");
+
+test("a mail part with Content-Disposition: attachment is an ATTACHMENT", async () => {
+  assert.deepEqual(await embeddedTypes([pdf(['Content-Disposition: attachment; filename="a.pdf"'])]), ["ATTACHMENT"]);
+});
+
+test("a mail part with Content-Disposition: inline is INLINE, whatever the case", async () => {
+  assert.deepEqual(
+    await embeddedTypes([pdf(['Content-Disposition: inline; filename="a.pdf"']), pdf(["Content-Disposition: INLINE"])]),
+    ["INLINE", "INLINE"],
+  );
+});
+
+test("a mail part with no Content-Disposition, or one that is neither, is an ATTACHMENT", async () => {
+  assert.deepEqual(await embeddedTypes([pdf([]), pdf(["Content-Disposition: form-data"])]), ["ATTACHMENT", "ATTACHMENT"]);
 });
