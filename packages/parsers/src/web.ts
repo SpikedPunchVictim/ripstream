@@ -1,27 +1,37 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   XHTMLContentHandler,
+  inflateBounded,
   type ContentHandler,
   type Metadata,
   type ParseContext,
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { parseEntry } from "@spikedpunch/ripstream-parser-archive";
+import { inflateLimits, parseEntry } from "@spikedpunch/ripstream-parser-archive";
 import { SaxesParser } from "saxes";
+import { arcHttpBody, isArc, readArcRecords } from "./arc.ts";
 import { createDecoder } from "./charset.ts";
 import { detectXmlEncoding } from "./xml-encoding.ts";
 
-/** WARC/ARC record reader with embedded payload parsing. */
+/**
+ * WARC/ARC record reader with embedded payload parsing. Tika's WARCParser claims the four types below; for the `+gz`
+ * ones jwarc reads through the gzip itself, so the bytes are inflated (bounded) and read as the plain format.
+ */
 export class WarcParser implements Parser {
   readonly name = "WARCParser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
-      ["application/warc", "application/warc+zip"].map(
-        (type) => MediaType.parse(type)!,
-      ),
+      [
+        "application/warc",
+        "application/warc+zip",
+        "application/warc+gz",
+        "application/arc+gz",
+        "application/x-internet-archive",
+      ].map((type) => MediaType.parse(type)!),
     );
   }
 
@@ -33,10 +43,16 @@ export class WarcParser implements Parser {
   ): Promise<void> {
     const chunks: Uint8Array[] = [];
     for await (const chunk of stream) chunks.push(chunk);
-    const data = concat(chunks);
+    const data = gunzipIfGzip(concat(chunks), ctx);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
+
+    if (isArc(data)) {
+      await writeArcRecords(xhtml, data, metadata, ctx);
+      await xhtml.endDocument();
+      return;
+    }
 
     let offset = 0;
     while (offset < data.length) {
@@ -77,6 +93,45 @@ export class WarcParser implements Parser {
 
     await xhtml.endDocument();
   }
+}
+
+/**
+ * A gzip of any number of members (crawlers write one per record) becomes the bytes it holds. The inflate is bounded
+ * by the embedded-resource limits and the ratio limit, so a bomb stops at the cap.
+ */
+function gunzipIfGzip(data: Uint8Array, ctx: ParseContext): Uint8Array {
+  if (data.length < 2 || data[0] !== 0x1f || data[1] !== 0x8b) return data;
+  try {
+    return inflateBounded(data, "gzip", inflateLimits(ctx));
+  } catch (error) {
+    if (error instanceof LimitExceededError) throw error;
+    throw new MalformedDocumentError("Invalid gzip stream in a web archive", { cause: error });
+  }
+}
+
+/**
+ * Tika's testARC (a version block, a dns: record and one http record) yields a single embedded document, so only a
+ * record whose body is an HTTP response is parsed; the version block and dns records are not documents.
+ */
+async function writeArcRecords(
+  xhtml: XHTMLContentHandler,
+  data: Uint8Array,
+  metadata: Metadata,
+  ctx: ParseContext,
+): Promise<void> {
+  for (const record of readArcRecords(data)) {
+    if (!isHttpResponse(record.body)) continue;
+    await xhtml.startElement("div", "class", "warc-record");
+    await xhtml.element("h1", record.url);
+    await xhtml.element("p", record.contentType);
+    const body = arcHttpBody(record.body);
+    if (body.length > 0) await parseEntry(xhtml, record.url, body, metadata, ctx);
+    await xhtml.endElement("div");
+  }
+}
+
+function isHttpResponse(payload: Uint8Array): boolean {
+  return /^HTTP\/\d\.\d/.test(new TextDecoder("latin1").decode(payload.subarray(0, 16)));
 }
 
 function httpBody(payload: Uint8Array): Uint8Array {
