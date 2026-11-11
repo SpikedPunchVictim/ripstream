@@ -116,7 +116,7 @@ test("an unknown key is named, in the emitter and in httpClientConfig", () => {
 });
 
 test("components ripstream still lacks are named with what it has", () => {
-  const messages = issues({ emitters: { s: { "solr-emitter": { solrCollection: "c" } } } });
+  const messages = issues({ emitters: { s: { "kafka-emitter": { topic: "t" } } } });
   assert.equal(messages.length, 1);
-  assert.match(messages[0] ?? "", /solr-emitter is not an emitter ripstream has: .*Elasticsearch and OpenSearch emitters/);
+  assert.match(messages[0] ?? "", /kafka-emitter is not an emitter ripstream has: .*Solr, Elasticsearch and OpenSearch emitters/);
 });

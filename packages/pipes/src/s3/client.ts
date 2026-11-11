@@ -42,7 +42,8 @@ export function xmlText(raw: string): string {
   });
 }
 
-const firstTag = (xml: string, tag: string): string | undefined => new RegExp(`<${tag}>([^<]*)</${tag}>`).exec(xml)?.[1];
+/** The text of the first `<tag>text</tag>` of `xml`, still escaped. A self-closing `<tag />` is none. */
+export const firstTag = (xml: string, tag: string): string | undefined => new RegExp(`<${tag}>([^<]*)</${tag}>`).exec(xml)?.[1];
 
 export class S3Client {
   readonly #options: S3ClientOptions;

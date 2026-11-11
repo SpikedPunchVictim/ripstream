@@ -78,6 +78,7 @@ export {
   parsePipesSections,
   type FileSystemEmitterSettings,
   type FileSystemIteratorSettings,
+  type JsonlReporterSettings,
   type PipesEmitterSettings,
   type PipesFetcherSettings,
   type PipesIteratorSettings,
@@ -89,6 +90,16 @@ export {
   type PipesSettings,
 } from "./pipes-config.ts";
 export { type SearchEmitterSettings, type SearchEmitterType } from "./pipes-search-config.ts";
+export { type SearchReporterSettings, type SearchReporterType } from "./pipes-search-reporter-config.ts";
+export { type GcsConnectionSettings, type GcsEmitterSettings, type GcsFetcherSettings, type GcsIteratorSettings } from "./pipes-gcs-config.ts";
+export { type AzBlobConnectionSettings, type AzBlobEmitterSettings, type AzBlobFetcherSettings, type AzBlobIteratorSettings } from "./pipes-azblob-config.ts";
+export {
+  type SolrAttachmentStrategy,
+  type SolrConnectionSettings,
+  type SolrEmitterSettings,
+  type SolrIteratorSettings,
+  type SolrUpdateStrategy,
+} from "./pipes-solr-config.ts";
 export {
   S3_CREDENTIAL_PROVIDERS,
   type S3ConnectionSettings,

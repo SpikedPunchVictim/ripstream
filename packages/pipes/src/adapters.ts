@@ -127,13 +127,15 @@ export interface StatusFilter {
   readonly excludes?: readonly PipesResultStatus[];
 }
 
-function wants(filter: StatusFilter, result: PipesResult): boolean {
+/** Whether the filter lets the result through. */
+export function wants(filter: StatusFilter, result: PipesResult): boolean {
   if (filter.includes !== undefined && filter.includes.length > 0) return filter.includes.includes(result.status);
   if (filter.excludes !== undefined && filter.excludes.length > 0) return !filter.excludes.includes(result.status);
   return true;
 }
 
-function assertValidFilter(filter: StatusFilter): void {
+/** Refuses a filter that names a status Tika does not have, or that has both includes and excludes. */
+export function assertValidFilter(filter: StatusFilter): void {
   for (const [name, list] of [["includes", filter.includes], ["excludes", filter.excludes]] as const) {
     for (const status of list ?? []) {
       if (!(status in PIPES_RESULT_STATUSES)) throw new RangeError(`${name} names no result status: ${String(status)}`);

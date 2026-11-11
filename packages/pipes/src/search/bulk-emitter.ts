@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { metadataKeyDefinition, type RmetaValue, type SearchEmitterSettings } from "@spikedpunch/ripstream-core";
 import type { EmittedDocument, Emitter } from "../index.ts";
 import { documentObjects } from "../file-system-emitter.ts";
+import { SearchError, bulkAuthorization, postBulk } from "./bulk-client.ts";
 
 /*
  * Tika's es-emitter and opensearch-emitter (tika-pipes-es and tika-pipes-opensearch 4.2.0). Both build a `_bulk` request, one
@@ -13,17 +14,6 @@ import { documentObjects } from "../file-system-emitter.ts";
 export interface SearchTransport {
   readonly fetchImpl?: typeof fetch;
   readonly randomId?: () => string;
-}
-
-/** What `_bulk` answered when it was not a success: the HTTP status, so that a rejected request (429, 5xx) is retried. */
-export class SearchError extends Error {
-  readonly status: number | undefined;
-
-  constructor(message: string, status?: number) {
-    super(message);
-    this.name = "SearchError";
-    this.status = status;
-  }
 }
 
 type Fields = ReadonlyArray<readonly [string, string]>;
@@ -64,11 +54,6 @@ export interface BulkSearchEmitterOptions {
   readonly transport?: SearchTransport;
 }
 
-/** The longest stretch of an error response that goes into a message. */
-const MESSAGE_LIMIT = 1000;
-
-const clipped = (value: string): string => (value.length > MESSAGE_LIMIT ? `${value.slice(0, MESSAGE_LIMIT)}… (${value.length - MESSAGE_LIMIT} more characters)` : value);
-
 export class BulkSearchEmitter implements Emitter {
   readonly #settings: SearchEmitterSettings;
   readonly #fetch: typeof fetch;
@@ -82,12 +67,7 @@ export class BulkSearchEmitter implements Emitter {
     this.#fetch = transport?.fetchImpl ?? fetch;
     this.#randomId = transport?.randomId ?? randomUUID;
     this.#label = settings.type;
-    this.#authorization =
-      settings.apiKey !== undefined
-        ? `ApiKey ${settings.apiKey}`
-        : settings.userName !== undefined
-          ? `Basic ${Buffer.from(`${settings.userName}:${settings.password ?? ""}`, "utf8").toString("base64")}`
-          : undefined;
+    this.#authorization = bulkAuthorization(settings);
   }
 
   /** The action line and the document line of one entry, as Tika's InsertMetadataToJsonWriter and UpsertMetadataToJsonWriter write them. */
@@ -125,30 +105,6 @@ export class BulkSearchEmitter implements Emitter {
     const list = documentObjects(document);
     if (list.length === 0) return;
     const { url, socketTimeoutMillis } = this.#settings;
-    const response = await this.#fetch(`${url}/_bulk`, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json; charset=utf-8",
-        ...(this.#authorization === undefined ? {} : { authorization: this.#authorization }),
-      },
-      body: this.#bulkBody(document.id, list),
-      // The credentials go to the URL the operator set and to no other: a redirect is an error to fix in the settings.
-      redirect: "error",
-      ...(socketTimeoutMillis === undefined ? {} : { signal: AbortSignal.timeout(socketTimeoutMillis) }),
-    });
-    const answer = await response.text();
-    if (response.status !== 200) throw new SearchError(`${this.#label} _bulk ${response.status}: ${clipped(answer)}`, response.status);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(answer);
-    } catch {
-      throw new SearchError(`${this.#label} _bulk answered 200 with a body that is not JSON: ${clipped(answer)}`);
-    }
-    // `errors` is what the service sets when any one entry failed; the request as a whole is then 200. Nothing here retries it:
-    // the entries that did succeed would be indexed again, and an embedded document's id is drawn anew each time.
-    if (typeof parsed === "object" && parsed !== null && (parsed as { errors?: unknown }).errors === true) {
-      throw new SearchError(`${this.#label} _bulk reported errors: ${clipped(answer)}`);
-    }
+    await postBulk({ fetchImpl: this.#fetch, label: this.#label, url, authorization: this.#authorization, socketTimeoutMillis, body: this.#bulkBody(document.id, list) });
   }
 }

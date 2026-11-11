@@ -81,8 +81,8 @@ test("pipes keys with no counterpart are refused by name", () => {
 
 test("a component ripstream does not have is refused by name, with where the cloud ones are tracked", () => {
   const cases: Array<[string, unknown, RegExp]> = [
-    ["fetchers", { gcs: { "gcs-fetcher": { bucket: "b" } } }, /fetchers\.gcs\.gcs-fetcher is not a fetcher ripstream has.*docs\/migration\.md/],
-    ["emitters", { solr: { "solr-emitter": {} } }, /emitters\.solr\.solr-emitter is not an emitter ripstream has/],
+    ["fetchers", { drive: { "google-drive-fetcher": { bucket: "b" } } }, /fetchers\.drive\.google-drive-fetcher is not a fetcher ripstream has.*docs\/migration\.md/],
+    ["emitters", { kafka: { "kafka-emitter": {} } }, /emitters\.kafka\.kafka-emitter is not an emitter ripstream has/],
     ["pipes-iterator", { "jdbc-pipes-iterator": {} }, /pipes-iterator\.jdbc-pipes-iterator is not an iterator ripstream has/],
     ["pipes-reporters", { "jdbc-reporter": {} }, /pipes-reporters\.jdbc-reporter is not a reporter ripstream has/],
   ];
@@ -211,7 +211,7 @@ test("plugin-roots must be a string", () => {
 
 test("every issue is reported at once, and nothing loads", () => {
   assert.throws(
-    () => loadConfig({ fetchers: { gcs: { "gcs-fetcher": {} } }, pipes: { parseMode: "TEXT", bogus: true } }),
+    () => loadConfig({ fetchers: { drive: { "google-drive-fetcher": {} } }, pipes: { parseMode: "TEXT", bogus: true } }),
     (error: unknown) => error instanceof RipstreamConfigError && error.issues.length === 3,
   );
 });

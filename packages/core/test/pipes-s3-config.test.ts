@@ -122,7 +122,7 @@ test("maxLength is -1 or more; the secret is never in a message", () => {
 });
 
 test("components ripstream still lacks are named with what it has", () => {
-  const messages = issues({ fetchers: { g: { "gcs-fetcher": { bucket: "b" } } } });
+  const messages = issues({ fetchers: { g: { "google-drive-fetcher": { bucket: "b" } } } });
   assert.equal(messages.length, 1);
-  assert.match(messages[0] ?? "", /gcs-fetcher is not a fetcher ripstream has: .*file-system, http and S3 fetchers/);
+  assert.match(messages[0] ?? "", /google-drive-fetcher is not a fetcher ripstream has: .*file-system, http, S3, GCS and Azure Blob fetchers/);
 });

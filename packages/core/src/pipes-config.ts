@@ -1,4 +1,27 @@
+import {
+  parseAzBlobEmitter,
+  parseAzBlobFetcher,
+  parseAzBlobIterator,
+  type AzBlobEmitterSettings,
+  type AzBlobFetcherSettings,
+  type AzBlobIteratorSettings,
+} from "./pipes-azblob-config.ts";
+import {
+  parseGcsEmitter,
+  parseGcsFetcher,
+  parseGcsIterator,
+  type GcsEmitterSettings,
+  type GcsFetcherSettings,
+  type GcsIteratorSettings,
+} from "./pipes-gcs-config.ts";
 import { parseSearchEmitter, type SearchEmitterSettings } from "./pipes-search-config.ts";
+import { parseSearchReporter, type SearchReporterSettings } from "./pipes-search-reporter-config.ts";
+import {
+  parseSolrEmitter,
+  parseSolrIterator,
+  type SolrEmitterSettings,
+  type SolrIteratorSettings,
+} from "./pipes-solr-config.ts";
 import {
   parseS3Emitter,
   parseS3Fetcher,
@@ -59,9 +82,17 @@ export const SYSTEM_COMPONENT_PREFIX = "__";
 export type PipesFetcherSettings =
   | { readonly id: string; readonly type: "file-system-fetcher"; readonly basePath?: string; readonly allowAbsolutePaths: boolean }
   | { readonly id: string; readonly type: "http-fetcher" }
-  | S3FetcherSettings;
+  | S3FetcherSettings
+  | GcsFetcherSettings
+  | AzBlobFetcherSettings;
 
-export type PipesEmitterSettings = FileSystemEmitterSettings | S3EmitterSettings | SearchEmitterSettings;
+export type PipesEmitterSettings =
+  | FileSystemEmitterSettings
+  | S3EmitterSettings
+  | SearchEmitterSettings
+  | GcsEmitterSettings
+  | AzBlobEmitterSettings
+  | SolrEmitterSettings;
 
 /** Tika's FileSystemEmitterConfig, with its defaults applied: onExists EXCEPTION, atomicWrites true, compression NONE. */
 export interface FileSystemEmitterSettings {
@@ -83,9 +114,14 @@ export interface FileSystemIteratorSettings {
   readonly emitterId: string;
 }
 
-export type PipesIteratorSettings = FileSystemIteratorSettings | S3IteratorSettings;
+export type PipesIteratorSettings =
+  | FileSystemIteratorSettings
+  | S3IteratorSettings
+  | GcsIteratorSettings
+  | AzBlobIteratorSettings
+  | SolrIteratorSettings;
 
-export interface PipesReporterSettings {
+export interface JsonlReporterSettings {
   readonly type: "file-system-jsonl-reporter";
   readonly path: string;
   readonly includes?: readonly PipesResultStatus[];
@@ -94,6 +130,8 @@ export interface PipesReporterSettings {
   readonly onExists: "EXCEPTION" | "APPEND" | "REPLACE";
   readonly maxMessageLength: number;
 }
+
+export type PipesReporterSettings = JsonlReporterSettings | SearchReporterSettings;
 
 /** The pipes sections as ripstream applies them. A key the sections leave out is absent here. */
 export interface PipesSettings {
@@ -136,7 +174,7 @@ const whole = (value: unknown, min: number, max: number): value is number =>
 const nonEmpty = (value: unknown): value is string => typeof value === "string" && value.length > 0 && !value.includes("\u0000");
 
 const CLOUD =
-  "ripstream's pipes have the file-system, http and S3 fetchers, the file-system, S3, Elasticsearch and OpenSearch emitters, the file-system and S3 iterators and the jsonl reporter; the other cloud, database and search components are not implemented (docs/migration.md says which, and why)";
+  "ripstream's pipes have the file-system, http, S3, GCS and Azure Blob fetchers, the file-system, S3, GCS, Azure Blob, Solr, Elasticsearch and OpenSearch emitters, the file-system, S3, GCS, Azure Blob and Solr iterators, and the jsonl, Elasticsearch and OpenSearch reporters. Not implemented: the jdbc and kafka components, the atlassian-jwt, google-drive and microsoft-graph fetchers, and the csv and json iterators (docs/migration.md says which, and why)";
 
 /** A `{ type: config }` object as Tika writes a component: exactly one key, whose value is an object. */
 function oneComponent(value: unknown, where: string, issues: string[]): { type: string; config: Record<string, unknown> } | null {
@@ -208,6 +246,12 @@ function fetchers(raw: unknown, issues: string[], notices: string[]): PipesFetch
     } else if (type === "s3-fetcher") {
       const settings = parseS3Fetcher(id, config, { at, issues, notices });
       if (settings !== undefined) found.push(settings);
+    } else if (type === "gcs-fetcher") {
+      const settings = parseGcsFetcher(id, config, { at, issues, notices });
+      if (settings !== undefined) found.push(settings);
+    } else if (type === "az-blob-fetcher") {
+      const settings = parseAzBlobFetcher(id, config, { at, issues, notices });
+      if (settings !== undefined) found.push(settings);
     } else {
       issues.push(`${at} is not a fetcher ripstream has: ${CLOUD}`);
     }
@@ -235,6 +279,21 @@ function emitters(raw: unknown, issues: string[], notices: string[]): PipesEmitt
     }
     if (type === "es-emitter" || type === "opensearch-emitter") {
       const settings = parseSearchEmitter(id, type, config, { at, issues, notices });
+      if (settings !== undefined) found.push(settings);
+      continue;
+    }
+    if (type === "gcs-emitter") {
+      const settings = parseGcsEmitter(id, config, { at, issues, notices });
+      if (settings !== undefined) found.push(settings);
+      continue;
+    }
+    if (type === "az-blob-emitter") {
+      const settings = parseAzBlobEmitter(id, config, { at, issues, notices });
+      if (settings !== undefined) found.push(settings);
+      continue;
+    }
+    if (type === "solr-emitter") {
+      const settings = parseSolrEmitter(id, config, { at, issues, notices });
       if (settings !== undefined) found.push(settings);
       continue;
     }
@@ -300,7 +359,7 @@ function statusList(value: unknown, where: string, issues: string[]): PipesResul
   return names;
 }
 
-function reporters(raw: unknown, issues: string[]): PipesReporterSettings[] {
+function reporters(raw: unknown, issues: string[], notices: string[]): PipesReporterSettings[] {
   const found: PipesReporterSettings[] = [];
   if (!isObject(raw)) {
     issues.push("pipes-reporters must be an object keyed by reporter type");
@@ -308,6 +367,15 @@ function reporters(raw: unknown, issues: string[]): PipesReporterSettings[] {
   }
   for (const [type, config] of Object.entries(raw)) {
     const at = `pipes-reporters.${type}`;
+    if (type === "es-pipes-reporter" || type === "opensearch-pipes-reporter") {
+      if (!isObject(config)) {
+        issues.push(`${at} must be an object`);
+        continue;
+      }
+      const settings = parseSearchReporter(type, config, { at, issues, notices, statuses: Object.keys(PIPES_RESULT_STATUSES) });
+      if (settings !== undefined) found.push(settings);
+      continue;
+    }
     if (type !== "file-system-jsonl-reporter") {
       issues.push(`${at} is not a reporter ripstream has: ${CLOUD}`);
       continue;
@@ -410,6 +478,9 @@ function iterator(raw: unknown, issues: string[], notices: string[]): PipesItera
   const { type, config } = one;
   const at = `pipes-iterator.${type}`;
   if (type === "s3-pipes-iterator") return parseS3Iterator(config, { at, issues, notices });
+  if (type === "gcs-pipes-iterator") return parseGcsIterator(config, { at, issues, notices });
+  if (type === "az-blob-pipes-iterator") return parseAzBlobIterator(config, { at, issues, notices });
+  if (type === "solr-pipes-iterator") return parseSolrIterator(config, { at, issues, notices });
   if (type !== "file-system-pipes-iterator") {
     issues.push(`${at} is not an iterator ripstream has: ${CLOUD}`);
     return undefined;
@@ -436,7 +507,7 @@ export function parsePipesSections(record: Record<string, unknown>): { issues: s
   const notices: string[] = [];
   const fetcherList = record.fetchers === undefined ? [] : fetchers(record.fetchers, issues, notices);
   const emitterList = record.emitters === undefined ? [] : emitters(record.emitters, issues, notices);
-  const reporterList = record["pipes-reporters"] === undefined ? [] : reporters(record["pipes-reporters"], issues);
+  const reporterList = record["pipes-reporters"] === undefined ? [] : reporters(record["pipes-reporters"], issues, notices);
   const iteratorSettings = record["pipes-iterator"] === undefined ? undefined : iterator(record["pipes-iterator"], issues, notices);
   const keys = record.pipes === undefined ? {} : pipesKeys(record.pipes, issues, notices);
   if (iteratorSettings !== undefined) {

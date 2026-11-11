@@ -18,17 +18,23 @@ import {
   type ParseLimits,
   type ParseRecord,
   type PipesEmitterSettings,
+  type PipesFetcherSettings,
+  type PipesIteratorSettings,
+  type PipesReporterSettings,
   type PipesSettings,
   type Ripstream,
   RipstreamConfigError,
-  type SearchEmitterSettings,
   type UnpackSettings,
 } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { PIPE_MODES, assertValidEngineOptions, assertValidPipesConfig } from "./config.ts";
 import { FileSystemFetcher, FileSystemPipesIterator, HttpFetcher, PipesPathError, UrlListPipesIterator } from "./components.ts";
+import { AzBlobEmitter, AzBlobFetcher, AzBlobPipesIterator, type AzBlobTransport } from "./azblob/components.ts";
+import { GcsEmitter, GcsFetcher, GcsPipesIterator, type GcsTransport } from "./gcs/components.ts";
 import { S3Emitter, S3Fetcher, S3PipesIterator, type S3Transport } from "./s3/components.ts";
 import { BulkSearchEmitter, type SearchTransport } from "./search/bulk-emitter.ts";
+import { SearchPipesReporter } from "./search/reporter.ts";
+import { SolrEmitter, SolrPipesIterator, type SolrTransport } from "./solr/components.ts";
 import { CompositeReporter, JsonlReporter } from "./adapters.ts";
 import { FileSystemEmitter, FlatFileEmitter } from "./file-system-emitter.ts";
 import { type Checkpoint, type RetryOptions, isTransientError, withRetry } from "./resilience.ts";
@@ -795,8 +801,6 @@ export function createEngine(config: PipesConfig, options: PipesRunOptions = {})
 }
 
 /** What a caller adds to Tika-shaped settings: where the tuples come from when the settings name no iterator, and the run options. */
-const isSearchEmitter = (emitter: PipesEmitterSettings): emitter is SearchEmitterSettings => emitter.type === "es-emitter" || emitter.type === "opensearch-emitter";
-
 export interface PipesSettingsRunOptions extends PipesRunOptions {
   /** Used instead of the settings' `pipes-iterator`, or when they have none: a service that takes its tuples from a request. */
   readonly iterator?: PipesIterator;
@@ -806,10 +810,136 @@ export interface PipesSettingsRunOptions extends PipesRunOptions {
   readonly checkpoint?: Checkpoint;
   /** Replaces the network, the clock or the credentials of the settings' S3 components (a test's fake S3). */
   readonly s3?: S3Transport;
-  /** Replaces the network, or the ids drawn for embedded documents, of the settings' Elasticsearch and OpenSearch emitters. */
+  /** Replaces the network, or the ids drawn for embedded documents, of the settings' Elasticsearch and OpenSearch emitters. Their reporters take its network too. */
   readonly search?: SearchTransport;
+  /** Replaces the network, the clock, the environment or the token of the settings' GCS components (a test's fake Cloud Storage, or an emulator's address). */
+  readonly gcs?: GcsTransport;
+  /** Replaces the network of the settings' Azure Blob components. */
+  readonly azBlob?: AzBlobTransport;
+  /** Replaces the network, or the ids drawn for embedded documents, of the settings' Solr components. */
+  readonly solr?: SolrTransport;
   /** What the settings' metadata filters need that core has not (the language identifier of `charsoup-metadata-filter`). A filter whose service is missing is refused when the engine is built. */
   readonly metadataFilterServices?: MetadataFilterServices;
+}
+
+/** The ways a transport is given to a component that has one: not at all, when the run options have none. */
+const withTransport = <T>(transport: T | undefined): { transport?: T } => (transport === undefined ? {} : { transport });
+
+function iteratorFrom(settings: PipesIteratorSettings, options: PipesSettingsRunOptions): PipesIterator {
+  switch (settings.type) {
+    case "s3-pipes-iterator":
+      return new S3PipesIterator({
+        s3: settings.s3,
+        fetcherId: settings.fetcherId,
+        emitterId: settings.emitterId,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.fileNamePattern === undefined ? {} : { fileNamePattern: settings.fileNamePattern }),
+        ...withTransport(options.s3),
+      });
+    case "gcs-pipes-iterator":
+      return new GcsPipesIterator({
+        gcs: settings.gcs,
+        fetcherId: settings.fetcherId,
+        emitterId: settings.emitterId,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...withTransport(options.gcs),
+      });
+    case "az-blob-pipes-iterator":
+      return new AzBlobPipesIterator({
+        azure: settings.azure,
+        fetcherId: settings.fetcherId,
+        emitterId: settings.emitterId,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.timeoutMillis === undefined ? {} : { timeoutMillis: settings.timeoutMillis }),
+        ...withTransport(options.azBlob),
+      });
+    case "solr-pipes-iterator":
+      return new SolrPipesIterator({ settings, ...withTransport(options.solr) });
+    case "file-system-pipes-iterator":
+      return new FileSystemPipesIterator({ basePath: settings.basePath, fetcherId: settings.fetcherId, emitterId: settings.emitterId });
+  }
+}
+
+function fetcherFrom(settings: PipesFetcherSettings, options: PipesSettingsRunOptions): Fetcher {
+  switch (settings.type) {
+    case "http-fetcher":
+      return new HttpFetcher();
+    case "s3-fetcher":
+      return new S3Fetcher({
+        s3: settings.s3,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.maxLength === undefined ? {} : { maxLength: settings.maxLength }),
+        ...withTransport(options.s3),
+      });
+    case "gcs-fetcher":
+      return new GcsFetcher({ gcs: settings.gcs, ...withTransport(options.gcs) });
+    case "az-blob-fetcher":
+      return new AzBlobFetcher({ azure: settings.azure, ...withTransport(options.azBlob) });
+    case "file-system-fetcher":
+      return new FileSystemFetcher({
+        ...(settings.basePath === undefined ? {} : { basePath: settings.basePath }),
+        allowAbsolutePaths: settings.allowAbsolutePaths,
+      });
+  }
+}
+
+function emitterFrom(settings: PipesEmitterSettings, options: PipesSettingsRunOptions): Emitter {
+  switch (settings.type) {
+    case "s3-emitter":
+      return new S3Emitter({
+        s3: settings.s3,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.fileExtension === undefined ? {} : { fileExtension: settings.fileExtension }),
+        ...withTransport(options.s3),
+      });
+    case "es-emitter":
+    case "opensearch-emitter":
+      return new BulkSearchEmitter({ settings, ...withTransport(options.search) });
+    case "gcs-emitter":
+      return new GcsEmitter({
+        gcs: settings.gcs,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.fileExtension === undefined ? {} : { fileExtension: settings.fileExtension }),
+        ...withTransport(options.gcs),
+      });
+    case "az-blob-emitter":
+      return new AzBlobEmitter({
+        azure: settings.azure,
+        ...(settings.prefix === undefined ? {} : { prefix: settings.prefix }),
+        ...(settings.fileExtension === undefined ? {} : { fileExtension: settings.fileExtension }),
+        ...(settings.overwriteExisting === undefined ? {} : { overwriteExisting: settings.overwriteExisting }),
+        ...withTransport(options.azBlob),
+      });
+    case "solr-emitter":
+      return new SolrEmitter({ settings, ...withTransport(options.solr) });
+    case "file-system-emitter":
+      return new FileSystemEmitter({
+        ...(settings.basePath === undefined ? {} : { basePath: settings.basePath }),
+        allowAbsolutePaths: settings.allowAbsolutePaths,
+        ...(settings.fileExtension === undefined ? {} : { fileExtension: settings.fileExtension }),
+        onExists: settings.onExists,
+        atomicWrites: settings.atomicWrites,
+        compression: settings.compression,
+        prettyPrint: settings.prettyPrint,
+      });
+  }
+}
+
+function reporterFrom(settings: PipesReporterSettings, options: PipesSettingsRunOptions): Reporter {
+  switch (settings.type) {
+    case "es-pipes-reporter":
+    case "opensearch-pipes-reporter":
+      return new SearchPipesReporter({ settings, ...withTransport(options.search) });
+    case "file-system-jsonl-reporter":
+      return new JsonlReporter(
+        settings.path,
+        {
+          ...(settings.includes === undefined ? {} : { includes: settings.includes }),
+          ...(settings.excludes === undefined ? {} : { excludes: settings.excludes }),
+        },
+        { onExists: settings.onExists, maxMessageLength: settings.maxMessageLength },
+      );
+  }
 }
 
 /**
@@ -818,82 +948,15 @@ export interface PipesSettingsRunOptions extends PipesRunOptions {
  * the settings give none.
  */
 export function createEngineFromSettings(settings: PipesSettings, options: PipesSettingsRunOptions = {}): PipesEngine {
-  const iteratorSettings = settings.iterator;
-  const iterator =
-    options.iterator ??
-    (iteratorSettings === undefined
-      ? undefined
-      : iteratorSettings.type === "s3-pipes-iterator"
-        ? new S3PipesIterator({
-            s3: iteratorSettings.s3,
-            fetcherId: iteratorSettings.fetcherId,
-            emitterId: iteratorSettings.emitterId,
-            ...(iteratorSettings.prefix === undefined ? {} : { prefix: iteratorSettings.prefix }),
-            ...(iteratorSettings.fileNamePattern === undefined ? {} : { fileNamePattern: iteratorSettings.fileNamePattern }),
-            ...(options.s3 === undefined ? {} : { transport: options.s3 }),
-          })
-        : new FileSystemPipesIterator({
-            basePath: iteratorSettings.basePath,
-            fetcherId: iteratorSettings.fetcherId,
-            emitterId: iteratorSettings.emitterId,
-          }));
+  const iterator = options.iterator ?? (settings.iterator === undefined ? undefined : iteratorFrom(settings.iterator, options));
   if (iterator === undefined) {
     throw new RipstreamConfigError(["there is no pipes-iterator to take tuples from: configure one, or pass an iterator"]);
   }
   const fetchers: Record<string, Fetcher> = {};
-  for (const fetcher of settings.fetchers) {
-    if (fetcher.type === "http-fetcher") {
-      fetchers[fetcher.id] = new HttpFetcher();
-    } else if (fetcher.type === "s3-fetcher") {
-      fetchers[fetcher.id] = new S3Fetcher({
-        s3: fetcher.s3,
-        ...(fetcher.prefix === undefined ? {} : { prefix: fetcher.prefix }),
-        ...(fetcher.maxLength === undefined ? {} : { maxLength: fetcher.maxLength }),
-        ...(options.s3 === undefined ? {} : { transport: options.s3 }),
-      });
-    } else {
-      fetchers[fetcher.id] = new FileSystemFetcher({
-        ...(fetcher.basePath === undefined ? {} : { basePath: fetcher.basePath }),
-        allowAbsolutePaths: fetcher.allowAbsolutePaths,
-      });
-    }
-  }
+  for (const fetcher of settings.fetchers) fetchers[fetcher.id] = fetcherFrom(fetcher, options);
   const emitters: Record<string, Emitter> = {};
-  for (const emitter of settings.emitters) {
-    if (emitter.type === "s3-emitter") {
-      emitters[emitter.id] = new S3Emitter({
-        s3: emitter.s3,
-        ...(emitter.prefix === undefined ? {} : { prefix: emitter.prefix }),
-        ...(emitter.fileExtension === undefined ? {} : { fileExtension: emitter.fileExtension }),
-        ...(options.s3 === undefined ? {} : { transport: options.s3 }),
-      });
-      continue;
-    }
-    if (isSearchEmitter(emitter)) {
-      emitters[emitter.id] = new BulkSearchEmitter({ settings: emitter, ...(options.search === undefined ? {} : { transport: options.search }) });
-      continue;
-    }
-    emitters[emitter.id] = new FileSystemEmitter({
-      ...(emitter.basePath === undefined ? {} : { basePath: emitter.basePath }),
-      allowAbsolutePaths: emitter.allowAbsolutePaths,
-      ...(emitter.fileExtension === undefined ? {} : { fileExtension: emitter.fileExtension }),
-      onExists: emitter.onExists,
-      atomicWrites: emitter.atomicWrites,
-      compression: emitter.compression,
-      prettyPrint: emitter.prettyPrint,
-    });
-  }
-  const reporters: Reporter[] = settings.reporters.map(
-    (reporter) =>
-      new JsonlReporter(
-        reporter.path,
-        {
-          ...(reporter.includes === undefined ? {} : { includes: reporter.includes }),
-          ...(reporter.excludes === undefined ? {} : { excludes: reporter.excludes }),
-        },
-        { onExists: reporter.onExists, maxMessageLength: reporter.maxMessageLength },
-      ),
-  );
+  for (const emitter of settings.emitters) emitters[emitter.id] = emitterFrom(emitter, options);
+  const reporters: Reporter[] = settings.reporters.map((reporter) => reporterFrom(reporter, options));
   if (options.reporter !== undefined) reporters.push(options.reporter);
   const onParseException = options.onParseException ?? settings.onParseException;
   // The run's own filters replace the configuration's; the configuration's are built here, once, for every input.
@@ -950,7 +1013,16 @@ export { AsyncProcessor, DEFAULT_ASYNC_QUEUE_SIZE, OfferLargerThanQueueSize, typ
 export { type ExtensionOf } from "./unpack.ts";
 export { S3Emitter, S3Fetcher, S3PipesIterator, credentialsFor, s3ClientFor, type S3EmitterOptions, type S3FetcherOptions, type S3PipesIteratorOptions, type S3Transport } from "./s3/components.ts";
 export { S3Client, S3Error, type S3ClientOptions } from "./s3/client.ts";
-export { BulkSearchEmitter, SearchError, type BulkSearchEmitterOptions, type SearchTransport } from "./search/bulk-emitter.ts";
+export { BulkSearchEmitter, type BulkSearchEmitterOptions, type SearchTransport } from "./search/bulk-emitter.ts";
+export { SearchError } from "./search/bulk-client.ts";
+export { SearchPipesReporter, type SearchPipesReporterOptions, type SearchReporterTransport } from "./search/reporter.ts";
+export { GcsEmitter, GcsFetcher, GcsPipesIterator, gcsClientFor, type GcsEmitterOptions, type GcsFetcherOptions, type GcsPipesIteratorOptions, type GcsTransport } from "./gcs/components.ts";
+export { GcsClient, GcsError, type GcsClientOptions, type GcsObject } from "./gcs/client.ts";
+export { TokenError, applicationDefaultToken, metadataServerToken, parseServiceAccountKey, serviceAccountToken, type ServiceAccountKey, type TokenProvider } from "./gcs/credentials.ts";
+export { AzBlobEmitter, AzBlobFetcher, AzBlobPipesIterator, azBlobClientFor, type AzBlobEmitterOptions, type AzBlobFetcherOptions, type AzBlobPipesIteratorOptions, type AzBlobTransport } from "./azblob/components.ts";
+export { AzBlobClient, AzBlobError, type AzBlobClientOptions, type AzBlobObject } from "./azblob/client.ts";
+export { SolrEmitter, SolrPipesIterator, solrClientFor, type SolrEmitterOptions, type SolrPipesIteratorOptions, type SolrTransport } from "./solr/components.ts";
+export { SolrClient, SolrError, type SolrClientOptions, type SolrSelectPage } from "./solr/client.ts";
 export { instanceCredentials, profileCredentials, staticCredentials, type CredentialProvider } from "./s3/credentials.ts";
 export { signV4, type AwsCredentials } from "./s3/sigv4.ts";
 export { buildUnpackPackage, packageName, zipChunks, type PackageFile, type UnpackInput, type UnpackPackage } from "./frictionless.ts";
