@@ -73,6 +73,20 @@ test("rejects zip bombs by decompression ratio", async () => {
   await assert.rejects(parseZip({ "bomb.txt": bomb }), LimitExceededError);
 });
 
+test("accepts a highly compressible entry below Tika's zip-bomb output threshold", async () => {
+  // Tika's SecureContentHandler checks its ratio only once the output passes OutputLimits.zipBombThreshold
+  // (1,000,000), "to avoid false positives" on a document that starts with a highly compressible run. A blank
+  // 24-bit bitmap is such an entry: it deflates far past the ratio limit and is harmless. Read from Tika source.
+  const blank = new Uint8Array(500_000).fill(0x61);
+  const result = await parseZip({ "blank.bmp": blank });
+  assert.equal(result.text.length > 500_000, true);
+});
+
+test("applies the decompression ratio to an entry just above the threshold, not at it", async () => {
+  await parseZip({ "at.bin": new Uint8Array(1_000_000).fill(0x61) });
+  await assert.rejects(parseZip({ "above.bin": new Uint8Array(1_000_001).fill(0x61) }), LimitExceededError);
+});
+
 test("rejects archives above the embedded resource limit", async () => {
   const stream = await RipstreamInputStream.from(
     zipSync({ "a.txt": strToU8("a"), "b.txt": strToU8("b") }),

@@ -11,6 +11,14 @@ import {
 import { unzipSync } from "fflate";
 import { parseEntry, readAll, safeEntryName, withXhtml } from "./util.ts";
 
+/**
+ * An entry at or below this many bytes is never refused for its decompression ratio. It is Tika's
+ * OutputLimits.zipBombThreshold (1,000,000): SecureContentHandler checks its ratio only once the output passes it,
+ * so a document that starts with a highly compressible run (a blank bitmap) is not taken for a bomb. The per-entry
+ * and total byte limits still bound what an entry may expand to.
+ */
+const RATIO_CHECK_THRESHOLD_BYTES = 1_000_000;
+
 /** Port of Ripstream's PackageParser ZIP path. */
 export class ZipParser implements Parser {
   readonly name = "ZipParser";
@@ -54,6 +62,7 @@ export class ZipParser implements Parser {
             );
           }
           if (
+            file.originalSize > RATIO_CHECK_THRESHOLD_BYTES &&
             file.size > 0 &&
             file.originalSize / file.size > ctx.limits.maxDecompressionRatio
           ) {
