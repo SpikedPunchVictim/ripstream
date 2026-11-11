@@ -10,3 +10,7 @@ detected by name + bytes on both sides (oracle: `PUT /meta`, field `tk:content-t
 | 7d6a5fa (Tika magic ordering and regex semantics, Ogg/Matroska/gzip/bplist/compressor/OLE2/OPC detectors) | 1201 | 0 |
 
 No file that matched at an earlier build differs now.
+
+After that measurement two detection rules were added from source and not measured against the oracle: the Unix dump header
+(`application/x-tika-unix-dump`, `tikajs-68os.20`) and the Info-ZIP Unicode Path field `0x7075` for a member whose bit 11 is clear
+(`tikajs-68os.26`). Both are commons-compress behaviour, which is not in the Tika tree; the rules are from memory of that library.

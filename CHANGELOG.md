@@ -4,6 +4,22 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Unix dump and ZIP Unicode Path names; parity-gap type strings pinned (`tikajs-68os.20`, `.26`, `.15`, `.17`, `.18`, `.19`)
+
+Added: a Unix dump header (a little-endian 60012 at offset 24 of at least 32 bytes) is detected as `application/x-tika-unix-dump`, checked
+before the compressor signatures as `DefaultZipContainerDetector` does, so it beats a bzip2 signature. An Info-ZIP Unicode Path extra field
+(`0x7075`) now names a ZIP member whose general-purpose bit 11 is clear, when its CRC32 is that of the name in the header; the last field
+wins and a malformed one is ignored. Member names were already read as UTF-8 whatever bit 11 says, which is what Tika does, so `.26`'s premise
+(CP437 without the flag) was wrong and there was no such difference to fix.
+
+No behaviour change: tests now pin detection of the legacy Office (BIFF2-4 sheets, charts, macros, workspaces), iWork (`.13` and `.18`),
+Mach-O (eleven file types and the universal binary) and ELF, Ogg, au, MIDI, M4V and HEIF-sequence type strings. Detection for those was
+already complete. Their parsers and parser claims are still open (`.15`, `.17`, `.18`, `.19`), as are the deflate64, zlib, lzma and snappy
+decoders, a dump parser and the WARC gz variants (`.20`).
+
+Read from Tika source, not run against a Tika. The dump magic and the `0x7075` rule are commons-compress behaviour, which is not in the Tika
+tree: they are from memory of that library and not measured.
+
 ### `ripstream serve` sets the `/unpack` byte budget (`tikajs-68os.28`)
 
 Added: `server.maxUnpackBytes` in the configuration's `server` section is the most embedded-document bytes `/unpack` keeps for one request (the

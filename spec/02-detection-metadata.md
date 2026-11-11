@@ -114,6 +114,8 @@ Stream names also distinguish Word 6/95 from 97+, and encrypted OLE2 documents.
 
 - 7z / RAR: magic + header parse; archive listing through wasm decoders at parse time.
 - gzip / bzip2 / xz / lzma / z / brotli / lz4 / snappy: compressor magic; inner type detected after decompressing a bounded prefix.
+- Unix dump: a little-endian 60012 at offset 24 of at least 32 bytes is `application/x-tika-unix-dump`, checked before the compressor magic (`tikajs-68os.20`).
+- ZIP member names are read as UTF-8 whether or not general-purpose bit 11 is set, as Tika's `ZipFile` does; an Info-ZIP Unicode Path field (`0x7075`) replaces the name of a member whose bit 11 is clear when its CRC32 matches the header name (`tikajs-68os.26`).
 - tar: `ustar` at offset 257; compressed tar detected after decompression.
 - WARC: `WARC/1.x` line plus record headers.
 - PDF: `%PDF-` within first 1024 bytes; version recorded.
