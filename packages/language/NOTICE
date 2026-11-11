@@ -8,6 +8,9 @@ the Apache License, Version 2.0. In particular:
   - packages/mime/data/tika-mimetypes.xml and the registry generated from it
   - the metadata key schema generated from org.apache.tika.metadata.* (packages/core/data/upstream)
   - the parser/detector service lists generated from the upstream service files
+  - packages/language/data/langdetect-20260320.bin, the CharSoup language model of Apache Tika 4.2.0
+    (tika-langdetect-charsoup-core), unmodified, and the CharSoup detector and feature pipeline ported from it
+    (packages/language/src/charsoup*.ts)
 
 Apache Tika, Tika, Apache, and the Apache feather logo are trademarks of The Apache
 Software Foundation. ripstream is not affiliated with or endorsed by the ASF.

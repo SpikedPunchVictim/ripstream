@@ -759,6 +759,10 @@
       "validatePoolAgainstCgroup"
     ],
     "language": [
+      "CharSoupConfidence",
+      "CharSoupLanguageDetector",
+      "CharSoupOptions",
+      "CharSoupResult",
       "Cld3LanguageDetector",
       "FrancLanguageDetector",
       "ReliabilityOptions",
