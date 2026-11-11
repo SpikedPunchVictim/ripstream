@@ -31,6 +31,10 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
   private readonly spoolThreshold: number;
   private readonly signal: AbortSignal | undefined;
   private readonly chunks: Uint8Array[] = [];
+  // Where the last in-memory read started: chunks[scanIndex] begins at byte
+  // scanStart. Sequential reads resume here instead of scanning from chunk 0.
+  private scanIndex = 0;
+  private scanStart = 0;
   private bytesStored = 0;
   private cursor = 0;
   private markedCursor = 0;
@@ -171,6 +175,8 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       this.path = null;
     }
     this.chunks.length = 0;
+    this.scanIndex = 0;
+    this.scanStart = 0;
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
@@ -228,6 +234,8 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       offset += chunk.byteLength;
     }
     this.chunks.length = 0;
+    this.scanIndex = 0;
+    this.scanStart = 0;
   }
 
   private async readAt(cursor: number, max: number): Promise<Uint8Array> {
@@ -237,14 +245,29 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       return buffer.subarray(0, bytesRead);
     }
 
-    const parts: Uint8Array[] = [];
+    // Resume from the last read's chunk when it starts at or before `cursor`;
+    // reads before it (seek back, reset) rescan from the first chunk.
+    let index = 0;
     let position = 0;
+    if (this.scanStart <= cursor) {
+      index = this.scanIndex;
+      position = this.scanStart;
+    }
+
+    const parts: Uint8Array[] = [];
     let remaining = max;
-    for (const chunk of this.chunks) {
+    let found = false;
+    for (; index < this.chunks.length; index++) {
+      const chunk = this.chunks[index]!;
       const end = position + chunk.byteLength;
       if (end <= cursor) {
         position = end;
         continue;
+      }
+      if (!found) {
+        found = true;
+        this.scanIndex = index;
+        this.scanStart = position;
       }
       const from = Math.max(0, cursor - position);
       const take = Math.min(chunk.byteLength - from, remaining);
