@@ -286,8 +286,9 @@ parent memory that the pool does not account for.
 - **A document password does not cross the boundary.** `--password` with `--isolation` is a usage error.
 - **Exception text from a child is data.** Per-document exceptions in recursive results become plain `Error`s with
   the child's text, sanitised and length-capped. They are never a ripstream error class.
-- **Only `maxOutputChars` and `maxEmbeddedResources` cross.** Other limits stay at the child's defaults, and an
-  isolated request that sets another is refused up front. `contentType` overrides, streams and blobs are refused too.
+- **Only `maxOutputChars`, `maxEmbeddedResources`, `maxNodeDepth` and `maxParseMillis` cross.** Other limits stay at the
+  child's defaults, and an isolated request that sets another is refused up front. `maxParseMillis` cannot exceed what
+  `maxTaskMillis` allows. `contentType` overrides, streams and blobs are refused too.
 - **The child's parse timer does not know about queue time.** It is derived from `maxTaskMillis`. After a long wait
   for memory the parent's deadline can fire first and kill the child; the answer is still a timeout.
 - **Reservation is a policy, not a measurement.** The pool counts reservations. Real memory is held by L1, L3 and L4.

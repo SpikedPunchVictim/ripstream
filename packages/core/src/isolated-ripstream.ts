@@ -51,7 +51,7 @@ function crossingLimits(options: Partial<ParseLimits> | undefined): Partial<Pars
  * A Ripstream-shaped front over a ParseIsolator, so code written against `parse` / `parseRecursive` (the server,
  * the pipes engine, the CLI) runs every parse across the isolation boundary without knowing it. Only what an
  * `IsolatedParseRequest` can express crosses: bytes or a `{ path }`, a filename, `maxOutputChars`,
- * `maxEmbeddedResources` and the abort signal. Anything else (`contentType`, other limits, streams) is refused
+ * `maxEmbeddedResources`, `maxNodeDepth`, `maxParseMillis` and the abort signal. Anything else (`contentType`, other limits, streams) is refused
  * before anything is isolated, because ignoring it would silently change the parse.
  */
 export function createIsolatedRipstream(options: IsolatedRipstreamOptions): IsolatedRipstream {
