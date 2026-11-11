@@ -35,9 +35,10 @@ export interface ParseLimits {
   readonly maxMetadataValueChars: number;
   readonly maxZipEntries: number;
   /**
-   * Reserved. XML DTDs are rejected outright and saxes expands only the five
-   * predefined entities and character references (no amplification), so there
-   * is nothing to count; a future DTD-enabled parser must enforce this.
+   * Reserved. A DOCTYPE is accepted but its DTD is never read, and saxes
+   * expands only the five predefined entities and character references (no
+   * amplification), so there is nothing to count; a future parser that
+   * expands DTD entities must enforce this.
    */
   readonly maxXmlEntityExpansions: number;
 }

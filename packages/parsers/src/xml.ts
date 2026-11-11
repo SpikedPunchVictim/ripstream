@@ -10,22 +10,27 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { decodeText } from "@spikedpunch/ripstream-mime";
 import { SaxesParser } from "saxes";
 import { detectXmlEncoding } from "./xml-encoding.ts";
 
 const DC_NAMESPACE = "http://purl.org/dc/elements/1.1/";
 
-type Event =
-  | { readonly type: "text"; readonly text: string }
-  | { readonly type: "element"; readonly name: string };
-
 /**
  * Port of the generic XMLParser/DcXMLParser behavior: stream the document to
- * text, capture Dublin Core elements as metadata, and reject DTDs.
- * ParseLimits.maxXmlEntityExpansions is intentionally not consulted: saxes
- * expands only the five predefined entities and character references, so
- * there is no entity amplification to bound.
+ * text, capture Dublin Core elements as metadata.
+ *
+ * Like Tika's XMLParser the text is one XHTML paragraph, with a space written
+ * at every element start (its TextContentHandler is built with
+ * addSpaceBetweenElements = true) so adjacent elements do not run together.
+ *
+ * A DOCTYPE is accepted, as Tika's XMLReaderUtils accepts it, but its DTD is
+ * never read: saxes skips the declaration and its internal subset without
+ * interpreting them, never loads an external DTD or entity, and expands only
+ * the five predefined entities and character references. So a reference to
+ * an entity the DTD declares is a malformed document here (Tika expands the
+ * internal ones within the JAXP limits), and there is no entity
+ * amplification to bound: ParseLimits.maxXmlEntityExpansions is
+ * intentionally not consulted.
  */
 export class XmlParser implements Parser {
   readonly name = "XMLParser";
@@ -56,25 +61,24 @@ export class XmlParser implements Parser {
     _ctx: ParseContext,
   ): Promise<void> {
     const prefix = await stream.peek(64 * 1024);
-    if (/<!DOCTYPE/i.test(decodeText(prefix, "UTF-8"))) {
-      throw new MalformedDocumentError("DTD processing is disabled");
-    }
 
-    const events: Event[] = [];
+    const pending: string[] = [];
     const stack: Array<{ localName: string; namespaceURI: string; text: string }> = [];
     let failed: Error | null = null;
 
     const parser = new SaxesParser({ xmlns: true });
+    const addText = (text: string): void => {
+      const current = stack.at(-1);
+      if (current !== undefined) current.text += text;
+      pending.push(text);
+    };
     parser.on("opentag", (tag) => {
       const nsTag = tag as unknown as { local: string; uri: string };
       stack.push({ localName: nsTag.local, namespaceURI: nsTag.uri, text: "" });
-      events.push({ type: "element", name: "p" });
+      pending.push(" ");
     });
-    parser.on("text", (text) => {
-      const current = stack.at(-1);
-      if (current !== undefined) current.text += text;
-      events.push({ type: "text", text });
-    });
+    parser.on("text", addText);
+    parser.on("cdata", addText);
     parser.on("closetag", () => {
       const current = stack.pop();
       if (
@@ -84,7 +88,6 @@ export class XmlParser implements Parser {
       ) {
         metadata.set(`dc:${current.localName}`, current.text.trim());
       }
-      events.push({ type: "element", name: "p" });
     });
     parser.on("error", (error) => {
       failed = error;
@@ -92,33 +95,29 @@ export class XmlParser implements Parser {
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
+    await xhtml.startElement("p");
 
     // Tika's XMLParser writes no Content-Encoding and no charset in Content-Type.
     const { decoder } = createDecoder(detectXmlEncoding(prefix));
     try {
       for await (const chunk of stream) {
         parser.write(decoder.decode(chunk, { stream: true }));
-        await drain(events, xhtml);
+        await drain(pending, xhtml);
       }
       parser.write(decoder.decode());
       parser.close();
-      await drain(events, xhtml);
+      await drain(pending, xhtml);
     } catch (error) {
       if (error instanceof RipstreamError) throw error;
       throw new MalformedDocumentError("Malformed XML", { cause: error });
     }
 
     if (failed !== null) throw new MalformedDocumentError("Malformed XML", { cause: failed });
+    await xhtml.endElement("p");
     await xhtml.endDocument();
   }
 }
 
-async function drain(events: Event[], handler: XHTMLContentHandler): Promise<void> {
-  while (events.length > 0) {
-    const event = events.shift()!;
-    if (event.type === "text") await handler.characters(event.text);
-    else if (event.name === "p") {
-      // Element boundaries are intentionally flattened; text output stays raw.
-    }
-  }
+async function drain(pending: string[], handler: XHTMLContentHandler): Promise<void> {
+  for (const text of pending.splice(0)) await handler.characters(text);
 }

@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as net from "node:net";
+import * as os from "node:os";
+import * as path from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { BodyContentHandler, MalformedDocumentError, Metadata, ParseContext, RipstreamInputStream } from "@spikedpunch/ripstream-core";
 import { HtmlDocumentParser, createRipstream } from "../src/index.ts";
 
@@ -73,7 +78,95 @@ test("parses XML text and Dublin Core metadata", async () => {
   assert.match(result.text, /Hello/);
 });
 
-test("XML DTD is rejected", async () => {
+test("XML puts a space at every element start and a newline after the paragraph, as Tika's XMLParser does", async () => {
+  // Tika's XMLParser wraps the document in one <p> and feeds a TextContentHandler(addSpaceBetweenElements = true),
+  // which writes " " at each startElement; the </p> ends with a newline. Read from Tika source, not run against a Tika.
+  const result = await ripstream.parse(encoder.encode("<doc><a>x</a><b>y</b></doc>"), { filename: "doc.xml" });
+  assert.equal(result.text, "  x y\n");
+});
+
+test("XML keeps the whitespace the document itself carries next to the element spaces", async () => {
+  const result = await ripstream.parse(encoder.encode("<doc>\n  <a>x</a>\n  <b>y</b>\n</doc>"), { filename: "doc.xml" });
+  assert.equal(result.text, " \n   x\n   y\n\n");
+});
+
+test("XML emits CDATA sections as text", async () => {
+  const result = await ripstream.parse(encoder.encode("<doc><a><![CDATA[1 < 2 & 3]]></a></doc>"), { filename: "doc.xml" });
+  assert.match(result.text, /1 < 2 & 3/);
+});
+
+test("XML reads a Dublin Core value that arrives in a CDATA section", async () => {
+  const result = await ripstream.parse(
+    encoder.encode('<doc xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title><![CDATA[Doc]]></dc:title></doc>'),
+    { filename: "doc.xml" },
+  );
+  assert.equal(result.metadata.get("dc:title"), "Doc");
+});
+
+test("XML accepts a DOCTYPE with an external id and an internal subset, and reads the text", async () => {
+  // Tika's XMLReaderUtils parses a DOCTYPE and answers every external DTD or entity with an empty stream.
+  const xml =
+    '<?xml version="1.0"?><!DOCTYPE doc SYSTEM "missing.dtd" [<!ELEMENT doc (a)><!ELEMENT a (#PCDATA)>]><doc><a>kept</a></doc>';
+  const result = await ripstream.parse(encoder.encode(xml), { filename: "doc.xml" });
+  assert.match(result.text, /kept/);
+});
+
+test("SVG with the usual PUBLIC DOCTYPE is read", async () => {
+  const svg =
+    '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' +
+    '<svg xmlns="http://www.w3.org/2000/svg"><text>Hello SVG</text></svg>';
+  const result = await ripstream.parse(encoder.encode(svg), { filename: "icon.svg" });
+  assert.match(result.text, /Hello SVG/);
+});
+
+test("XML with a DOCTYPE never fetches its DTD or an external entity", async () => {
+  // Same oracle as Tika's TestXXEInXML: a local socket that must never see a connection.
+  let connections = 0;
+  const server = net.createServer((socket) => {
+    connections++;
+    socket.destroy();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { port } = server.address() as net.AddressInfo;
+    const base = `http://127.0.0.1:${port}`;
+    const xml =
+      `<!DOCTYPE doc SYSTEM "${base}/x.dtd" [<!ENTITY % p SYSTEM "${base}/p.dtd">%p;<!ENTITY e SYSTEM "${base}/e.txt">]><doc>text</doc>`;
+    const result = await ripstream.parse(encoder.encode(xml), { filename: "doc.xml" });
+    assert.match(result.text, /text/);
+    assert.equal(connections, 0, "an external reference was fetched");
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("XML reference to an external entity is a malformed document and never leaks the file", async () => {
+  const secret = path.join(os.tmpdir(), `ripstream-xxe-${process.pid}.txt`);
+  await fs.writeFile(secret, "SECRET_CONTENT_7f3a");
+  try {
+    const xml = `<!DOCTYPE doc [<!ENTITY x SYSTEM "${pathToFileURL(secret).href}">]><doc>&x;</doc>`;
+    await assert.rejects(ripstream.parse(encoder.encode(xml), { filename: "doc.xml" }), (error: unknown) => {
+      assert.ok(error instanceof MalformedDocumentError);
+      assert.doesNotMatch(String((error as Error).cause), /SECRET_CONTENT/);
+      return true;
+    });
+  } finally {
+    await fs.rm(secret, { force: true });
+  }
+});
+
+test("XML does not expand an entity bomb: a reference to a DTD entity is a malformed document", async () => {
+  // The billion-laughs payload of Tika's XmlSecurityContractTest.
+  const levels = Array.from({ length: 9 }, (_, index) => {
+    const name = `lol${index + 1}`;
+    const inner = index === 0 ? "lol" : `lol${index}`;
+    return ` <!ENTITY ${name} "${`&${inner};`.repeat(10)}">\n`;
+  }).join("");
+  const xml = `<?xml version="1.0"?>\n<!DOCTYPE lolz [\n <!ENTITY lol "lol">\n <!ELEMENT lolz (#PCDATA)>\n${levels}]>\n<lolz>&lol9;</lolz>`;
+  await assert.rejects(ripstream.parse(encoder.encode(xml), { filename: "doc.xml" }), MalformedDocumentError);
+});
+
+test("XML reference to a DTD entity is a malformed document, not an expansion", async () => {
   await assert.rejects(
     ripstream.parse(
       encoder.encode('<!DOCTYPE foo [<!ENTITY x "y">]><foo>&x;</foo>'),
