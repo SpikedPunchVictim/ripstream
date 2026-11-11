@@ -1,4 +1,5 @@
 import { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
+import { interpolateEnv, UnsetEnvironmentVariableError, type EnvironmentVariables } from "./env-interpolation.ts";
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
 import { freezeMetadataFilterEntries, parseMetadataFilterSection, type MetadataFilterEntry } from "./metadata-filter-config.ts";
@@ -191,8 +192,18 @@ function freezeEntries(entries: readonly ComponentEntry[] | undefined): readonly
   );
 }
 
-/** Loads JSON configuration, failing fast with every validation issue. */
-export function loadConfig(source: string | Uint8Array | unknown): RipstreamConfig {
+/**
+ * Loads JSON configuration, failing fast with every validation issue.
+ *
+ * With `env`, a string value may name a variable as `${env:NAME}`, alone or inside a longer string, and gets its value, as
+ * in Tika's `TikaJsonConfig.load` (see `interpolateEnv`); a variable that is not set fails the load. Without it nothing is
+ * replaced: core does not read `process.env`, so whoever loads a configuration says whose environment it is. Load only a
+ * configuration the operator wrote this way, never one a request supplied: a reference reads the server's environment.
+ */
+export function loadConfig(
+  source: string | Uint8Array | unknown,
+  options: { readonly env?: EnvironmentVariables } = {},
+): RipstreamConfig {
   let value: unknown = source;
   // What JSON.parse accepts silently (a repeated key, absurd nesting) is reported with the other problems.
   let structureIssues: string[] = [];
@@ -213,6 +224,15 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
       ]);
     }
     structureIssues = jsonStructureIssues(text);
+  }
+  // After the structure check, which also bounds the nesting this walks; a file that has structure issues fails with them.
+  if (options.env !== undefined && structureIssues.length === 0) {
+    try {
+      value = interpolateEnv(value, options.env);
+    } catch (error) {
+      if (error instanceof UnsetEnvironmentVariableError) throw new RipstreamConfigError([error.message]);
+      throw error;
+    }
   }
 
   const {

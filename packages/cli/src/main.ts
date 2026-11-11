@@ -305,6 +305,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES) }),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
         ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
+        ...(server.maxUnpackBytes === undefined ? {} : { maxUnpackBytes: server.maxUnpackBytes }),
         ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),
         ...(server.maxRequestReadMillis === undefined ? {} : { maxRequestReadMillis: server.maxRequestReadMillis }),
         ...(server.idleTimeoutMillis === undefined ? {} : { idleTimeoutMillis: server.idleTimeoutMillis }),
@@ -519,7 +520,8 @@ async function resolveSettings(
   options: Options,
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<CliSettings> {
-  const config = options.config === null ? null : loadConfig(await readFile(options.config, "utf8"));
+  // The file is the operator's, so its `${env:NAME}` references read the environment the CLI was given, as Tika's loader does.
+  const config = options.config === null ? null : loadConfig(await readFile(options.config, "utf8"), { env });
   const fileIsolation = config === null ? null : config.isolation;
   const depth = embeddedLimit("--maxEmbeddedDepth", options.maxEmbeddedDepth);
   const count = embeddedLimit("--maxEmbeddedCount", options.maxEmbeddedCount);

@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { IsolationError, MediaType, Metadata, createIsolatedRipstream } from "@spikedpunch/ripstream-core";
 import { MemoryPool, createNodeIsolator, type IsolatorRipstream, type NodeIsolator } from "@spikedpunch/ripstream-isolation-node";
 import { main, type CliDeps, type CliIO } from "../src/main.ts";
+import { readZip, storedZip } from "../../server/test/fixtures/zip.ts";
 
 type CreateIsolation = NonNullable<CliDeps["createIsolation"]>;
 
@@ -365,6 +366,24 @@ test("a server section sets what serve listens on and serves; a flag beats the f
   });
 });
 
+test("a server section may name its values as ${env:NAME}; a variable that is not set stops serve before it listens", async () => {
+  const section = { server: { host: "${env:BIND_HOST}", cors: "https://${env:ORIGIN_HOST}", endpoints: ["detect"] } };
+  await withConfig(section, async (file) => {
+    const running = await startRaw(["--isolation", "off", "--port", "0", "--config", file], { env: { BIND_HOST: "127.0.0.1", ORIGIN_HOST: "env.example" } });
+    try {
+      assert.equal(running.host, "127.0.0.1");
+      const detected = await fetch(`${running.base}/detect`, { method: "PUT", body: "short" });
+      assert.equal(detected.headers.get("access-control-allow-origin"), "https://env.example");
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+    const sink = io();
+    assert.equal(await main(["serve", "--isolation", "off", "--port", "0", "--config", file], sink, { env: { BIND_HOST: "127.0.0.1" } }), 2);
+    assert.match(sink.err.join(""), /environment variable ORIGIN_HOST is not set; referenced at \/server\/cors/);
+    assert.equal(sink.out.join(""), "", "the server never started");
+  });
+});
+
 test("Tika's spellings: serve -h is the host, -p the port, -? help; * is every interface", async () => {
   const running = await startRaw(["--isolation", "off", "-h", "*", "-p", "0"]);
   try {
@@ -382,6 +401,60 @@ test("Tika's spellings: serve -h is the host, -p the port, -? help; * is every i
   const sink = io();
   assert.equal(await main(["serve", "-h"], sink, { env: {} }), 2);
   assert.match(sink.err.join(""), /-h expects a value, the host.*--help/);
+});
+
+test("server.maxUnpackBytes is the most /unpack keeps: a document that would take the total past it is left out of the zip", async () => {
+  const container = storedZip({ "a.txt": "a".repeat(30), "b.txt": "b".repeat(30), "c.txt": "c".repeat(10) });
+  const embeddedNames = async (file: string): Promise<unknown[]> => {
+    const running = await startRaw(["--isolation", "off", "--port", "0", "--config", file]);
+    try {
+      const response = await fetch(`${running.base}/unpack`, { method: "PUT", body: container });
+      assert.equal(response.status, 200, await response.clone().text());
+      const manifest = JSON.parse(readZip(new Uint8Array(await response.arrayBuffer()))[0]?.data.toString("utf8") ?? "") as {
+        resources: Array<Record<string, unknown>>;
+      };
+      return manifest.resources.slice(1).map((resource) => resource["tk:resource-name"]);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  };
+  await withConfig({ server: { maxUnpackBytes: 50 } }, async (file) => {
+    assert.deepEqual(await embeddedNames(file), ["a.txt", "c.txt"], "30 + 30 is past 50; the 10 that still fits is kept");
+  });
+  await withConfig({ server: {} }, async (file) => {
+    assert.deepEqual(await embeddedNames(file), ["a.txt", "b.txt", "c.txt"], "without the setting the default (100 MiB) holds them all");
+  });
+});
+
+test("a server.maxUnpackBytes the server cannot hold is a usage error naming it, and nothing starts", async () => {
+  for (const [value, message] of [
+    [-1, /server\.maxUnpackBytes must be a whole number of bytes, 0 or more/],
+    ["100", /server\.maxUnpackBytes must be a whole number of bytes, 0 or more/],
+    [2 * 1024 ** 3 + 1, /maxUnpackBytes must be an integer from 0 to 2147483648, got 2147483649/],
+  ] as const) {
+    await withConfig({ isolation: { mode: "off" }, server: { maxUnpackBytes: value } }, async (file) => {
+      const sink = io();
+      assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {} }), 2, String(value));
+      assert.match(sink.err.join(""), message, String(value));
+      assert.equal(sink.out.join(""), "", "the server never started");
+    });
+  }
+});
+
+test("with isolation, a server.maxUnpackBytes above what the children can hold is a usage error naming both numbers, and the isolation is disposed", async () => {
+  const fake = fakeIsolation();
+  const createIsolation = (async (options: Parameters<CreateIsolation>[0]) => {
+    const built = await fake.createIsolation(options);
+    const status = built.isolator.status.bind(built.isolator);
+    return { ...built, isolator: { ...built.isolator, status: () => ({ ...status(), limits: { maxOutputChars: 100_000, unpackCeiling: 1000 } }) } };
+  }) as unknown as CreateIsolation;
+  await withConfig({ server: { maxUnpackBytes: 2000 } }, async (file) => {
+    const sink = io();
+    assert.equal(await main(["serve", "--port", "0", "--config", file], sink, { env: {}, createIsolation }), 2);
+    assert.match(sink.err.join(""), /maxUnpackBytes 2000 is more than the isolation allows \(1000:/);
+    assert.equal(sink.out.join(""), "", "the server never started");
+  });
+  assert.equal(fake.disposed, 1);
 });
 
 test("a server section ripstream cannot apply is a usage error naming the setting, and nothing starts", async () => {

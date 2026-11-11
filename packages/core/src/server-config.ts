@@ -18,6 +18,13 @@ export interface ServerSettings {
   readonly endpoints?: readonly ServerEndpoint[];
   readonly cors?: string;
   readonly maxRequestSizeBytes?: number;
+  /**
+   * The most embedded-document bytes `/unpack` keeps for one request (`createRipstreamServer({ maxUnpackBytes })`). Not a
+   * Tika key: Tika bounds `/unpack` by a 10 GiB constant, so this is ripstream's own setting, and a configuration that
+   * has it is not one Tika's loader accepts (it refuses an unknown `server` key). The server refuses a value past what it
+   * can hold, naming it.
+   */
+  readonly maxUnpackBytes?: number;
   readonly requestLogLevel?: "debug" | "info";
   /** Negative disables the deadline, as in Tika. */
   readonly maxRequestReadMillis?: number;
@@ -46,7 +53,7 @@ const REFUSED: Readonly<Record<string, string>> = {
   metricsPort: "ripstream has no metrics listener",
 };
 
-const APPLIED = ["port", "host", "endpoints", "cors", "maxRequestSizeBytes", "requestLogLevel", "maxRequestReadMillis", "idleTimeoutMillis"];
+const APPLIED = ["port", "host", "endpoints", "cors", "maxRequestSizeBytes", "maxUnpackBytes", "requestLogLevel", "maxRequestReadMillis", "idleTimeoutMillis"];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -77,10 +84,10 @@ function endpointList(value: unknown, issues: string[]): ServerEndpoint[] | unde
 }
 
 /**
- * Reads a `server` section in Tika's shape (`TikaServerConfig`, tika-server 4.2.0). A setting ripstream's server has no
- * counterpart for is an issue naming it, where Tika's own loader would never see it; a switch for a feature ripstream
- * lacks is refused only when it turns the feature on. An empty list of endpoints, an empty `cors` and `host: "*"`
- * mean what they mean in Tika.
+ * Reads a `server` section in Tika's shape (`TikaServerConfig`, tika-server 4.2.0), and `maxUnpackBytes`, which is
+ * ripstream's own. A setting ripstream's server has no counterpart for is an issue naming it, where Tika's own loader
+ * would never see it; a switch for a feature ripstream lacks is refused only when it turns the feature on. An empty list
+ * of endpoints, an empty `cors` and `host: "*"` mean what they mean in Tika.
  */
 export function parseServerSection(value: unknown): { settings: ServerSettings; issues: string[] } {
   const issues: string[] = [];
@@ -109,6 +116,10 @@ export function parseServerSection(value: unknown): { settings: ServerSettings; 
       case "maxRequestSizeBytes":
         if (whole(raw, 1, Number.MAX_SAFE_INTEGER)) settings.maxRequestSizeBytes = raw;
         else issues.push("server.maxRequestSizeBytes must be a positive number of bytes: ripstream always bounds a request body");
+        break;
+      case "maxUnpackBytes":
+        if (whole(raw, 0, Number.MAX_SAFE_INTEGER)) settings.maxUnpackBytes = raw;
+        else issues.push("server.maxUnpackBytes must be a whole number of bytes, 0 or more");
         break;
       case "requestLogLevel":
         if (raw === "debug" || raw === "info") settings.requestLogLevel = raw;

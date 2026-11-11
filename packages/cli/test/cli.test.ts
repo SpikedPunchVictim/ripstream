@@ -472,6 +472,38 @@ test("a config file with a repeated key, or deep nesting, is a usage error", asy
   }
 });
 
+// A configuration's string values may name a variable as ${env:NAME} (Tika's TikaJsonConfig.load, tikajs-68os.30), read from
+// the environment the CLI was given.
+test("--config resolves ${env:NAME} in its string values from the environment", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-env-"));
+  try {
+    const file = join(directory, "config.json");
+    writeFileSync(file, '{"isolation":{"mode":"${env:ISO_MODE}"}}');
+    const sink = io("plain");
+    assert.equal(await main(["--config", file, "-"], sink, { env: { ISO_MODE: "off" } }), 0, sink.err.join(""));
+    assert.match(sink.out.join(""), /plain/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("--config naming a variable that is not set is a usage error that names the variable and the path, never a value", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-env-"));
+  try {
+    const file = join(directory, "config.json");
+    writeFileSync(file, '{"isolation":{"mode":"${env:ISO_MODE}"}}');
+    for (const command of [[], ["metadata"], ["detect"], ["language"]]) {
+      const sink = io("plain");
+      assert.equal(await main([...command, "--config", file, "-"], sink, { env: { SECRET_TOKEN: "hunter2-never-printed" } }), 2, command.join(" "));
+      assert.match(sink.err.join(""), /environment variable ISO_MODE is not set; referenced at \/isolation\/mode/, command.join(" "));
+      assert.doesNotMatch(sink.err.join(""), /hunter2/, command.join(" "));
+      assert.equal(sink.out.join(""), "", "nothing was parsed");
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 // A `parsers` section is Tika's (tikajs-68os.8.6). `-c` used to take it and parse with every parser anyway.
 function withConfig(config: unknown, run: (file: string) => Promise<void>): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), "ripstream-cli-parsers-"));

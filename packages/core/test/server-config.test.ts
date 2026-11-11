@@ -24,6 +24,7 @@ test("every applied key is read, and a loaded configuration keeps them frozen", 
     endpoints: ["detect", "status"],
     cors: "https://example.com",
     maxRequestSizeBytes: 1_048_576,
+    maxUnpackBytes: 52_428_800,
     requestLogLevel: "info",
     maxRequestReadMillis: 30_000,
     idleTimeoutMillis: 60_000,
@@ -91,6 +92,17 @@ test("the size, time and log settings take only values that mean something", () 
   assert.deepEqual(issuesOf({ cors: 1 }), ["server.cors must be an origin, a string"]);
 });
 
+// Tika has no such key (its /unpack is bounded by a 10 GiB constant): this is ripstream's own server setting, the
+// `maxUnpackBytes` option of createRipstreamServer. The most it may be is the server's to say (2 GiB, and what an isolation
+// allows), so it is refused there, naming it, and not here.
+test("maxUnpackBytes takes a whole number of bytes, 0 or more", () => {
+  for (const value of [-1, 1.5, "1", null, true, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.deepEqual(issuesOf({ maxUnpackBytes: value }), ["server.maxUnpackBytes must be a whole number of bytes, 0 or more"], String(value));
+  }
+  for (const value of [0, 1, 2 ** 31]) assert.deepEqual(section({ maxUnpackBytes: value }), { settings: { maxUnpackBytes: value }, issues: [] }, String(value));
+  assert.equal(loadConfig({ server: { maxUnpackBytes: 0 } }).server?.maxUnpackBytes, 0);
+});
+
 test("a switch ripstream does not have is refused when on and accepted when off, which is what it does", () => {
   for (const key of ["allowPipes", "allowPerRequestConfig", "allowHttp2"]) {
     assert.match(issuesOf({ [key]: true }).join("|"), new RegExp(`^server\\.${key} is not supported: `), key);
@@ -104,7 +116,7 @@ test("a setting with no ripstream counterpart is refused by name, with the reaso
     const [issue] = issuesOf({ [key]: key === "tlsConfig" ? {} : 1 });
     assert.match(issue ?? "", new RegExp(`^server\\.${key} is not supported: ripstream `), key);
   }
-  assert.match(issuesOf({ bogus: 1 }).join("|"), /^server\.bogus is not a server setting; ripstream applies port, host, endpoints, cors, /);
+  assert.match(issuesOf({ bogus: 1 }).join("|"), /^server\.bogus is not a server setting; ripstream applies port, host, endpoints, cors, maxRequestSizeBytes, maxUnpackBytes, /);
 });
 
 test("the section must be an object, and loadConfig reports every problem at once", () => {
