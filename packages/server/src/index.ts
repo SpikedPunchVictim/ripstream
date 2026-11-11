@@ -22,7 +22,7 @@ import {
   type RmetaValue,
   type ServerEndpoint,
 } from "@spikedpunch/ripstream-core";
-import { CharSoupLanguageDetector, FrancLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
+import { CharSoupLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
 import {
   PipesClient,
   PipesPathError,
@@ -533,6 +533,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const derivedGate = startupStatus === undefined ? undefined : deriveGate(startupStatus);
   // /async and /pipes take no limit parameters: they parse under the server's ceilings, like a request without any.
   const ceilinged = withCeilings(ripstream, options.maxLimits, options.defaultLimits);
+  // Tika's detector: /language answers from it, and so does the language filter of the settings unless it is given another.
+  const languageDetector = new CharSoupLanguageDetector();
   const tikaPipes =
     options.pipes?.settings === undefined
       ? undefined
@@ -541,7 +543,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           ripstream: ceilinged,
           // Pipes' UNPACK with `suffixStrategy: DETECTED` names files as /unpack does: by the server's media type registry.
           extensionOf: (contentType) => extensionFor(contentType, options.mimeTypes),
-          metadataFilterServices: options.metadataFilterServices ?? { languageIdentifier: new CharSoupLanguageDetector() },
+          metadataFilterServices: options.metadataFilterServices ?? { languageIdentifier: languageDetector },
           ...(options.pipes.asyncMaxWaitMs === undefined ? {} : { asyncMaxWaitMs: options.pipes.asyncMaxWaitMs }),
         });
   // Tika's emit: the configured chain, but the text endpoints (CONTENT_ONLY) answer for the parse-context chain alone: their
@@ -564,7 +566,6 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   log("info", `Concurrency gate: maxConcurrent ${maxConcurrent}, maxQueue ${maxQueue}`);
   const requestTimeoutMs = options.requestTimeoutMs ?? 60_000;
   const corsOrigin = options.corsOrigin;
-  const languageDetector = new FrancLanguageDetector();
   let active = 0;
   const waiters: Array<() => void> = [];
   const maxJobs = options.maxJobs ?? 1000;

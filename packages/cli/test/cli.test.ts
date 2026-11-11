@@ -106,6 +106,30 @@ test("detects language from stdin", async () => {
   assert.equal(sink.out.join("").trim(), "eng");
 });
 
+test("language --json gives the detector's whole answer: ISO 639-3, the raw score, and whether it is sure", async () => {
+  const sink = io("Scientists have discovered a new species of butterfly in the tropical rainforests of South America.");
+  assert.equal(await main(["language", "--json"], sink), 0);
+  const answer = JSON.parse(sink.out.join("")) as { language: string; confidence: number; isReasonablyCertain: boolean };
+  assert.equal(answer.language, "eng");
+  assert.equal(answer.isReasonablyCertain, true);
+  assert.ok(answer.confidence > 0.9 && answer.confidence <= 1, String(answer.confidence));
+});
+
+test("language of a blank input is und", async () => {
+  const sink = io("  \n ");
+  assert.equal(await main(["language"], sink), 0);
+  assert.equal(sink.out.join("").trim(), "und");
+  const json = io("  \n ");
+  assert.equal(await main(["language", "--json"], json), 0);
+  assert.deepEqual(JSON.parse(json.out.join("")), { language: "und", confidence: 0, isReasonablyCertain: false });
+});
+
+test("language names Cebuano, which has no two-letter code, by its three-letter one", async () => {
+  const sink = io("Ang Pilipinas usa ka nasod sa Habagatan-Sidlangang Asya nga adunay daghang mga pulo ug daghang pinulongan.");
+  assert.equal(await main(["language"], sink), 0);
+  assert.equal(sink.out.join("").trim(), "ceb");
+});
+
 test("serve command starts an HTTP server", async () => {
   const { spawn } = await import("node:child_process");
   const child = spawn(process.execPath, ["packages/cli/bin/ripstream.js", "serve", "--port", "0"], {

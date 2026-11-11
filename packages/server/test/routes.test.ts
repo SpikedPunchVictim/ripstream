@@ -467,10 +467,49 @@ test("/language: Accept application/json is the detector's whole answer; what it
   await withServer(async (base) => {
     const json = await put(base, "/language", { body: ENGLISH, headers: { accept: "application/json" } });
     assert.equal(json.status, 200);
-    assert.deepEqual(await json.json(), { language: "eng", confidence: 0.9, isReasonablyCertain: true });
+    const answer = (await json.json()) as { language: string; confidence: number; isReasonablyCertain: boolean };
+    assert.equal(answer.language, "eng");
+    assert.equal(answer.isReasonablyCertain, true);
+    // The confidence is the detector's raw score, a number in (0.9, 1] for a verdict it is sure of.
+    assert.ok(answer.confidence > 0.9 && answer.confidence <= 1, String(answer.confidence));
     const refused = await put(base, "/language", { body: ENGLISH, headers: { accept: "image/png" } });
     assert.equal(refused.status, 406);
     assert.equal(await refused.text(), "");
+  });
+});
+
+// /language answers from the detector Tika's does (CharSoup, its own model), in the code Tika's `toIso1` gives it.
+
+test("/language names a language by its two-letter code where it has one, and by the three-letter one where it has not", async () => {
+  const sentences: ReadonlyArray<readonly [string, string]> = [
+    ["uk", "Українська мова є слов'янською мовою і є офіційною мовою України, однією з найпоширеніших мов в Європі."],
+    ["el", "Η ελληνική γλώσσα είναι μια από τις πιο παλιές γλώσσες στον κόσμο και η επίσημη γλώσσα της Ελλάδας και της Κύπρου."],
+    ["fa", "زبان فارسی یکی از زبان‌های هندواروپایی است که در ایران، افغانستان و تاجیکستان به عنوان زبان رسمی استفاده می‌شود."],
+    ["zh", "中华人民共和国位于亚洲东部，是世界上人口最多的国家，也是世界第二大经济体。"],
+    ["ko", "한국어는 대한민국과 조선민주주의인민공화국의 공용어이며 약 칠천오백만 명이 사용한다."],
+    ["ceb", "Ang Pilipinas usa ka nasod sa Habagatan-Sidlangang Asya nga adunay daghang mga pulo ug daghang pinulongan."],
+  ];
+  await withServer(async (base) => {
+    for (const [code, text] of sentences) assert.equal(await (await put(base, "/language", { body: text })).text(), code, text.slice(0, 20));
+  });
+});
+
+test("/language answers a short text with the detector's best guess, as Tika's does, however low its confidence", async () => {
+  await withServer(async (base) => {
+    assert.equal(await (await put(base, "/language", { body: "Bonjour" })).text(), "fr");
+    const json = await put(base, "/language", { body: "Bonjour", headers: { accept: "application/json" } });
+    const answer = (await json.json()) as { language: string; confidence: number; isReasonablyCertain: boolean };
+    assert.equal(answer.language, "fra");
+    assert.equal(answer.isReasonablyCertain, false);
+    assert.ok(answer.confidence > 0.5 && answer.confidence <= 0.9, String(answer.confidence));
+  });
+});
+
+test("/language of a blank body is no language: an empty answer, and `und` as JSON", async () => {
+  await withServer(async (base) => {
+    assert.equal(await (await put(base, "/language", { body: " \n\t " })).text(), "");
+    const json = await put(base, "/language", { body: " \n\t ", headers: { accept: "application/json" } });
+    assert.deepEqual(await json.json(), { language: "und", confidence: 0, isReasonablyCertain: false });
   });
 });
 

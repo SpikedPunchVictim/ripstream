@@ -24,7 +24,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
-import { CharSoupLanguageDetector, FrancLanguageDetector } from "@spikedpunch/ripstream-language";
+import { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
 import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
 import { createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
 import { serverMimeTypes } from "./mime-types.ts";
@@ -42,8 +42,11 @@ export interface CliIO {
   readonly readStdin: () => Promise<Uint8Array>;
 }
 
-/** What a configuration's metadata filters need that core has not: Tika's CharSoup for `charsoup-metadata-filter`. The model is read when a document first needs it. */
-const METADATA_FILTER_SERVICES: MetadataFilterServices = { languageIdentifier: new CharSoupLanguageDetector() };
+/** Tika's own language detector, for the `language` command and the language filter. Its model is read when a text first needs it. */
+const LANGUAGE_DETECTOR = new CharSoupLanguageDetector();
+
+/** What a configuration's metadata filters need that core has not. */
+const METADATA_FILTER_SERVICES: MetadataFilterServices = { languageIdentifier: LANGUAGE_DETECTOR };
 
 const defaultIO: CliIO = {
   stdout: (value) => process.stdout.write(value),
@@ -192,7 +195,7 @@ export async function main(
 
     if (options.command === "language") {
       const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-      const result = new FrancLanguageDetector().detect(text);
+      const result = LANGUAGE_DETECTOR.detect(text);
       if (options.json || options.output === "json") {
         io.stdout(`${JSON.stringify(result)}\n`);
       } else {
