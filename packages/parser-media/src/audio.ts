@@ -1,5 +1,6 @@
 import {
   MediaType,
+  XHTMLContentHandler,
   type ContentHandler,
   type Metadata,
   type ParseContext,
@@ -7,8 +8,9 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { parseBuffer } from "music-metadata";
+import { AU_HEADER_BYTES, applyAuHeader } from "./au.ts";
 
-/** Audio metadata for MP3/FLAC/OGG/WAV/AIFF/M4A/WMA via music-metadata. */
+/** Audio metadata for MP3/FLAC/WAV/AIFF/M4A/WMA via music-metadata, and AU by its header. Ogg has its own parsers. */
 export class AudioParser implements Parser {
   readonly name = "AudioParser";
   readonly capabilities = { metadataOnly: true, unsafe: true } as const;
@@ -19,7 +21,8 @@ export class AudioParser implements Parser {
         "audio/mpeg",
         "audio/flac",
         "audio/x-flac",
-        "audio/ogg",
+        // Tika's AudioParser reads .au files through javax.sound, which music-metadata cannot read: see parse().
+        "audio/basic",
         "audio/wav",
         "audio/vnd.wave",
         "audio/x-wav",
@@ -34,10 +37,19 @@ export class AudioParser implements Parser {
 
   async parse(
     stream: RipstreamInputStream,
-    _handler: ContentHandler,
+    handler: ContentHandler,
     metadata: Metadata,
     _ctx: ParseContext,
   ): Promise<void> {
+    if (isBasicAudio(metadata.get("Content-Type"))) {
+      // Only the header is read: the format is all the file gives. Tika's AudioParser then writes an empty document, so
+      // that the metadata is in its head, whether the file was understood or only got the warning.
+      applyAuHeader(await stream.peek(AU_HEADER_BYTES), metadata);
+      const xhtml = new XHTMLContentHandler(handler, metadata);
+      await xhtml.startDocument();
+      await xhtml.endDocument();
+      return;
+    }
     const chunks: Uint8Array[] = [];
     let total = 0;
     for await (const chunk of stream) {
@@ -75,6 +87,10 @@ export class AudioParser implements Parser {
       metadata.set("audio:codec", parsed.format.codec);
     }
   }
+}
+
+function isBasicAudio(contentType: string | null): boolean {
+  return contentType !== null && contentType.split(";")[0]!.trim().toLowerCase() === "audio/basic";
 }
 
 function assign(

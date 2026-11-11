@@ -63,6 +63,8 @@ export class ImageParser implements Parser {
         "image/j2c",
         "image/heic",
         "image/heif",
+        "image/heic-sequence",
+        "image/heif-sequence",
         "image/avif",
         "image/x-canon-cr2",
         "image/x-canon-crw",

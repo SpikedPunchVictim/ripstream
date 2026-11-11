@@ -25,6 +25,7 @@ export class Mp4Parser implements Parser {
       [
         "video/mp4",
         "audio/mp4",
+        "application/mp4",
         "video/quicktime",
         "video/3gpp",
         "video/3gpp2",
@@ -98,7 +99,7 @@ function setQuickTimeDate(metadata: Metadata, key: string, quickTimeSeconds: num
 }
 
 /** Java's DecimalFormat("0.0#") on a Locale.ROOT number: two places at most, one at least, rounding half to even. */
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   // toFixed rounds from the exact binary value, as Java does, except that it rounds an exact tie up. A tie is an
   // odd multiple of 1/8 (x.125, x.375, ...), the only exact values that end in a 5 in the third place.
   let text = seconds.toFixed(2);

@@ -16,7 +16,7 @@ export class MidiParser implements Parser {
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
-      ["audio/midi", "audio/x-midi"].map((type) => MediaType.parse(type)!),
+      ["audio/midi", "audio/x-midi", "application/x-midi"].map((type) => MediaType.parse(type)!),
     );
   }
 
