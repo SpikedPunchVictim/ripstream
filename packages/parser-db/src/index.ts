@@ -1,5 +1,3 @@
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import {
   LimitExceededError,
   MalformedDocumentError,
@@ -11,6 +9,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { loadSqlJs, quoteIdentifier, type SqlDatabase } from "./sql-js.ts";
 
 const MAX_CELL_CHARS = 4_096;
 const MAX_TOTAL_CHARS = 1_000_000;
@@ -48,15 +47,9 @@ export class SqliteParser implements Parser {
     if (new TextDecoder("latin1").decode(data.subarray(0, 16)) !== "SQLite format 3\u0000") {
       throw new MalformedDocumentError("Not a SQLite database");
     }
-    const require = createRequire(import.meta.url);
-    const init = (await import("sql.js")).default as (options?: Record<string, unknown>) => Promise<{
-      Database: new (data: Uint8Array) => SqlDatabase;
-    }>;
     let database: SqlDatabase | null = null;
     try {
-      const SQL = await init({
-        locateFile: (file: string) => join(dirname(require.resolve("sql.js")), file),
-      });
+      const SQL = await loadSqlJs();
       database = new SQL.Database(data);
       const tables = database.exec(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
@@ -108,13 +101,14 @@ export class SqliteParser implements Parser {
   }
 }
 
-function quoteIdentifier(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
-}
-
-interface SqlDatabase {
-  exec(sql: string): Array<{ columns: string[]; values: unknown[][] }>;
-  close(): void;
-}
 export { OpenPgpParser } from "./openpgp.ts";
 export { ColumnarParser } from "./columnar.ts";
+export {
+  GeoPkgParser,
+  DEFAULT_MAX_GEOPKG_BYTES,
+  DEFAULT_MAX_GEOPKG_CHARS,
+  DEFAULT_MAX_GEOPKG_COLUMNS,
+  DEFAULT_MAX_GEOPKG_ROWS,
+  DEFAULT_MAX_GEOPKG_TABLES,
+  type GeoPkgParserOptions,
+} from "./geopkg.ts";
