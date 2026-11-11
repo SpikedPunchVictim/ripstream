@@ -58,6 +58,40 @@ test("extracts xlsx sheets and shared strings", async () => {
   assert.match(result.text, /Beta/);
 });
 
+test("xlsx writes a cell only where the sheet has a value, as Tika's TikaSheetXMLHandler does", async () => {
+  // Tika calls cell() when a <v> (or <is>) ends, so a styled cell with no value writes nothing, and the empty cells in
+  // front of a value cell are padding (SheetTextAsHTML.cell). A merged region is a run of such empty cells, which is
+  // where the extra tabs of 57893-many-merges.xlsx came from. Read from Tika source, not run against a Tika.
+  const result = await parse({
+    "[Content_Types].xml": "<Types/>",
+    "xl/workbook.xml": '<workbook xmlns="x"><sheets><sheet name="Sheet1" sheetId="1"/></sheets></workbook>',
+    "xl/sharedStrings.xml": '<sst xmlns="x"><si><t>Alpha</t></si></sst>',
+    "xl/worksheets/sheet1.xml":
+      '<worksheet xmlns="x"><sheetData><row r="1"><c r="A1" s="1"/><c r="B1" s="1"/><c r="C1" t="s"><v>0</v></c><c r="D1" s="1"/><c r="E1" s="1"/></row><row r="2"><c r="A2" s="1"/></row></sheetData></worksheet>',
+  });
+  assert.equal(result.text, "Sheet1\n\t\t\tAlpha\n\n\n\n");
+});
+
+test("xlsx places a cell with no reference after the last cell it wrote", async () => {
+  const result = await parse({
+    "[Content_Types].xml": "<Types/>",
+    "xl/workbook.xml": '<workbook xmlns="x"><sheets><sheet name="Sheet1" sheetId="1"/></sheets></workbook>',
+    "xl/worksheets/sheet1.xml":
+      '<worksheet xmlns="x"><sheetData><row><c><v>1</v></c><c s="1"/><c><v>2</v></c></row></sheetData></worksheet>',
+  });
+  assert.equal(result.text, "Sheet1\n\t1\t2\n\n\n");
+});
+
+test("xlsx still writes a cell whose value is empty", async () => {
+  const result = await parse({
+    "[Content_Types].xml": "<Types/>",
+    "xl/workbook.xml": '<workbook xmlns="x"><sheets><sheet name="Sheet1" sheetId="1"/></sheets></workbook>',
+    "xl/worksheets/sheet1.xml":
+      '<worksheet xmlns="x"><sheetData><row r="1"><c r="A1"><v></v></c><c r="B1"><v>2</v></c></row></sheetData></worksheet>',
+  });
+  assert.equal(result.text, "Sheet1\n\t\t2\n\n\n");
+});
+
 test("extracts pptx slide text", async () => {
   const result = await parse({
     "[Content_Types].xml": "<Types/>",
@@ -217,4 +251,102 @@ test("closes the OPC package when reading a part throws", async () => {
   } finally {
     close.mock.restore();
   }
+});
+
+const APP = 'xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"';
+const DOCX_BODY = `<w:document ${W}><w:body><w:p><w:r><w:t>x</w:t></w:r></w:p></w:body></w:document>`;
+
+async function parseDocxWithApp(appXml: string): Promise<Metadata> {
+  const result = await parse({
+    "[Content_Types].xml": "<Types/>",
+    "docProps/app.xml": `<Properties ${APP}>${appXml}</Properties>`,
+    "word/document.xml": DOCX_BODY,
+  });
+  return result.metadata;
+}
+
+// Tika's SAXBasedMetadataExtractor.ExtendedPropertiesHandler.applyTo: read from Tika source, not run against a Tika.
+test("docProps/app.xml counts use Tika's keys: xmpTPg:NPages and the meta:*-count family", async () => {
+  const metadata = await parseDocxWithApp(
+    "<Pages>3</Pages><Paragraphs>9</Paragraphs><Lines>20</Lines><Words>120</Words>" +
+      "<Characters>700</Characters><CharactersWithSpaces>820</CharactersWithSpaces>",
+  );
+  assert.equal(metadata.get("xmpTPg:NPages"), "3");
+  assert.equal(metadata.get("meta:page-count"), "3");
+  assert.equal(metadata.get("meta:paragraph-count"), "9");
+  assert.equal(metadata.get("meta:line-count"), "20");
+  assert.equal(metadata.get("meta:word-count"), "120");
+  assert.equal(metadata.get("meta:character-count"), "700");
+  assert.equal(metadata.get("meta:character-count-with-spaces"), "820");
+});
+
+test("docProps/app.xml does not write the keys Tika does not have (extended-properties:Pages, Words, Characters, Slides)", async () => {
+  const metadata = await parseDocxWithApp(
+    "<Pages>3</Pages><Words>120</Words><Characters>700</Characters><Slides>4</Slides>",
+  );
+  for (const key of [
+    "extended-properties:Pages",
+    "extended-properties:Words",
+    "extended-properties:Characters",
+    "extended-properties:Slides",
+  ]) {
+    assert.equal(metadata.get(key), null, key);
+  }
+});
+
+test("docProps/app.xml: a deck with Slides and no Pages gets xmpTPg:NPages from the slide count", async () => {
+  const metadata = await parseDocxWithApp("<Slides>5</Slides>");
+  assert.equal(metadata.get("xmpTPg:NPages"), "5");
+  assert.equal(metadata.get("meta:slide-count"), "5");
+  assert.equal(metadata.get("meta:page-count"), null);
+});
+
+test("docProps/app.xml: Pages wins over Slides for xmpTPg:NPages", async () => {
+  const metadata = await parseDocxWithApp("<Pages>2</Pages><Slides>5</Slides>");
+  assert.equal(metadata.get("xmpTPg:NPages"), "2");
+  assert.equal(metadata.get("meta:slide-count"), "5");
+});
+
+test("docProps/app.xml: a count of zero, a negative, an overflow or a non-number writes nothing", async () => {
+  const metadata = await parseDocxWithApp(
+    "<Words>0</Words><Lines>-3</Lines><Paragraphs>4294967295</Paragraphs><Characters>many</Characters><Pages></Pages>",
+  );
+  for (const key of [
+    "meta:word-count",
+    "meta:line-count",
+    "meta:paragraph-count",
+    "meta:character-count",
+    "meta:page-count",
+    "xmpTPg:NPages",
+  ]) {
+    assert.equal(metadata.get(key), null, key);
+  }
+});
+
+test("docProps/app.xml: the descriptive properties use Tika's names", async () => {
+  const metadata = await parseDocxWithApp(
+    "<Application>Microsoft Office Word</Application><AppVersion>16.0000</AppVersion><Company>ACME</Company>" +
+      "<Manager>Ada;Grace;Ada</Manager><Notes>2</Notes><PresentationFormat>Widescreen</PresentationFormat>" +
+      "<Template>Normal.dotm</Template><TotalTime>12</TotalTime><DocSecurity>4</DocSecurity>",
+  );
+  assert.equal(metadata.get("extended-properties:Application"), "Microsoft Office Word");
+  assert.equal(metadata.get("extended-properties:AppVersion"), "16.0000");
+  assert.equal(metadata.get("extended-properties:Company"), "ACME");
+  assert.equal(metadata.get("dc:publisher"), "ACME");
+  assert.deepEqual(metadata.getAll("extended-properties:Manager"), ["Ada", "Grace"]);
+  assert.equal(metadata.get("extended-properties:Notes"), "2");
+  assert.equal(metadata.get("extended-properties:PresentationFormat"), "Widescreen");
+  assert.equal(metadata.get("extended-properties:Template"), "Normal.dotm");
+  assert.equal(metadata.get("extended-properties:TotalTime"), "12");
+  assert.equal(metadata.get("extended-properties:DocSecurity"), "4");
+  assert.equal(metadata.get("extended-properties:doc-security-string"), "ReadOnlyEnforced");
+});
+
+test("docProps/app.xml: a document with no DocSecurity reads None, and an unlisted flag reads Unknown", async () => {
+  assert.equal((await parseDocxWithApp("<Words>1</Words>")).get("extended-properties:doc-security-string"), "None");
+  assert.equal((await parseDocxWithApp("<DocSecurity>3</DocSecurity>")).get("extended-properties:doc-security-string"), "Unknown");
+  // A negative or an overflowing flag is read as 0, as Tika's safeParseInt does, so it is None and has no DocSecurity key.
+  const negative = await parseDocxWithApp("<DocSecurity>-1</DocSecurity>");
+  assert.equal(negative.get("extended-properties:doc-security-string"), "None");
+  assert.equal(negative.get("extended-properties:DocSecurity"), null);
 });

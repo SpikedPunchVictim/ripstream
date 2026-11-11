@@ -338,26 +338,21 @@ function parseSheet(xml: string, shared: string[]): SheetRow[] {
     for (const cellNode of childrenNamed(rowNode, "c")) {
       const reference = attribute(cellNode, "r");
       const column = reference === undefined ? nextColumn : columnIndex(reference);
-      totalCells += column + 1 - nextColumn;
-      if (totalCells > MAX_SHEET_CELLS) {
-        throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_CELLS} cells`);
-      }
-      while (nextColumn < column) {
-        row.push({ value: "", styleIndex: 0, type: "" });
-        nextColumn++;
-      }
 
       cellType = attribute(cellNode, "t") ?? "";
       styleIndex = Number(attribute(cellNode, "s") ?? "0");
       text = "";
       inInline = false;
+      let hasValue = false;
 
       const visit = (node: XmlNode): void => {
         for (const child of node.children) {
           const name = localName(child.name);
           if (name === "v") {
+            hasValue = true;
             text += child.text;
           } else if (name === "is") {
+            hasValue = true;
             inInline = true;
             visit(child);
             inInline = false;
@@ -369,6 +364,19 @@ function parseSheet(xml: string, shared: string[]): SheetRow[] {
         }
       };
       visit(cellNode);
+
+      // Tika's TikaSheetXMLHandler writes a cell when its <v> or <is> ends, so a styled cell with no value (the cells
+      // of a merged region) writes nothing; the empty cells in front of the next value cell are padding.
+      if (!hasValue) continue;
+
+      totalCells += column + 1 - nextColumn;
+      if (totalCells > MAX_SHEET_CELLS) {
+        throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_CELLS} cells`);
+      }
+      while (nextColumn < column) {
+        row.push({ value: "", styleIndex: 0, type: "" });
+        nextColumn++;
+      }
 
       row.push({
         value: cellType === "s" ? (shared[Number(text)] ?? "") : text,
@@ -814,13 +822,76 @@ function applyPackageMetadata(
 
   const app = files["docProps/app.xml"];
   if (app !== undefined) {
-    const values = propertyMap(decode(app));
-    assign(metadata, "extended-properties:Application", values.Application);
-    assign(metadata, "extended-properties:Company", values.Company);
-    assign(metadata, "extended-properties:Pages", values.Pages);
-    assign(metadata, "extended-properties:Words", values.Words);
-    assign(metadata, "extended-properties:Characters", values.Characters);
-    assign(metadata, "extended-properties:Slides", values.Slides);
+    applyExtendedProperties(metadata, propertyMap(decode(app)));
+  }
+}
+
+/**
+ * docProps/app.xml, written under the keys Tika writes (SAXBasedMetadataExtractor.ExtendedPropertiesHandler.applyTo):
+ * a text property when it is not blank, an integer property only when it is a positive int, xmpTPg:NPages from Pages
+ * and, when there are none, from Slides, and the doc-security string for every flag.
+ */
+function applyExtendedProperties(metadata: Metadata, values: Record<string, string>): void {
+  const text = (name: string): string | undefined => {
+    const value = values[name]?.trim();
+    return value === undefined || value.length === 0 ? undefined : value;
+  };
+  const positive = (name: string): number => {
+    const value = text(name);
+    // Tika's safeParseInt reads a non-number, a negative and anything over Integer.MAX_VALUE as 0.
+    if (value === undefined || !/^[+-]?\d+$/.test(value)) return 0;
+    const number = Number(value);
+    return number <= 2_147_483_647 ? Math.max(number, 0) : 0;
+  };
+  const setPositive = (key: string, name: string): void => {
+    const value = positive(name);
+    if (value > 0) metadata.set(key, String(value));
+  };
+
+  assign(metadata, "extended-properties:Application", text("Application"));
+  assign(metadata, "extended-properties:AppVersion", text("AppVersion"));
+  assign(metadata, "dc:publisher", text("Company"));
+  assign(metadata, "extended-properties:Company", text("Company"));
+  const manager = text("Manager");
+  if (manager !== undefined) {
+    for (const part of new Set(manager.split(";"))) {
+      if (part.trim().length > 0) metadata.add("extended-properties:Manager", part);
+    }
+  }
+  assign(metadata, "extended-properties:Notes", text("Notes"));
+  assign(metadata, "extended-properties:PresentationFormat", text("PresentationFormat"));
+  assign(metadata, "extended-properties:Template", text("Template"));
+  setPositive("extended-properties:TotalTime", "TotalTime");
+  setPositive("extended-properties:DocSecurity", "DocSecurity");
+  metadata.set("extended-properties:doc-security-string", docSecurityString(positive("DocSecurity")));
+
+  const pages = positive("Pages");
+  const slides = positive("Slides");
+  if (pages > 0) metadata.set("xmpTPg:NPages", String(pages));
+  else if (slides > 0) metadata.set("xmpTPg:NPages", String(slides));
+  setPositive("meta:page-count", "Pages");
+  setPositive("meta:slide-count", "Slides");
+  setPositive("meta:paragraph-count", "Paragraphs");
+  setPositive("meta:line-count", "Lines");
+  setPositive("meta:word-count", "Words");
+  setPositive("meta:character-count", "Characters");
+  setPositive("meta:character-count-with-spaces", "CharactersWithSpaces");
+}
+
+function docSecurityString(flag: number): string {
+  switch (flag) {
+    case 0:
+      return "None";
+    case 1:
+      return "PasswordProtected";
+    case 2:
+      return "ReadOnlyRecommended";
+    case 4:
+      return "ReadOnlyEnforced";
+    case 8:
+      return "LockedForAnnotations";
+    default:
+      return "Unknown";
   }
 }
 
