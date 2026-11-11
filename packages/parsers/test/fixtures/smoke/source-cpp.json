@@ -1,0 +1,8 @@
+{
+  "description": "C++ source keeps the bare type: Tika's SourceCodeParser writes no charset to Content-Type",
+  "tags": ["smoke", "text", "source"],
+  "input": { "text": "int main() {}\n", "filename": "a.cpp" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/x-c++src" }
+  ]
+}

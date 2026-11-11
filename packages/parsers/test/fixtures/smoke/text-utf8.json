@@ -1,0 +1,10 @@
+{
+  "description": "UTF-8 text with a non-ASCII character is reported as UTF-8",
+  "tags": ["smoke", "text"],
+  "input": { "text": "héllo" },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "héllo\n" },
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/plain; charset=UTF-8" },
+    { "type": "equals", "field": "metadata.Content-Encoding", "value": "UTF-8" }
+  ]
+}

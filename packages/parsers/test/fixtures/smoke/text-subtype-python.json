@@ -1,0 +1,8 @@
+{
+  "description": "a text subtype (Python by filename) keeps its own type and gains the charset",
+  "tags": ["smoke", "text"],
+  "input": { "text": "print(1)\n", "filename": "a.py" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/x-python; charset=windows-1252" }
+  ]
+}

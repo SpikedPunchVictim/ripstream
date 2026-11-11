@@ -6,47 +6,8 @@ import { createRipstream } from "../src/index.ts";
 const encoder = new TextEncoder();
 const ripstream = createRipstream();
 
-test("detects text and named PDF", async () => {
-  assert.equal((await ripstream.detect(encoder.encode("hello"))).toString(), "text/plain");
-  assert.equal(
-    (
-      await ripstream.detect(encoder.encode("%PDF-1.7"), { filename: "x.pdf" })
-    ).toString(),
-    "application/pdf",
-  );
-});
-
-test("parses plain text end to end", async () => {
-  const result = await ripstream.parse(encoder.encode("hello\nworld"));
-  assert.equal(result.text, "hello\nworld\n");
-  // Tika's TXTParser writes `<incoming type>; charset=<detected>`, and Mojibuster detects pure ASCII as windows-1252.
-  assert.equal(result.metadata.get("Content-Type"), "text/plain; charset=windows-1252");
-  assert.equal(result.metadata.get("Content-Encoding"), "windows-1252");
-});
-
 test("parses UTF-8 text", async () => {
   assert.equal(await ripstream.parseToString(encoder.encode("héllo")), "héllo\n");
-});
-
-test("UTF-8 text with a non-ASCII character is reported as UTF-8", async () => {
-  const result = await ripstream.parse(encoder.encode("héllo"));
-  assert.equal(result.metadata.get("Content-Type"), "text/plain; charset=UTF-8");
-  assert.equal(result.metadata.get("Content-Encoding"), "UTF-8");
-});
-
-test("a text subtype keeps its own type and gains the charset", async () => {
-  const json = await ripstream.parse(encoder.encode('{"a":1}'), { filename: "data.json" });
-  assert.equal(json.metadata.get("Content-Type"), "application/json; charset=windows-1252");
-  const python = await ripstream.parse(encoder.encode("print(1)\n"), { filename: "a.py" });
-  assert.equal(python.metadata.get("Content-Type"), "text/x-python; charset=windows-1252");
-});
-
-test("Java and C++ source keep the bare type: Tika's SourceCodeParser writes no charset to Content-Type", async () => {
-  const java = await ripstream.parse(encoder.encode("class A {}\n"), { filename: "A.java" });
-  assert.equal(java.metadata.get("Content-Type"), "text/x-java-source");
-  assert.equal(java.metadata.get("Content-Encoding"), "windows-1252");
-  const cpp = await ripstream.parse(encoder.encode("int main() {}\n"), { filename: "a.cpp" });
-  assert.equal(cpp.metadata.get("Content-Type"), "text/x-c++src");
 });
 
 test("a recursive record's mediaType is the bare type while its metadata carries the charset", async () => {

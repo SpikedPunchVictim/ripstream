@@ -74,4 +74,15 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+### Fixtures (declarative parser tests)
+
+Behaviour that is "this input gives these fields" belongs in a JSON fixture, not a hand-written test.
+Files live in `packages/parsers/test/fixtures/**/*.json`; `fixtures.test.ts` runs each one through `createRipstream()`.
+Schema and assertion semantics: `packages/parsers/test/fixture-runner.ts`.
+
+- `input`: exactly one of `text`, `base64`, `file` (path relative to the fixture); optional `filename`.
+- `operation`: `parse` (default) or `detect`. `options`: `contentType`, `onDocumentFailure`, `onOutputLimit`, `limits`.
+- `assertions`: `{type, field, value}` with type `equals|contains|not_contains|matches|min_length|max_length|absent`;
+  field `text`, `mediaType` (detect) or `metadata.<key>`.
+- `smoke/`: basic per-format behaviour. `repros/`: one fixture per fixed bug; put the commit or bead id in `description`.
+- Keep hand-written tests for logic a fixture cannot express (streaming, limits, abort, config objects).

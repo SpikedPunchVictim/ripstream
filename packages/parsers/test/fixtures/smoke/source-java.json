@@ -1,0 +1,9 @@
+{
+  "description": "Java source keeps the bare type: Tika's SourceCodeParser writes no charset to Content-Type",
+  "tags": ["smoke", "text", "source"],
+  "input": { "text": "class A {}\n", "filename": "A.java" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/x-java-source" },
+    { "type": "equals", "field": "metadata.Content-Encoding", "value": "windows-1252" }
+  ]
+}

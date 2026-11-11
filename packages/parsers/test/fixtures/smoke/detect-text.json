@@ -1,0 +1,7 @@
+{
+  "description": "detect: plain bytes with no name are text/plain",
+  "tags": ["smoke", "detect"],
+  "operation": "detect",
+  "input": { "text": "hello" },
+  "assertions": [{ "type": "equals", "field": "mediaType", "value": "text/plain" }]
+}

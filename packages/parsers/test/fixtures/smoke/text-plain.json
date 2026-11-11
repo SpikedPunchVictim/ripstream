@@ -1,0 +1,10 @@
+{
+  "description": "plain ASCII text: Tika's TXTParser writes the detected charset (Mojibuster: windows-1252) to Content-Type and Content-Encoding",
+  "tags": ["smoke", "text"],
+  "input": { "text": "hello\nworld" },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "hello\nworld\n" },
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/plain; charset=windows-1252" },
+    { "type": "equals", "field": "metadata.Content-Encoding", "value": "windows-1252" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "description": "XML carries no Content-Encoding and no charset in Content-Type, as Tika's XMLParser writes none (commit 0fbbdee, tikajs-68os.37)",
+  "tags": ["repro", "xml"],
+  "input": { "text": "<doc><p>Hello</p></doc>", "filename": "doc.xml" },
+  "assertions": [
+    { "type": "absent", "field": "metadata.Content-Encoding" },
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/xml" }
+  ]
+}

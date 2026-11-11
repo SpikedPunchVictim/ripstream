@@ -1,0 +1,7 @@
+{
+  "description": "detect: a %PDF header with a .pdf name is application/pdf",
+  "tags": ["smoke", "detect", "pdf"],
+  "operation": "detect",
+  "input": { "text": "%PDF-1.7", "filename": "x.pdf" },
+  "assertions": [{ "type": "equals", "field": "mediaType", "value": "application/pdf" }]
+}
