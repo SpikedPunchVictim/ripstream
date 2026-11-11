@@ -7,6 +7,12 @@ export interface ZipFixtureEntry {
   readonly deflated?: Uint8Array;
   /** Write the central entry as a streaming ZIP64 writer does: 0xFFFFFFFF sizes/offset, real values in the extra field. */
   readonly zip64?: boolean;
+  /** The name as the writer stored it, in place of the UTF-8 encoding of `name` (a legacy-charset name). */
+  readonly nameBytes?: Uint8Array;
+  /** General-purpose flag bits for both headers; bit 11 (0x0800) says the name is UTF-8. */
+  readonly flags?: number;
+  /** Extra-field bytes for the central entry (not combinable with `zip64`). */
+  readonly extra?: Uint8Array;
 }
 
 /** A minimal ZIP: stored entries (or pre-deflated ones), a central directory, no extras. */
@@ -16,13 +22,14 @@ export function zip(entries: readonly ZipFixtureEntry[]): Uint8Array {
   let offset = 0;
 
   for (const entry of entries) {
-    const name = encoder.encode(entry.name);
+    const name = entry.nameBytes ?? encoder.encode(entry.name);
     const data = entry.deflated ?? entry.bytes ?? encoder.encode(entry.data ?? "x");
     const method = entry.deflated === undefined ? 0 : 8;
     const local = new Uint8Array(30 + name.length + data.length);
     const localView = new DataView(local.buffer);
     localView.setUint32(0, 0x04034b50, true);
     localView.setUint16(4, 20, true);
+    localView.setUint16(6, entry.flags ?? 0, true);
     localView.setUint16(8, method, true);
     localView.setUint32(18, data.length, true);
     localView.setUint32(22, data.length, true);
@@ -31,12 +38,13 @@ export function zip(entries: readonly ZipFixtureEntry[]): Uint8Array {
     local.set(data, 30 + name.length);
     locals.push(local);
 
-    const extraLength = entry.zip64 === true ? 4 + 24 : 0;
+    const extraLength = entry.zip64 === true ? 4 + 24 : (entry.extra?.length ?? 0);
     const central = new Uint8Array(46 + name.length + extraLength);
     const centralView = new DataView(central.buffer);
     centralView.setUint32(0, 0x02014b50, true);
     centralView.setUint16(4, 20, true);
     centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, entry.flags ?? 0, true);
     centralView.setUint16(10, method, true);
     centralView.setUint16(28, name.length, true);
     centralView.setUint16(30, extraLength, true);
@@ -52,6 +60,7 @@ export function zip(entries: readonly ZipFixtureEntry[]): Uint8Array {
       centralView.setBigUint64(extra + 12, BigInt(data.length), true);
       centralView.setBigUint64(extra + 20, BigInt(offset), true);
     } else {
+      if (entry.extra !== undefined) central.set(entry.extra, 46 + name.length);
       centralView.setUint32(20, data.length, true);
       centralView.setUint32(24, data.length, true);
       centralView.setUint32(42, offset, true);

@@ -1,5 +1,5 @@
 import { open, type FileHandle } from "node:fs/promises";
-import { createInflateRaw } from "node:zlib";
+import { createInflateRaw, crc32 } from "node:zlib";
 import { inflateBounded } from "@spikedpunch/ripstream-core";
 
 export interface ZipEntry {
@@ -16,6 +16,10 @@ const ZIP64_LOCATOR = 0x07064b50;
 const ZIP64_RECORD = 0x06064b50;
 const EOCD_LENGTH = 22;
 const ZIP64_LOCATOR_LENGTH = 20;
+/** General-purpose bit 11: the writer says the name is UTF-8. */
+const UTF8_NAME_FLAG = 0x0800;
+/** The Info-ZIP Unicode Path extra field. */
+const UNICODE_PATH_FIELD = 0x7075;
 
 /**
  * Detection happens in the caller's process, before any parser limit applies, and the central directory sits at the
@@ -150,6 +154,7 @@ async function readCentralDirectory(handle: FileHandle): Promise<ZipEntry[] | nu
     if (cursor + 46 > directory.length) return null;
     if (directoryView.getUint32(cursor, true) !== CENTRAL) return null;
 
+    const flags = directoryView.getUint16(cursor + 8, true);
     const compression = directoryView.getUint16(cursor + 10, true);
     const compressedSize32 = directoryView.getUint32(cursor + 20, true);
     const uncompressedSize32 = directoryView.getUint32(cursor + 24, true);
@@ -169,7 +174,7 @@ async function readCentralDirectory(handle: FileHandle): Promise<ZipEntry[] | nu
       localOffset: localOffset32,
     });
     entries.push({
-      name: new TextDecoder("utf-8").decode(directory.subarray(nameStart, extraStart)),
+      name: memberName(flags, directory.subarray(nameStart, extraStart), directory.subarray(extraStart, extraStart + extraLength)),
       compression,
       compressedSize: sizes.compressedSize,
       localOffset: sizes.localOffset,
@@ -177,6 +182,45 @@ async function readCentralDirectory(handle: FileHandle): Promise<ZipEntry[] | nu
     cursor = next;
   }
   return entries;
+}
+
+/**
+ * A member's name as Tika's commons-compress `ZipFile` reads it: UTF-8, whether or not bit 11 is set (Tika names no
+ * other charset, DefaultZipContainerDetector.java:237). A member whose bit 11 is clear may carry an Info-ZIP Unicode
+ * Path field, and `ZipFile` takes the name in it when its CRC32 is that of the name bytes in the header. Bit 11 set,
+ * and the field is not read.
+ */
+function memberName(flags: number, headerName: Uint8Array, extra: Uint8Array): string {
+  if ((flags & UTF8_NAME_FLAG) === 0) {
+    const unicode = readUnicodePath(extra, headerName);
+    if (unicode !== null) return unicode;
+  }
+  return new TextDecoder("utf-8").decode(headerName);
+}
+
+/**
+ * The name in the last Unicode Path field of `extra` (version 1, CRC32 of the header name, UTF-8 name), or null when
+ * there is none or it is not valid for this header name.
+ */
+function readUnicodePath(extra: Uint8Array, headerName: Uint8Array): string | null {
+  const view = new DataView(extra.buffer, extra.byteOffset, extra.byteLength);
+  let name: string | null = null;
+  // A hostile extra field repeats the field thousands of times: the header name is hashed once, not once per field.
+  let headerCrc: number | null = null;
+  for (let position = 0; position + 4 <= extra.length; ) {
+    const id = view.getUint16(position, true);
+    const size = view.getUint16(position + 2, true);
+    const end = position + 4 + size;
+    if (end > extra.length) break;
+    if (id === UNICODE_PATH_FIELD) {
+      const versionOne = size >= 5 && extra[position + 4] === 1;
+      if (versionOne) headerCrc ??= crc32(headerName);
+      const valid = versionOne && view.getUint32(position + 5, true) === headerCrc;
+      name = valid ? new TextDecoder("utf-8").decode(extra.subarray(position + 9, end)) : null;
+    }
+    position = end;
+  }
+  return name;
 }
 
 /**

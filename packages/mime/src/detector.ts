@@ -23,6 +23,7 @@ import { detectZipContainer } from "./containers/zip.ts";
 import { detectOle2Container } from "./containers/ole2.ts";
 import { detectBplist } from "./containers/bplist.ts";
 import { detectCompressor } from "./containers/compressor.ts";
+import { detectUnixDump } from "./containers/dump.ts";
 import { detectGzipSpecialization } from "./containers/gzip.ts";
 import { detectMatroska } from "./containers/matroska.ts";
 import { detectOgg } from "./containers/ogg.ts";
@@ -95,6 +96,8 @@ const STAGES: readonly Stage[] = [
   },
   { names: ["bp-list-detector"], run: ({ stream, prefix }) => (stream !== null && startsWith(prefix, BPLIST_SIGNATURE) ? detectBplist(stream) : null) },
   { names: ["gzip-specialization-detector"], run: ({ prefix }) => detectGzipSpecialization(prefix) },
+  // DefaultZipContainerDetector names an archive type before it tries the compressor signatures.
+  { names: [ZIP_CONTAINER], run: ({ prefix }) => detectUnixDump(prefix) },
   { names: [ZIP_CONTAINER], run: ({ prefix }) => detectCompressor(prefix) },
   { names: ["matroska-detector"], run: ({ prefix }) => detectMatroska(prefix) },
   { names: ["ogg-detector"], run: ({ prefix }) => detectOgg(prefix) },
