@@ -19,10 +19,10 @@ test("loads a valid JSON configuration", () => {
 
 // Sections Tika's configuration has and ripstream does not apply. Accepting one would report success while changing
 // nothing (measured: tasks/parity/audits/config-inventory.json), so each is refused by name. `parsers` and `detectors`
-// left this list when createRipstream began applying them (tikajs-68os.8.6; see component-config.test.ts).
+// left this list when createRipstream began applying them (tikajs-68os.8.6; see component-config.test.ts), and
+// `metadata-filters` when it began to be read (tikajs-68os.9.2.5; see metadata-filter-config.test.ts).
 const UNAPPLIED_SECTIONS: ReadonlyArray<readonly [string, unknown]> = [
   ["contentHandlers", [{ class: "org.example.Handler" }]],
-  ["metadataFilters", [{ class: "org.example.Filter" }]],
   ["encodingDetector", { class: "org.example.Encoding" }],
 ];
 for (const [section, value] of UNAPPLIED_SECTIONS) {

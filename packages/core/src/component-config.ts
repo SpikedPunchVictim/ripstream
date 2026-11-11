@@ -104,7 +104,7 @@ function booleanSettings(
 }
 
 /** The one `[name, settings]` pair of an entry, or null when it has been reported. */
-function entryParts(entry: unknown, position: string, issues: string[]): [string, Record<string, unknown>] | null {
+export function entryParts(entry: unknown, position: string, issues: string[]): [string, Record<string, unknown>] | null {
   if (typeof entry === "string" && entry.length > 0) return [entry, {}];
   if (!isObject(entry)) {
     issues.push(`${position} must be a component name or an object`);

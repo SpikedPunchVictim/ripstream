@@ -36,6 +36,13 @@ export {
   type WriteLimitOptions,
 } from "./metadata-filter.ts";
 export {
+  createMetadataFilter,
+  emitMetadataFilter,
+  metadataFiltersOf,
+  type EmitMetadataFilters,
+  type MetadataFilterEntry,
+} from "./metadata-filter-config.ts";
+export {
   LegacyKeyMigrationFilter,
   type LegacyKeyMigrationDirection,
   type LegacyKeyMigrationOptions,
@@ -293,11 +300,14 @@ export {
 export { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, digestBytes, digestKey, type DigestAlgorithm, type DigestDef, type DigestEncoding, type DigestSettings } from "./digest.ts";
 export { CONTENT_LENGTH, EMBEDDED_RESOURCE_TYPES, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
 export {
+  filterDocument,
+  filterRmetaObjects,
   markParseTiming,
   metadataJson,
   rmetaObject,
   rmetaObjects,
   serializeRmeta,
+  type FilteredDocument,
   type RmetaOptions,
   type RmetaValue,
 } from "./rmeta.ts";

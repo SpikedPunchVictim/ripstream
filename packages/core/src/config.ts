@@ -1,6 +1,7 @@
 import { parseComponentSection, type ComponentEntry, type ComponentSection } from "./component-config.ts";
 import type { IsolationConfig } from "./isolation.ts";
 import { jsonStructureIssues } from "./json-structure.ts";
+import { freezeMetadataFilterEntries, parseMetadataFilterSection, type MetadataFilterEntry } from "./metadata-filter-config.ts";
 import type { ParseLimits } from "./parse-context.ts";
 import type { DigestSettings } from "./digest.ts";
 import { parseParseContextSection } from "./parse-context-config.ts";
@@ -21,6 +22,10 @@ export interface RipstreamConfigShape {
   readonly throwOnWriteLimit?: boolean;
   /** The `parse-context` digester factory: the digests every document gets. */
   readonly digest?: DigestSettings;
+  /** The top-level `metadata-filters` section, already read into entries by `loadConfig`. */
+  readonly metadataFilters?: readonly MetadataFilterEntry[];
+  /** The `metadata-filters` list of the `parse-context` section, already read into entries by `loadConfig`. */
+  readonly parseContextMetadataFilters?: readonly MetadataFilterEntry[];
   /** The path the `custom-mimetypes` key names. */
   readonly customMimeTypes?: string;
   /** The `server` section, already read by `loadConfig`. */
@@ -36,6 +41,7 @@ const ALLOWED_ROOT_KEYS = new Set([
   "isolation",
   "parsers",
   "detectors",
+  "metadata-filters",
   "parse-context",
   "custom-mimetypes",
   "server",
@@ -49,7 +55,6 @@ const ALLOWED_ROOT_KEYS = new Set([
  */
 const UNAPPLIED_SECTIONS = new Set([
   "contentHandlers",
-  "metadataFilters",
   "encodingDetector",
 ]);
 
@@ -120,6 +125,19 @@ export class RipstreamConfig {
    */
   readonly digest: DigestSettings | null;
   /**
+   * The `metadata-filters` section: the filters that shape the metadata of a parse before it is emitted, in the order
+   * they run, or null when the configuration has no such section. An empty list is a section that runs nothing, as it is
+   * in Tika, which has no default filter. `createMetadataFilter` builds the chain; the surfaces that emit metadata
+   * (pipes, `ripstream serve`, the command line) apply it, and `createRipstream` does not, as Tika's parse does not.
+   */
+  readonly metadataFilters: readonly MetadataFilterEntry[] | null;
+  /**
+   * The `metadata-filters` list of the `parse-context` section, or null when it has none that names a filter (Tika sets
+   * nothing for an empty list). It is the list a request's parse context carries in Tika: where it is there, it replaces
+   * `metadataFilters` instead of adding to it.
+   */
+  readonly parseContextMetadataFilters: readonly MetadataFilterEntry[] | null;
+  /**
    * The path of a `custom-mimetypes.xml' (Tika's file, whose property is `tika.custom-mimetypes`), or null when the
    * configuration names none. `createRipstream({ config })` reads it, relative to the working directory, and adds its
    * media types to the registry that names, magic and aliases are resolved with.
@@ -148,6 +166,11 @@ export class RipstreamConfig {
     this.limits = shape.limits === undefined || Object.keys(shape.limits).length === 0 ? null : Object.freeze({ ...shape.limits });
     this.throwOnWriteLimit = shape.throwOnWriteLimit ?? false;
     this.digest = shape.digest === undefined ? null : Object.freeze({ digests: Object.freeze([...shape.digest.digests]), skipContainerDocumentDigest: shape.digest.skipContainerDocumentDigest });
+    this.metadataFilters = shape.metadataFilters === undefined ? null : freezeMetadataFilterEntries(shape.metadataFilters);
+    this.parseContextMetadataFilters =
+      shape.parseContextMetadataFilters === undefined || shape.parseContextMetadataFilters.length === 0
+        ? null
+        : freezeMetadataFilterEntries(shape.parseContextMetadataFilters);
     this.customMimeTypes = shape.customMimeTypes ?? null;
     this.server = shape.server === undefined || Object.keys(shape.server).length === 0 ? null : Object.freeze({ ...shape.server });
     this.pipes = shape.pipes === undefined ? null : shape.pipes;
@@ -192,7 +215,21 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     structureIssues = jsonStructureIssues(text);
   }
 
-  const { issues: valueIssues, isolation, parsers, detectors, limits, throwOnWriteLimit, digest, customMimeTypes, server, pipes, notices } = inspectConfig(value);
+  const {
+    issues: valueIssues,
+    isolation,
+    parsers,
+    detectors,
+    limits,
+    throwOnWriteLimit,
+    digest,
+    metadataFilters,
+    parseContextMetadataFilters,
+    customMimeTypes,
+    server,
+    pipes,
+    notices,
+  } = inspectConfig(value);
   const issues = [...structureIssues, ...valueIssues];
   if (issues.length > 0) throw new RipstreamConfigError(issues);
   // Build from the validated copies, never from the caller's object.
@@ -205,6 +242,8 @@ export function loadConfig(source: string | Uint8Array | unknown): RipstreamConf
     ...(limits === undefined ? {} : { limits }),
     ...(throwOnWriteLimit === true ? { throwOnWriteLimit } : {}),
     ...(digest === undefined ? {} : { digest }),
+    ...(metadataFilters === undefined ? {} : { metadataFilters }),
+    ...(parseContextMetadataFilters === undefined ? {} : { parseContextMetadataFilters }),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
     ...(pipes === undefined ? {} : { pipes }),
@@ -224,6 +263,8 @@ interface InspectedConfig {
   readonly limits?: Partial<ParseLimits>;
   readonly throwOnWriteLimit?: boolean;
   readonly digest?: DigestSettings;
+  readonly metadataFilters?: readonly MetadataFilterEntry[];
+  readonly parseContextMetadataFilters?: readonly MetadataFilterEntry[];
   readonly customMimeTypes?: string;
   readonly server?: ServerSettings;
   readonly pipes?: PipesSettings;
@@ -276,6 +317,7 @@ function inspectConfig(value: unknown): InspectedConfig {
   let throwOnWriteLimit = false;
   let unpack: UnpackSettings | undefined;
   let digest: DigestSettings | undefined;
+  let parseContextMetadataFilters: readonly MetadataFilterEntry[] | undefined;
   if (record["parse-context"] !== undefined) {
     const result = parseParseContextSection(record["parse-context"]);
     issues.push(...result.issues);
@@ -284,7 +326,14 @@ function inspectConfig(value: unknown): InspectedConfig {
       throwOnWriteLimit = result.throwOnWriteLimit;
       unpack = result.unpack;
       digest = result.digest;
+      parseContextMetadataFilters = result.metadataFilters;
     }
+  }
+  let metadataFilters: readonly MetadataFilterEntry[] | undefined;
+  if (record["metadata-filters"] !== undefined) {
+    const result = parseMetadataFilterSection("metadata-filters", record["metadata-filters"]);
+    issues.push(...result.issues);
+    metadataFilters = result.entries;
   }
   let customMimeTypes: string | undefined;
   const rawCustom = record["custom-mimetypes"];
@@ -310,7 +359,14 @@ function inspectConfig(value: unknown): InspectedConfig {
   if (pipesResult.issues.length === 0 && pipesResult.settings !== undefined) {
     // UNPACK mode's settings live in the parse-context section but only pipes uses them.
     // The digester factory is the same: it is a parse-context setting, and NO_PARSE is where pipes needs it.
-    pipes = { ...pipesResult.settings, ...(unpack === undefined ? {} : { unpack }), ...(digest === undefined ? {} : { digest }) };
+    // The metadata filters are the same: parse-context and top-level settings that pipes' emit is where Tika runs.
+    pipes = {
+      ...pipesResult.settings,
+      ...(unpack === undefined ? {} : { unpack }),
+      ...(digest === undefined ? {} : { digest }),
+      ...(metadataFilters === undefined ? {} : { metadataFilters }),
+      ...(parseContextMetadataFilters === undefined || parseContextMetadataFilters.length === 0 ? {} : { parseContextMetadataFilters }),
+    };
     notices.push(...pipes.notices);
   } else if (unpack !== undefined && pipesResult.issues.length === 0) {
     notices.push('"parse-context" unpack-config says what pipes\' UNPACK mode emits; the configuration has no pipes sections, so it changes nothing');
@@ -324,6 +380,8 @@ function inspectConfig(value: unknown): InspectedConfig {
     ...(limits === undefined ? {} : { limits }),
     ...(throwOnWriteLimit ? { throwOnWriteLimit } : {}),
     ...(digest === undefined ? {} : { digest }),
+    ...(metadataFilters === undefined ? {} : { metadataFilters }),
+    ...(parseContextMetadataFilters === undefined ? {} : { parseContextMetadataFilters }),
     ...(customMimeTypes === undefined ? {} : { customMimeTypes }),
     ...(server === undefined ? {} : { server }),
     ...(pipes === undefined ? {} : { pipes }),

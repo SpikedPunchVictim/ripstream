@@ -8,6 +8,7 @@ import {
   type S3IteratorSettings,
 } from "./pipes-s3-config.ts";
 import type { DigestSettings } from "./digest.ts";
+import type { MetadataFilterEntry } from "./metadata-filter-config.ts";
 import type { UnpackSettings } from "./unpack-config.ts";
 
 /*
@@ -113,6 +114,13 @@ export interface PipesSettings {
    * Every parse digests by it in the parser. Set by `loadConfig`, not by the pipes sections.
    */
   readonly digest?: DigestSettings;
+  /**
+   * The `metadata-filters` section: the chain every emit runs (Tika's `EmitHandler`). Set by `loadConfig`, not by the pipes
+   * sections.
+   */
+  readonly metadataFilters?: readonly MetadataFilterEntry[];
+  /** The `metadata-filters` of the `parse-context` section: they replace `metadataFilters`, and CONTENT_ONLY's own. Set by `loadConfig`. */
+  readonly parseContextMetadataFilters?: readonly MetadataFilterEntry[];
   /** Settings that were accepted and change nothing here, each with why: for the operator, not an error. */
   readonly notices: readonly string[];
 }

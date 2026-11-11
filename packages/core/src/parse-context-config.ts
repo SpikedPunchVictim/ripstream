@@ -1,5 +1,6 @@
 import type { DigestSettings } from "./digest.ts";
 import { DIGESTER_FACTORIES, parseDigesterFactory, type DigesterFactoryName } from "./digest-config.ts";
+import { parseMetadataFilterSection, type MetadataFilterEntry } from "./metadata-filter-config.ts";
 import type { ParseLimits } from "./parse-context.ts";
 import { parseUnpackConfig, type UnpackSettings } from "./unpack-config.ts";
 
@@ -23,6 +24,9 @@ import { parseUnpackConfig, type UnpackSettings } from "./unpack-config.ts";
  * `unpack-config` is not a limit: it says what pipes' UNPACK mode emits (unpack-config.ts) and is passed on as `unpack`.
  * `commons-digester-factory` and `bouncy-castle-digester-factory` say which digests every document gets (digest-config.ts)
  * and are passed on as `digest`.
+ *
+ * `metadata-filters` is a list of filters (metadata-filter-config.ts), the one Tika's parse context carries. It is passed on
+ * as `metadataFilters`; `RipstreamConfig` drops an empty one, since Tika sets nothing for it and so it replaces no other.
  */
 
 type Block = "embedded-limits" | "output-limits" | "timeout-limits";
@@ -94,6 +98,8 @@ export function parseParseContextSection(value: unknown): {
   unpack?: UnpackSettings;
   /** The digester factory the section names, when it names one. */
   digest?: DigestSettings;
+  /** The `metadata-filters` list, when the section has one. */
+  metadataFilters?: readonly MetadataFilterEntry[];
   issues: string[];
 } {
   const issues: string[] = [];
@@ -101,6 +107,7 @@ export function parseParseContextSection(value: unknown): {
   let throwOnWriteLimit = false;
   let unpack: UnpackSettings | undefined;
   let digest: DigestSettings | undefined;
+  let metadataFilters: readonly MetadataFilterEntry[] | undefined;
   let factory: DigesterFactoryName | undefined;
   if (!isObject(value)) return { limits, throwOnWriteLimit, issues: ["parse-context must be an object"] };
 
@@ -123,9 +130,15 @@ export function parseParseContextSection(value: unknown): {
       if (result.issues.length === 0) unpack = result.settings;
       continue;
     }
+    if (name === "metadata-filters") {
+      const result = parseMetadataFilterSection("parse-context metadata-filters", raw);
+      issues.push(...result.issues);
+      metadataFilters = result.entries;
+      continue;
+    }
     if (!(BLOCKS as readonly string[]).includes(name)) {
       issues.push(
-        `parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${[...BLOCKS, "unpack-config", ...DIGESTER_FACTORIES].join(", ").replace(/, ([^,]*)$/, " and $1")}`,
+        `parse-context: ${JSON.stringify(name)} is not supported: ripstream reads only ${[...BLOCKS, "unpack-config", "metadata-filters", ...DIGESTER_FACTORIES].join(", ").replace(/, ([^,]*)$/, " and $1")}`,
       );
       continue;
     }
@@ -171,5 +184,12 @@ export function parseParseContextSection(value: unknown): {
       limits[rule.limit] = number;
     }
   }
-  return { limits, throwOnWriteLimit, ...(unpack === undefined ? {} : { unpack }), ...(digest === undefined ? {} : { digest }), issues };
+  return {
+    limits,
+    throwOnWriteLimit,
+    ...(unpack === undefined ? {} : { unpack }),
+    ...(digest === undefined ? {} : { digest }),
+    ...(metadataFilters === undefined ? {} : { metadataFilters }),
+    issues,
+  };
 }

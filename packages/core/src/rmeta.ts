@@ -1,5 +1,7 @@
 import { metadataKeyDefinition } from "./generated/metadata-schema.ts";
-import type { Metadata } from "./metadata.ts";
+import { Metadata } from "./metadata.ts";
+import type { MetadataFilter } from "./metadata-filter.ts";
+import { ParseContext } from "./parse-context.ts";
 import type { ParseRecord } from "./recursive.ts";
 import { handlerTypeName } from "./handler-type.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
@@ -10,6 +12,12 @@ export interface RmetaOptions {
   /** "records" (rmeta array) or "document" (first record only). */
   readonly jsonShape?: "records" | "document";
   readonly includeContent?: boolean;
+  /**
+   * Runs over the list of `rmetaObjects` and `serializeRmeta` as it would be written, with `tk:content`, the depth, the
+   * embedded paths and every other key already in it, as Tika's emit runs its filters. The filter may drop keys, change
+   * them, and take whole documents out of the list. Values are typed after it has run.
+   */
+  readonly metadataFilter?: MetadataFilter;
 }
 
 export type RmetaValue = string | number | boolean | readonly (string | number | boolean)[];
@@ -41,7 +49,8 @@ export function rmetaObject(
 
   Object.assign(result, metadataJson(record.metadata, { typedMetadata: typed }));
 
-  result[TIKA_KEYS.EMBEDDED_DEPTH] ??= String(record.depth);
+  // The depth is an integer key like any other when the values are typed.
+  result[TIKA_KEYS.EMBEDDED_DEPTH] ??= typed ? typedValue(TIKA_KEYS.EMBEDDED_DEPTH, [String(record.depth)]) : String(record.depth);
   // A failure the wrapper did not note on the metadata (a record built by hand) is noted here, as Tika's container
   // and embedded keys.
   const failureKey = record.depth === 0 ? TIKA_KEYS.CONTAINER_EXCEPTION : TIKA_KEYS.EMBEDDED_EXCEPTION;
@@ -79,7 +88,10 @@ export function rmetaObjects(
   records: readonly ParseRecord[],
   options: RmetaOptions = {},
 ): Record<string, RmetaValue>[] {
-  const objects = records.map((record) => rmetaObject(record, options));
+  // A filter reads text: the values are typed, if they are to be, once it is done.
+  const filter = options.metadataFilter;
+  const unfiltered = filter === undefined ? options : { ...options, typedMetadata: false };
+  const objects = records.map((record) => rmetaObject(record, unfiltered));
   const nameOfId = new Map<string, string>();
   let unknown = 0;
   for (const record of records) {
@@ -98,7 +110,50 @@ export function rmetaObjects(
   });
   const container = objects[0];
   if (container !== undefined && parsedBy.size > 0) container[TIKA_KEYS.PARSED_BY_FULL_SET] = [...parsedBy];
-  return objects;
+  return filter === undefined ? objects : filterRmetaObjects(objects, filter, options);
+}
+
+/**
+ * Runs `filter` over a list of documents written as objects (what `rmetaObjects` gives) and returns what is left, written
+ * the same way. The values are read as text, a number as its digits, and `typedMetadata` types them again afterwards.
+ * The objects given are not changed. A filter that takes a document out of the list takes it out of the answer.
+ */
+export function filterRmetaObjects(
+  objects: readonly Record<string, RmetaValue>[],
+  filter: MetadataFilter,
+  options: Pick<RmetaOptions, "typedMetadata"> = {},
+): Record<string, RmetaValue>[] {
+  const list = objects.map((object) => {
+    const metadata = new Metadata();
+    for (const [name, value] of Object.entries(object)) {
+      for (const each of Array.isArray(value) ? value : [value]) metadata.add(name, each);
+    }
+    return metadata;
+  });
+  filter.filter(list, new ParseContext());
+  return list.map((metadata) => metadataJson(metadata, options));
+}
+
+/** A single document as the emitters that write one hold it: its metadata, and its content apart from them. */
+export interface FilteredDocument {
+  readonly metadata: Record<string, RmetaValue>;
+  readonly text: string;
+}
+
+/**
+ * Runs `filter` over one document the way Tika's emit does: the content is `tk:content` of its metadata for the filter,
+ * so a filter that drops `tk:content` drops the content, and one that takes the document out of the list leaves
+ * nothing. Blank content is not a key, as in `rmetaObject`.
+ */
+export function filterDocument(filter: MetadataFilter, document: FilteredDocument): FilteredDocument {
+  const object: Record<string, RmetaValue> = { ...document.metadata };
+  delete object[TIKA_KEYS.CONTENT];
+  if (document.text.trim() !== "") object[TIKA_KEYS.CONTENT] = document.text;
+  const [kept] = filterRmetaObjects([object], filter);
+  if (kept === undefined) return { metadata: {}, text: "" };
+  const { [TIKA_KEYS.CONTENT]: content, ...metadata } = kept;
+  const first = Array.isArray(content) ? content[0] : content;
+  return { metadata, text: first === undefined ? "" : String(first) };
 }
 
 function typedValue(
