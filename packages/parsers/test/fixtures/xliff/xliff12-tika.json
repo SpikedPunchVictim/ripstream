@@ -1,0 +1,42 @@
+{
+  "description": "XLIFF 1.2 gives what Tika XLIFF12ParserTest.testXLIFF12 asserts on testXLIFF12.xlf (read from Tika source/tests): file-count, tu-count, source-language, target-language (tikajs-68os.49)",
+  "tags": [
+    "xliff"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<xliff version=\"1.2\"\n       xmlns=\"urn:oasis:names:tc:xliff:document:1.2\"\n       xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n       xsi:schemaLocation=\"urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-strict.xsd\">\n    <file original=\"sample.properties\"\n          source-language=\"en\" target-language=\"fr\"\n          datatype=\"javapropertyresourcebundle\">\n        <body>\n            <trans-unit id=\"1\" resname=\"welcome\">\n                <source xml:lang=\"en\">Hooray, you're here! The day just got better - enjoy the following tips!</source>\n                <target xml:lang=\"fr\">Hurrah, tu es là. Ça fait une bonne journée - profite des renseignements suivants !</target>\n            </trans-unit>\n            <trans-unit id=\"2\" resname=\"text_segment\">\n                <source xml:lang=\"en\">A section of text like this is known as a text segment. Start rockin' your translations now!</source>\n                <target xml:lang=\"fr\">Un tel extrait est qualifié de segment du texte chez nous. C’est parti – commence tes traductions tout de suite/maintenant !</target>\n            </trans-unit>\n            <trans-unit id=\"3\" resname=\"tab_shortcut\">\n                <source xml:lang=\"en\">Arriba, Arriba! Andale, Andale! Be fast as Speedy Gonzales. Just hit TAB to save and go to the next text segment, once you're done.</source>\n                <target xml:lang=\"fr\">Arriba, Arriba ! Andale, Andale ! Prends Speedy Gonzales de vitesse. Appuie sur TAB pour sauvegarder et continuer avec le segment prochain dès que tu as fini.</target>\n            </trans-unit>\n        </body>\n    </file>\n\n    <file original=\"sample2.properties\"\n          source-language=\"en\" target-language=\"fr\"\n          datatype=\"javapropertyresourcebundle\">\n        <body>\n            <trans-unit id=\"4\" resname=\"welcome\">\n                <source xml:lang=\"en\">Another trans-unit</source>\n                <target xml:lang=\"fr\">Un autre trans-unit</target>\n            </trans-unit>\n        </body>\n    </file>\n</xliff>",
+    "filename": "testXLIFF12.xlf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hooray"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.file-count",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tu-count",
+      "value": "4"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.source-language",
+      "value": "en"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.target-language",
+      "value": "fr"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/x-xliff+xml"
+    }
+  ]
+}

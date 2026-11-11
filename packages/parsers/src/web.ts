@@ -14,6 +14,7 @@ import { inflateLimits, parseEntry } from "@spikedpunch/ripstream-parser-archive
 import { SaxesParser } from "saxes";
 import { arcHttpBody, isArc, readArcRecords } from "./arc.ts";
 import { createDecoder } from "./charset.ts";
+import { parseXliff12 } from "./xlz.ts";
 import { detectXmlEncoding } from "./xml-encoding.ts";
 
 /**
@@ -78,11 +79,16 @@ export class WarcParser implements Parser {
       const payload = data.subarray(payloadStart, payloadStart + length);
       offset = payloadStart + length;
 
+      // Tika's WARCParser.processRecord parses the payload of a RESPONSE record only; warcinfo is a no-op and every other
+      // type (request, resource, metadata, ...) is left out ("TODO - other warc record types"). The record is still
+      // read past, so the records after it are found.
+      const type = fields.get("warc-type");
+      if (type?.toLowerCase() !== "response") continue;
+
       await xhtml.startElement("div", "class", "warc-record");
       const target = fields.get("warc-target-uri");
       if (target !== undefined) await xhtml.element("h1", target);
-      const type = fields.get("warc-type");
-      if (type !== undefined) await xhtml.element("p", type);
+      await xhtml.element("p", type);
 
       const body = httpBody(payload);
       if (body.length > 0) {
@@ -176,7 +182,15 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   return result;
 }
 
-/** XLIFF 1.2/2.0 translation-unit extraction. */
+/**
+ * XLIFF. A 1.2 document is read by the port of Tika's XLIFF12Parser (`parseXliff12` in xlz.ts, which XLZParser shares):
+ * a div per file with its `original` as h1, a div per trans-unit, a p per source/target carrying `xml:lang` as `lang`,
+ * and the `file-count`, `tu-count`, `source-language` and `target-language` metadata. Read from XLIFF12Parser.java and
+ * XLIFF12ContentHandler.java; not run against a Tika.
+ *
+ * Tika has no XLIFF 2.0 parser (its XLIFF12Parser would find no trans-unit in one), so a document whose root `version`
+ * is 2.x keeps this port's older reader, a p per trans-unit/source/target, rather than losing its text.
+ */
 export class XliffParser implements Parser {
   readonly name = "XLIFFParser";
 
@@ -194,7 +208,12 @@ export class XliffParser implements Parser {
     metadata: Metadata,
     _ctx: ParseContext,
   ): Promise<void> {
-    const xml = await readText(stream);
+    const bytes = await readBytes(stream);
+    if (!isXliff2(bytes)) {
+      await parseXliff12(bytes, handler, metadata);
+      return;
+    }
+    const xml = decodeXml(bytes);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const value of xmlSegments(xml, new Set(["trans-unit", "source", "target"]))) {
@@ -202,6 +221,12 @@ export class XliffParser implements Parser {
     }
     await xhtml.endDocument();
   }
+}
+
+/** The root `xliff` element's version starts with 2, read from the first 4 KiB (where a root tag with attributes is). */
+function isXliff2(bytes: Uint8Array): boolean {
+  const head = new TextDecoder("latin1").decode(bytes.subarray(0, 4096));
+  return /<xliff\b[^>]*\sversion\s*=\s*["']2\./.test(head);
 }
 
 /** TMX translation memory extraction. */
@@ -233,9 +258,16 @@ export class TmxParser implements Parser {
 }
 
 async function readText(stream: RipstreamInputStream): Promise<string> {
+  return decodeXml(await readBytes(stream));
+}
+
+async function readBytes(stream: RipstreamInputStream): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of stream) chunks.push(chunk);
-  const data = concat(chunks);
+  return concat(chunks);
+}
+
+function decodeXml(data: Uint8Array): string {
   // Honor the BOM / XML declaration like the sibling XML parsers do.
   const { decoder } = createDecoder(detectXmlEncoding(data));
   return decoder.decode(data);

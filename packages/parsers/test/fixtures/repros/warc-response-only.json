@@ -1,0 +1,33 @@
+{
+  "description": "WARC: only response records become embedded documents; warcinfo, request and resource payloads are skipped, as Tika WARCParser.processRecord (read from Tika source) handles RESPONSE and does nothing for WARCINFO or other types (tikajs-68os.50)",
+  "tags": [
+    "repro",
+    "warc"
+  ],
+  "input": {
+    "text": "WARC/1.0\r\nWARC-Type: warcinfo\r\nWARC-Target-URI: \r\nContent-Length: 25\r\n\r\nsoftware: infoonly-marker\r\n\r\nWARC/1.0\r\nWARC-Type: request\r\nWARC-Target-URI: https://a.test/\r\nContent-Length: 44\r\n\r\nGET / HTTP/1.1\r\nHost: requestonly-marker\r\n\r\n\r\n\r\nWARC/1.0\r\nWARC-Type: response\r\nWARC-Target-URI: https://a.test/\r\nContent-Length: 65\r\n\r\nHTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nresponse-body-marker\r\n\r\nWARC/1.0\r\nWARC-Type: resource\r\nWARC-Target-URI: https://b.test/\r\nContent-Length: 19\r\n\r\nresourceonly-marker\r\n\r\n",
+    "filename": "types.warc"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "response-body-marker"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "infoonly-marker"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "requestonly-marker"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "resourceonly-marker"
+    }
+  ]
+}

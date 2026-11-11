@@ -62,8 +62,8 @@ class EndDocumentShield extends ContentHandlerDecorator {
   }
 }
 
-/** XLIFF12Parser.parse. */
-async function parseXliff12(bytes: Uint8Array, shield: ContentHandler, metadata: Metadata): Promise<void> {
+/** XLIFF12Parser.parse. Also what XliffParser does with an XLIFF 1.2 document (tikajs-68os.49). */
+export async function parseXliff12(bytes: Uint8Array, shield: ContentHandler, metadata: Metadata): Promise<void> {
   metadata.set("Content-Type", XLF_TYPE);
   const xhtml = new XHTMLContentHandler(shield, metadata);
   await xhtml.startDocument();

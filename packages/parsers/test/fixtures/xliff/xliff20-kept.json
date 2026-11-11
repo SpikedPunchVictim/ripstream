@@ -1,0 +1,26 @@
+{
+  "description": "XLIFF 2.0 is still read (source and target text) although Tika has no XLIFF 2.0 parser: XliffParser sends version 2.x to its own reader and 1.2 to the port of XLIFF12Parser (tikajs-68os.49)",
+  "tags": [
+    "xliff"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\"?><xliff version=\"2.0\" xmlns=\"urn:oasis:names:tc:xliff:document:2.0\" srcLang=\"en\" trgLang=\"fr\"><file id=\"f1\"><unit id=\"u1\"><segment><source>Hello two</source><target>Bonjour deux</target></segment></unit></file></xliff>",
+    "filename": "two.xlf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello two"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Bonjour deux"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.file-count"
+    }
+  ]
+}

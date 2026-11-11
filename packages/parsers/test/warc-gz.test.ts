@@ -17,8 +17,8 @@ function warcRecord(type: string, uri: string, payload: string): string {
 
 const WARC =
   warcRecord("warcinfo", "https://info.test", "software: test") +
-  warcRecord("resource", "https://one.test", "first page content") +
-  warcRecord("resource", "https://two.test", "second page content");
+  warcRecord("response", "https://one.test", "first page content") +
+  warcRecord("response", "https://two.test", "second page content");
 
 /** One gzip member per record, as crawlers write them. */
 function gzipPerRecord(records: readonly string[]): Uint8Array {
@@ -56,8 +56,8 @@ test("warc.gz parses to the same text as the plain warc", async () => {
 
 test("a warc.gz written as one gzip member per record is read through every member", async () => {
   const records = [
-    warcRecord("resource", "https://one.test", "first page content"),
-    warcRecord("resource", "https://two.test", "second page content"),
+    warcRecord("response", "https://one.test", "first page content"),
+    warcRecord("response", "https://two.test", "second page content"),
   ];
   const result = await ripstream.parse(gzipPerRecord(records), { filename: "archive.warc.gz" });
   assert.match(result.text, /first page content/);

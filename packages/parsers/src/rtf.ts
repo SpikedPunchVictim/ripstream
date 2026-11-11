@@ -84,20 +84,11 @@ export class RtfParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-      total += chunk.byteLength;
-    }
-    const data = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      data.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
+    // The input is read up to the embedded-resource byte limit and no further: a stream longer than that is refused
+    // after maxEmbeddedResourceBytes + 1 bytes, not after being buffered whole (tikajs-kpkn).
+    const data = await stream.readFully(ctx.limits.maxEmbeddedResourceBytes);
 
     const source = new TextDecoder("latin1").decode(data);
     if (!source.trimStart().startsWith("{\\rtf")) {
@@ -121,6 +112,7 @@ export class RtfParser implements Parser {
 
 const HEX_ESCAPE = /^[0-9a-fA-F]{2}$/;
 const MAX_GROUP_DEPTH = 1_000;
+const OUTPUT_PIECE = 8192;
 
 interface TokenizeResult {
   readonly text: string;
@@ -131,7 +123,10 @@ function tokenize(rtf: string): TokenizeResult {
   const stack: Frame[] = [
     { skip: false, destination: "body", unicodeFallback: 0, uc: 1 },
   ];
-  let output = "";
+  // The text is collected 8192 characters at a time, each piece joined to a flat string. `output += char` for each of
+  // 20M characters builds a rope of 20M nodes (975 MB for a 20 MB document, tikajs-kpkn) that is flattened only at the end.
+  const pieces: string[] = [];
+  let pending: string[] = [];
   let codepage = 1252;
   let infoField = "";
   let infoDate: string | null = null;
@@ -155,7 +150,11 @@ function tokenize(rtf: string): TokenizeResult {
       }
       return;
     }
-    output += value;
+    pending.push(value);
+    if (pending.length >= OUTPUT_PIECE) {
+      pieces.push(pending.join(""));
+      pending = [];
+    }
   };
 
   while (position < rtf.length) {
@@ -338,7 +337,8 @@ function tokenize(rtf: string): TokenizeResult {
   }
 
   finalizeInfoDate();
-  return { text: output, info };
+  pieces.push(pending.join(""));
+  return { text: pieces.join(""), info };
 
   function finalizeInfoDate(): void {
     if (infoDate === null) return;
