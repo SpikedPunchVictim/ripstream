@@ -17,11 +17,12 @@ import {
   IsolationError,
   RipstreamError,
   type EmitMetadataFilters,
+  type MetadataFilterServices,
   type HandlerType,
   type RmetaValue,
   type ServerEndpoint,
 } from "@spikedpunch/ripstream-core";
-import { FrancLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
+import { CharSoupLanguageDetector, FrancLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
 import {
   PipesClient,
   PipesPathError,
@@ -173,6 +174,12 @@ export interface RipstreamServerOptions {
    * its own. Default: none, nothing is filtered. /pipes and /async take the filters of `pipes.settings`.
    */
   readonly metadataFilters?: EmitMetadataFilters;
+  /**
+   * What the metadata filters of `pipes.settings` need that core has not: the language identifier of
+   * `charsoup-metadata-filter`. Default: Tika's CharSoup detector, from `@spikedpunch/ripstream-language`. A server whose
+   * settings name a filter that the services cannot serve does not start.
+   */
+  readonly metadataFilterServices?: MetadataFilterServices;
   /**
    * The media types `/mime-types` describes. The server has no registry of its own, so it answers 404 until it is
    * given one (`ripstream serve` passes the standard bundle's).
@@ -534,6 +541,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           ripstream: ceilinged,
           // Pipes' UNPACK with `suffixStrategy: DETECTED` names files as /unpack does: by the server's media type registry.
           extensionOf: (contentType) => extensionFor(contentType, options.mimeTypes),
+          metadataFilterServices: options.metadataFilterServices ?? { languageIdentifier: new CharSoupLanguageDetector() },
           ...(options.pipes.asyncMaxWaitMs === undefined ? {} : { asyncMaxWaitMs: options.pipes.asyncMaxWaitMs }),
         });
   // Tika's emit: the configured chain, but the text endpoints (CONTENT_ONLY) answer for the parse-context chain alone: their

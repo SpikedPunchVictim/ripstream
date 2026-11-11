@@ -1,4 +1,4 @@
-import type { PipesSettings } from "@spikedpunch/ripstream-core";
+import type { MetadataFilterServices, PipesSettings } from "@spikedpunch/ripstream-core";
 import { PipesEngine, createEngineFromSettings, type ExtensionOf, type PipesRipstream, type PipesStats, type Reporter } from "./index.ts";
 import type { FetchEmitTuple } from "./tuple.ts";
 
@@ -33,6 +33,8 @@ export interface AsyncProcessorOptions {
   readonly reporter?: Reporter;
   /** The extension of a media type, for UNPACK with `suffixStrategy: DETECTED`. See `PipesEngineOptions.extensionOf`. */
   readonly extensionOf?: ExtensionOf;
+  /** What the settings' metadata filters need that core has not, such as the language identifier. See `PipesSettingsRunOptions.metadataFilterServices`. */
+  readonly metadataFilterServices?: MetadataFilterServices;
 }
 
 /** A change a waiting offer or the drain is waiting for: tuples taken off the queue, put on it, or the processor closing or failing. */
@@ -86,6 +88,7 @@ export class AsyncProcessor {
       ...(options.ripstream === undefined ? {} : { ripstream: options.ripstream }),
       ...(options.reporter === undefined ? {} : { reporter: options.reporter }),
       ...(options.extensionOf === undefined ? {} : { extensionOf: options.extensionOf }),
+      ...(options.metadataFilterServices === undefined ? {} : { metadataFilterServices: options.metadataFilterServices }),
     });
     // A run that cannot go on (a reporter that throws, an emitter that cannot close) ends here; offers hear why.
     this.#done = this.#engine.run().then(

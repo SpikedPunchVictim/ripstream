@@ -3,6 +3,8 @@ import { UPSTREAM_COMPONENTS } from "./generated/upstream-services.ts";
 import { MediaType } from "./media-type.ts";
 import type { RipstreamConfig } from "./config.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
+import type { LanguageIdentifier } from "./language.ts";
+import { LANGUAGE_MAX_LENGTH_RANGE, LanguageDetectionMetadataFilter } from "./language-metadata-filter.ts";
 import {
   CaptureGroupMetadataFilter,
   ClearByAttachmentTypeMetadataFilter,
@@ -41,7 +43,22 @@ export interface MetadataFilterEntry {
 
 type Settings = Readonly<Record<string, unknown>>;
 
-type SettingKind = "string" | "boolean" | "string-list" | "string-map" | { readonly oneOf: readonly string[] };
+/**
+ * What a filter needs that core does not have, handed in by whoever builds the chain (the CLI and the server give the
+ * detector `@spikedpunch/ripstream-language` ships). A filter whose service is missing is refused when the chain is built.
+ */
+export interface MetadataFilterServices {
+  /** What `charsoup-metadata-filter` runs to find a document's language. */
+  readonly languageIdentifier?: LanguageIdentifier;
+}
+
+type SettingKind =
+  | "string"
+  | "boolean"
+  | "string-list"
+  | "string-map"
+  | { readonly oneOf: readonly string[] }
+  | { readonly integer: { readonly min: number; readonly max: number } };
 
 interface FilterSpec {
   /** The settings it reads, in the order they are checked. */
@@ -49,7 +66,26 @@ interface FilterSpec {
   readonly required?: readonly string[];
   /** What the settings must satisfy that their types do not say. Reports at `where`; runs only when the types are right. */
   readonly check?: (settings: Settings, where: string, issues: string[]) => void;
-  readonly build: (settings: Settings) => MetadataFilter;
+  readonly build: (settings: Settings, services: MetadataFilterServices) => MetadataFilter;
+}
+
+/**
+ * The services a configuration is validated with. Validation builds each filter to find what it refuses, and never runs
+ * one, so a service is never asked for anything; it is only there to be given.
+ */
+const VALIDATION_SERVICES: MetadataFilterServices = {
+  languageIdentifier: {
+    identify() {
+      throw new Error("a language identifier is not run while a configuration is validated");
+    },
+  },
+};
+
+function languageIdentifierOf(name: string, services: MetadataFilterServices): LanguageIdentifier {
+  if (services.languageIdentifier === undefined) {
+    throw new Error(`${JSON.stringify(name)} needs a language identifier: build the chain with services.languageIdentifier`);
+  }
+  return services.languageIdentifier;
 }
 
 /** Tika's name for the table `legacy-key-migration-filter` reads, a classpath resource. */
@@ -154,12 +190,22 @@ const SPECS: ReadonlyMap<string, FilterSpec> = new Map<string, FilterSpec>([
       build: (s) => new LegacyKeyMigrationFilter(given("direction", s.direction as "V4_TO_V3" | "V3_TO_V4" | undefined)),
     },
   ],
+  [
+    "charsoup-metadata-filter",
+    {
+      settings: { maxLength: { integer: LANGUAGE_MAX_LENGTH_RANGE } },
+      build: (s, services) =>
+        new LanguageDetectionMetadataFilter({
+          identifier: languageIdentifierOf("charsoup-metadata-filter", services),
+          ...given("maxLength", s.maxLength as number | undefined),
+        }),
+    },
+  ],
   ["no-op-filter", { settings: {}, build: () => new NoOpFilter() }],
 ]);
 
 /** Filters Tika has under `metadata-filters` and ripstream does not, each with why. */
 const UNAVAILABLE: ReadonlyMap<string, string> = new Map([
-  ["charsoup-metadata-filter", "ripstream does not detect languages during a parse"],
   ["optimaize-metadata-filter", "ripstream has no Optimaize language detector"],
   ["open-nlp-metadata-filter", "ripstream has no OpenNLP language detector"],
   ["tika-eval-metadata-filter", "ripstream has no tika-eval"],
@@ -206,6 +252,10 @@ function readSetting(kind: SettingKind, key: string, value: unknown, where: stri
       if (typeof to !== "string") issues.push(`${label} ${JSON.stringify(from)} must be a field name (a string)`);
     }
     return Object.fromEntries(pairs);
+  } else if ("integer" in kind) {
+    const { min, max } = kind.integer;
+    if (typeof value === "number" && Number.isInteger(value) && value >= min && value <= max) return value;
+    issues.push(`${label} must be a whole number from ${min} to ${max}`);
   } else {
     if (typeof value === "string" && kind.oneOf.includes(value)) return value;
     issues.push(`${label} must be ${oneOfText(kind.oneOf)}`);
@@ -239,7 +289,7 @@ function readSettings(name: string, spec: FilterSpec, provided: Record<string, u
   // What the filter itself refuses (a regex with no group, a zone that is not one, a type that is not an attachment type)
   // is found now, not at the first document.
   try {
-    spec.build(chosen);
+    spec.build(chosen, VALIDATION_SERVICES);
   } catch (error) {
     issues.push(`${where}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -306,13 +356,13 @@ export function parseMetadataFilterSection(
  * The chain a `metadata-filters` section names: its filters in order, each on what the one before left. An empty list is
  * Tika's no-op filter.
  */
-export function createMetadataFilter(entries: readonly MetadataFilterEntry[]): MetadataFilter {
+export function createMetadataFilter(entries: readonly MetadataFilterEntry[], services: MetadataFilterServices = {}): MetadataFilter {
   if (entries.length === 0) return new NoOpFilter();
   return new CompositeMetadataFilter(
     entries.map((entry) => {
       const spec = SPECS.get(entry.name);
       if (spec === undefined) throw new RangeError(`${JSON.stringify(entry.name)} is not a metadata filter ripstream has`);
-      return spec.build(entry.settings);
+      return spec.build(entry.settings, services);
     }),
   );
 }
@@ -340,9 +390,12 @@ export function emitMetadataFilter(filters: EmitMetadataFilters | undefined, con
 }
 
 /** The filters of a configuration, built. An absent section is none; the filters run on documents one at a time and hold nothing between them. */
-export function metadataFiltersOf(config: Pick<RipstreamConfig, "metadataFilters" | "parseContextMetadataFilters">): EmitMetadataFilters {
+export function metadataFiltersOf(
+  config: Pick<RipstreamConfig, "metadataFilters" | "parseContextMetadataFilters">,
+  services: MetadataFilterServices = {},
+): EmitMetadataFilters {
   return {
-    configured: config.metadataFilters === null ? null : createMetadataFilter(config.metadataFilters),
-    parseContext: config.parseContextMetadataFilters === null ? null : createMetadataFilter(config.parseContextMetadataFilters),
+    configured: config.metadataFilters === null ? null : createMetadataFilter(config.metadataFilters, services),
+    parseContext: config.parseContextMetadataFilters === null ? null : createMetadataFilter(config.parseContextMetadataFilters, services),
   };
 }

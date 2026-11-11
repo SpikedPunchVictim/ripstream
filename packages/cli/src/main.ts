@@ -17,13 +17,14 @@ import {
   rmetaObjects,
   serializeRmeta,
   type Metadata,
+  type MetadataFilterServices,
   type ParseLimits,
   type ParseRecord,
   type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
 import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
-import { FrancLanguageDetector } from "@spikedpunch/ripstream-language";
+import { CharSoupLanguageDetector, FrancLanguageDetector } from "@spikedpunch/ripstream-language";
 import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
 import { createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
 import { serverMimeTypes } from "./mime-types.ts";
@@ -40,6 +41,9 @@ export interface CliIO {
   readonly stderr: (value: string) => void;
   readonly readStdin: () => Promise<Uint8Array>;
 }
+
+/** What a configuration's metadata filters need that core has not: Tika's CharSoup for `charsoup-metadata-filter`. The model is read when a document first needs it. */
+const METADATA_FILTER_SERVICES: MetadataFilterServices = { languageIdentifier: new CharSoupLanguageDetector() };
 
 const defaultIO: CliIO = {
   stdout: (value) => process.stdout.write(value),
@@ -210,7 +214,7 @@ export async function main(
       );
       // Tika's CLI runs the configured `metadata-filters` over the list it writes as recursive JSON, and nowhere else.
       const metadataFilter =
-        settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config), parseContext: null }, false);
+        settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES), parseContext: null }, false);
       const written = metadataFilter === null ? {} : { metadataFilter };
       if (options.output === "jsonl") {
         io.stdout(rmetaObjects(records, written).map((object) => `${JSON.stringify(object)}\n`).join(""));
@@ -295,7 +299,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         ...(settings.config?.throwOnWriteLimit === true ? { onOutputLimit: "throw" as const } : {}),
         endpoints: server.endpoints ?? DEFAULT_SERVER_ENDPOINTS,
         mimeTypes: serverMimeTypes(settings.config?.customMimeTypes ?? null),
-        ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config) }),
+        ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES) }),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
         ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
         ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),
@@ -405,6 +409,7 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
     const engine = createEngineFromSettings(pipesSettings, {
       ripstream,
       reporter,
+      metadataFilterServices: METADATA_FILTER_SERVICES,
       // UNPACK with `suffixStrategy: DETECTED` names files as `ripstream serve` and /unpack do: by the media type registry.
       extensionOf: (contentType) => extensionFor(contentType, (mimeTypes ??= serverMimeTypes(settings.config?.customMimeTypes ?? null))),
       ...(checkpoint === undefined ? {} : { checkpoint }),

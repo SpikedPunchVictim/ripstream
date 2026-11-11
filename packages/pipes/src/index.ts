@@ -10,6 +10,7 @@ import {
   type DigestSettings,
   type EmitMetadataFilters,
   type FilteredDocument,
+  type MetadataFilterServices,
   type RmetaValue,
   rmetaObjects,
   TEXT_HANDLER_TYPE,
@@ -807,6 +808,8 @@ export interface PipesSettingsRunOptions extends PipesRunOptions {
   readonly s3?: S3Transport;
   /** Replaces the network, or the ids drawn for embedded documents, of the settings' Elasticsearch and OpenSearch emitters. */
   readonly search?: SearchTransport;
+  /** What the settings' metadata filters need that core has not (the language identifier of `charsoup-metadata-filter`). A filter whose service is missing is refused when the engine is built. */
+  readonly metadataFilterServices?: MetadataFilterServices;
 }
 
 /**
@@ -898,10 +901,13 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
     options.metadataFilters ??
     (settings.metadataFilters === undefined && settings.parseContextMetadataFilters === undefined
       ? undefined
-      : metadataFiltersOf({
-          metadataFilters: settings.metadataFilters ?? null,
-          parseContextMetadataFilters: settings.parseContextMetadataFilters ?? null,
-        }));
+      : metadataFiltersOf(
+          {
+            metadataFilters: settings.metadataFilters ?? null,
+            parseContextMetadataFilters: settings.parseContextMetadataFilters ?? null,
+          },
+          options.metadataFilterServices,
+        ));
   return new PipesEngine({
     iterator,
     fetchers,

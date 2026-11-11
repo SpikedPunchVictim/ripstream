@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { LanguageDetector, LanguageResult } from "@spikedpunch/ripstream-core";
+import type { LanguageDetector, LanguageIdentifier, LanguageResult } from "@spikedpunch/ripstream-core";
 import { CHARSOUP_MAX_TEXT_LENGTH, SaltedNgramFeatureExtractor } from "./charsoup-features.ts";
 import { CharSoupModel } from "./charsoup-model.ts";
 
@@ -151,7 +151,7 @@ function toConfidence(score: number, entropy: number): CharSoupConfidence {
 }
 
 /** The CharSoup language detector: Tika's own model and pipeline, loaded on first use. */
-export class CharSoupLanguageDetector implements LanguageDetector {
+export class CharSoupLanguageDetector implements LanguageDetector, LanguageIdentifier {
   /** The ISO 639-3 codes the built-in model can answer with. */
   static get supportedLanguages(): ReadonlySet<string> {
     return builtIn().supported;

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { UPSTREAM_COMPONENTS } from "../src/generated/upstream-services.ts";
 import { parseMetadataFilterSection } from "../src/metadata-filter-config.ts";
 import {
+  CompositeMetadataFilter,
   Metadata,
   NoOpFilter,
   ParseContext,
@@ -10,8 +11,10 @@ import {
   RipstreamConfigError,
   createMetadataFilter,
   loadConfig,
+  metadataFiltersOf,
   validateConfig,
   type MetadataFilterEntry,
+  type MetadataFilterServices,
 } from "../src/index.ts";
 
 type Fields = Readonly<Record<string, string>>;
@@ -45,6 +48,7 @@ function issuesOf(section: unknown): string[] {
 
 const FILTER_NAMES = [
   "capture-group-metadata-filter",
+  "charsoup-metadata-filter",
   "clear-by-attachment-type-metadata-filter",
   "date-normalizing-metadata-filter",
   "exclude-field-metadata-filter",
@@ -300,10 +304,17 @@ const REFUSALS: ReadonlyArray<readonly [string, unknown, string]> = [
     'metadata-filters[0] "legacy-key-migration-filter": setting "table" names a classpath resource; ripstream ships Tika\'s table and has no classpath, so only Tika\'s own, "/org/apache/tika/metadata/metadata-migration-3x-4x.json", is accepted',
   ],
   ["a table that is not a string", [{ "legacy-key-migration-filter": { table: 1 } }], 'metadata-filters[0] "legacy-key-migration-filter": setting "table" must be a string'],
+  ...[0, -3, 1.5, "10", true, null, 2147483648].map(
+    (maxLength): [string, unknown, string] => [
+      `a maxLength of ${JSON.stringify(maxLength)}, which is not a whole number from 1 to 2147483647`,
+      [{ "charsoup-metadata-filter": { maxLength } }],
+      'metadata-filters[0] "charsoup-metadata-filter": setting "maxLength" must be a whole number from 1 to 2147483647',
+    ],
+  ),
   [
-    "the language filter that needs a language detector ripstream does not run in a parse",
-    ["charsoup-metadata-filter"],
-    'metadata-filters[0]: "charsoup-metadata-filter" is not supported: ripstream does not detect languages during a parse',
+    "a setting the language filter has not",
+    [{ "charsoup-metadata-filter": { threshold: 0.5 } }],
+    'metadata-filters[0] "charsoup-metadata-filter": setting "threshold" is not supported (charsoup-metadata-filter reads: maxLength)',
   ],
   ["Optimaize", ["optimaize-metadata-filter"], 'metadata-filters[0]: "optimaize-metadata-filter" is not supported: ripstream has no Optimaize language detector'],
   ["OpenNLP", [{ "open-nlp-metadata-filter": {} }], 'metadata-filters[0]: "open-nlp-metadata-filter" is not supported: ripstream has no OpenNLP language detector'],
@@ -425,7 +436,79 @@ test("every metadata filter the upstream registry lists is built or refused by n
 });
 
 test("a chain cannot be built from an entry that names a filter ripstream does not have", () => {
-  assert.throws(() => createMetadataFilter([{ name: "charsoup-metadata-filter", settings: {} }]), /"charsoup-metadata-filter" is not a metadata filter ripstream has/);
+  assert.throws(() => createMetadataFilter([{ name: "optimaize-metadata-filter", settings: {} }]), /"optimaize-metadata-filter" is not a metadata filter ripstream has/);
+});
+
+// The language filter needs a detector, which core does not have: whoever builds the chain hands one in.
+
+const LANGUAGE_SERVICES: MetadataFilterServices = {
+  languageIdentifier: {
+    identify: (text, options) => ({
+      language: `lang-of-${text}-${options?.maxLength ?? "default"}`,
+      confidence: "LOW",
+      rawScore: 0.5,
+    }),
+  },
+};
+
+test("a configuration that names the language filter is valid without a detector: validating never runs one", () => {
+  assert.deepEqual(issuesOf(["charsoup-metadata-filter"]), []);
+  assert.deepEqual(issuesOf([{ "charsoup-metadata-filter": {} }]), []);
+  assert.deepEqual(issuesOf([{ "charsoup-metadata-filter": { maxLength: 1 } }]), []);
+  assert.deepEqual(issuesOf([{ "charsoup-metadata-filter": { maxLength: 2147483647 } }]), []);
+  assert.deepEqual(entriesOf([{ "charsoup-metadata-filter": { maxLength: 500 } }]), [{ name: "charsoup-metadata-filter", settings: { maxLength: 500 } }]);
+});
+
+test("the language filter is built with the detector it is given, and the maxLength of its entry", () => {
+  const entries = entriesOf(["no-op-filter", { "charsoup-metadata-filter": { maxLength: 7 } }]);
+  assert.deepEqual(run(["no-op-filter"], { "tk:content": "x" }), [{ "tk:content": "x" }]);
+  const list = [metadataOf({ "tk:content": "abc" })];
+  createMetadataFilter(entries, LANGUAGE_SERVICES).filter(list, new ParseContext());
+  assert.deepEqual(fieldsOf(list[0]!), {
+    "tk:content": "abc",
+    "tk:detected-language": "lang-of-abc-7",
+    "tk:detected-language-confidence": "LOW",
+    "tk:detected-language-confidence-raw": "0.5",
+  });
+});
+
+test("an entry with no maxLength leaves the limit to the detector", () => {
+  const list = [metadataOf({ "tk:content": "abc" })];
+  createMetadataFilter(entriesOf(["charsoup-metadata-filter"]), LANGUAGE_SERVICES).filter(list, new ParseContext());
+  assert.equal(list[0]!.get("tk:detected-language"), "lang-of-abc-default");
+});
+
+test("a chain that names the language filter cannot be built without a detector, and says what to give", () => {
+  const entries = entriesOf(["charsoup-metadata-filter"]);
+  assert.throws(() => createMetadataFilter(entries), /"charsoup-metadata-filter" needs a language identifier: build the chain with services\.languageIdentifier/);
+  assert.throws(() => createMetadataFilter(entries, {}), /needs a language identifier/);
+});
+
+test("the configured chain and the parse-context chain are both built with the detector", () => {
+  const config = loadConfig({
+    "metadata-filters": ["charsoup-metadata-filter"],
+    "parse-context": { "metadata-filters": [{ "charsoup-metadata-filter": { maxLength: 3 } }] },
+  });
+  const filters = metadataFiltersOf(config, LANGUAGE_SERVICES);
+  const configured = [metadataOf({ "tk:content": "a" })];
+  const parseContext = [metadataOf({ "tk:content": "a" })];
+  filters.configured!.filter(configured, new ParseContext());
+  filters.parseContext!.filter(parseContext, new ParseContext());
+  assert.equal(configured[0]!.get("tk:detected-language"), "lang-of-a-default");
+  assert.equal(parseContext[0]!.get("tk:detected-language"), "lang-of-a-3");
+  assert.throws(() => metadataFiltersOf(config), /needs a language identifier/);
+});
+
+test("a configuration with no language filter needs no detector to build its chain", () => {
+  const filters = metadataFiltersOf(loadConfig({ "metadata-filters": ["no-op-filter"] }));
+  assert.ok(filters.configured instanceof CompositeMetadataFilter);
+});
+
+test("the language filter runs in its place in the chain, on what the filter before it left", () => {
+  const list = [metadataOf({ "tk:content": "kept" })];
+  createMetadataFilter(entriesOf([{ "exclude-field-metadata-filter": { exclude: ["tk:content"] } }, "charsoup-metadata-filter"]), LANGUAGE_SERVICES).filter(list, new ParseContext());
+  // The content was dropped first, so there is nothing to detect.
+  assert.deepEqual(fieldsOf(list[0]!), {});
 });
 
 test("a configuration built by hand holds frozen copies of its entries, and an empty parse-context list is none", () => {
@@ -476,7 +559,7 @@ test("every kind of refusal leaves its entry out of what is read", () => {
   const { entries, issues } = parseMetadataFilterSection("metadata-filters", [
     "no-such-filter",
     "tika-eval-metadata-filter",
-    "charsoup-metadata-filter",
+    "optimaize-metadata-filter",
     "no-op-filter",
     { "no-op-filter": { colour: "red" } },
     { "remove-by-mime-metadata-filter": { mimes: [2] } },

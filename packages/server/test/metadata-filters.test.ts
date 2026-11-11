@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { RipstreamConfig, loadConfig, metadataFiltersOf, type EmitMetadataFilters } from "@spikedpunch/ripstream-core";
+import { RipstreamConfig, loadConfig, metadataFiltersOf, type EmitMetadataFilters, type LanguageIdentifier } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { createRipstreamServer, type ServerMimeType } from "../src/index.ts";
 import { readZip, storedZip } from "./fixtures/zip.ts";
@@ -259,6 +259,106 @@ test("/pipes: the filters of the settings run on what the emitter writes", async
     const filtered = await written({ "metadata-filters": [{ "include-field-metadata-filter": { include: ["Content-Type", "tk:content"] } }] }, "filtered");
     assert.deepEqual(keys(filtered[0]), ["Content-Type", "tk:content"]);
     assert.ok(keys((await written({}, "plain"))[0]).length > 2, "without filters the list is what the parse made");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// The language filter of the settings: /pipes and /async build their chains from `pipes.settings`, with the detector the
+// server was given, and Tika's own CharSoup when it was given none.
+
+const ENGLISH = "Scientists have discovered a new species of butterfly in the tropical rainforests of South America.";
+
+const LANGUAGE_TUPLE = { id: "a.txt", fetcher: "fsf", fetchKey: "a.txt", emitter: "fse" };
+
+function languageSettings(directory: string, output: string, maxLength?: number) {
+  const input = join(directory, "in");
+  mkdirSync(input, { recursive: true });
+  writeFileSync(join(input, "a.txt"), ENGLISH);
+  return loadConfig({
+    fetchers: { fsf: { "file-system-fetcher": { basePath: input } } },
+    emitters: { fse: { "file-system-emitter": { basePath: output, fileExtension: "json", onExists: "REPLACE" } } },
+    pipes: { parseMode: "RMETA" },
+    "metadata-filters": [{ "charsoup-metadata-filter": maxLength === undefined ? {} : { maxLength } }],
+  }).pipes!;
+}
+
+const fakeIdentifier: LanguageIdentifier = { identify: () => ({ language: "xyz", confidence: "LOW", rawScore: 0.5 }) };
+
+async function waitFor(file: string): Promise<string> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    try {
+      return readFileSync(file, "utf8");
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  }
+  assert.fail(`${file} was never written`);
+}
+
+test("/pipes: the language filter of the settings runs with Tika's CharSoup unless the server is given another detector", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-server-language-"));
+  try {
+    for (const [name, services, language, confidence] of [
+      ["default", undefined, "eng", "HIGH"],
+      ["given", { languageIdentifier: fakeIdentifier }, "xyz", "LOW"],
+    ] as const) {
+      const output = join(directory, name);
+      const instance = createRipstreamServer({
+        ripstream: createRipstream(),
+        log: () => undefined,
+        authenticate: () => true,
+        pipes: { settings: languageSettings(directory, output) },
+        ...(services === undefined ? {} : { metadataFilterServices: services }),
+      });
+      const port = await instance.listen();
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/pipes`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(LANGUAGE_TUPLE) });
+        assert.equal(response.status, 200, await response.clone().text());
+        const [record] = JSON.parse(readFileSync(join(output, "a.txt.json"), "utf8")) as Array<Record<string, unknown>>;
+        assert.equal(record?.["tk:detected-language"], language, name);
+        assert.equal(record?.["tk:detected-language-confidence"], confidence, name);
+      } finally {
+        await instance.close();
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("/async: the language filter of the settings runs on what the background run emits", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-server-language-async-"));
+  try {
+    const output = join(directory, "out");
+    const instance = createRipstreamServer({
+      ripstream: createRipstream(),
+      log: () => undefined,
+      authenticate: () => true,
+      pipes: { settings: languageSettings(directory, output, 5_000) },
+    });
+    const port = await instance.listen();
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/async`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tuples: [LANGUAGE_TUPLE] }) });
+      assert.equal(response.status, 200, await response.clone().text());
+      const [record] = JSON.parse(await waitFor(join(output, "a.txt.json"))) as Array<Record<string, unknown>>;
+      assert.equal(record?.["tk:detected-language"], "eng");
+    } finally {
+      await instance.close();
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a server whose settings name the language filter and whose services have no identifier does not start", () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-server-language-refused-"));
+  try {
+    const settings = languageSettings(directory, join(directory, "out"));
+    assert.throws(
+      () => createRipstreamServer({ ripstream: createRipstream(), log: () => undefined, authenticate: () => true, pipes: { settings }, metadataFilterServices: {} }),
+      /"charsoup-metadata-filter" needs a language identifier/,
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

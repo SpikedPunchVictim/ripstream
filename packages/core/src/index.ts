@@ -41,6 +41,7 @@ export {
   metadataFiltersOf,
   type EmitMetadataFilters,
   type MetadataFilterEntry,
+  type MetadataFilterServices,
 } from "./metadata-filter-config.ts";
 export {
   LegacyKeyMigrationFilter,
@@ -219,10 +220,14 @@ export {
   IdentityTranslator,
   TranslationError,
   languageResult,
+  type LanguageConfidenceName,
   type LanguageDetector,
+  type LanguageIdentification,
+  type LanguageIdentifier,
   type LanguageResult,
   type Translator,
 } from "./language.ts";
+export { LanguageDetectionMetadataFilter, type LanguageDetectionOptions } from "./language-metadata-filter.ts";
 export {
   DisabledVlmProvider,
   VlmError,

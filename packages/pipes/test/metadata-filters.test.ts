@@ -10,7 +10,9 @@ import {
   loadConfig,
   rmetaObjects,
   type EmitMetadataFilters,
+  type LanguageIdentifier,
   type Metadata,
+  type MetadataFilterServices,
 } from "@spikedpunch/ripstream-core";
 import {
   FileSystemEmitter,
@@ -20,6 +22,7 @@ import {
   type EmittedDocument,
   type PipeMode,
   type PipesResult,
+  type PipesSettingsRunOptions,
 } from "../src/index.ts";
 import { fileSystem, storedZip } from "./helpers.ts";
 
@@ -236,7 +239,13 @@ test("a filter that fails fails the input it was running on, and the run goes on
 });
 
 /** What a run of the settings writes for `doc.txt`. */
-async function written(directory: string, parseMode: PipeMode, sections: Record<string, unknown>, extension = "json"): Promise<string> {
+async function written(
+  directory: string,
+  parseMode: PipeMode,
+  sections: Record<string, unknown>,
+  extension = "json",
+  options: PipesSettingsRunOptions = {},
+): Promise<string> {
   const input = join(directory, "in");
   const output = join(directory, "out");
   mkdirSync(input, { recursive: true });
@@ -248,7 +257,7 @@ async function written(directory: string, parseMode: PipeMode, sections: Record<
     pipes: { parseMode },
     ...sections,
   };
-  assert.equal(await createEngineFromSettings(loadConfig(config).pipes!).run(), 1);
+  assert.equal(await createEngineFromSettings(loadConfig(config).pipes!, options).run(), 1);
   return readFileSync(join(output, `doc.txt.${extension}`), "utf8");
 }
 
@@ -329,5 +338,57 @@ test("a run's own filters replace the configuration's", async () => {
     const written = JSON.parse(readFileSync(join(directory, "out", "doc.txt"), "utf8")) as unknown;
     assert.deepEqual(written, [{ "tk:embedded-depth": "0" }]);
     assert.deepEqual(readdirSync(join(directory, "out")), ["doc.txt"]);
+  });
+});
+
+// The language filter's detector is not core's: whoever builds the engine from settings gives it.
+
+function fakeLanguages(): MetadataFilterServices & { readonly texts: string[] } {
+  const texts: string[] = [];
+  const languageIdentifier: LanguageIdentifier = {
+    identify(text, options) {
+      texts.push(text);
+      return { language: `seen-${options?.maxLength ?? "all"}`, confidence: "MEDIUM", rawScore: 0.75 };
+    },
+  };
+  return { languageIdentifier, texts };
+}
+
+const LANGUAGE_FILTER = [{ "charsoup-metadata-filter": { maxLength: 50 } }];
+
+test("a configuration's language filter runs with the identifier the caller gave the engine", async () => {
+  await scratch(async (directory) => {
+    const services = fakeLanguages();
+    const list = JSON.parse(await written(directory, "RMETA", { "metadata-filters": LANGUAGE_FILTER }, "json", { metadataFilterServices: services })) as Array<
+      Record<string, string>
+    >;
+    assert.equal(list[0]?.["tk:detected-language"], "seen-50");
+    assert.equal(list[0]?.["tk:detected-language-confidence"], "MEDIUM");
+    assert.equal(list[0]?.["tk:detected-language-confidence-raw"], "0.75");
+    assert.match(services.texts.join(""), /alpha text/);
+  });
+});
+
+test("a parse-context language filter gets the identifier too", async () => {
+  await scratch(async (directory) => {
+    const list = JSON.parse(
+      await written(directory, "RMETA", { "parse-context": { "metadata-filters": LANGUAGE_FILTER } }, "json", { metadataFilterServices: fakeLanguages() }),
+    ) as Array<Record<string, string>>;
+    assert.equal(list[0]?.["tk:detected-language"], "seen-50");
+  });
+});
+
+test("an engine whose configuration names the language filter cannot be built without an identifier", async () => {
+  await scratch(async (directory) => {
+    await assert.rejects(written(directory, "RMETA", { "metadata-filters": LANGUAGE_FILTER }), /"charsoup-metadata-filter" needs a language identifier/);
+  });
+});
+
+test("a run's own filters need no identifier even when the configuration names the language filter", async () => {
+  await scratch(async (directory) => {
+    const text = await written(directory, "RMETA", { "metadata-filters": LANGUAGE_FILTER }, "json", {
+      metadataFilters: { configured: include("tk:embedded-depth") },
+    });
+    assert.deepEqual(JSON.parse(text), [{ "tk:embedded-depth": "0" }]);
   });
 });

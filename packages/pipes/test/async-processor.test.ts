@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { loadConfig, PIPES_RESULT_STATUSES } from "@spikedpunch/ripstream-core";
+import { loadConfig, PIPES_RESULT_STATUSES, type LanguageIdentifier } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import {
   AsyncProcessor,
@@ -289,3 +289,27 @@ test("Retry-After comes with 503 (5 s) and 429 (the wait held for, at least 1 s)
     assert.equal(httpResponseFor(status, 30).retryAfterSeconds, undefined, status);
   }
 });
+
+test("a processor whose settings name the language filter needs the identifier it is given, and runs it on what it emits", () =>
+  scratch(async (paths) => {
+    writeFileSync(join(paths.input, "a.txt"), "content of a");
+    const settings = loadConfig({
+      fetchers: { fsf: { "file-system-fetcher": { basePath: paths.input } } },
+      emitters: { fse: { "file-system-emitter": { basePath: paths.output, fileExtension: "json", onExists: "REPLACE" } } },
+      pipes: { parseMode: "RMETA" },
+      "metadata-filters": [{ "charsoup-metadata-filter": {} }],
+    }).pipes!;
+    assert.throws(() => new AsyncProcessor(settings), /"charsoup-metadata-filter" needs a language identifier/);
+
+    const languageIdentifier: LanguageIdentifier = { identify: () => ({ language: "xyz", confidence: "HIGH", rawScore: 1 }) };
+    const processor = new AsyncProcessor(settings, { metadataFilterServices: { languageIdentifier } });
+    try {
+      assert.equal(await processor.offer([tuple("a.txt")], 1_000), true);
+      await until(() => existsSync(join(paths.output, "a.txt.json")), "a.txt to be emitted");
+      const [document] = JSON.parse(readFileSync(join(paths.output, "a.txt.json"), "utf8")) as Array<Record<string, string>>;
+      assert.equal(document?.["tk:detected-language"], "xyz");
+      assert.equal(document?.["tk:detected-language-confidence-raw"], "1.0");
+    } finally {
+      await processor.close();
+    }
+  }));

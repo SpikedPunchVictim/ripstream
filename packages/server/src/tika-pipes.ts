@@ -1,4 +1,4 @@
-import { SYSTEM_COMPONENT_PREFIX, type PipesSettings } from "@spikedpunch/ripstream-core";
+import { SYSTEM_COMPONENT_PREFIX, metadataFiltersOf, type MetadataFilterServices, type PipesSettings } from "@spikedpunch/ripstream-core";
 import {
   AsyncProcessor,
   OfferLargerThanQueueSize,
@@ -29,6 +29,8 @@ export interface TikaPipesOptions {
   readonly ripstream: PipesRipstream;
   /** The extension of a media type, for UNPACK with `suffixStrategy: DETECTED`. See `PipesEngineOptions.extensionOf`. */
   readonly extensionOf?: ExtensionOf;
+  /** What the settings' metadata filters need that core has not (the language identifier). A filter whose service is missing is refused here, not on the first request. */
+  readonly metadataFilterServices?: MetadataFilterServices;
   /** How long an /async offer waits for room in the queue before it is answered 429. Default 5 000. */
   readonly asyncMaxWaitMs?: number;
 }
@@ -59,6 +61,7 @@ export class TikaPipes {
   readonly #settings: PipesSettings;
   readonly #ripstream: PipesRipstream;
   readonly #extensionOf: ExtensionOf | undefined;
+  readonly #metadataFilterServices: MetadataFilterServices | undefined;
   readonly #asyncMaxWaitMs: number;
   readonly #fetcherIds: ReadonlySet<string>;
   readonly #emitterIds: ReadonlySet<string>;
@@ -68,6 +71,12 @@ export class TikaPipes {
     this.#settings = options.settings;
     this.#ripstream = options.ripstream;
     this.#extensionOf = options.extensionOf;
+    this.#metadataFilterServices = options.metadataFilterServices;
+    // The chains are built for each request, and the failure of one that cannot be built would be a 500 on the first: build it now.
+    metadataFiltersOf(
+      { metadataFilters: options.settings.metadataFilters ?? null, parseContextMetadataFilters: options.settings.parseContextMetadataFilters ?? null },
+      options.metadataFilterServices,
+    );
     this.#asyncMaxWaitMs = options.asyncMaxWaitMs ?? DEFAULT_ASYNC_MAX_WAIT_MS;
     this.#fetcherIds = new Set(options.settings.fetchers.map((fetcher) => fetcher.id));
     this.#emitterIds = new Set(options.settings.emitters.map((emitter) => emitter.id));
@@ -91,6 +100,7 @@ export class TikaPipes {
         })(),
         ripstream: this.#ripstream,
         ...(this.#extensionOf === undefined ? {} : { extensionOf: this.#extensionOf }),
+        ...(this.#metadataFilterServices === undefined ? {} : { metadataFilterServices: this.#metadataFilterServices }),
         reporter: { report: (result) => void results.push(result) },
       },
     );
@@ -119,6 +129,7 @@ export class TikaPipes {
     const processor = (this.#processor ??= new AsyncProcessor(this.#settings, {
         ripstream: this.#ripstream,
         ...(this.#extensionOf === undefined ? {} : { extensionOf: this.#extensionOf }),
+        ...(this.#metadataFilterServices === undefined ? {} : { metadataFilterServices: this.#metadataFilterServices }),
       }));
     let offered: boolean;
     try {
