@@ -464,6 +464,7 @@ const UNPACK_REGISTRY: ServerMimeType[] = [
   { type: "application/zip", extensions: [".zip"] },
   { type: "text/plain", extensions: [".txt"] },
   { type: "text/html", extensions: [".html"] },
+  { type: "application/xml", extensions: [".xml"] },
 ];
 
 test("/pipes in UNPACK mode writes Tika's package at `<emitKey>-frictionless.zip`, as it does by default", () =>
@@ -489,9 +490,11 @@ test("/pipes in UNPACK mode follows the configuration's unpack-config: REGULAR p
     });
   }));
 
+// A text or HTML document's Content-Type carries a charset (`text/plain; charset=windows-1252`), which Tika's registry
+// does not know as a type: it names the file `.bin`. A type that carries no parameter, XML here, keeps its extension.
 test("a DETECTED suffix is the server's registry extension, so a /pipes package and PUT /unpack name their files alike", () =>
   scratch(async (paths) => {
-    const container = storedZip({ "one.txt": "first", "two.html": "<p>second</p>" });
+    const container = storedZip({ "one.txt": "first", "two.html": "<p>second</p>", "three.xml": "<a>third</a>" });
     writeFileSync(join(paths.input, "outer.zip"), container);
     const settings = settingsFor(paths, { parseMode: "UNPACK" }, { "parse-context": { "unpack-config": { suffixStrategy: "DETECTED" } } });
     await serving({ mimeTypes: UNPACK_REGISTRY, pipes: { settings } }, async ({ post, port }) => {
@@ -500,8 +503,8 @@ test("a DETECTED suffix is the server's registry extension, so a /pipes package 
       const response = await fetch(`http://127.0.0.1:${port}/unpack`, { method: "PUT", body: container });
       const fromServer = readZip(new Uint8Array(await response.arrayBuffer()));
       assert.deepEqual(fromPipes.map((entry) => entry.name), fromServer.map((entry) => entry.name));
-      assert.deepEqual(fromPipes.map((entry) => entry.name), ["datapackage.json", "rmeta.json", "unpacked/1.txt", "unpacked/2.html"]);
-      for (const name of ["unpacked/1.txt", "unpacked/2.html"]) {
+      assert.deepEqual(fromPipes.map((entry) => entry.name), ["datapackage.json", "rmeta.json", "unpacked/1.bin", "unpacked/2.bin", "unpacked/3.xml"]);
+      for (const name of ["unpacked/1.bin", "unpacked/2.bin", "unpacked/3.xml"]) {
         assert.deepEqual(fromPipes.find((entry) => entry.name === name)?.data, fromServer.find((entry) => entry.name === name)?.data, name);
       }
       // The manifests agree on everything but when they were made and what they are named after.
@@ -519,6 +522,6 @@ test("/async in UNPACK mode writes the same package in the background", () =>
       assert.equal(response.status, 200);
       const file = join(paths.output, "outer.zip-frictionless.zip");
       await until(() => existsSync(file), "the package");
-      assert.deepEqual(readZip(readFileSync(file)).map((entry) => entry.name), ["datapackage.json", "rmeta.json", "unpacked/1.txt"]);
+      assert.deepEqual(readZip(readFileSync(file)).map((entry) => entry.name), ["datapackage.json", "rmeta.json", "unpacked/1.bin"]);
     });
   }));

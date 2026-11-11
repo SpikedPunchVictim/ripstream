@@ -30,6 +30,15 @@ test("emits parse lifecycle events and metrics", async () => {
   assert.equal(snapshot.failed, 0);
 });
 
+test("counts a media type once however its charset parameter reads", () => {
+  const metrics = new MetricsCollector();
+  metrics.emit({ type: "end", mediaType: "text/plain; charset=windows-1252" });
+  metrics.emit({ type: "end", mediaType: "text/plain; charset=UTF-8" });
+  metrics.emit({ type: "end", mediaType: "text/plain" });
+  metrics.emit({ type: "end", mediaType: "application/pdf" });
+  assert.deepEqual(metrics.snapshot().byMediaType, { "text/plain": 3, "application/pdf": 1 });
+});
+
 test("records failures", async () => {
   const metrics = new MetricsCollector();
   const failing: Parser = {

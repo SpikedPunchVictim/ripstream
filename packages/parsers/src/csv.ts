@@ -1,4 +1,4 @@
-import { createDecoder } from "./charset.ts";
+import { createDecoder, withCharset } from "./charset.ts";
 import {
   LimitExceededError,
   MediaType,
@@ -99,6 +99,7 @@ export class CsvParser implements Parser {
     const prefix = await stream.peek(64 * 1024);
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
+    metadata.set("Content-Type", withCharset(metadata.get("Content-Type"), "text/csv", charset));
 
     const scanner = new CsvScanner({
       maxRowChars: this.#maxRowChars,

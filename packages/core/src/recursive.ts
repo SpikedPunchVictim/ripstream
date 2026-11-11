@@ -147,7 +147,7 @@ export class RecursiveParserWrapper implements Parser {
       }
       record.content = content.toString();
       const type = metadata.get("Content-Type");
-      if (type !== null) record.mediaType = MediaType.parse(type) ?? record.mediaType;
+      if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
     }
   }
 }
@@ -261,7 +261,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       // What was extracted is kept even when the document failed or was cut short, as Tika's per-document handler is.
       record.content = body.toString();
       const type = metadata.get("Content-Type");
-      if (type !== null) record.mediaType = MediaType.parse(type) ?? record.mediaType;
+      if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
       if (truncated) metadata.set(TIKA_KEYS.WRITE_LIMIT_REACHED, "true");
       markParseTiming(metadata, startedAt);
       // Tika's embedded path starts below the container: the container itself has none.

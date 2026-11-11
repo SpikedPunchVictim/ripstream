@@ -433,10 +433,11 @@ test("pipes in UNPACK mode names a package's files by the media type registry wh
     { pipes: { parseMode: "UNPACK" }, extra: { "parse-context": { "unpack-config": { suffixStrategy: "DETECTED" } } } },
   );
   try {
-    writeFileSync(join(paths.input, "outer.zip"), storedZip({ "one.txt": "first", "two.html": "<p>second</p>" }));
+    // Text and HTML carry a charset in Content-Type, which Tika's registry reads as no type: `.bin`. XML carries none.
+    writeFileSync(join(paths.input, "outer.zip"), storedZip({ "one.txt": "first", "two.html": "<p>second</p>", "three.xml": "<a>third</a>" }));
     const sink = io();
     assert.equal(await main(["pipes", "--config", paths.config], sink), 0, sink.err.join(""));
-    assert.deepEqual(entryNames(readFileSync(join(paths.output, "outer.zip-frictionless.zip"))), ["datapackage.json", "rmeta.json", "unpacked/1.txt", "unpacked/2.html"]);
+    assert.deepEqual(entryNames(readFileSync(join(paths.output, "outer.zip-frictionless.zip"))), ["datapackage.json", "rmeta.json", "unpacked/1.bin", "unpacked/2.bin", "unpacked/3.xml"]);
   } finally {
     cleanup(paths);
   }

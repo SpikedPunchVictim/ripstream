@@ -49,13 +49,13 @@ test("/tika/html and /tika/xml are the XHTML the parsers wrote, with the metadat
     assert.equal(html.headers.get("content-type"), "text/html; charset=utf-8");
     const page = await html.text();
     assert.match(page, /^<html>/);
-    assert.match(page, /<meta name="Content-Type" content="text\/plain">/);
+    assert.match(page, /<meta name="Content-Type" content="text\/plain; charset=windows-1252">/);
     assert.match(page, /<p>Hello server<\/p>/);
 
     const xml = await put(base, "/tika/xml");
     assert.equal(xml.headers.get("content-type"), "text/xml; charset=utf-8");
     // XML closes its empty elements; HTML leaves `meta` open.
-    assert.match(await xml.text(), /<meta name="Content-Type" content="text\/plain"><\/meta>/);
+    assert.match(await xml.text(), /<meta name="Content-Type" content="text\/plain; charset=windows-1252"><\/meta>/);
   });
 });
 
@@ -71,7 +71,7 @@ test("a trailing slash names the same route", async () => {
   await withServer(async (base) => {
     assert.equal(await (await put(base, "/tika/")).text(), "Hello server\n");
     assert.match(await (await put(base, "/tika/html/")).text(), /^<html>/);
-    assert.equal(((await (await put(base, "/meta/")).json()) as Record<string, string>)["Content-Type"], "text/plain");
+    assert.equal(((await (await put(base, "/meta/")).json()) as Record<string, string>)["Content-Type"], "text/plain; charset=windows-1252");
   });
 });
 
@@ -81,7 +81,7 @@ test("/tika/json is one object: the metadata, the content in tk:content and the 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "application/json");
     const object = (await response.json()) as Record<string, unknown>;
-    assert.equal(object["Content-Type"], "text/plain");
+    assert.equal(object["Content-Type"], "text/plain; charset=windows-1252");
     assert.equal(object["tk:content"], "Hello server\n");
     assert.equal(object["tk:content-handler-type"], "TEXT");
   });
@@ -100,7 +100,7 @@ test("/tika/json/{handler} writes the content in that shape; ignore has none, an
     const ignored = (await (await put(base, "/tika/json/ignore")).json()) as Record<string, unknown>;
     assert.equal(ignored["tk:content"], undefined);
     assert.equal(ignored["tk:content-handler-type"], "IGNORE");
-    assert.equal(ignored["Content-Type"], "text/plain");
+    assert.equal(ignored["Content-Type"], "text/plain; charset=windows-1252");
   });
 });
 
@@ -133,7 +133,7 @@ test("/rmeta/{handler}: each document's content in that shape, the handler named
     const [ignored] = await records("/rmeta/ignore");
     assert.equal(ignored?.["tk:content"], undefined);
     assert.equal(ignored?.["tk:content-handler-type"], undefined);
-    assert.equal(ignored?.["Content-Type"], "text/plain");
+    assert.equal(ignored?.["Content-Type"], "text/plain; charset=windows-1252");
 
     const [bare] = await records("/rmeta");
     assert.equal(bare?.["tk:content-handler-type"], "TEXT");
@@ -193,15 +193,15 @@ test("/meta/{field}: the one field, as JSON, CSV or plain text by Accept", async
   await withServer(async (base) => {
     const json = await put(base, "/meta/Content-Type");
     assert.equal(json.headers.get("content-type"), "application/json");
-    assert.deepEqual(await json.json(), { "Content-Type": "text/plain" });
+    assert.deepEqual(await json.json(), { "Content-Type": "text/plain; charset=windows-1252" });
 
     const csv = await put(base, "/meta/Content-Type", { headers: { accept: "text/csv" } });
     assert.equal(csv.headers.get("content-type"), "text/csv; charset=UTF-8");
-    assert.equal(await csv.text(), "Content-Type,text/plain\r\n");
+    assert.equal(await csv.text(), "Content-Type,text/plain; charset=windows-1252\r\n");
 
     const plain = await put(base, "/meta/Content-Type", { headers: { accept: "text/plain" } });
     assert.equal(plain.headers.get("content-type"), "text/plain; charset=utf-8");
-    assert.equal(await plain.text(), "text/plain");
+    assert.equal(await plain.text(), "text/plain; charset=windows-1252");
   });
 });
 
@@ -226,12 +226,12 @@ test("/meta/{field} of a document that could not be read is 422: a bare value ha
 test("/meta: JSON by default, CSV when asked for, 406 for what it cannot write", async () => {
   await withServer(async (base) => {
     const json = await put(base, "/meta", { headers: { accept: "application/json" } });
-    assert.equal(((await json.json()) as Record<string, string>)["Content-Type"], "text/plain");
+    assert.equal(((await json.json()) as Record<string, string>)["Content-Type"], "text/plain; charset=windows-1252");
 
     const csv = await put(base, "/meta", { headers: { accept: "text/csv" } });
     assert.equal(csv.headers.get("content-type"), "text/csv; charset=UTF-8");
     const rows = (await csv.text()).split("\r\n");
-    assert.ok(rows.includes("Content-Type,text/plain"));
+    assert.ok(rows.includes("Content-Type,text/plain; charset=windows-1252"));
     assert.equal(rows.at(-1), "", "every row ends in CRLF");
 
     // Tika answers application/rdf+xml with XMP; this server does not write XMP.
@@ -243,7 +243,7 @@ test("/meta is metadata only: it writes no content, so it has no output limit to
   await withServer(async (base) => {
     const response = await put(base, "/meta?maxOutputChars=1");
     assert.equal(response.status, 200);
-    assert.equal(((await response.json()) as Record<string, string>)["Content-Type"], "text/plain");
+    assert.equal(((await response.json()) as Record<string, string>)["Content-Type"], "text/plain; charset=windows-1252");
   }, { onOutputLimit: "throw" });
 });
 
@@ -256,7 +256,7 @@ test("the form routes take a POSTed multipart form, and nothing else", async () 
     };
     const meta = await fetch(`${base}/meta/form`, { method: "POST", body: form() });
     assert.equal(meta.status, 200);
-    assert.equal(((await meta.json()) as Record<string, string>)["Content-Type"], "text/plain");
+    assert.equal(((await meta.json()) as Record<string, string>)["Content-Type"], "text/plain; charset=windows-1252");
 
     const rmeta = await fetch(`${base}/rmeta/form`, { method: "POST", body: form() });
     assert.match(String((await rmeta.json() as Array<Record<string, unknown>>)[0]?.["tk:content"]), /Multipart text/);

@@ -20,4 +20,6 @@ test("parses Markdown text", async () => {
   assert.match(result.text, /bold and link/);
   assert.match(result.text, /item one/);
   assert.doesNotMatch(result.text, /\*\*|\[link\]/);
+  assert.equal(result.metadata.get("Content-Type"), "text/markdown; charset=windows-1252");
+  assert.equal(result.metadata.get("Content-Encoding"), "windows-1252");
 });

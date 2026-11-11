@@ -9,7 +9,9 @@ test("parses comma CSV", async () => {
   const result = await ripstream.parse(encoder.encode("name,age\nAda,36\nGrace,85\n"), {
     filename: "people.csv",
   });
-  assert.equal(result.metadata.get("Content-Type"), "text/csv");
+  // Tika also writes `; delimiter=comma` here (tikajs-68os.29 follow-up); the charset is what Mojibuster gives ASCII.
+  assert.equal(result.metadata.get("Content-Type"), "text/csv; charset=windows-1252");
+  assert.equal(result.metadata.get("Content-Encoding"), "windows-1252");
   assert.match(result.text, /Ada/);
   assert.match(result.text, /Grace/);
   assert.equal(result.text.match(/\t/g)?.length, 6);

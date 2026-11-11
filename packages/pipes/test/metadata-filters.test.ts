@@ -136,7 +136,7 @@ test("CONTENT_ONLY: a parse-context chain replaces the default, and can drop the
     writeFileSync(join(directory, "a.txt"), "alpha");
     const [dropped] = await emit(directory, "CONTENT_ONLY", { configured: include("tk:content"), parseContext: exclude("tk:content") });
     assert.equal(dropped?.text, "");
-    assert.equal(dropped?.metadata?.["Content-Type"], "text/plain", "the default no longer strips what the chain keeps");
+    assert.equal(dropped?.metadata?.["Content-Type"], "text/plain; charset=windows-1252", "the default no longer strips what the chain keeps");
   });
 });
 
@@ -204,8 +204,8 @@ test("UNPACK, FRICTIONLESS: rmeta.json is the filtered list", async () => {
     const rmeta = documents.find((document) => document.id === "pkg/rmeta.json");
     assert.deepEqual(JSON.parse(Buffer.from(rmeta?.bytes ?? new Uint8Array()).toString("utf8")), [
       { "Content-Type": "application/zip" },
-      { "Content-Type": "text/plain" },
-      { "Content-Type": "text/plain" },
+      { "Content-Type": "text/plain; charset=windows-1252" },
+      { "Content-Type": "text/plain; charset=windows-1252" },
     ]);
     assert.ok(documents.some((document) => document.id === "pkg/unpacked/1"), "the files are still in the package");
   });
@@ -268,7 +268,7 @@ test("a configuration's metadata-filters section reaches the engine: the file wr
     const list = JSON.parse(await written(directory, "RMETA", { "metadata-filters": FILTERS })) as Array<Record<string, string>>;
     assert.equal(list.length, 1);
     assert.deepEqual(Object.keys(list[0] ?? {}).sort(), ["Content-Type", "tk:content"]);
-    assert.equal(list[0]?.["Content-Type"], "text/plain");
+    assert.equal(list[0]?.["Content-Type"], "text/plain; charset=windows-1252");
     assert.match(list[0]?.["tk:content"] ?? "", /alpha text/);
   });
 });

@@ -13,10 +13,52 @@ test("parses HTML text, title, and strips script/style", async () => {
     ),
     { filename: "page.html" },
   );
-  assert.equal(result.metadata.get("Content-Type"), "text/html");
+  // Tika's JSoupParser: `text/html; charset=<detected>`, and Mojibuster detects pure ASCII as windows-1252.
+  assert.equal(result.metadata.get("Content-Type"), "text/html; charset=windows-1252");
+  assert.equal(result.metadata.get("Content-Encoding"), "windows-1252");
   assert.equal(result.metadata.get("dc:title"), "Title");
   assert.match(result.text, /Hello world/);
   assert.doesNotMatch(result.text, /bad\(\)|x\{\}/);
+});
+
+test("HTML that declares its charset reports that charset", async () => {
+  const result = await ripstream.parse(encoder.encode('<html><head><meta charset="ISO-8859-2"></head><body>x</body></html>'), {
+    filename: "page.html",
+  });
+  assert.equal(result.metadata.get("Content-Type"), "text/html; charset=ISO-8859-2");
+});
+
+/** The Content-Type the HTML parser leaves when it is handed `incoming` (none when null). */
+async function htmlTypeAfter(incoming: string | null): Promise<string | null> {
+  const metadata = new Metadata();
+  if (incoming !== null) metadata.set("Content-Type", incoming);
+  const stream = await RipstreamInputStream.from(encoder.encode("<p>x</p>"));
+  try {
+    await new HtmlDocumentParser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  } finally {
+    await stream.close();
+  }
+  return metadata.get("Content-Type");
+}
+
+test("HTML given no Content-Type is text/html with its charset, as Tika's JSoupParser makes it", async () => {
+  assert.equal(await htmlTypeAfter(null), "text/html; charset=windows-1252");
+});
+
+test("HTML drops the other parameters of an incoming text/html, as Tika builds the type from a constant", async () => {
+  assert.equal(await htmlTypeAfter("text/html; foo=bar"), "text/html; charset=windows-1252");
+});
+
+test("HTML leaves a Content-Type that is neither text/html nor XHTML as it was", async () => {
+  assert.equal(await htmlTypeAfter("application/x-other"), "application/x-other");
+});
+
+test("XHTML keeps its own type and gains the charset", async () => {
+  const result = await ripstream.parse(
+    encoder.encode('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head><body>x</body></html>'),
+    { filename: "page.xhtml" },
+  );
+  assert.equal(result.metadata.get("Content-Type"), "application/xhtml+xml; charset=windows-1252");
 });
 
 test("parses XML text and Dublin Core metadata", async () => {

@@ -1,3 +1,5 @@
+import { MediaType } from "./media-type.ts";
+
 export type ParseEventType = "start" | "end" | "error";
 
 export interface ParseEvent {
@@ -37,10 +39,9 @@ export class MetricsCollector implements EventSink {
       this.#completed++;
       this.#totalMillis += event.durationMs ?? 0;
       if (event.mediaType !== undefined) {
-        this.#byMediaType.set(
-          event.mediaType,
-          (this.#byMediaType.get(event.mediaType) ?? 0) + 1,
-        );
+        // A text parser writes `text/plain; charset=...`: count the type, not each charset it was read as.
+        const type = MediaType.parse(event.mediaType)?.getBaseType().toString() ?? event.mediaType;
+        this.#byMediaType.set(type, (this.#byMediaType.get(type) ?? 0) + 1);
       }
       return;
     }

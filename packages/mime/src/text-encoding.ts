@@ -39,6 +39,12 @@ export function detectEncoding(data: Uint8Array): EncodingDetection {
     return { charset: "ISO-8859-1", confidence: 0.1, bom: false, binary: true };
   }
 
+  // Tika 4.2.0's MojibusterEncodingDetector answers windows-1252 (the WHATWG default for unlabeled Western text) for a
+  // probe under two bytes and for one that is pure ASCII, before it weighs any other charset.
+  if (data.length < 2 || isPureAscii(data)) {
+    return { charset: "windows-1252", confidence: 0.2, bom: false, binary: false };
+  }
+
   if (isValidUtf8(data)) {
     return { charset: "UTF-8", confidence: 0.95, bom: false, binary: false };
   }
@@ -119,6 +125,13 @@ function isBinary(data: Uint8Array): boolean {
   }
   if (nul > 0) return true;
   return control / data.length > 0.02;
+}
+
+function isPureAscii(data: Uint8Array): boolean {
+  for (const byte of data) {
+    if (byte >= 0x80) return false;
+  }
+  return true;
 }
 
 function isValidUtf8(data: Uint8Array): boolean {

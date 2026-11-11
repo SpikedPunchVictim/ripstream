@@ -7,8 +7,11 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { createDecoder } from "./charset.ts";
+import { createDecoder, withCharset } from "./charset.ts";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
+
+/** The types Tika's SourceCodeParser takes; it records `Content-Encoding` and leaves `Content-Type` bare. */
+const SOURCE_CODE_TYPES: ReadonlySet<string> = new Set(["text/x-java-source", "text/x-c++src"]);
 
 /**
  * Port of TextAndCSVParser's plain-text path. Decoding uses Ripstream's encoding
@@ -61,6 +64,11 @@ export class TextParser implements Parser {
 
     const { decoder, charset } = createDecoder(encoding.charset);
     metadata.set("Content-Encoding", charset);
+    // Tika's TXTParser writes `<incoming type>; charset=<detected>`; its SourceCodeParser leaves the type bare.
+    const incoming = metadata.get("Content-Type");
+    if (!SOURCE_CODE_TYPES.has(MediaType.parse(incoming)?.getBaseType().toString() ?? "")) {
+      metadata.set("Content-Type", withCharset(incoming, "text/plain", charset));
+    }
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();

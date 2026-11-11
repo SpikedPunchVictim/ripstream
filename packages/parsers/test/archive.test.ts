@@ -107,6 +107,12 @@ test("records recursive embedded resources", async () => {
   assert.match(records[1]?.content ?? "", /hello recursive/);
 });
 
+test("an embedded text document's record keeps the bare type while its metadata carries the charset", async () => {
+  const records = await ripstream.parseRecursive(zip([{ name: "a.txt", data: "hello" }]), { filename: "archive.zip" });
+  assert.equal(records[1]?.mediaType.toString(), "text/plain");
+  assert.equal(records[1]?.metadata.get("Content-Type"), "text/plain; charset=windows-1252");
+});
+
 test("extracts bzip2 and brotli", async () => {
   const bzip2 = new Uint8Array(
     Buffer.from(
