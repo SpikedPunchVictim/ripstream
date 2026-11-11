@@ -1,0 +1,42 @@
+{
+  "description": "Mach-O file type 9: ExecutableParser claims application/x-mach-o-dylib-stub and sets Content-Type from the header (ExecutableParser.parseMachO; tikajs-68os.17)",
+  "tags": [
+    "executable",
+    "macho"
+  ],
+  "input": {
+    "base64": "z/rt/gcAAAEDAAAACQAAAAAAAAAAAAAAAAAAAAAAAAA="
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/x-mach-o-dylib-stub"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:endian",
+      "value": "Little"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:machineType",
+      "value": "x86-64"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:architectureBits",
+      "value": "64"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "ExecutableParser"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    }
+  ]
+}

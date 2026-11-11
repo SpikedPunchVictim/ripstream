@@ -29,6 +29,7 @@ import { MboxParser } from "./mbox.ts";
 import { JavaClassParser } from "./java-class.ts";
 import { RdfParser } from "./rdf.ts";
 import { ExecutableParser } from "./executable.ts";
+import { UniversalExecutableParser } from "./universal-executable.ts";
 import { DbfParser } from "./dbf.ts";
 import { DicomParser } from "./dicom.ts";
 import { DxfParser } from "./dxf.ts";
@@ -67,6 +68,7 @@ export { MboxParser } from "./mbox.ts";
 export { JavaClassParser } from "./java-class.ts";
 export { RdfParser } from "./rdf.ts";
 export { ExecutableParser } from "./executable.ts";
+export { UniversalExecutableParser } from "./universal-executable.ts";
 export { DbfParser } from "./dbf.ts";
 export { DicomParser } from "./dicom.ts";
 export { DxfParser } from "./dxf.ts";
@@ -178,6 +180,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new JavaClassParser(),
       new RdfParser(),
       new ExecutableParser(),
+      new UniversalExecutableParser(),
       new DbfParser(),
       new DicomParser(),
       new DxfParser(),

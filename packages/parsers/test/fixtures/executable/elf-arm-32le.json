@@ -1,0 +1,11 @@
+{
+  "description": "Tika's testLinux-arm-32le (not asserted by Tika's tests): header e_ident 32-bit little-endian, e_type 2, e_machine 0x28 read through ExecutableParser.parseELF (tikajs-68os.17)",
+  "tags": ["executable", "elf"],
+  "input": { "file": "testLinux-arm-32le" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-executable" },
+    { "type": "equals", "field": "metadata.machine:machineType", "value": "ARM" },
+    { "type": "equals", "field": "metadata.machine:endian", "value": "Little" },
+    { "type": "equals", "field": "metadata.machine:architectureBits", "value": "32" }
+  ]
+}

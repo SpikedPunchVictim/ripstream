@@ -1,0 +1,11 @@
+{
+  "description": "Tika's testMacOS-x86_64-arm64: the container keeps the detected type, has no machine keys of its own, and no text (UniversalExecutableParser writes only the embedded documents; tikajs-68os.17)",
+  "tags": ["executable", "macho", "universal"],
+  "input": { "file": "testMacOS-x86_64-arm64" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-mach-o-universal" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "UniversalExecutableParser" },
+    { "type": "absent", "field": "metadata.machine:machineType" },
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "description": "Tika's testMacOS-x86_64: ExecutableParserTest.testMachOParser_x86_64 asserts these values (tikajs-68os.17)",
+  "tags": ["executable", "macho"],
+  "input": { "file": "testMacOS-x86_64" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-mach-o-executable" },
+    { "type": "equals", "field": "metadata.machine:endian", "value": "Little" },
+    { "type": "equals", "field": "metadata.machine:machineType", "value": "x86-64" },
+    { "type": "equals", "field": "metadata.machine:architectureBits", "value": "64" },
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

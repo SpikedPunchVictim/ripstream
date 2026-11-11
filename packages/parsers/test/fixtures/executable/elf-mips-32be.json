@@ -1,0 +1,11 @@
+{
+  "description": "Tika's testLinux-mips-32be (not asserted by Tika's tests): big-endian ELF, so e_type and e_machine are read big-endian (ExecutableParser.parseELF; tikajs-68os.17)",
+  "tags": ["executable", "elf"],
+  "input": { "file": "testLinux-mips-32be" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-executable" },
+    { "type": "equals", "field": "metadata.machine:machineType", "value": "MIPS" },
+    { "type": "equals", "field": "metadata.machine:endian", "value": "Big" },
+    { "type": "equals", "field": "metadata.machine:architectureBits", "value": "32" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "description": "Tika's testWindows-x86-32.exe: ExecutableParserTest.testWin32Parser asserts these values; no body text yet (tikajs-68os.17)",
+  "tags": ["executable", "pe"],
+  "input": { "file": "testWindows-x86-32.exe" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-msdownload" },
+    { "type": "equals", "field": "metadata.dcterms:created", "value": "2012-05-13T13:40:11Z" },
+    { "type": "equals", "field": "metadata.machine:machineType", "value": "x86-32" },
+    { "type": "equals", "field": "metadata.machine:endian", "value": "Little" },
+    { "type": "equals", "field": "metadata.machine:architectureBits", "value": "32" },
+    { "type": "equals", "field": "metadata.machine:platform", "value": "Windows" },
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

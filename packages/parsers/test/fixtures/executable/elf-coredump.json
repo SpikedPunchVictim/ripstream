@@ -1,0 +1,46 @@
+{
+  "description": "ELF e_type 4: ExecutableParser claims application/x-coredump and sets Content-Type from the header (ExecutableParser.parseELF; tikajs-68os.17)",
+  "tags": [
+    "executable",
+    "elf"
+  ],
+  "input": {
+    "base64": "f0VMRgIBAQAAAAAAAAAAAAQAPgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/x-coredump"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:endian",
+      "value": "Little"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:machineType",
+      "value": "x86-64"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.machine:architectureBits",
+      "value": "64"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "ExecutableParser"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.machine:platform"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    }
+  ]
+}
