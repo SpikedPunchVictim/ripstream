@@ -62,6 +62,7 @@ const exists = (path: string): Promise<boolean> =>
 
 /** The metadata list of a document: an RMETA document's records, or the one document CONCATENATE and NO_PARSE give. */
 export function documentObjects(document: EmittedDocument): readonly Record<string, RmetaValue>[] {
+  if (document.objects !== undefined) return document.objects;
   if (document.records !== undefined) return rmetaObjects(document.records);
   if (document.metadata !== undefined) {
     const content = document.text ?? "";

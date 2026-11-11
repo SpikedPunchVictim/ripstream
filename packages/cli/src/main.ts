@@ -10,7 +10,9 @@ import {
   RipstreamConfigError,
   RipstreamError,
   UnsupportedFormatError,
+  emitMetadataFilter,
   loadConfig,
+  metadataFiltersOf,
   metadataJson,
   rmetaObjects,
   serializeRmeta,
@@ -206,10 +208,14 @@ export async function main(
         bytes,
         filename === undefined ? {} : { filename },
       );
+      // Tika's CLI runs the configured `metadata-filters` over the list it writes as recursive JSON, and nowhere else.
+      const metadataFilter =
+        settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config), parseContext: null }, false);
+      const written = metadataFilter === null ? {} : { metadataFilter };
       if (options.output === "jsonl") {
-        io.stdout(rmetaObjects(records).map((object) => `${JSON.stringify(object)}\n`).join(""));
+        io.stdout(rmetaObjects(records, written).map((object) => `${JSON.stringify(object)}\n`).join(""));
       } else {
-        io.stdout(`${serializeRmeta(records)}\n`);
+        io.stdout(`${serializeRmeta(records, written)}\n`);
       }
       return 0;
     }
@@ -289,6 +295,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         ...(settings.config?.throwOnWriteLimit === true ? { onOutputLimit: "throw" as const } : {}),
         endpoints: server.endpoints ?? DEFAULT_SERVER_ENDPOINTS,
         mimeTypes: serverMimeTypes(settings.config?.customMimeTypes ?? null),
+        ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config) }),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
         ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
         ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),
@@ -368,7 +375,9 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
         return EXIT_USAGE;
       }
       // Emitting and recording are two steps, so a run that is killed between them emits that input again on resume.
-      const strict = pipesSettings.emitters.filter((emitter) => emitter.onExists === "EXCEPTION").map((emitter) => emitter.id);
+      const strict = pipesSettings.emitters
+        .filter((emitter) => emitter.type === "file-system-emitter" && emitter.onExists === "EXCEPTION")
+        .map((emitter) => emitter.id);
       if (strict.length > 0) {
         io.stderr(
           `ripstream: WARN: emitter ${strict.join(", ")} has onExists EXCEPTION (Tika's default): an input that was emitted just before a run was ` +
@@ -699,7 +708,7 @@ function usage(): string {
     "  -m, --metadata       Metadata only",
     "  -r, --recursive      Recursive metadata JSON",
     "  -o, --output <mode>  text, json or jsonl",
-    "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context, custom-mimetypes, server)",
+    "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context, metadata-filters, custom-mimetypes, server)",
     "  -p, --password <pw>  Document password (not available with --isolation; serve: -p is the port)",
     "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
     "                          (serve: strict unless set; other commands: off unless set)",

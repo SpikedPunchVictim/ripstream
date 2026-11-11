@@ -3,10 +3,15 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   CONTENT_LENGTH,
   digestBytes,
+  emitMetadataFilter,
+  filterDocument,
+  metadataFiltersOf,
   metadataJson,
   type DigestSettings,
+  type EmitMetadataFilters,
+  type FilteredDocument,
   type RmetaValue,
-  serializeRmeta,
+  rmetaObjects,
   TEXT_HANDLER_TYPE,
   TIKA_KEYS,
   type ParseLimits,
@@ -112,6 +117,12 @@ export interface EmittedDocument {
   readonly bytes?: Uint8Array;
   readonly metadata?: Readonly<Record<string, RmetaValue>>;
   readonly records?: readonly ParseRecord[];
+  /**
+   * RMETA and UNPACK: the metadata list as it is written, one object for each of `records` that the run's metadata filters
+   * left in the list, with the filters applied. An emitter that writes the list writes this: `records` are the parse, before
+   * the filters, and carry the embedded documents' bytes.
+   */
+  readonly objects?: readonly Record<string, RmetaValue>[];
 }
 
 export interface Emitter {
@@ -192,6 +203,13 @@ export interface PipesEngineOptions {
    */
   readonly digest?: DigestSettings;
   /**
+   * The metadata filters of the run (Tika's `metadata-filters`; `pipes` settings carry them from a configuration). Every
+   * mode runs them on what it emits, after the parse and before the emitter, as Tika's `EmitHandler` does: the parse-context
+   * chain if there is one, else for CONTENT_ONLY the content and the container exception only, else the configured chain.
+   * Default: none, nothing is filtered.
+   */
+  readonly metadataFilters?: EmitMetadataFilters;
+  /**
    * UNPACK with `suffixStrategy: "DETECTED"`: the extension, dot included, of a media type (a server's registry of types
    * knows them). Default: none known, `.bin` for every type.
    */
@@ -268,6 +286,12 @@ export class PipesEngine {
     const unpack = resolveUnpack(this.#options.unpack);
     const extensionOf = this.#options.extensionOf ?? (() => ".bin");
     const digest = this.#options.digest;
+    const metadataFilters = this.#options.metadataFilters;
+    // The document as the run's filters leave it: the content is the `tk:content` of its metadata for them.
+    const filtered = (metadata: Record<string, RmetaValue>, text: string, contentOnly: boolean): FilteredDocument => {
+      const filter = emitMetadataFilter(metadataFilters, contentOnly);
+      return filter === null ? { metadata, text } : filterDocument(filter, { metadata, text });
+    };
     // A ripstream the caller passes digests as it was built; the one made here digests as the run's settings say, in every mode.
     const ripstream = this.#options.ripstream ?? createRipstream(digest === undefined ? {} : { digest });
     const limits = this.#options.limits;
@@ -434,7 +458,7 @@ export class PipesEngine {
           const detected = String(await ripstream.detect(bytes, { filename: tuple.id, signal }));
           metadata["Content-Type"] = detected;
           metadata[TIKA_KEYS.CONTENT_TYPE_PARSER_OVERRIDE] = detected;
-          return emitting([{ id: emitKey, mode, metadata }]);
+          return emitting([{ id: emitKey, mode, metadata: filtered(metadata, "", false).metadata }]);
         }
         const parseOptions = {
           filename: tuple.id,
@@ -450,10 +474,14 @@ export class PipesEngine {
             return settled("PARSE_EXCEPTION_NO_EMIT", describeError(exception));
           }
           if (mode === "UNPACK" && records.length === 0) return emitting([], exception);
-          const rmeta = serializeRmeta(records);
-          if (mode === "RMETA") return emitting([{ id: emitKey, mode, text: rmeta, records }], exception);
+          // What the embedded documents' bytes are paired with is the records, as the parse made them: a filter may take an
+          // `tk:embedded-id` out of the list, or a document, and the bytes still go with the document they came from.
+          const filter = emitMetadataFilter(metadataFilters, false);
+          const objects = rmetaObjects(records, filter === null ? {} : { metadataFilter: filter });
+          const rmeta = JSON.stringify(objects);
+          if (mode === "RMETA") return emitting([{ id: emitKey, mode, text: rmeta, records, objects }], exception);
           return emitting(
-            await unpackDocuments({ emitKey, fetchKey: tuple.fetchKey, bytes, records, rmeta, unpack, extensionOf, now: new Date() }),
+            await unpackDocuments({ emitKey, fetchKey: tuple.fetchKey, bytes, records, objects, rmeta, unpack, extensionOf, now: new Date() }),
             exception,
           );
         }
@@ -465,7 +493,8 @@ export class PipesEngine {
         if (result.exception !== undefined) {
           metadata[TIKA_KEYS.CONTAINER_EXCEPTION] ??= `${result.exception.name}: ${result.exception.message}`;
         }
-        return emitting([{ id: emitKey, mode, text: result.text, metadata }], result.exception);
+        const document = filtered(metadata, result.text, mode === "CONTENT_ONLY");
+        return emitting([{ id: emitKey, mode, text: document.text, metadata: document.metadata }], result.exception);
       } catch (error) {
         // The run is already ending (its first failure aborted this parse): that failure is what is thrown.
         if (signal.aborted) throw error;
@@ -720,6 +749,8 @@ export interface PipesRunOptions {
   readonly unpack?: UnpackSettings;
   /** UNPACK with `suffixStrategy: "DETECTED"`: the extension of a media type. See `PipesEngineOptions.extensionOf`. */
   readonly extensionOf?: ExtensionOf;
+  /** The metadata filters of the run. See `PipesEngineOptions.metadataFilters`; they replace those of the settings. */
+  readonly metadataFilters?: EmitMetadataFilters;
 }
 
 /** The id the shorthand config gives its one fetcher. */
@@ -758,6 +789,7 @@ export function createEngine(config: PipesConfig, options: PipesRunOptions = {})
     // The shorthand's sink is flat, and a zip in it would be a `.bin` named after the key: it keeps the REGULAR layout.
     unpack: options.unpack ?? { outputFormat: "REGULAR" },
     ...(options.extensionOf === undefined ? {} : { extensionOf: options.extensionOf }),
+    ...(options.metadataFilters === undefined ? {} : { metadataFilters: options.metadataFilters }),
   });
 }
 
@@ -861,6 +893,15 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
   );
   if (options.reporter !== undefined) reporters.push(options.reporter);
   const onParseException = options.onParseException ?? settings.onParseException;
+  // The run's own filters replace the configuration's; the configuration's are built here, once, for every input.
+  const metadataFilters =
+    options.metadataFilters ??
+    (settings.metadataFilters === undefined && settings.parseContextMetadataFilters === undefined
+      ? undefined
+      : metadataFiltersOf({
+          metadataFilters: settings.metadataFilters ?? null,
+          parseContextMetadataFilters: settings.parseContextMetadataFilters ?? null,
+        }));
   return new PipesEngine({
     iterator,
     fetchers,
@@ -875,6 +916,7 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
     ...(options.checkpoint === undefined ? {} : { checkpoint: options.checkpoint }),
     ...(options.unpack === undefined && settings.unpack === undefined ? {} : { unpack: options.unpack ?? settings.unpack }),
     ...(settings.digest === undefined ? {} : { digest: settings.digest }),
+    ...(metadataFilters === undefined ? {} : { metadataFilters }),
     ...(options.extensionOf === undefined ? {} : { extensionOf: options.extensionOf }),
   });
 }

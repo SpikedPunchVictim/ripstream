@@ -1,4 +1,4 @@
-import { TIKA_KEYS, type ParseRecord, type UnpackSettings } from "@spikedpunch/ripstream-core";
+import { TIKA_KEYS, type ParseRecord, type RmetaValue, type UnpackSettings } from "@spikedpunch/ripstream-core";
 import { buildUnpackPackage, zipChunks } from "./frictionless.ts";
 import type { EmittedDocument } from "./index.ts";
 
@@ -98,6 +98,8 @@ export interface UnpackInput {
   readonly bytes: Uint8Array;
   /** What the parse made of it, the container first, the embedded documents carrying the bytes that were kept. */
   readonly records: readonly ParseRecord[];
+  /** The metadata list as the RMETA emit writes it, as objects: what a REGULAR emit's document carries. */
+  readonly objects?: readonly Record<string, RmetaValue>[];
   /** The metadata list as the RMETA emit writes it. */
   readonly rmeta: string;
   readonly unpack: ResolvedUnpack;
@@ -116,7 +118,9 @@ export async function unpackDocuments(input: UnpackInput): Promise<EmittedDocume
   const { emitKey, records, unpack } = input;
   const container = records[0];
   if (unpack.outputFormat === "REGULAR") {
-    const documents: EmittedDocument[] = [{ id: emitKey, mode: "UNPACK", text: input.rmeta, records }];
+    const documents: EmittedDocument[] = [
+      { id: emitKey, mode: "UNPACK", text: input.rmeta, records, ...(input.objects === undefined ? {} : { objects: input.objects }) },
+    ];
     // The container is embedded document 0 when asked for; the others are in record order, as they were parsed.
     if (unpack.includeOriginal && container !== undefined) {
       documents.push({ id: embeddedKey(emitKey, 0, container.metadata, unpack, input.extensionOf), mode: "UNPACK", bytes: input.bytes });

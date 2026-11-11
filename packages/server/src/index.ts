@@ -6,6 +6,9 @@ import {
   SERVER_ENDPOINTS,
   TIKA_KEYS,
   assertValidLimits,
+  emitMetadataFilter,
+  filterDocument,
+  filterRmetaObjects,
   handlerTypeName,
   httpStatusForError,
   metadataJson,
@@ -13,7 +16,9 @@ import {
   serializeRmeta,
   IsolationError,
   RipstreamError,
+  type EmitMetadataFilters,
   type HandlerType,
+  type RmetaValue,
   type ServerEndpoint,
 } from "@spikedpunch/ripstream-core";
 import { FrancLanguageDetector, toIso6391 } from "@spikedpunch/ripstream-language";
@@ -161,6 +166,13 @@ export interface RipstreamServerOptions {
    * name paths relative to these roots; absolute paths, `..` and symlinks are rejected.
    */
   readonly pipes?: RipstreamServerPipesOptions;
+  /**
+   * Tika's `metadata-filters` (`metadataFiltersOf(loadConfig(...).config)`), run on what the endpoints answer, as Tika's
+   * emit runs them: /rmeta, /unpack's `rmeta.json`, /meta (and `/meta/{field}`), /tika/json and the `handler=meta|json`
+   * answers use the configured chain; the text endpoints run the parse-context chain alone. A request names no filter of
+   * its own. Default: none, nothing is filtered. /pipes and /async take the filters of `pipes.settings`.
+   */
+  readonly metadataFilters?: EmitMetadataFilters;
   /**
    * The media types `/mime-types` describes. The server has no registry of its own, so it answers 404 until it is
    * given one (`ripstream serve` passes the standard bundle's).
@@ -524,6 +536,17 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           extensionOf: (contentType) => extensionFor(contentType, options.mimeTypes),
           ...(options.pipes.asyncMaxWaitMs === undefined ? {} : { asyncMaxWaitMs: options.pipes.asyncMaxWaitMs }),
         });
+  // Tika's emit: the configured chain, but the text endpoints (CONTENT_ONLY) answer for the parse-context chain alone: their
+  // own default keeps the content, which is all they write.
+  const metadataFilter = emitMetadataFilter(options.metadataFilters, false) ?? undefined;
+  const textFilter =
+    options.metadataFilters?.parseContext == null
+      ? undefined
+      : (emitMetadataFilter({ parseContext: options.metadataFilters.parseContext }, true) ?? undefined);
+  const rmetaOptions = metadataFilter === undefined ? {} : { metadataFilter };
+  // One document of an answer, with the filter run over it as the list's only member: gone from the list, it is `{}`.
+  const filterObject = (object: Record<string, RmetaValue>): Record<string, RmetaValue> =>
+    metadataFilter === undefined ? object : (filterRmetaObjects([object], metadataFilter)[0] ?? {});
   const enabled: ReadonlySet<string> = new Set(options.endpoints ?? SERVER_ENDPOINTS);
   const sortedMimeTypes = sortMimeTypes(options.mimeTypes ?? []);
   const maxBodyBytes = options.maxBodyBytes ?? 100 * 1024 * 1024;
@@ -959,7 +982,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         ...(unpacking ? { unpackBytes: maxUnpackBytes } : {}),
       });
       if (!unpacking) {
-        sendJson(response, 200, JSON.parse(serializeRmeta(records)));
+        sendJson(response, 200, JSON.parse(serializeRmeta(records, rmetaOptions)));
         return;
       }
       // A document that could not be read at all has nothing to unpack: Tika answers 422 with the failure as the body.
@@ -973,7 +996,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         records,
         container: target.all ? body : null,
         filename: name,
-        rmeta: Buffer.from(`${serializeRmeta(records)}\n`, "utf8"),
+        rmeta: Buffer.from(`${serializeRmeta(records, rmetaOptions)}\n`, "utf8"),
         nameOf: (id, record) => `${id}${extensionFor(record.metadata.get("Content-Type"), options.mimeTypes)}`,
         now: new Date(),
       });
@@ -990,7 +1013,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       target.fixedType ?? (target.json ? (pathType ?? formatOf(preset?.handler?.toLowerCase(), "text")) : formatOf(handlerOverride, "text"));
     const result = await ripstream.parse(body, { ...parseOptions, ...failures, ...output, ...withLimits, handlerType: type });
     if (handlerOverride === "meta" && !target.json && target.fixedType === null) {
-      sendJson(response, 200, metadataJson(result.metadata));
+      sendJson(response, 200, filterObject(metadataJson(result.metadata)));
       return;
     }
     if (target.json) {
@@ -998,21 +1021,24 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       const document = metadataJson(result.metadata);
       if (result.text.trim() !== "") document[TIKA_KEYS.CONTENT] = result.text;
       document[TIKA_KEYS.CONTENT_HANDLER_TYPE] = handlerTypeName(type);
-      sendJson(response, 200, document);
+      sendJson(response, 200, filterObject(document));
     } else if (target.fixedType === null && handlerOverride === "json") {
-      sendJson(response, 200, {
-        text: result.text,
-        metadata: metadataJson(result.metadata),
-      });
-    } else if (result.exception !== undefined) {
-      send(response, 422, contentTypeOf(type), result.text, {
-        "X-Ripstream-Error": headerText(`${result.exception.name}: ${result.exception.message}`),
-      });
-    } else if (result.metadata.get(TIKA_KEYS.WRITE_LIMIT_REACHED) === "true") {
-      // A text answer has no metadata to carry the flag: a client that needs to know the text was cut reads this header.
-      send(response, 200, contentTypeOf(type), result.text, { "X-Ripstream-Write-Limit-Reached": "true" });
+      const document = { text: result.text, metadata: metadataJson(result.metadata) };
+      sendJson(response, 200, metadataFilter === undefined ? document : filterDocument(metadataFilter, document));
     } else {
-      send(response, 200, contentTypeOf(type), result.text);
+      // The content is what a text answer is, so a parse-context filter that drops `tk:content` drops it. A blank text has
+      // no `tk:content` to keep or to drop.
+      const text = textFilter === undefined || result.text.trim() === "" ? result.text : filterDocument(textFilter, { metadata: metadataJson(result.metadata), text: result.text }).text;
+      if (result.exception !== undefined) {
+        send(response, 422, contentTypeOf(type), text, {
+          "X-Ripstream-Error": headerText(`${result.exception.name}: ${result.exception.message}`),
+        });
+      } else if (result.metadata.get(TIKA_KEYS.WRITE_LIMIT_REACHED) === "true") {
+        // A text answer has no metadata to carry the flag: a client that needs to know the text was cut reads this header.
+        send(response, 200, contentTypeOf(type), text, { "X-Ripstream-Write-Limit-Reached": "true" });
+      } else {
+        send(response, 200, contentTypeOf(type), text);
+      }
     }
   }
 
@@ -1067,6 +1093,13 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     kind: string,
   ): void {
     let metadata = result.metadata;
+    if (metadataFilter !== undefined) {
+      // What the filters leave of it: a document they take out of the list is no metadata at all.
+      metadata = new Metadata();
+      for (const [name, value] of Object.entries(filterObject(metadataJson(result.metadata)))) {
+        for (const each of Array.isArray(value) ? value : [value]) metadata.add(name, String(each));
+      }
+    }
     if (field !== null) {
       // A bare field value has no envelope to carry the failure of the container, so it is an error, as Tika's is.
       if (result.exception !== undefined) {
