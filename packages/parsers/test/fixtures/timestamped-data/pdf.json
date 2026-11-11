@@ -1,0 +1,29 @@
+{
+  "description": "Tika's TSDParserTest.testToXML on Test4.pdf.tsd: the output of the envelope holds the text of the stamped PDF, 'Empty doc' (tikajs-68os.21). Read from the Tika source, not run against a Tika",
+  "tags": [
+    "tsd",
+    "timestamped-data",
+    "cms"
+  ],
+  "input": {
+    "file": "Test4.pdf.tsd",
+    "filename": "Test4.pdf.tsd"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/timestamped-data"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "TSDParser"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Empty doc"
+    }
+  ]
+}

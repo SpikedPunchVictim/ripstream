@@ -1,0 +1,11 @@
+{
+  "description": "Tika's PListParserTest.testWebArchive on testWEBARCHIVE.webarchive: reported as application/x-bplist-webarchive and parsed by PListParser. Tika also reads the HTML inside the NSData as embedded documents (12 in all) and asserts on 'December 2008: Apache Tika Release' there; this port writes NSData as base64 and extracts no embedded documents, so that assertion is not made (tikajs-68os.21). The limit is raised because the base64 of the data is just over the default 100000 characters",
+  "tags": ["plist", "bplist", "webarchive"],
+  "input": { "file": "testWEBARCHIVE.webarchive" },
+  "options": { "limits": { "maxOutputChars": 1000000 } },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-bplist-webarchive" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "PListParser" },
+    { "type": "contains", "field": "text", "value": "\"WebMainResource\":" }
+  ]
+}

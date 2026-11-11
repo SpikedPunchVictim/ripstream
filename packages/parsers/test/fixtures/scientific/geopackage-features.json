@@ -1,0 +1,18 @@
+{
+  "description": "A synthetic GeoPackage (feature table, tile table, no Tika sample exists) by name and content: application/x-geopackage resolves GeoPkgParser, not the SQLite3Parser of its supertype; geom is an empty blob span, the tile blob is parsed as an embedded document, and the header integers are base-16 text as SQLite3DBParser writes them (tikajs-68os.22)",
+  "tags": ["scientific", "geopackage"],
+  "input": { "file": "synthetic-features.gpkg", "filename": "synthetic-features.gpkg" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-geopackage" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "GeoPkgParser" },
+    { "type": "equals", "field": "metadata.sqlite3:application_id", "value": "47504b47" },
+    { "type": "equals", "field": "metadata.sqlite3:user_version", "value": "27d8" },
+    { "type": "equals", "field": "metadata.database:table-name", "value": "gpkg_spatial_ref_sys" },
+    { "type": "contains", "field": "text", "value": "Alpha" },
+    { "type": "contains", "field": "text", "value": "12.5" },
+    { "type": "contains", "field": "text", "value": "3.0" },
+    { "type": "contains", "field": "text", "value": "true" },
+    { "type": "contains", "field": "text", "value": "embedded tile text" },
+    { "type": "absent", "field": "metadata.sqlite:table-count" }
+  ]
+}

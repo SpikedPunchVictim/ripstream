@@ -1,0 +1,7 @@
+{
+  "description": "An ISA-Tab study file with no name is application/x-isatab by its content: tika-mimetypes.xml's magic is Source Name at offset 1, the first value in quotes (tikajs-68os.22)",
+  "tags": ["scientific", "isatab"],
+  "operation": "detect",
+  "input": { "text": "\"Source Name\"\t\"Characteristics[organism]\"\n\"culture1\"\t\"yeast\"\n" },
+  "assertions": [{ "type": "equals", "field": "mediaType", "value": "application/x-isatab" }]
+}

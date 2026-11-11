@@ -1,0 +1,10 @@
+{
+  "description": "Tika's OldExcelParserTest.testToXMLInOldExcelParser on testEXCEL_5.xls: a BIFF5 workbook in an OLE2 container is detected as application/vnd.ms-excel and read by ExcelParser, which finds the cell text Tika's test looks for (tikajs-68os.18)",
+  "tags": ["office", "excel", "biff5"],
+  "input": { "file": "testEXCEL_5.xls" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.ms-excel" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "ExcelParser" },
+    { "type": "contains", "field": "text", "value": "Written and saved in Microsoft Excel X for Mac Service Release 1" }
+  ]
+}

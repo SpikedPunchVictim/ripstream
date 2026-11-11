@@ -1,0 +1,10 @@
+{
+  "description": "Tika's IWork13ParserTest.testParseNumbers13 on testNumbers2013.numbers: without a file name the type stays unknown, and the only text is the thumbnail's entry name (tikajs-68os.19)",
+  "tags": ["iwork", "numbers", "2013"],
+  "input": { "file": "testNumbers2013.numbers" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.apple.unknown.13" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "IWork13PackageParser" },
+    { "type": "matches", "field": "text", "value": "^\\s*preview\\.jpg\\s*$" }
+  ]
+}

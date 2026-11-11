@@ -1,0 +1,15 @@
+{
+  "description": "Tika's s_BII-S-2.txt (ISA-Tab study file) alone: resolves ISArchiveParser; the heading has no study identifier (it comes from the investigation file beside the study, which a stream does not have) and the table is the file (tikajs-68os.22)",
+  "tags": ["scientific", "isatab"],
+  "input": { "file": "s_BII-S-2.txt", "filename": "s_BII-S-2.txt" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-isatab" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "ISArchiveParser" },
+    { "type": "contains", "field": "text", "value": "STUDY null" },
+    { "type": "contains", "field": "text", "value": "Characteristics[organism]" },
+    { "type": "contains", "field": "text", "value": "NZ_0hrs_Grow_1" },
+    { "type": "contains", "field": "text", "value": "ng /ml" },
+    { "type": "absent", "field": "metadata.isatab:Study Identifier" },
+    { "type": "absent", "field": "metadata.isatab:Investigation Identifier" }
+  ]
+}

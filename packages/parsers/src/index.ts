@@ -16,9 +16,9 @@ import { XmlParser } from "./xml.ts";
 import { CsvParser, type CsvParserOptions } from "./csv.ts";
 import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, Deflate64Parser, GzipParser, Iso9660Parser, Lz4Parser, LzmaParser, PlistParser, SnappyParser, TarParser, UnixCompressParser, XzParser, ZipParser, ZlibParser } from "@spikedpunch/ripstream-parser-archive";
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
-import { AsfParser, AudioParser, AviParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
-import { ColumnarParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
-import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser } from "@spikedpunch/ripstream-parser-office";
+import { AsfParser, AudioParser, AviParser, FlacParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
+import { ColumnarParser, GeoPkgParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
+import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, IWork18Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OldExcelParser, OleContainerParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser } from "@spikedpunch/ripstream-parser-office";
 import { FeedParser } from "./feed.ts";
 import { MarkdownParser } from "./markdown.ts";
 import { TmxParser, WarcParser, XliffParser } from "./web.ts";
@@ -31,6 +31,10 @@ import { RdfParser } from "./rdf.ts";
 import { ExecutableParser } from "./executable.ts";
 import { UniversalExecutableParser } from "./universal-executable.ts";
 import { DbfParser } from "./dbf.ts";
+import { Dgn8Parser } from "./dgn8.ts";
+import { QuattroProParser } from "./quattro-pro.ts";
+import { TsdParser } from "./tsd.ts";
+import { Sas7bdatParser } from "./sas7bdat.ts";
 import { DicomParser } from "./dicom.ts";
 import { DxfParser } from "./dxf.ts";
 import { TnefParser } from "./tnef.ts";
@@ -46,6 +50,9 @@ import { RtfParser } from "./rtf.ts";
 import { DifParser } from "./dif.ts";
 import { MifParser } from "./mif.ts";
 import { HttpParser } from "./http.ts";
+import { EnviHeaderParser } from "./envi.ts";
+import { ISArchiveParser } from "./isatab.ts";
+import { GeographicInformationParser } from "./iso19139.ts";
 import { applyParserConfig } from "./parser-config.ts";
 
 export { applyParserConfig } from "./parser-config.ts";
@@ -70,6 +77,10 @@ export { RdfParser } from "./rdf.ts";
 export { ExecutableParser } from "./executable.ts";
 export { UniversalExecutableParser } from "./universal-executable.ts";
 export { DbfParser } from "./dbf.ts";
+export { Dgn8Parser } from "./dgn8.ts";
+export { QuattroProParser } from "./quattro-pro.ts";
+export { TsdParser } from "./tsd.ts";
+export { Sas7bdatParser } from "./sas7bdat.ts";
 export { DicomParser } from "./dicom.ts";
 export { DxfParser } from "./dxf.ts";
 export { TnefParser } from "./tnef.ts";
@@ -85,6 +96,20 @@ export { RtfParser } from "./rtf.ts";
 export { DifParser, DEFAULT_MAX_DIF_DEPTH, type DifParserOptions } from "./dif.ts";
 export { MifParser, DEFAULT_MAX_MIF_LINE_CHARS, DEFAULT_MAX_MIF_OPEN_CHARS, type MifParserOptions } from "./mif.ts";
 export { HttpParser, DEFAULT_MAX_HTTP_HEADER_BYTES, type HttpParserOptions } from "./http.ts";
+export { EnviHeaderParser, DEFAULT_MAX_ENVI_HEADER_BYTES, type EnviHeaderParserOptions } from "./envi.ts";
+export {
+  ISArchiveParser,
+  DEFAULT_MAX_ISATAB_BYTES,
+  DEFAULT_MAX_ISATAB_COLUMNS,
+  type ISArchiveParserOptions,
+} from "./isatab.ts";
+export {
+  GeographicInformationParser,
+  DEFAULT_MAX_ISO19139_BYTES,
+  DEFAULT_MAX_ISO19139_DEPTH,
+  DEFAULT_MAX_ISO19139_NODES,
+  type GeographicInformationParserOptions,
+} from "./iso19139.ts";
 
 export interface DefaultParserOptions {
   readonly parsers?: readonly Parser[];
@@ -148,6 +173,13 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new ImageParser(),
       new Mp4Parser(),
       new AudioParser(),
+      // OggParser first: it holds the bare audio/ogg that Opus and Speex also name by their codec-parameter forms.
+      new OggParser(),
+      new VorbisParser(),
+      new OpusParser(),
+      new SpeexParser(),
+      new FlacParser(),
+      new TheoraParser(),
       new WmfEmfParser(),
       new FlvParser(),
       new AviParser(),
@@ -155,15 +187,19 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new AsfParser(),
       new FontParser(),
       new SqliteParser(),
+      new GeoPkgParser(),
       new OpenPgpParser(),
       new ColumnarParser(),
       new OoxmlParser(),
       new WordBinaryParser(),
       new ExcelBinaryParser(),
+      new OldExcelParser(),
+      new OleContainerParser(),
       new PowerPointBinaryParser(),
       new MsgParser(),
       new IWork09Parser(),
       new IWork13Parser(),
+      new IWork18Parser(),
       new LegacyOfficeParser(),
       new LegacyFormatParser(),
       new PstParser(),
@@ -185,6 +221,10 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new ExecutableParser(),
       new UniversalExecutableParser(),
       new DbfParser(),
+      new Dgn8Parser(),
+      new QuattroProParser(),
+      new TsdParser(),
+      new Sas7bdatParser(),
       new DicomParser(),
       new DxfParser(),
       new TnefParser(),
@@ -200,6 +240,9 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new DifParser(),
       new MifParser(),
       new HttpParser(),
+      new EnviHeaderParser(),
+      new ISArchiveParser(),
+      new GeographicInformationParser(),
     ];
   return new CompositeParser({ registry, parsers: section === null ? parsers : applyParserConfig(parsers, section, registry) });
 }

@@ -1,0 +1,26 @@
+{
+  "description": "Tika's SAS7BDATParserTest.testMultiColumns and testHTML2 on test-columnar.sas7bdat: eight columns, labels as headings, dates written as parso writes them. The column names and the markup are asserted in sas7bdat.test.ts (tikajs-68os.21). Read from the Tika source, not run against a Tika; Tika reads the file with parso, whose source was not available",
+  "tags": ["sas", "sas7bdat", "database"],
+  "input": { "file": "test-columnar.sas7bdat" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-sas-data" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "SAS7BDATParser" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "TESTING" },
+    { "type": "equals", "field": "metadata.dcterms:created", "value": "2018-05-18T11:38:30Z" },
+    { "type": "equals", "field": "metadata.dcterms:modified", "value": "2018-05-18T11:38:30Z" },
+    { "type": "equals", "field": "metadata.xmpTPg:NPages", "value": "1" },
+    { "type": "equals", "field": "metadata.database:column-count", "value": "8" },
+    { "type": "equals", "field": "metadata.database:row-count", "value": "11" },
+    { "type": "equals", "field": "metadata.Content-Encoding", "value": "windows-1252" },
+    { "type": "equals", "field": "metadata.extended-properties:Application", "value": "X64_7PRO" },
+    { "type": "equals", "field": "metadata.extended-properties:AppVersion", "value": "9.0401M5" },
+    { "type": "equals", "field": "metadata.machine:architectureBits", "value": "32" },
+    { "type": "equals", "field": "metadata.machine:endian", "value": "Little" },
+    { "type": "contains", "field": "text", "value": "TESTING" },
+    { "type": "contains", "field": "text", "value": "0\t0\tThis" },
+    { "type": "contains", "field": "text", "value": "2\t4\tThis" },
+    { "type": "contains", "field": "text", "value": "4\t16\tThis" },
+    { "type": "contains", "field": "text", "value": "\t01-01-1960\t" },
+    { "type": "contains", "field": "text", "value": "\t01Jan1960:00:00" }
+  ]
+}

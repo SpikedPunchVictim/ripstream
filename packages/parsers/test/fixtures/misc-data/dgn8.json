@@ -1,0 +1,10 @@
+{
+  "description": "Tika's DGN8ParserTest.testBasics on testDGN8.dgn: the MicroStation v8 file is read through its OLE summary stream, with the modifier and application Tika asserts and DGN8Parser among the parsers (tikajs-68os.21). Read from the Tika source, not run against a Tika",
+  "tags": ["dgn", "ole", "cad"],
+  "input": { "file": "testDGN8.dgn" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.meta:last-author", "value": "John.Frampton" },
+    { "type": "equals", "field": "metadata.extended-properties:Application", "value": "MicroStation v8.11.0.0" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "DGN8Parser" }
+  ]
+}

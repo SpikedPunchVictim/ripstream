@@ -1,0 +1,11 @@
+{
+  "description": "Tika's sampleFile.iso19139 by name: resolves GeographicInformationParser (not XMLParser) and gives the values GeographicInformationParserTest.testISO19139 asserts; read from Tika source, not run against a Tika or Apache SIS (tikajs-68os.22)",
+  "tags": ["scientific", "iso19139"],
+  "input": { "file": "sampleFile.iso19139", "filename": "sampleFile.iso19139" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "text/iso19139+xml" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "GeographicInformationParser" },
+    { "type": "contains", "field": "text", "value": "CitedResponsiblePartyName Robert Hollister" },
+    { "type": "contains", "field": "text", "value": "GeographicElementWestBoundLatitude" }
+  ]
+}

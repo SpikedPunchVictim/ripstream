@@ -1,0 +1,15 @@
+{
+  "description": "Tika's testOPUS.opus through OpusParser: AutoDetectParserTest.testOggFlacAudio (type, tags, layout, rate, text; the album is not asserted for Opus files) (tikajs-68os.15)",
+  "tags": ["media", "ogg", "opus"],
+  "input": { "file": "testOPUS.opus" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/opus" },
+    { "type": "equals", "field": "metadata.dc:creator", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "Test Title" },
+    { "type": "equals", "field": "metadata.xmpDM:artist", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.xmpDM:audioChannelType", "value": "Stereo" },
+    { "type": "equals", "field": "metadata.xmpDM:audioSampleRate", "value": "44100" },
+    { "type": "contains", "field": "text", "value": "Test Title" },
+    { "type": "contains", "field": "text", "value": "Test Artist" }
+  ]
+}

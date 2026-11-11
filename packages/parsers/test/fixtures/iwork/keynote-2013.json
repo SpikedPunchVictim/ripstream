@@ -1,0 +1,15 @@
+{
+  "description": "Tika's IWork13ParserTest.testParseKeynote13 on testKeynote2013.key: the Slide and MasterSlide parts type the package as Keynote 2013 without a file name, and the three Metadata/ entries become iwork: fields (tikajs-68os.19)",
+  "tags": ["iwork", "keynote", "2013"],
+  "input": { "file": "testKeynote2013.key" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.apple.keynote.13" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "IWork13PackageParser" },
+    { "type": "equals", "field": "metadata.iwork:build-version-history", "value": "Template: White (2015-09-16 11:52)" },
+    { "type": "equals", "field": "metadata.iwork:isMultiPage", "value": "true" },
+    { "type": "equals", "field": "metadata.iwork:versionUUID", "value": "2D8FBF24-9B98-40D8-B383-4DC901CC75E1" },
+    { "type": "equals", "field": "metadata.iwork:document-id", "value": "42541D1C-A9DC-49A9-814C-7FC1338850A2" },
+    { "type": "contains", "field": "text", "value": "preview.jpg" },
+    { "type": "contains", "field": "text", "value": "Data/st0-108.jpg" }
+  ]
+}

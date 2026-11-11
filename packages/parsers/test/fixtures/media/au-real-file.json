@@ -1,0 +1,13 @@
+{
+  "description": "Tika's testAU.au through AudioParser: AudioParserTest.testAU (type, rate, channels, bits, encoding, empty content) (tikajs-68os.15)",
+  "tags": ["media", "au"],
+  "input": { "file": "testAU.au" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/basic" },
+    { "type": "equals", "field": "metadata.xmpDM:audioSampleRate", "value": "44100" },
+    { "type": "equals", "field": "metadata.audio:channels", "value": "2" },
+    { "type": "equals", "field": "metadata.audio:bits-per-sample", "value": "16" },
+    { "type": "equals", "field": "metadata.audio:encoding", "value": "PCM_SIGNED" },
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

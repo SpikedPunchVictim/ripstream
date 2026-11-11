@@ -1,0 +1,16 @@
+{
+  "description": "Tika's testFLAC.oga through FlacParser: AutoDetectParserTest.testOggFlacAudio (type, tags, layout, rate, text) (tikajs-68os.15)",
+  "tags": ["media", "ogg", "flac"],
+  "input": { "file": "testFLAC.oga" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/x-oggflac" },
+    { "type": "equals", "field": "metadata.dc:creator", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "Test Title" },
+    { "type": "equals", "field": "metadata.xmpDM:album", "value": "Test Album" },
+    { "type": "equals", "field": "metadata.xmpDM:artist", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.xmpDM:audioChannelType", "value": "Stereo" },
+    { "type": "equals", "field": "metadata.xmpDM:audioSampleRate", "value": "44100" },
+    { "type": "contains", "field": "text", "value": "Test Title" },
+    { "type": "contains", "field": "text", "value": "Test Artist" }
+  ]
+}

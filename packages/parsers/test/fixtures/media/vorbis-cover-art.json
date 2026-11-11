@@ -1,0 +1,9 @@
+{
+  "description": "Tika's testVORBIS_coverArt.ogg, the container side of VorbisParserTest.testCoverArt: audio/vorbis, and the raw metadata_block_picture comment is not metadata (tikajs-68os.15)",
+  "tags": ["media", "ogg", "vorbis", "embedded"],
+  "input": { "file": "testVORBIS_coverArt.ogg" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/vorbis" },
+    { "type": "absent", "field": "metadata.vorbis:metadata_block_picture" }
+  ]
+}

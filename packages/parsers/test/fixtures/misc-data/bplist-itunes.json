@@ -1,0 +1,11 @@
+{
+  "description": "Tika's PListParserTest.testBasicBinaryPList on testBPList.bplist: detected and reported as application/x-bplist-itunes, parsed by PListParser, with the values the test looks for. Tika asserts them in dd-plist's element markup (<key>Application Version</key><string>9.0); here the plist is written as one JSON paragraph, so the assertion is on that text (tikajs-68os.21)",
+  "tags": ["plist", "bplist", "itunes"],
+  "input": { "file": "testBPList.bplist" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-bplist-itunes" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "PListParser" },
+    { "type": "contains", "field": "text", "value": "\"Application Version\":\"9.0" },
+    { "type": "contains", "field": "text", "value": "\"90" }
+  ]
+}

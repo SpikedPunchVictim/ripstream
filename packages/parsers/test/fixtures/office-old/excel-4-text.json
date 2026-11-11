@@ -1,0 +1,19 @@
+{
+  "description": "Tika's OldExcelParserTest on testEXCEL_4.xls (testPlainText, testHTML): the BIFF4 sheet resolves to OldExcelParser, text comes one line per cell, strings as stored and numbers as Java's Double.toString writes them, with no sheet name (tikajs-68os.18)",
+  "tags": ["office", "excel", "biff4"],
+  "input": { "file": "testEXCEL_4.xls" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.ms-excel.sheet.4" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "OldExcelParser" },
+    { "type": "contains", "field": "text", "value": "Size" },
+    { "type": "contains", "field": "text", "value": "Returns" },
+    { "type": "contains", "field": "text", "value": "11" },
+    { "type": "contains", "field": "text", "value": "784" },
+    { "type": "matches", "field": "text", "value": "(^|\\n)Table 10 -" },
+    { "type": "matches", "field": "text", "value": "(^|\\n)Tax(\\n|$)" },
+    { "type": "matches", "field": "text", "value": "(^|\\n)N/A(\\n|$)" },
+    { "type": "matches", "field": "text", "value": "(^|\\n)\\(1\\)(\\n|$)" },
+    { "type": "matches", "field": "text", "value": "(^|\\n)5\\.0(\\n|$)" },
+    { "type": "not_contains", "field": "text", "value": "Sheet 1" }
+  ]
+}

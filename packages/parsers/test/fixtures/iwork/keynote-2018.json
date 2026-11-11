@@ -1,0 +1,11 @@
+{
+  "description": "Tika's IWork18ParserTest.testNoPreview on testKeynote2018.key: the BuildVersionHistory.plist under Presentation.key types the package as Keynote 2018, and the fixture holds no preview, so there is no text and no embedded document (tikajs-68os.19)",
+  "tags": ["iwork", "keynote", "2018"],
+  "input": { "file": "testKeynote2018.key" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.apple.keynote.18" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "IWork18PackageParser" },
+    { "type": "matches", "field": "text", "value": "^\\s*$" },
+    { "type": "absent", "field": "metadata.iwork:document-id" }
+  ]
+}

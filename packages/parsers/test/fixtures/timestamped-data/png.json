@@ -1,0 +1,24 @@
+{
+  "description": "Tika's TSDParserTest on Test5.PNG.tsd, which Tika's recursive test leaves disabled but its testTSDFileData parses: the stamped image is the embedded document and adds no text (tikajs-68os.21). Read from the Tika source, not run against a Tika",
+  "tags": [
+    "tsd",
+    "timestamped-data",
+    "cms"
+  ],
+  "input": {
+    "file": "Test5.PNG.tsd",
+    "filename": "Test5.PNG.tsd"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/timestamped-data"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "TSDParser"
+    }
+  ]
+}

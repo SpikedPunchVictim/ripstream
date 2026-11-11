@@ -1,0 +1,11 @@
+{
+  "description": "Tika's IWork13ParserTest.testParsePages13 on testPages2013.pages, with the file name given so the package is typed as Pages 2013 (the Java test calls the parser directly and sees the unknown type) (tikajs-68os.19)",
+  "tags": ["iwork", "pages", "2013"],
+  "input": { "file": "testPages2013.pages", "filename": "testPages2013.pages" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.apple.pages.13" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "IWork13PackageParser" },
+    { "type": "equals", "field": "metadata.iwork:document-id", "value": "3BF730A3-7690-489B-92C7-321B204640CF" },
+    { "type": "matches", "field": "text", "value": "^\\s*preview\\.jpg\\s*$" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Tika's IWork13ParserTest.testNumbers13WFileName on testNumbers2013.numbers: the .numbers file name types the package as Numbers 2013, and the plist values are the ones the test states (tikajs-68os.19)",
+  "tags": ["iwork", "numbers", "2013"],
+  "input": { "file": "testNumbers2013.numbers", "filename": "testNumbers2013.numbers" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.apple.numbers.13" },
+    { "type": "equals", "field": "metadata.iwork:isMultiPage", "value": "true" },
+    { "type": "equals", "field": "metadata.iwork:versionUUID", "value": "C5ED6463-575C-43B9-8FDA-1957B186C422" },
+    { "type": "matches", "field": "text", "value": "^\\s*preview\\.jpg\\s*$" }
+  ]
+}

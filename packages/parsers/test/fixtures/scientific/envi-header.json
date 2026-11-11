@@ -1,0 +1,7 @@
+{
+  "description": "Tika's envi_test_header.hdr by name and content: application/envi.hdr has a glob (*.hdr) and no magic or supertype, so Tika's MimeTypes.applyHint leaves a text file at text/plain; EnviHeaderParser is reached by calling it directly, as EnviHeaderParserTest does (tikajs-68os.22)",
+  "tags": ["scientific", "envi"],
+  "operation": "detect",
+  "input": { "file": "envi_test_header.hdr", "filename": "envi_test_header.hdr" },
+  "assertions": [{ "type": "equals", "field": "mediaType", "value": "text/plain" }]
+}

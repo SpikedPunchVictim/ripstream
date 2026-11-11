@@ -1,0 +1,10 @@
+{
+  "description": "Tika's QuattroProTest.testQPW on testQUATTRO.qpw: a Quattro Pro 9 notebook is detected and reported as application/x-quattro-pro; version=9 and its text contains the sentence Tika looks for (tikajs-68os.21). Read from the Tika source, not run against a Tika",
+  "tags": ["quattro-pro", "qpw", "ole"],
+  "input": { "file": "testQUATTRO.qpw" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-quattro-pro; version=9" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "QuattroProParser" },
+    { "type": "contains", "field": "text", "value": "This is an example spreadsheet" }
+  ]
+}

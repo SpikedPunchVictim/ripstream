@@ -1,0 +1,18 @@
+{
+  "description": "Tika's testVORBIS.ogg through VorbisParser: AutoDetectParserTest.testOggFlacAudio (tags, layout, rate, text) and VorbisParserTest.testRealFile (bitrate 80000, variable) (tikajs-68os.15)",
+  "tags": ["media", "ogg", "vorbis"],
+  "input": { "file": "testVORBIS.ogg" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/vorbis" },
+    { "type": "equals", "field": "metadata.dc:creator", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "Test Title" },
+    { "type": "equals", "field": "metadata.xmpDM:album", "value": "Test Album" },
+    { "type": "equals", "field": "metadata.xmpDM:artist", "value": "Test Artist" },
+    { "type": "equals", "field": "metadata.xmpDM:audioChannelType", "value": "Stereo" },
+    { "type": "equals", "field": "metadata.xmpDM:audioSampleRate", "value": "44100" },
+    { "type": "equals", "field": "metadata.audio:bitrate", "value": "80000" },
+    { "type": "equals", "field": "metadata.audio:is-variable-bitrate", "value": "true" },
+    { "type": "contains", "field": "text", "value": "Test Title" },
+    { "type": "contains", "field": "text", "value": "Test Artist" }
+  ]
+}
