@@ -4,6 +4,22 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### `/language` keeps only the start of the body (`tikajs-68os.9.5`)
+
+Changed: `/language` reads the first 100,000 characters of a body and ignores the rest, as Tika does. It now keeps only the first
+400,000 bytes (enough for 100,000 characters at up to four bytes each) and drops the rest as it arrives, where it held the whole
+body until the request ended. The answer is the same, and a body over `maxBodyBytes` is still refused with 413 on a connection
+that lives on. Body reading moved from `index.ts` to `request-body.ts` (`readBody`, `readBodyPrefix`, `readRawBody`), unchanged
+for every other route.
+
+Measured, a `PUT /language` of 100 MiB to a server in its own process, peak RSS (the process starts at about 117 MB): 413 MB before
+and 204 MB after for English text, 437 and 211 MB for random bytes, 408 and 220 MB for a repeated trigram. A plain Node server that
+reads the same 100 MiB and drops it peaks at 147 MB from a 79 MB start, so most of what is left is Node's own read buffers, not the
+route. 10 MiB: 163 to 149 MB. The answers (`en`, `wa`, `vi`) did not change at any size.
+
+Limit: a body sent with `Content-Encoding: gzip` is still inflated whole, bounded by `maxBodyBytes`, because its start cannot be had
+without the rest. The memory result is the measurement above; no unit test fails if the route goes back to reading the whole body.
+
 ### XML and feed documents carry no `Content-Encoding` (`tikajs-68os.37`)
 
 Changed: the XML parser (XML, SVG and the types it serves) and the feed parser no longer write `Content-Encoding`. Tika 4.2.0's
@@ -35,8 +51,9 @@ Differences, read from Tika 4.2.0 source and not run against a Tika; the first f
   0x7f falls between the two is `windows-1252` in Tika and `UTF-8` here. A file that is ASCII for the whole 64 KiB and then holds
   UTF-8 is decoded as `windows-1252`, as Tika would decode it: the later text comes out as mojibake.
 - 7-bit ISO-2022-JP, -KR and -CN text is detected structurally by Tika, not here.
-- CSV: Tika also writes `; delimiter=comma` (`tab` for TSV) and `csv:delimiter`; ripstream writes the charset only
-  (`tikajs-68os.36`).
+- CSV: Tika's parser for text/plain and text/csv sniffs the delimiter, and writes `; delimiter=comma` (`tab` for TSV),
+  `csv:delimiter`, `csv:num-columns` and `csv:num-rows`; ripstream writes the charset only. The same sniffer decides whether a
+  `.txt` is a table, and Tika reads a `.tsv` as text, so this is more than a parameter (`tikajs-68os.36`).
 
 ### `tk:embedded-resource-type` (`tikajs-68os.35`)
 
