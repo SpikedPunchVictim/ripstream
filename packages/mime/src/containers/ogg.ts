@@ -1,8 +1,8 @@
 import { MediaType } from "@spikedpunch/ripstream-core";
 
-type Kind = "audio" | "video" | "metadata" | "other";
+export type Kind = "audio" | "video" | "metadata" | "other";
 
-interface StreamType {
+export interface StreamType {
   readonly mime: MediaType;
   readonly kind: Kind;
 }
@@ -22,8 +22,10 @@ const KATE = streamType("application/kate", "metadata");
  * What a stream's first packet starts with, and the shortest such packet that counts. The identification is the
  * `vorbis-java` library's, which is not in the Tika tree: the signatures come from the Ogg mapping specs and the
  * minimum lengths from probing Tika 4.2.0 (a `\x01vorbis` packet of 7 bytes is not Vorbis, of 30 is).
+ * packages/parser-media/src/ogg.ts keeps a copy of this table (it has no dependency on this package);
+ * packages/parser-media/test/ogg-signatures.test.ts fails when the two differ.
  */
-const SIGNATURES: readonly { readonly bytes: string; readonly minLength: number; readonly type: StreamType }[] = [
+export const OGG_STREAM_SIGNATURES: readonly { readonly bytes: string; readonly minLength: number; readonly type: StreamType }[] = [
   { bytes: "\x01vorbis", minLength: 30, type: streamType("audio/vorbis", "audio") },
   { bytes: "OpusHead", minLength: 19, type: streamType("audio/opus", "audio") },
   { bytes: "Speex   ", minLength: 80, type: streamType("audio/speex", "audio") },
@@ -34,6 +36,10 @@ const SIGNATURES: readonly { readonly bytes: string; readonly minLength: number;
   { bytes: "UVS ", minLength: 28, type: streamType("video/x-ogguvs", "video") },
   { bytes: "\x01YUV", minLength: 28, type: streamType("video/x-oggyuv", "video") },
   { bytes: "BBCD", minLength: 28, type: streamType("video/x-dirac", "video") },
+  // OGM and raw RGB (tikajs-68os.62): the packet starts follow the registry's xml 8888-8931 and the OGM header (a type
+  // byte of 1, then "video"). The minimum length is that of the raw YUV and UVS mappings beside them, not probed.
+  { bytes: "\x01video", minLength: 28, type: streamType("video/x-ogm", "video") },
+  { bytes: "\x01RGB", minLength: 28, type: streamType("video/x-oggrgb", "video") },
   { bytes: "\x80kate\0\0\0\0", minLength: 30, type: KATE },
   { bytes: "CMML\0\0\0\0", minLength: 30, type: streamType("text/x-cmml", "metadata") },
   { bytes: "fishead\0", minLength: 30, type: streamType("application/ogg", "metadata") },
@@ -88,7 +94,7 @@ function startsWithOggS(data: Uint8Array, position: number): boolean {
 }
 
 function identify(packet: Uint8Array): StreamType {
-  for (const { bytes, minLength, type } of SIGNATURES) {
+  for (const { bytes, minLength, type } of OGG_STREAM_SIGNATURES) {
     if (packet.length < minLength) continue;
     let matches = true;
     for (let index = 0; index < bytes.length; index++) {

@@ -18,7 +18,8 @@ import {
   type Parser,
 } from "@spikedpunch/ripstream-core";
 import { formatDuration } from "./mp4.ts";
-import { decodeMimeBase64, parseComments, parsePictureBlock, type PictureBlock, type VorbisComments } from "./ogg-comments.ts";
+import { DEFAULT_MAX_FLAC_METADATA_BYTES, readNativeFlac } from "./flac.ts";
+import { decodeMimeBase64, parseComments, parsePictureBlock, readFlacStreamInfo, type PictureBlock, type VorbisComments } from "./ogg-comments.ts";
 import { readOgg } from "./ogg-demux.ts";
 
 /*
@@ -30,9 +31,9 @@ import { readOgg } from "./ogg-demux.ts";
 
 // ---- the streams of a file -------------------------------------------------------------------------------------------
 
-type Kind = "audio" | "video" | "metadata" | "unknown";
+export type Kind = "audio" | "video" | "metadata" | "unknown";
 
-interface Signature {
+export interface Signature {
   /** What the first packet of the stream starts with, and the shortest such packet that counts. */
   readonly bytes: string;
   readonly minLength: number;
@@ -41,10 +42,11 @@ interface Signature {
 }
 
 /**
- * vorbis-java's OggStreamIdentifier. The same table as packages/mime/src/containers/ogg.ts, which pinned it against
- * Tika; keep the two in step. It has no signature for OGM or Ogg RGB streams, as the detector has none.
+ * vorbis-java's OggStreamIdentifier. The same table as OGG_STREAM_SIGNATURES in packages/mime/src/containers/ogg.ts,
+ * which this package cannot import (it depends on core alone, and the table would pull the mime package into its
+ * bundle); packages/parser-media/test/ogg-signatures.test.ts fails when the two differ.
  */
-const SIGNATURES: readonly Signature[] = [
+export const OGG_SIGNATURES: readonly Signature[] = [
   { bytes: "\x01vorbis", minLength: 30, mime: "audio/vorbis", kind: "audio" },
   { bytes: "OpusHead", minLength: 19, mime: "audio/opus", kind: "audio" },
   { bytes: "Speex   ", minLength: 80, mime: "audio/speex", kind: "audio" },
@@ -55,6 +57,8 @@ const SIGNATURES: readonly Signature[] = [
   { bytes: "UVS ", minLength: 28, mime: "video/x-ogguvs", kind: "video" },
   { bytes: "\x01YUV", minLength: 28, mime: "video/x-oggyuv", kind: "video" },
   { bytes: "BBCD", minLength: 28, mime: "video/x-dirac", kind: "video" },
+  { bytes: "\x01video", minLength: 28, mime: "video/x-ogm", kind: "video" },
+  { bytes: "\x01RGB", minLength: 28, mime: "video/x-oggrgb", kind: "video" },
   { bytes: "\x80kate\0\0\0\0", minLength: 30, mime: "application/kate", kind: "metadata" },
   { bytes: "CMML\0\0\0\0", minLength: 30, mime: "text/x-cmml", kind: "metadata" },
   { bytes: "fishead\0", minLength: 30, mime: "application/ogg", kind: "metadata" },
@@ -71,11 +75,11 @@ function matches(signature: Signature, packet: Uint8Array): boolean {
 }
 
 function identify(packet: Uint8Array): Signature {
-  return SIGNATURES.find((signature) => matches(signature, packet)) ?? UNKNOWN;
+  return OGG_SIGNATURES.find((signature) => matches(signature, packet)) ?? UNKNOWN;
 }
 
 function signatureOf(mime: string): Signature {
-  return SIGNATURES.find((signature) => signature.mime === mime)!;
+  return OGG_SIGNATURES.find((signature) => signature.mime === mime)!;
 }
 
 const types = (...names: string[]): ReadonlySet<MediaType> => new Set(names.map((name) => MediaType.parseOrThrow(name)));
@@ -436,11 +440,8 @@ const OGG_FLAC: Codec = {
   compressor: "FLAC",
   keepPackets: FLAC_HEADER_PACKETS,
   info(first, metadata) {
-    // The mapping header, then the STREAMINFO block (RFC 9639): at byte 27 20 bits of rate, 3 of channels less one, 5
-    // of bits per sample less one, and 36 of total samples.
-    const rate = (first[27]! << 12) | (first[28]! << 4) | (first[29]! >> 4);
-    const channels = ((first[29]! >> 1) & 7) + 1;
-    const samples = (first[30]! & 0x0f) * 2 ** 32 + view(first).getUint32(31);
+    // The mapping header (13 bytes), then the STREAMINFO block: its 4 byte block header, then the block.
+    const { sampleRate: rate, channels, totalSamples: samples } = readFlacStreamInfo(first, 17);
     metadata.set("xmpDM:audioSampleRate", rate);
     extractChannelInfo(metadata, channels);
     metadata.add("ogg:codec-version", `Flac ${first[5]}.${first[6]}`);
@@ -543,9 +544,58 @@ export class TheoraParser extends OggCodecParser {
   }
 }
 
-/** FLAC in an Ogg container. Tika's FlacParser also reads native FLAC files (audio/x-flac), which this does not. */
-export class FlacParser extends OggCodecParser {
-  constructor() {
-    super(OGG_FLAC);
+export interface FlacParserOptions {
+  /** What the walk over the metadata blocks of a native FLAC file may cover (default {@link DEFAULT_MAX_FLAC_METADATA_BYTES}). */
+  readonly maxMetadataBytes?: number;
+}
+
+const FLAC_MAGIC = "fLaC";
+
+/**
+ * Tika's FlacParser: FLAC in an Ogg container (the Ogg codec parser of the file) and native FLAC (flac.ts), told by the
+ * first four bytes as vorbis-java's FlacFile.open does. Written the same way for both: the layout and the rate from the
+ * stream info, the comments, the pictures (those of the comments, then the PICTURE blocks), the duration.
+ */
+export class FlacParser implements Parser {
+  readonly name = "FlacParser";
+  readonly capabilities = { metadataOnly: true } as const;
+  readonly #ogg = new OggCodecParser(OGG_FLAC);
+  readonly #maxMetadataBytes: number;
+
+  constructor(options: FlacParserOptions = {}) {
+    const maxMetadataBytes = options.maxMetadataBytes ?? DEFAULT_MAX_FLAC_METADATA_BYTES;
+    if (!Number.isInteger(maxMetadataBytes) || maxMetadataBytes < 1) {
+      throw new RangeError(`maxMetadataBytes must be a positive integer, got ${maxMetadataBytes}`);
+    }
+    this.#maxMetadataBytes = maxMetadataBytes;
+  }
+
+  getSupportedTypes(): ReadonlySet<MediaType> {
+    // audio/flac is the alias of audio/x-flac in Tika's registry.
+    return types("audio/x-flac", "audio/flac", ...OGG_FLAC.claims);
+  }
+
+  async parse(stream: RipstreamInputStream, handler: ContentHandler, metadata: Metadata, ctx: ParseContext): Promise<void> {
+    const magic = await stream.peek(FLAC_MAGIC.length);
+    if (String.fromCharCode(...magic) !== FLAC_MAGIC) return this.#ogg.parse(stream, handler, metadata, ctx);
+
+    metadata.set("xmpDM:audioCompressor", "FLAC");
+    const { streamInfo, comments, pictures } = await readNativeFlac(stream, this.#maxMetadataBytes);
+    const xhtml = new XHTMLContentHandler(handler, metadata);
+    await xhtml.startDocument();
+    metadata.set("xmpDM:audioSampleRate", streamInfo.sampleRate);
+    extractChannelInfo(metadata, streamInfo.channels);
+    metadata.set("Content-Type", "audio/x-flac");
+    // A file with no comment block has no tags: it is written as one with an empty block, less the vendor it never named.
+    const fromComments = await extractComments(metadata, xhtml, comments ?? { vendor: "", fields: new Map() });
+    if (comments === null) {
+      metadata.remove("xmp:CreatorTool");
+      metadata.remove("vorbis:vendor");
+    }
+    await extractPictures([...fromComments, ...pictures], xhtml, metadata, ctx);
+    if (streamInfo.totalSamples > 0 && streamInfo.sampleRate > 0) {
+      await extractDuration(metadata, xhtml, streamInfo.totalSamples / streamInfo.sampleRate);
+    }
+    await xhtml.endDocument();
   }
 }

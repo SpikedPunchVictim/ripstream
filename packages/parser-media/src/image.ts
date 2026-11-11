@@ -10,12 +10,14 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import exifr from "exifr";
+import { EXIFR_OPTIONS, guardExifAmplification } from "./exif-guard.ts";
 import { readIcns } from "./icns.ts";
 import { readIco } from "./ico.ts";
 import { readJbig2 } from "./jbig2.ts";
 import { readPnm } from "./pnm.ts";
 import { readWbmp } from "./wbmp.ts";
-import type { HeaderReader } from "./imageio-metadata.ts";
+import { readGifImages } from "./gif.ts";
+import { setImageReaderMetadata, type HeaderReader } from "./imageio-metadata.ts";
 
 /**
  * The formats read from their header alone, by the type the document was detected as, as Tika picks a parser or an
@@ -114,19 +116,12 @@ export class ImageParser implements Parser {
     // exifr's HEIF box walker can spin forever on a mid-file size-0 box, so
     // reject malformed top-level box structure before it ever sees the bytes.
     validateIsoBmffTopLevel(data);
+    // exifr allocates per tag by declared value count: bound that before it runs (tikajs-e42s).
+    guardExifAmplification(data);
 
     let exif: Record<string, unknown> | null = null;
     try {
-      exif = (await exifr.parse(data, {
-        tiff: true,
-        exif: true,
-        gps: true,
-        iptc: true,
-        // exifr's XMP extraction runs a quadratic synchronous regex that can
-        // freeze the event loop on large or crafted payloads.
-        xmp: false,
-        icc: false,
-      })) as Record<string, unknown> | null;
+      exif = (await exifr.parse(data, EXIFR_OPTIONS)) as Record<string, unknown> | null;
     } catch (error) {
       // Only swallow genuine library/parse failures; aborts and ripstream
       // errors (timeouts, limits) must reach the caller.
@@ -135,7 +130,10 @@ export class ImageParser implements Parser {
     }
 
     const dimensions = imageDimensions(data);
-    if (dimensions !== null) {
+    const readerImages = imageReaderImages(data, dimensions);
+    if (readerImages !== null) {
+      setImageReaderMetadata(metadata, readerImages.width, readerImages.height, readerImages.count);
+    } else if (dimensions !== null) {
       metadata.set("tiff:ImageWidth", dimensions.width);
       metadata.set("tiff:ImageLength", dimensions.height);
     }
@@ -533,6 +531,31 @@ function imageDimensions(
     return webpDimensions(data);
   }
 
+  return null;
+}
+
+/**
+ * PNG, GIF and BMP are the formats of this path that Tika's ImageParser serves through an ImageIO reader (its
+ * supported types, read from Tika source; JPEG, TIFF, WebP and the rest go to other parsers or none). For those
+ * it writes the image count and the size of image 0 under `tk:num-images`, `tiff:ImageWidth`/`tiff:ImageLength`
+ * and `img:height`/`img:width`, as `setImageReaderMetadata` does. Chosen by the bytes, as `imageDimensions` is.
+ *
+ * `dimensions` is what `imageDimensions` read from the same data. PNG and BMP have one image. GIF is counted by
+ * walking its blocks and sized by the first image's descriptor.
+ */
+function imageReaderImages(
+  data: Uint8Array,
+  dimensions: { width: number; height: number } | null,
+): { width: number; height: number; count: number } | null {
+  if (dimensions === null) return null;
+  const isPng = data.length >= 24 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47;
+  const isBmp = data.length >= 26 && data[0] === 0x42 && data[1] === 0x4d;
+  if (isPng || isBmp) return { ...dimensions, count: 1 };
+  if (data.length >= 10 && data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46) {
+    const gif = readGifImages(data);
+    if (gif.count === 0 || gif.blockTypeZero) return null;
+    return { width: gif.firstWidth, height: gif.firstHeight, count: gif.count };
+  }
   return null;
 }
 

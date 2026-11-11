@@ -1,0 +1,37 @@
+{
+  "description": "A hand-made 640x480 PNG through ImageParser: img:width, img:height and tk:num-images as Tika's ImageParser writes them for an ImageIO reader (ImageParserTest.testPNG asserts one image). Read from Tika source, not run. (tikajs-68os.45)",
+  "tags": [
+    "media",
+    "png"
+  ],
+  "input": {
+    "base64": "iVBORw0KGgoAAAANSUhEUgAAAoAAAAHgCAYAAAAAAAAAAAAAAElFTkQAAAAA"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:num-images",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.img:width",
+      "value": "640"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.img:height",
+      "value": "480"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tiff:ImageWidth",
+      "value": "640"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tiff:ImageLength",
+      "value": "480"
+    }
+  ]
+}

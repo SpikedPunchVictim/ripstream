@@ -313,7 +313,8 @@ test("the claims of each parser: the types Tika routes to it", () => {
   assert.deepEqual(claims(new OpusParser()), ["audio/ogg; codecs=opus", "audio/opus"]);
   assert.deepEqual(claims(new SpeexParser()), ["audio/ogg; codecs=speex", "audio/speex"]);
   assert.deepEqual(claims(new TheoraParser()), ["video/theora"]);
-  assert.deepEqual(claims(new FlacParser()), ["audio/x-oggflac"]);
+  // Native FLAC and its alias audio/flac are read by the same parser (flac.test.ts).
+  assert.deepEqual(claims(new FlacParser()), ["audio/flac", "audio/x-flac", "audio/x-oggflac"]);
   assert.deepEqual(claims(new OggParser()), [
     "application/kate",
     "application/ogg",

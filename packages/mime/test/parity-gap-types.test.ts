@@ -212,6 +212,42 @@ test("the Ogg detector names a file for its one video stream, and mixed video is
   assert.deepEqual(wrong, []);
 });
 
+test("the Ogg detector identifies OGM and Ogg RGB video streams (tikajs-68os.62)", () => {
+  // The packet starts are the OGM header (a type byte of 1, then "video") and the raw RGB mapping (1, "RGB"), as the
+  // detector's siblings for raw YUV and UVS do. The registry (xml 8888-8931) names the same two types.
+  const ogm = (serial: number): Uint8Array => oggStream(serial, packetOf("\x01video\0\0\0", 57));
+  const rgb = (serial: number): Uint8Array => oggStream(serial, packetOf("\x01RGB", 30));
+  const vorbis = (serial: number): Uint8Array => oggStream(serial, packetOf("\x01vorbis", 30));
+  const cases: ReadonlyArray<readonly [string, Uint8Array, string]> = [
+    ["ogm alone", oggFile(ogm(1)), "video/x-ogm"],
+    ["rgb alone", oggFile(rgb(1)), "video/x-oggrgb"],
+    ["ogm and vorbis", oggFile(ogm(1), vorbis(2)), "video/x-ogm"],
+    ["two ogm streams", oggFile(ogm(1), ogm(2)), "video/x-ogm"],
+    ["ogm and rgb", oggFile(ogm(1), rgb(2)), "video/ogg"],
+  ];
+  const wrong = cases.flatMap(([label, bytes, expected]) => {
+    const actual = detectOgg(bytes)?.toString();
+    return actual === expected ? [] : [`${label}: expected ${expected}, got ${actual}`];
+  });
+  assert.deepEqual(wrong, []);
+});
+
+test("an OGM or Ogg RGB packet counts from 28 bytes, as the raw YUV and UVS packets beside them do", () => {
+  const cases: ReadonlyArray<readonly [string, string, number, string]> = [
+    ["ogm of 27", "\x01video", 27, "application/ogg"],
+    ["ogm of 28", "\x01video", 28, "video/x-ogm"],
+    ["rgb of 27", "\x01RGB", 27, "application/ogg"],
+    ["rgb of 28", "\x01RGB", 28, "video/x-oggrgb"],
+    ["yuv of 27", "\x01YUV", 27, "application/ogg"],
+    ["yuv of 28", "\x01YUV", 28, "video/x-oggyuv"],
+  ];
+  const wrong = cases.flatMap(([label, signature, length, expected]) => {
+    const actual = detectOgg(oggFile(oggStream(1, packetOf(signature, length))))?.toString();
+    return actual === expected ? [] : [`${label}: expected ${expected}, got ${actual}`];
+  });
+  assert.deepEqual(wrong, []);
+});
+
 test("in the full detector the registry's Ogg magic refines mixed video to the first stream's type", async () => {
   const theora = oggStream(1, packetOf("\x80theora", 30));
   const daala = oggStream(2, packetOf("\x80daala", 30));

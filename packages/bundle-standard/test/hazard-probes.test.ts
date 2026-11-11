@@ -27,9 +27,9 @@ import { createStandardIsolation, type StandardIsolation } from "../src/isolatio
  *     free-format MPEG headers x 2 MiB: bare 3.5 s, 180 MiB. tight: ok after 4.2 s.
  *     100,000 CHAP frames (2.8 MiB): bare 209 MiB; tight: LIMIT_EXCEEDED (heap, SIGABRT) after 1.0 s.
  *     85,000 tiny APIC frames (2 MiB): bare 1.3 s, 202 MiB; tight: ok after 2.0 s.
- *   Not reachable through the bundle: Ogg Vorbis / Opus detect as audio/vorbis and audio/opus, which no parser
- *   claims (UNSUPPORTED_FORMAT), and no detector output maps to the AudioParser type audio/ogg. Probed with
- *   music-metadata directly: all bounded, under 20 ms. ASF/WMA detects as video/x-ms-asf (another parser).
+ *   Ogg is reachable through the bundle since tikajs-68os.15: OggParser claims the Ogg family, and music-metadata
+ *   is not on that path (FLAC is native since tikajs-68os.61). Probed with music-metadata directly before that:
+ *   all bounded, under 20 ms. ASF/WMA detects as video/x-ms-asf (another parser).
  *
  *   hyparquet (no limits of its own; the ColumnarParser asks for rows 0..100 of every column of the first row groups)
  *     dictionary page + data page of 2^31-1 values with bit width 0 (119 bytes): bare 4.1 s, 1.0 GiB, ok (it

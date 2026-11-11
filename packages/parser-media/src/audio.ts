@@ -10,17 +10,37 @@ import {
 import { parseBuffer } from "music-metadata";
 import { AU_HEADER_BYTES, applyAuHeader } from "./au.ts";
 
+/**
+ * The whole input is buffered for music-metadata, so this is what the parse can hold, and the same 64 MiB as
+ * music-metadata's own ceiling on one allocation. It bounds memory, not the CPU cost of hostile data: music-metadata's
+ * MPEG sync scan on 0xFF bytes costs about 3 s of CPU and 70 bytes of heap per byte, which no option of it bounds (tried:
+ * duration false, skipPostHeaders), so a smaller limit is the way to a tighter bound. A real file is far smaller: a ten
+ * minute MP3 at 320 kbit/s is 24 MB, three minutes of CD audio as WAV 30 MB.
+ */
+export const DEFAULT_MAX_AUDIO_BYTES = 64 * 1024 * 1024;
+
+export interface AudioParserOptions {
+  /** Largest input read for music-metadata (default {@link DEFAULT_MAX_AUDIO_BYTES}); a larger one is a LimitExceededError. */
+  readonly maxBytes?: number;
+}
+
 /** Audio metadata for MP3/FLAC/WAV/AIFF/M4A/WMA via music-metadata, and AU by its header. Ogg has its own parsers. */
 export class AudioParser implements Parser {
   readonly name = "AudioParser";
   readonly capabilities = { metadataOnly: true, unsafe: true } as const;
+  readonly #maxBytes: number;
+
+  constructor(options: AudioParserOptions = {}) {
+    const maxBytes = options.maxBytes ?? DEFAULT_MAX_AUDIO_BYTES;
+    if (!Number.isInteger(maxBytes) || maxBytes < 1) throw new RangeError(`maxBytes must be a positive integer, got ${maxBytes}`);
+    this.#maxBytes = maxBytes;
+  }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
       [
         "audio/mpeg",
-        "audio/flac",
-        "audio/x-flac",
+        // FLAC is the FlacParser's, as in Tika: it reads the comments and the pictures that music-metadata only sums up.
         // Tika's AudioParser reads .au files through javax.sound, which music-metadata cannot read: see parse().
         "audio/basic",
         "audio/wav",
@@ -50,18 +70,9 @@ export class AudioParser implements Parser {
       await xhtml.endDocument();
       return;
     }
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-      total += chunk.byteLength;
-    }
-    const data = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      data.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
+    // Stops one chunk past the limit with a LimitExceededError, before music-metadata sees any of it.
+    const data = await stream.readFully(this.#maxBytes);
+    const total = data.byteLength;
     const contentType = metadata.get("Content-Type");
     const parsed = await parseBuffer(
       data,
@@ -86,6 +97,10 @@ export class AudioParser implements Parser {
     if (parsed.format.codec !== undefined) {
       metadata.set("audio:codec", parsed.format.codec);
     }
+    // AudioParser.java:146-148 writes the empty document for every type, so that the metadata is in its head.
+    const xhtml = new XHTMLContentHandler(handler, metadata);
+    await xhtml.startDocument();
+    await xhtml.endDocument();
   }
 }
 

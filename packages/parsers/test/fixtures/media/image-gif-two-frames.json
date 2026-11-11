@@ -1,0 +1,37 @@
+{
+  "description": "A hand-made two-frame GIF through ImageParser: Tika's ImageParser writes tk:num-images, tiff:ImageWidth/Length and img:width/height from the ImageIO reader, which sizes image 0 by its image descriptor (60x40), not the logical screen (100x75). Read from Tika source, not run. (tikajs-68os.45)",
+  "tags": [
+    "media",
+    "gif"
+  ],
+  "input": {
+    "base64": "R0lGODlhZABLAAAAACH5BAAAAAAAIf4DYWJjAmRlACwAAAAAPAAoAAACA0wBAAE7ACH5BAAAAAAAIf4DYWJjAmRlACwAAAAACgAKAIFVVVVVVVVVVVVVVVUCA0wBAAE7ADs="
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:num-images",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.img:width",
+      "value": "60"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.img:height",
+      "value": "40"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tiff:ImageWidth",
+      "value": "60"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tiff:ImageLength",
+      "value": "40"
+    }
+  ]
+}

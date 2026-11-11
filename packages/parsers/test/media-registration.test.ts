@@ -43,6 +43,25 @@ test("the audio Ogg types that fell back to AudioParser reach the parser of thei
   assert.deepEqual(await best("audio/x-oggpcm"), { name: "OggParser", kind: "exact" });
 });
 
+test("native FLAC and its alias reach the FlacParser, which reads them as Tika does (tikajs-68os.61)", async () => {
+  assert.deepEqual(await best("audio/x-flac"), { name: "FlacParser", kind: "exact" });
+  assert.deepEqual(await best("audio/flac"), { name: "FlacParser", kind: "exact" });
+});
+
+// Tika's FlacParserTest.testCoverArt and testMultipleCovers, through the default parser and a recursive parse.
+test("the pictures of a native FLAC file are embedded documents with the metadata Tika gives them", async () => {
+  const ripstream = createRipstream();
+  const one = await ripstream.parseRecursive(media("testFLAC_coverArt.flac"));
+  assert.equal(one.length, 2);
+  assert.equal(one[0]!.metadata.get("Content-Type"), "audio/x-flac");
+  assert.deepEqual(
+    [one[1]!.metadata.get("Content-Type"), one[1]!.metadata.get("tk:embedded-resource-type"), one[1]!.metadata.get("dc:title"), one[1]!.metadata.get("dc:description")],
+    ["image/png", "THUMBNAIL", "Test Cover", "Cover (front)"],
+  );
+  const two = await ripstream.parseRecursive(media("testFLAC_twoCovers.flac"));
+  assert.deepEqual(two.map((entry) => entry.metadata.get("tk:embedded-resource-type")), [null, "THUMBNAIL", "INLINE"]);
+});
+
 test("a bare audio/ogg goes to the general OggParser, and not to AudioParser", async () => {
   assert.deepEqual(await best("audio/ogg"), { name: "OggParser", kind: "exact" });
 });

@@ -1,0 +1,10 @@
+{
+  "description": "Tika's testFLAC_coverArt.flac, the audio side of FlacParserTest.testCoverArt: audio/x-flac, and the picture block is no metadata of the audio document (tikajs-68os.61)",
+  "tags": ["media", "flac", "embedded"],
+  "input": { "file": "testFLAC_coverArt.flac" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "audio/x-flac" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "Test Title" },
+    { "type": "equals", "field": "metadata.xmpDM:audioCompressor", "value": "FLAC" }
+  ]
+}

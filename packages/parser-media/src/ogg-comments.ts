@@ -154,3 +154,25 @@ export function decodeMimeBase64(text: string): Uint8Array | null {
   }
   return out.slice(0, length);
 }
+
+export interface FlacStreamInfo {
+  readonly sampleRate: number;
+  readonly channels: number;
+  /** Zero when the encoder did not know it. */
+  readonly totalSamples: number;
+}
+
+/**
+ * The STREAMINFO block of FLAC (RFC 9639, section 8.2) from its `offset`: after 10 bytes of block and frame sizes, 20 bits
+ * of sample rate, 3 of channels less one, 5 of bits per sample less one, and 36 of total samples. The caller has checked
+ * that the 18 bytes are there. Shared by native FLAC and the mapping of FLAC into Ogg.
+ */
+export function readFlacStreamInfo(bytes: Uint8Array, offset: number): FlacStreamInfo {
+  const at = (index: number): number => bytes[offset + index]!;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return {
+    sampleRate: (at(10) << 12) | (at(11) << 4) | (at(12) >> 4),
+    channels: ((at(12) >> 1) & 7) + 1,
+    totalSamples: (at(13) & 0x0f) * 2 ** 32 + view.getUint32(offset + 14),
+  };
+}

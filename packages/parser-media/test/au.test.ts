@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Metadata, ParseContext, RipstreamInputStream, createOutputHandler } from "@spikedpunch/ripstream-core";
+import { Metadata, ParseContext, RipstreamInputStream, createOutputHandler, type ContentHandler } from "@spikedpunch/ripstream-core";
 import { AudioParser } from "../src/audio.ts";
 import { concat, u32be } from "./ogg-builder.ts";
 
@@ -83,4 +83,39 @@ test("a header with a hostile data size reads no more than the header", async ()
   // The data size is 0xffffffff; nothing is allocated for it, and 5 MB of body is never read.
   const metadata = await parseAu(concat(auHeader(3), new Uint8Array(5 * 1024 * 1024)));
   assert.equal(metadata.get("audio:encoding"), "PCM_SIGNED");
+});
+
+async function parseAuAs(contentType: string, handler: ContentHandler = createOutputHandler("body")): Promise<Metadata> {
+  const metadata = new Metadata();
+  metadata.set("Content-Type", contentType);
+  const stream = await RipstreamInputStream.from(auHeader(3));
+  try {
+    await new AudioParser().parse(stream, handler, metadata, new ParseContext());
+  } finally {
+    await stream.close();
+  }
+  return metadata;
+}
+
+test("audio/basic is told by its essence, whatever its case, spaces and parameters", async () => {
+  for (const contentType of ["Audio/Basic", " audio/basic", "audio/basic ; x=y", "audio/basic; charset=binary"]) {
+    const metadata = await parseAuAs(contentType);
+    assert.equal(metadata.get("audio:encoding"), "PCM_SIGNED", contentType);
+  }
+});
+
+test("the AU branch starts and ends the document, once each, with the format in the head of the xml", async () => {
+  const events: string[] = [];
+  const recorder: ContentHandler = {
+    startDocument: () => void events.push("startDocument"),
+    endDocument: () => void events.push("endDocument"),
+  };
+  await parseAuAs("audio/basic", recorder);
+  assert.deepEqual(events, ["startDocument", "endDocument"]);
+
+  const xml = createOutputHandler("xml");
+  await parseAuAs("audio/basic", xml);
+  assert.match(xml.toString(), /^<html>\n<head>/);
+  assert.match(xml.toString(), /<meta name="xmpDM:audioSampleRate" content="44100"><\/meta>/);
+  assert.match(xml.toString(), /<\/html>\s*$/);
 });

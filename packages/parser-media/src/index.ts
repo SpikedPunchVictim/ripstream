@@ -1,7 +1,8 @@
 export { ImageParser } from "./image.ts";
 export { Mp4Parser } from "./mp4.ts";
-export { AudioParser } from "./audio.ts";
-export { FlacParser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser } from "./ogg.ts";
+export { AudioParser, DEFAULT_MAX_AUDIO_BYTES, type AudioParserOptions } from "./audio.ts";
+export { DEFAULT_MAX_FLAC_METADATA_BYTES } from "./flac.ts";
+export { FlacParser, type FlacParserOptions, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser } from "./ogg.ts";
 export { WmfEmfParser } from "./wmf.ts";
 export { FlvParser } from "./flv.ts";
 export { AsfParser, AviParser, MatroskaParser } from "./av-container.ts";
