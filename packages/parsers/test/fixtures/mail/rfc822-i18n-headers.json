@@ -1,0 +1,41 @@
+{
+  "description": "RFC822ParserTest.testI18NHeaders on testRFC822_i18nheaders: encoded words in the sender's name (Q) and in a subject folded over two lines (B, two charsets), the white space between them dropped. Read from the Tika source, not run against a Tika (tikajs-68os.46).",
+  "tags": [
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "file": "testRFC822_i18nheaders",
+    "filename": "testRFC822_i18nheaders"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Keld Jørn Simonsen <keld@dkuug.dk>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-name",
+      "value": "Keld Jørn Simonsen"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "keld@dkuug.dk"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "If you can read this you understand the example."
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "If you can read this you understand the example."
+    }
+  ]
+}

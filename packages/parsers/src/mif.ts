@@ -1,4 +1,5 @@
-import { createDecoder } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding } from "./charset.ts";
+import { LineSplitter } from "./line-splitter.ts";
 import {
   LimitExceededError,
   MediaType,
@@ -73,12 +74,13 @@ export class MifParser implements Parser {
     const prefix = await stream.peek(64 * 1024);
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
     metadata.set("Content-Type", CONTENT_TYPE);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     const statements = new MifStatements(new MifContent(xhtml, metadata), this.#maxOpenChars);
-    const lines = new LineSplitter(this.#maxLineChars);
+    const lines = new LineSplitter(this.#maxLineChars, "a MIF line");
     const read = async (found: readonly string[]): Promise<void> => {
       for (const line of found) {
         tick();
@@ -97,61 +99,6 @@ export class MifParser implements Parser {
 function positive(name: string, value: number): number {
   if (!Number.isInteger(value) || value < 1) throw new RangeError(`${name} must be a positive integer, got ${value}`);
   return value;
-}
-
-/** BufferedReader.readLine over decoded chunks: a line ends at \n, \r or \r\n, and the last needs no terminator. */
-class LineSplitter {
-  readonly #maxChars: number;
-  #pending = "";
-  /** The last chunk ended in \r: a \n at the start of the next one is part of that line end. */
-  #skipLineFeed = false;
-
-  constructor(maxChars: number) {
-    this.#maxChars = maxChars;
-  }
-
-  push(text: string): string[] {
-    if (text.length === 0) return [];
-    const lines: string[] = [];
-    let start = 0;
-    if (this.#skipLineFeed) {
-      this.#skipLineFeed = false;
-      if (text.startsWith("\n")) start = 1;
-    }
-    const terminator = /[\r\n]/g;
-    for (;;) {
-      terminator.lastIndex = start;
-      const match = terminator.exec(text);
-      if (match === null) break;
-      lines.push(this.#complete(text.slice(start, match.index)));
-      start = match.index + 1;
-      if (match[0] === "\r") {
-        if (start === text.length) this.#skipLineFeed = true;
-        else if (text[start] === "\n") start++;
-      }
-    }
-    this.#pending += text.slice(start);
-    this.#check(this.#pending);
-    return lines;
-  }
-
-  /** What is left at the end of the input: readLine returns it when it is not empty. */
-  finish(): string[] {
-    const last = this.#pending;
-    this.#pending = "";
-    return last.length > 0 ? [last] : [];
-  }
-
-  #complete(end: string): string {
-    const line = this.#pending + end;
-    this.#pending = "";
-    this.#check(line);
-    return line;
-  }
-
-  #check(line: string): void {
-    if (line.length > this.#maxChars) throw new LimitExceededError(`a MIF line is longer than ${this.#maxChars} characters`);
-  }
 }
 
 /** MIFExtractor.parse: the statements of the lines, passed to the content handler. */

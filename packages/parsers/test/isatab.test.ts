@@ -182,3 +182,8 @@ test("the options are positive integers", () => {
   assert.throws(() => new ISArchiveParser({ maxBytes: 0 }), RangeError);
   assert.throws(() => new ISArchiveParser({ maxColumns: 1.5 }), RangeError);
 });
+
+test("tk:detected-encoding is the charset the study table was read with, as AutoDetectReader writes it (tikajs-68os.65)", async () => {
+  const { metadata } = await parseXml(encoder.encode('"Source Name"\t"cultureé"\n'));
+  assert.equal(metadata.get("tk:detected-encoding"), "UTF-8");
+});

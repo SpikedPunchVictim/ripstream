@@ -272,3 +272,36 @@ test("the open-name cap is inclusive: names and one more character each, up to m
   await parseDirect("<abcde\n", parser);
   await assert.rejects(parseDirect("<abcdef\n", parser), (error: Error) => error.name === "LimitExceededError");
 });
+
+test("tk:detected-encoding is the charset the MIF text was read with, as AutoDetectReader writes it (tikajs-68os.65)", async () => {
+  const { metadata } = await parseDirect(MIF);
+  assert.equal(metadata.get("tk:detected-encoding"), "windows-1252");
+});
+
+test("a UTF-8 character split across two reads is one character", async () => {
+  // The stream hands out 64 KiB at a time: put the two bytes of an é on either side of the first 64 KiB.
+  const head = encoder.encode("<Para \n<String `é'>\n<String `");
+  const input = Uint8Array.from([
+    ...head,
+    ...encoder.encode("x".repeat(64 * 1024 - 1 - head.length)),
+    ...encoder.encode("é'>\n> # end of Para\n"),
+  ]);
+  assert.equal(input[64 * 1024 - 1], 0xc3);
+  const { text } = await parseDirect(input);
+  assert.match(text, /xé/);
+});
+
+test("a UTF-8 character cut off at the end of the file is decoded to U+FFFD, and that character is in the last line", async () => {
+  // The last line is `<Para` and a lead byte with nothing after it: an open line whose name is five characters with the U+FFFD.
+  const input = Uint8Array.from([...encoder.encode("<String `é'>\n<Para"), 0xc3]);
+  await assert.rejects(parseDirect(input, new MifParser({ maxOpenChars: 5 })), (error: Error) => error.name === "LimitExceededError");
+  const ended = Uint8Array.from([...encoder.encode("<String `é'>\n<Para")]);
+  await parseDirect(ended, new MifParser({ maxOpenChars: 5 }));
+});
+
+test("the error for a line over the cap says it is a MIF line", async () => {
+  await assert.rejects(
+    parseDirect(`<String \`${"x".repeat(50)}'>`, new MifParser({ maxLineChars: 10 })),
+    (error: Error) => error.name === "LimitExceededError" && error.message.includes("a MIF line"),
+  );
+});

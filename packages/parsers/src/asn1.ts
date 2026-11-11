@@ -9,15 +9,16 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 
-/** Generic DER/PKCS#7/PKCS#12 inspector: OIDs, strings and integers. */
+/**
+ * Generic DER inspector for PKCS#12 and PKCS#7 certificate bundles: OIDs, strings and integers. Not a Tika parser; pkcs7-mime
+ * and pkcs7-signature are Pkcs7Parser's (tikajs-68os.70).
+ */
 export class Asn1Parser implements Parser {
   readonly name = "ASN1Parser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
       [
-        "application/pkcs7-mime",
-        "application/pkcs7-signature",
         "application/x-pkcs12",
         "application/x-pkcs7-certificates",
       ].map((type) => MediaType.parse(type)!),

@@ -1,0 +1,18 @@
+{
+  "description": "MarkdownParser writes tk:detected-encoding as Tika's AutoDetectReader does (tikajs-68os.65)",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "text": "# héllo",
+    "filename": "doc.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:detected-encoding",
+      "value": "UTF-8"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "description": "HtmlParser writes tk:detected-encoding as Tika's AutoDetectReader does (tikajs-68os.65)",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "text": "<html><body>héllo</body></html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:detected-encoding",
+      "value": "UTF-8"
+    }
+  ]
+}

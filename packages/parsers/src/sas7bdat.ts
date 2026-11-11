@@ -21,6 +21,8 @@ import { readSasFile, type SasColumn } from "./sas7bdat-file.ts";
 const SAS_TYPE = "application/x-sas-data";
 /** A row is cheap and a file can hold millions; the checkpoint keeps an abort from waiting for the last one. */
 const ABORT_CHECK_INTERVAL = 256;
+/** What a small compressed file may inflate to whatever its ratio, so that a few rows of blanks are not a bomb. */
+const MIN_INFLATED_BYTES = 1024 * 1024;
 
 export class Sas7bdatParser implements Parser {
   readonly name = "SAS7BDATParser";
@@ -36,7 +38,10 @@ export class Sas7bdatParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     metadata.set("Content-Type", SAS_TYPE);
-    const sas = readSasFile(await readAll(stream));
+    const data = await readAll(stream);
+    // What the rows of a compressed file may inflate to: the ratio the limits allow of the file, and no more than they allow in all.
+    const maxInflated = Math.min(ctx.limits.maxTotalEmbeddedBytes, data.length * ctx.limits.maxDecompressionRatio + MIN_INFLATED_BYTES);
+    const sas = readSasFile(data, { maxInflatedBytes: maxInflated });
     const { properties, columns } = sas;
 
     metadata.set("dc:title", properties.name);

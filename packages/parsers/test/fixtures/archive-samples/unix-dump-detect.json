@@ -1,0 +1,9 @@
+{
+  "description": "A Unix dump volume is application/x-tika-unix-dump from its content alone (tikajs-68os.20, .47): a little-endian 60012 at offset 24, with no file name. Synthetic volume, see unix-dump.json",
+  "tags": ["dump", "archive", "detect"],
+  "operation": "detect",
+  "input": { "file": "synthetic-unix-dump.dump" },
+  "assertions": [
+    { "type": "equals", "field": "mediaType", "value": "application/x-tika-unix-dump" }
+  ]
+}

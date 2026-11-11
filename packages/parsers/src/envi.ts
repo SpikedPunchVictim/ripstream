@@ -1,4 +1,4 @@
-import { createDecoder } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding } from "./charset.ts";
 import {
   MalformedDocumentError,
   MediaType,
@@ -13,6 +13,7 @@ import {
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 import { javaDoubleString, javaIsBlank, javaSplit, javaTrim, parseJavaDouble, parseJavaInt } from "./java-compat.ts";
 import { KeyPrefixWriter } from "./key-prefix.ts";
+import { LineSplitter } from "./line-splitter.ts";
 
 /** Real ENVI headers are a few kilobytes to tens of kilobytes (one number per band); this bounds one that never ends. */
 export const DEFAULT_MAX_ENVI_HEADER_BYTES = 4 * 1024 * 1024;
@@ -73,23 +74,20 @@ export class EnviHeaderParser implements Parser {
     const bytes = await stream.readFully(this.#maxHeaderBytes);
     const { decoder, charset } = createDecoder(detectEncoding(bytes.subarray(0, 64 * 1024)).charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     const lines = new EnviLines(xhtml, new KeyPrefixWriter(metadata, ENVI_PREFIX));
-    for (const line of linesOf(decoder.decode(bytes))) {
+    // The header is already capped in bytes, so a line (at most that many characters) never trips the splitter's own cap.
+    const splitter = new LineSplitter(this.#maxHeaderBytes, "an ENVI header line");
+    const found = [...splitter.push(decoder.decode(bytes)), ...splitter.finish()];
+    for (const line of found) {
       tick();
       await lines.read(line);
     }
     await xhtml.endDocument();
   }
-}
-
-/** BufferedReader.readLine: a line ends at \n, \r or \r\n, and a terminator at the very end does not start another line. */
-function linesOf(text: string): string[] {
-  const lines = text.split(/\r\n|\r|\n/);
-  if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
 }
 
 /** EnviHeaderParser.readLines and writeParagraphAndSetMetadata. */

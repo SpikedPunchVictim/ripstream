@@ -34,12 +34,14 @@ for (const [name, count] of [
   });
 }
 
-test("MANIFEST.XML.TSD: two documents here, where Tika counts three", async () => {
-  // Tika's third document is the signed XML inside the PKCS#7 file this envelope holds. Here that file reaches the generic
-  // ASN.1 parser, which does not read indefinite lengths, so the XML is not extracted (follow-up bead).
+test("MANIFEST.XML.TSD: three documents, as Tika counts them (testTSDFileDataRecursiveMetadataXML)", async () => {
+  // The envelope, the PKCS#7 file it holds, and the signed XML inside that file (tikajs-68os.70).
   const records = await createRipstream().parseRecursive(file("MANIFEST.XML.TSD"), { filename: "MANIFEST.XML.TSD" });
-  assert.equal(records.length, 2);
+  assert.equal(records.length, 3);
   assert.ok(records[0]!.metadata.getAll("tk:parsed-by").includes("TSDParser"));
+  assert.ok(records[1]!.metadata.getAll("tk:parsed-by").includes("Pkcs7Parser"));
+  assert.equal(records[1]!.metadata.get("Content-Type"), "application/pkcs7-mime; smime-type=signed-data");
+  assert.equal(records[2]!.metadata.get("Content-Type"), "application/xml");
 });
 
 test("testTSD_broken_pdf.tsd: the PDF is the embedded document and the cut is recorded on it (testBrokenPdf)", async () => {

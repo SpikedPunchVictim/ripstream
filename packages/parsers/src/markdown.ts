@@ -1,4 +1,4 @@
-import { createDecoder, withCharset } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import {
   MediaType,
   XHTMLContentHandler,
@@ -27,6 +27,7 @@ export class MarkdownParser implements Parser {
     const prefix = await stream.peek(64 * 1024);
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
     metadata.set("Content-Type", withCharset(null, "text/markdown", charset));
 
     let text = "";

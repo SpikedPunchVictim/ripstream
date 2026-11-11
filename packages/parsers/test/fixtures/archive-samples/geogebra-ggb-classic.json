@@ -1,0 +1,18 @@
+{
+  "description": "Tika's GeoGebraParserTest.testClassicWorksheet on testGeoGebra_classic.ggb: app keys, no title for a blank construction, and the text without the point and segment expressions (tikajs-68os.52). Read from the Tika source, not run against a Tika",
+  "tags": ["geogebra", "zip"],
+  "input": { "file": "testGeoGebra_classic.ggb" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.geogebra.file" },
+    { "type": "equals", "field": "metadata.geogebra:app-name", "value": "classic" },
+    { "type": "equals", "field": "metadata.geogebra:app-version", "value": "5.4.929.3" },
+    { "type": "equals", "field": "metadata.geogebra:format-version", "value": "5.0" },
+    { "type": "equals", "field": "metadata.geogebra:id", "value": "6b9c92b5-ee50-4943-a8a0-388a33f639f8" },
+    { "type": "absent", "field": "metadata.dc:title" },
+    { "type": "contains", "field": "text", "value": "In a right triangle a² + b² = c²" },
+    { "type": "contains", "field": "text", "value": "Hypotenuse c =" },
+    { "type": "contains", "field": "text", "value": "Drag the vertices to explore." },
+    { "type": "not_contains", "field": "text", "value": "(0, 0)" },
+    { "type": "not_contains", "field": "text", "value": "Segment" }
+  ]
+}

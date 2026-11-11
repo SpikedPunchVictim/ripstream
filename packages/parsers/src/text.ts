@@ -7,7 +7,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { createDecoder, withCharset } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 
 /** The types Tika's SourceCodeParser takes; it records `Content-Encoding` and leaves `Content-Type` bare. */
@@ -66,6 +66,7 @@ export class TextParser implements Parser {
 
     const { decoder, charset } = createDecoder(encoding.charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
     // Tika's TXTParser writes `<incoming type>; charset=<detected>`; its SourceCodeParser leaves the type bare.
     const incoming = metadata.get("Content-Type");
     if (!SOURCE_CODE_TYPES.has(MediaType.parse(incoming)?.getBaseType().toString() ?? "")) {

@@ -153,8 +153,6 @@ test("a byte order that is neither of the two is refused as malformed", () => {
   const data = base();
   data[37] = 2;
   assert.equal(outcome(data), "malformed: SAS7BDAT has an unknown byte order");
-  data[37] = 0;
-  assert.equal(outcome(data), "unsupported: Big-endian SAS7BDAT files are not supported");
 });
 
 test("the layout of byte 35 puts the page fields and the timestamps four bytes further in", () => {
@@ -446,14 +444,14 @@ test("the strings of a column may be in any of the text blocks, each named by it
   );
 });
 
-test("compression is named by the first text block only, and either literal in it refuses the file", () => {
+test("compression is named by the first text block only, and either literal in it is read as a compressed file", () => {
+  // Compressed files are read in sas7bdat-layouts.test.ts; here only that naming it does not refuse the file.
   const named = (name: string, blocks?: BuiltColumn["blocks"], textBlocks = 1): string =>
     outcome(base({ columns: [{ name, type: "numeric", width: 8, blocks }], rows: [], textBlocks }));
-  assert.equal(named("SASYZCRL"), "unsupported: Compressed (SASYZCRL) SAS7BDAT files are not supported");
-  assert.equal(named("SASYZCR2"), "unsupported: Compressed (SASYZCR2) SAS7BDAT files are not supported");
-  assert.equal(named("xx SASYZCR2 xx"), "unsupported: Compressed (SASYZCR2) SAS7BDAT files are not supported");
-  assert.equal(named("SASYZCRL", { name: 0 }, 2), "unsupported: Compressed (SASYZCRL) SAS7BDAT files are not supported");
-  // In the second block of two it is a name like another.
+  assert.equal(named("SASYZCRL"), "accepted");
+  assert.equal(named("SASYZCR2"), "accepted");
+  assert.equal(named("xx SASYZCR2 xx"), "accepted");
+  assert.equal(named("SASYZCRL", { name: 0 }, 2), "accepted");
   assert.equal(named("SASYZCRL", { name: 1 }, 2), "accepted");
   assert.equal(named("SASYZCRX"), "accepted");
 });

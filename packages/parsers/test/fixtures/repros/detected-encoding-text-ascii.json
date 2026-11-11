@@ -1,0 +1,17 @@
+{
+  "description": "TXTParser writes tk:detected-encoding as Tika's AutoDetectReader does (Mojibuster answers windows-1252 for pure ASCII) (tikajs-68os.65)",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "text": "hello"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:detected-encoding",
+      "value": "windows-1252"
+    }
+  ]
+}

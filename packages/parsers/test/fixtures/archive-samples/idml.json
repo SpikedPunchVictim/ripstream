@@ -1,0 +1,15 @@
+{
+  "description": "Tika's IDMLParserTest.testParserToText on testIndesign.idml: page counts, the XMP dates and creator tool from META-INF/metadata.xml, and the story text (tikajs-68os.52). Read from the Tika source, not run against a Tika",
+  "tags": ["idml", "zip", "xmp"],
+  "input": { "file": "testIndesign.idml" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.meta:page-count", "value": "3" },
+    { "type": "equals", "field": "metadata.idml:master-spread-page-count", "value": "2" },
+    { "type": "equals", "field": "metadata.idml:spread-page-count", "value": "1" },
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.adobe.indesign-idml-package" },
+    { "type": "equals", "field": "metadata.xmp:CreateDate", "value": "2020-09-20T20:07:44Z" },
+    { "type": "equals", "field": "metadata.xmp:ModifyDate", "value": "2020-09-20T20:07:44Z" },
+    { "type": "equals", "field": "metadata.xmp:CreatorTool", "value": "Adobe InDesign CC 14.0 (Windows)" },
+    { "type": "contains", "field": "text", "value": "Lorem ipsum dolor sit amet, consectetur adipiscing elit" }
+  ]
+}

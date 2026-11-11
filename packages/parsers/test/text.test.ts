@@ -114,3 +114,17 @@ test("shell scripts (application/x-sh) parse as text", async () => {
   const result = await ripstream.parse(encoder.encode("#!/bin/sh\necho hi\n"), { filename: "run.sh" });
   assert.match(result.text, /echo hi/);
 });
+
+test("the text parser writes tk:detected-encoding for the types it reads itself (the .log of a text/x-log)", async () => {
+  const result = await ripstream.parse(encoder.encode("héllo\n"), { filename: "a.log" });
+  assert.equal(result.metadata.get("tk:detected-encoding"), "UTF-8");
+});
+
+test("recordDetectedEncoding replaces a charset recorded before it", async () => {
+  const { recordDetectedEncoding } = await import("../src/charset.ts");
+  const { Metadata } = await import("@spikedpunch/ripstream-core");
+  const metadata = new Metadata();
+  recordDetectedEncoding(metadata, "windows-1252");
+  recordDetectedEncoding(metadata, "UTF-8");
+  assert.deepEqual(metadata.getAll("tk:detected-encoding"), ["UTF-8"]);
+});

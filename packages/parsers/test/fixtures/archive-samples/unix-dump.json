@@ -1,0 +1,11 @@
+{
+  "description": "A Unix dump volume is detected as application/x-tika-unix-dump and read: each file is an embedded document whose text is in the output (tikajs-68os.47). The volume is synthetic, built to the dump(8) layout by packages/parser-archive/test/dump-builder.ts: Tika has no dump test file and none produced by dump(8) was available. Read from the commons-compress layout as remembered, not run against a Tika",
+  "tags": ["dump", "archive"],
+  "input": { "file": "synthetic-unix-dump.dump" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-tika-unix-dump" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "UnixDumpParser" },
+    { "type": "contains", "field": "text", "value": "Hello from a Unix dump volume." },
+    { "type": "contains", "field": "text", "value": "Notes kept in a subdirectory of the dump." }
+  ]
+}

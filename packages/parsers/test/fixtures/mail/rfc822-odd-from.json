@@ -1,0 +1,41 @@
+{
+  "description": "RFC822ParserTest.testUnusualFromAddress on testRFC822_oddfrom: a From that is only a bracketed phrase is the creator without its brackets. Read from the Tika source, not run against a Tika (tikajs-68os.46).",
+  "tags": [
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "file": "testRFC822_oddfrom",
+    "filename": "testRFC822_oddfrom"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Saved by Windows Internet Explorer 7"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "Saved by Windows Internet Explorer 7"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Air Permit Programs | Air & Radiation | US EPA"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.multipart:subtype",
+      "value": "related"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.multipart:boundary",
+      "value": "----=_NextPart_000_0003_01C86FE3.9CC848D0"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import { TextParser } from "./text.ts";
 import { HtmlDocumentParser } from "./html.ts";
 import { XmlParser } from "./xml.ts";
 import { CsvParser, type CsvParserOptions } from "./csv.ts";
-import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, Deflate64Parser, GzipParser, Iso9660Parser, Lz4Parser, LzmaParser, PlistParser, SnappyParser, TarParser, UnixCompressParser, XzParser, ZipParser, ZlibParser } from "@spikedpunch/ripstream-parser-archive";
+import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, Deflate64Parser, GzipParser, Iso9660Parser, Lz4Parser, LzmaParser, PlistParser, SnappyParser, TarParser, UnixCompressParser, UnixDumpParser, XzParser, ZipParser, ZlibParser } from "@spikedpunch/ripstream-parser-archive";
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
 import { AsfParser, AudioParser, AviParser, FlacParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
 import { ColumnarParser, GeoPkgParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
@@ -42,6 +42,7 @@ import { X509Parser } from "./x509.ts";
 import { ShapefileParser } from "./shapefile.ts";
 import { FitsParser } from "./fits.ts";
 import { Asn1Parser } from "./asn1.ts";
+import { Pkcs7Parser } from "./pkcs7.ts";
 import { MidiParser } from "./midi.ts";
 import { IccParser } from "./icc.ts";
 import { AnpaParser } from "./anpa.ts";
@@ -70,7 +71,7 @@ export { MarkdownParser } from "./markdown.ts";
 export { TmxParser, WarcParser, XliffParser } from "./web.ts";
 export { WACZParser } from "./wacz.ts";
 export { XLZParser } from "./xlz.ts";
-export { MailParser } from "./mail.ts";
+export { DEFAULT_MAX_MAIL_HEADER_BYTES, MailParser, type MailParserOptions } from "./mail.ts";
 export { MboxParser } from "./mbox.ts";
 export { JavaClassParser } from "./java-class.ts";
 export { RdfParser } from "./rdf.ts";
@@ -88,6 +89,7 @@ export { X509Parser } from "./x509.ts";
 export { ShapefileParser } from "./shapefile.ts";
 export { FitsParser } from "./fits.ts";
 export { Asn1Parser } from "./asn1.ts";
+export { Pkcs7Parser } from "./pkcs7.ts";
 export { MidiParser } from "./midi.ts";
 export { IccParser } from "./icc.ts";
 export { AnpaParser } from "./anpa.ts";
@@ -165,6 +167,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new PlistParser(),
       new AppleSingleParser(),
       new TarParser(),
+      new UnixDumpParser(),
       new PdfParser({
         ...(options.pdfPassword === undefined ? {} : { password: options.pdfPassword }),
         // The `pdf-parser` entry's PDFParserConfig properties (the section only holds the ones PdfParser has).
@@ -231,6 +234,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new X509Parser(),
       new ShapefileParser(),
       new FitsParser(),
+      new Pkcs7Parser(),
       new Asn1Parser(),
       new MidiParser(),
       new IccParser(),

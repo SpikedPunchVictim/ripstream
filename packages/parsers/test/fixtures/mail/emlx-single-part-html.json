@@ -1,0 +1,33 @@
+{
+  "description": "EMLXTest.testSinglePartHtml on testEMLX_single_part_html.emlx: a single-part message. Read from the Tika source, not run against a Tika (tikajs-68os.46).",
+  "tags": [
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "file": "testEMLX_single_part_html.emlx",
+    "filename": "testEMLX_single_part_html.emlx"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/x-emlx"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "hseldon@example.com"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "The trial balance is ready for review."
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "date-received"
+    }
+  ]
+}

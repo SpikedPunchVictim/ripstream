@@ -1,0 +1,9 @@
+{
+  "description": "Tika's TestContainerAwareDetector.testDetectGeoGebra: testGeoGebra_classic.ggb is application/vnd.geogebra.file from its content, with no file name (tikajs-68os.52). Read from the Tika source, not run against a Tika",
+  "tags": ["geogebra", "zip", "detect"],
+  "operation": "detect",
+  "input": { "file": "testGeoGebra_classic.ggb" },
+  "assertions": [
+    { "type": "equals", "field": "mediaType", "value": "application/vnd.geogebra.file" }
+  ]
+}

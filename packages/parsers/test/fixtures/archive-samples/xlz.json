@@ -1,0 +1,13 @@
+{
+  "description": "Tika's XLZParserTest.testXLZ on testXLIFF12.xlz, named because the type is a glob only (without a name it is application/zip, in Tika as here): the XLIFF 1.2 inside the zip is read, with its file and unit counts and its languages (tikajs-68os.52). Read from the Tika source, not run against a Tika",
+  "tags": ["xliff", "xlz", "zip"],
+  "input": { "file": "testXLIFF12.xlz", "filename": "testXLIFF12.xlz" },
+  "assertions": [
+    { "type": "contains", "field": "text", "value": "Hooray" },
+    { "type": "equals", "field": "metadata.file-count", "value": "2" },
+    { "type": "equals", "field": "metadata.tu-count", "value": "4" },
+    { "type": "equals", "field": "metadata.source-language", "value": "en" },
+    { "type": "equals", "field": "metadata.target-language", "value": "fr" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "XLZParser" }
+  ]
+}

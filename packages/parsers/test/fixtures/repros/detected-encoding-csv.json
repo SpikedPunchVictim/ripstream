@@ -1,0 +1,18 @@
+{
+  "description": "TextAndCSVParser writes tk:detected-encoding as Tika's AutoDetectReader does (tikajs-68os.65)",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "text": "a,b\n1,é\n",
+    "filename": "data.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.tk:detected-encoding",
+      "value": "UTF-8"
+    }
+  ]
+}

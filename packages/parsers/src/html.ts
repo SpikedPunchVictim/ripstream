@@ -1,4 +1,4 @@
-import { createDecoder, withCharset } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import {
   AttributesImpl,
   LimitExceededError,
@@ -74,6 +74,7 @@ export class HtmlDocumentParser implements Parser {
     const prefix = await stream.peek(64 * 1024);
     const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
     // Tika's JSoupParser builds the type from a constant by the incoming type's prefix, and leaves any other type alone
     // (application/vnd.mozilla.xul+xml among them).
     const previous = metadata.get("Content-Type");

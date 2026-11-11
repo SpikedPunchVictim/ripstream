@@ -183,7 +183,7 @@ test("text is written as it is", () => {
   assert.equal(formatCell(column, "abc"), "abc");
 });
 
-// ---- variants this reader does not read ----
+// ---- files that are not SAS files (the 64-bit, big-endian and compressed layouts are in sas7bdat-layouts.test.ts) ----
 
 const COLUMNS: BuiltColumn[] = [
   { name: "n", type: "numeric", width: 8 },
@@ -205,19 +205,6 @@ const patched = (data: Uint8Array, change: (view: DataView, bytes: Uint8Array) =
 
 /** Absolute offset of the row size subheader of a built file: the first subheader sits at the end of the first page. */
 const ROW_SIZE_AT = (pageLength = 4096): number => HEADER_LENGTH + pageLength - 480;
-
-test("a 64-bit file is refused as unsupported, since no file of that kind was available to read it against", async () => {
-  await assert.rejects(parseSas(patched(small(), (_view, bytes) => (bytes[32] = 0x33))), UnsupportedFormatError);
-});
-
-test("a big-endian file is refused as unsupported, for the same reason", async () => {
-  await assert.rejects(parseSas(patched(small(), (_view, bytes) => (bytes[37] = 0))), UnsupportedFormatError);
-});
-
-test("a file whose columns are compressed is refused as unsupported", async () => {
-  const compressed = buildSas7bdat({ columns: [{ name: "SASYZCRL", type: "numeric", width: 8 }], rows: [[1]] });
-  await assert.rejects(parseSas(compressed), UnsupportedFormatError);
-});
 
 test("text and an empty file are not SAS files", async () => {
   await assert.rejects(parseSas(new TextEncoder().encode("not a SAS file ".repeat(40))), MalformedDocumentError);

@@ -1,4 +1,4 @@
-import { MediaType } from "@spikedpunch/ripstream-core";
+import { MediaType, type Metadata } from "@spikedpunch/ripstream-core";
 
 export const FALLBACK_CHARSET = "utf-8";
 
@@ -32,4 +32,14 @@ export function createDecoder(label: string): CharsetDecoder {
 export function withCharset(incoming: string | null, fallback: string, charset: string): string {
   const base = MediaType.parse(incoming) ?? MediaType.parseOrThrow(fallback);
   return base.withParameters({ charset }).toString();
+}
+
+/**
+ * `TikaCoreProperties.DETECTED_ENCODING` (`tk:detected-encoding`), which Tika's AutoDetectReader writes for every text parser that
+ * reads through it: the charset the text is decoded with. Tika also writes `tk:encoding-detector` (the simple class name of the
+ * detector that won, such as `MojibusterEncodingDetector`); it is not written here, because ripstream's detector is not Tika's
+ * chain and has no name that would be true to it.
+ */
+export function recordDetectedEncoding(metadata: Metadata, charset: string): void {
+  metadata.set("tk:detected-encoding", charset);
 }

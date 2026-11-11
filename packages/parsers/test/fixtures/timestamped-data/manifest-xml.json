@@ -1,5 +1,5 @@
 {
-  "description": "Tika's TSDParserTest.testTSDFileData and testTSDFileDataRecursiveMetadataXML on MANIFEST.XML.TSD. Tika counts three documents (the envelope, a PKCS#7 file and the signed XML in it); here the PKCS#7 content reaches the generic ASN.1 parser, which cannot read its indefinite lengths, so the signed XML is not extracted. That count is not asserted here (tikajs-68os.21). Read from the Tika source, not run against a Tika",
+  "description": "Tika's TSDParserTest.testTSDFileData on MANIFEST.XML.TSD. Its testTSDFileDataRecursiveMetadataXML count of three documents (the envelope, the PKCS#7 file in it, the signed XML in that) is asserted in test/tsd-facade.test.ts, since a fixture cannot count documents (tikajs-68os.70). Read from the Tika source, not run against a Tika",
   "tags": [
     "tsd",
     "timestamped-data",

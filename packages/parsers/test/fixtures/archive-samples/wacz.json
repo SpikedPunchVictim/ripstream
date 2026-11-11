@@ -1,0 +1,9 @@
+{
+  "description": "Tika's WACZParserTest.testBasic on testWACZ.wacz: the container is application/x-wacz; its one embedded WARC is a warcinfo record, so there is no text (tikajs-68os.52). The embedded document is asserted in archive-samples.test.ts. Read from the Tika source, not run against a Tika",
+  "tags": ["wacz", "zip", "warc"],
+  "input": { "file": "testWACZ.wacz" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/x-wacz" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "WACZParser" }
+  ]
+}

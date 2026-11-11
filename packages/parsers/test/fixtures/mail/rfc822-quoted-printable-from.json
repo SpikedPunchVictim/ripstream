@@ -1,0 +1,46 @@
+{
+  "description": "RFC822ParserTest.testExtendedToFromMetadata on testRFC822_quoted: an unquoted display name and an address in angle brackets. Read from the Tika source, not run against a Tika (tikajs-68os.46).",
+  "tags": [
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "file": "testRFC822_quoted",
+    "filename": "testRFC822_quoted"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.message:from-name",
+      "value": "Another Person"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "another.person@another-example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "A. Person <a.person@example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:Return-Path",
+      "value": "<another.person@another-example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2010-11-26T19:57:53Z"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Düsseldorf has non-ascii."
+    }
+  ]
+}

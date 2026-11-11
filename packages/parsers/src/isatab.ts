@@ -1,4 +1,4 @@
-import { createDecoder } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding } from "./charset.ts";
 import {
   LimitExceededError,
   MalformedDocumentError,
@@ -53,8 +53,8 @@ function positiveInteger(name: string, value: number): number {
  *
  * Differences from Tika, all read from the source and not run against a Tika:
  *  - A study over `maxBytes`, or a row wider than `maxColumns`, is a LimitExceededError. Tika reads it all.
- *  - The character set comes from ripstream's detector, not Tika's AutoDetectReader, so `tk:detected-encoding` and
- *    `tk:encoding-detector` are not written.
+ *  - The character set comes from ripstream's detector, not Tika's AutoDetectReader. `tk:detected-encoding` is written;
+ *    `tk:encoding-detector` is not, as there is no Tika detector to name.
  */
 export class ISArchiveParser implements Parser {
   readonly name = "ISArchiveParser";
@@ -78,7 +78,8 @@ export class ISArchiveParser implements Parser {
   ): Promise<void> {
     const tick = signalCheckpoint(ctx);
     const bytes = await stream.readFully(this.#maxBytes);
-    const { decoder } = createDecoder(detectEncoding(bytes.subarray(0, 64 * 1024)).charset);
+    const { decoder, charset } = createDecoder(detectEncoding(bytes.subarray(0, 64 * 1024)).charset);
+    recordDetectedEncoding(metadata, charset);
     const records = tdfRecords(decoder.decode(bytes), this.#maxColumns);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);

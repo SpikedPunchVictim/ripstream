@@ -1,4 +1,4 @@
-import { createDecoder, withCharset } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import {
   LimitExceededError,
   MediaType,
@@ -153,6 +153,7 @@ export class CsvParser implements Parser {
     const head = await stream.peek(this.#markLimit * 4);
     const { decoder, charset } = createDecoder(detectEncoding(head.subarray(0, 64 * 1024)).charset);
     metadata.set("Content-Encoding", charset);
+    recordDetectedEncoding(metadata, charset);
 
     const delimiter = this.#delimiter ?? this.#sniff(head, charset);
     if (delimiter === null) {

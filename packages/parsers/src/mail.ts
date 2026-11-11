@@ -17,10 +17,38 @@ import {
   type Parser,
 } from "@spikedpunch/ripstream-core";
 import { HtmlDocumentParser } from "./html.ts";
+import { applyMailMetadata, type HeaderField } from "./mail-metadata.ts";
+import { parseStructured } from "./mail-structured.ts";
 
-interface HeaderField {
-  readonly name: string;
-  readonly value: string;
+/**
+ * Tika's RFC822Parser builds its mime4j configuration with `setMaxLineLen(100000).setMaxHeaderLen(100000)`: a header block over
+ * this many bytes is an error there (a TikaException; a LimitExceededError here).
+ */
+export const DEFAULT_MAX_MAIL_HEADER_BYTES = 100_000;
+
+export interface MailParserOptions {
+  /**
+   * Tika's `RFC822Parser.Config.extractAllAlternatives` (default false): every part of a multipart/alternative is read, not
+   * only the best one.
+   */
+  readonly extractAllAlternatives?: boolean;
+  /** Maximum bytes in one header block, the message's and each part's (default {@link DEFAULT_MAX_MAIL_HEADER_BYTES}). */
+  readonly maxHeaderBytes?: number;
+}
+
+/** What rendering a message needs besides the entity: where the text goes, the limits, and the options. */
+interface Output {
+  readonly xhtml: XHTMLContentHandler;
+  readonly metadata: Metadata;
+  readonly ctx: ParseContext;
+  readonly extractAllAlternatives: boolean;
+  readonly maxHeaderBytes: number;
+}
+
+/** The multipart an entity is in: what Tika's MailContentHandler tells an embedded part (`multipart:subtype`, `multipart:boundary`). */
+interface Container {
+  readonly subtype: string;
+  readonly boundary: string | undefined;
 }
 
 interface Entity {
@@ -33,9 +61,27 @@ interface Entity {
  *
  * Like Tika's RFC822Parser it also reads Apple Mail's emlx (`message/x-emlx`): a first line carrying the message's byte
  * count, then the message, then an XML plist. See {@link stripEmlxFraming}.
+ *
+ * Headers become metadata as in Tika's MailContentHandler (see {@link applyMailMetadata}). Of a multipart/alternative only the
+ * best part is read, unless `extractAllAlternatives` is set. Not yet as Tika does it (tikajs-68os.46 records the rest): a
+ * text part that is an attachment, or that sits below the first level of a multipart outside an alternative, is read inline here
+ * and is an embedded document in Tika; a message/rfc822 part is read inline and is an embedded document in Tika; the text of
+ * a body part is not wrapped in `<div class="email-entry"><p>`; an embedded part gets no Content-Disposition, Content-Encoding
+ * or file-system dates.
  */
 export class MailParser implements Parser {
   readonly name = "RFC822Parser";
+  readonly #extractAllAlternatives: boolean;
+  readonly #maxHeaderBytes: number;
+
+  constructor(options: MailParserOptions = {}) {
+    const maxHeaderBytes = options.maxHeaderBytes ?? DEFAULT_MAX_MAIL_HEADER_BYTES;
+    if (!Number.isInteger(maxHeaderBytes) || maxHeaderBytes < 1) {
+      throw new RangeError(`maxHeaderBytes must be a positive integer, got ${maxHeaderBytes}`);
+    }
+    this.#extractAllAlternatives = options.extractAllAlternatives ?? false;
+    this.#maxHeaderBytes = maxHeaderBytes;
+  }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
@@ -64,16 +110,23 @@ export class MailParser implements Parser {
       offset += chunk.byteLength;
     }
 
-    const root = splitEntity(stripEmlxFraming(data));
+    const root = splitEntity(stripEmlxFraming(data), this.#maxHeaderBytes);
     if (root.headers.length === 0) {
       throw new MalformedDocumentError("Email message has no headers");
     }
-    applyMailMetadata(metadata, root.headers);
+    applyMailMetadata(metadata, root.headers, decodeHeader);
     classifySecurity(root.headers, metadata);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
+    const output: Output = {
+      xhtml,
+      metadata,
+      ctx,
+      extractAllAlternatives: this.#extractAllAlternatives,
+      maxHeaderBytes: this.#maxHeaderBytes,
+    };
     await xhtml.startDocument();
-    await renderEntity(root, xhtml, metadata, ctx, 0);
+    await renderEntity(root, output, 0, undefined);
     await xhtml.endDocument();
   }
 }
@@ -113,13 +166,8 @@ function stripEmlxFraming(data: Uint8Array): Uint8Array {
   return verified ? data.subarray(lineLength, plistAt) : data.subarray(lineLength);
 }
 
-async function renderEntity(
-  entity: Entity,
-  xhtml: XHTMLContentHandler,
-  metadata: Metadata,
-  ctx: ParseContext,
-  depth: number,
-): Promise<void> {
+async function renderEntity(entity: Entity, output: Output, depth: number, container: Container | undefined): Promise<void> {
+  const { xhtml, ctx } = output;
   if (depth > ctx.limits.maxNodeDepth) {
     throw new LimitExceededError(
       `Mail nesting depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`,
@@ -129,23 +177,14 @@ async function renderEntity(
   const type = contentType.type;
 
   if (type.startsWith("multipart/")) {
-    const boundary = contentType.parameters.get("boundary");
-    if (boundary === undefined) return;
-    // RFC 2046 section 5.1.1 caps boundaries at 70 characters; longer ones make
-    // the naive byte search O(body * boundary).
-    if (boundary.length > 70) {
-      throw new MalformedDocumentError("Multipart boundary exceeds 70 characters");
-    }
-    for (const part of splitMultipart(entity.body, boundary)) {
-      await renderEntity(part, xhtml, metadata, ctx, depth + 1);
-    }
+    await renderMultipart(entity, type, contentType.parameters.get("boundary"), output, depth);
     return;
   }
 
   if (type === "message/rfc822") {
-    const nested = splitEntity(entity.body);
+    const nested = splitEntity(entity.body, output.maxHeaderBytes);
     if (nested.headers.length > 0) {
-      await renderEntity(nested, xhtml, metadata, ctx, depth + 1);
+      await renderEntity(nested, output, depth + 1, container);
     }
     return;
   }
@@ -177,19 +216,70 @@ async function renderEntity(
     return;
   }
 
-  await dispatchEmbedded(entity, decoded, type, xhtml, ctx, depth);
+  await dispatchEmbedded(entity, decoded, type, output, depth, container);
+}
+
+async function renderMultipart(entity: Entity, type: string, boundary: string | undefined, output: Output, depth: number): Promise<void> {
+  if (boundary === undefined) return;
+  // RFC 2046 section 5.1.1 caps boundaries at 70 characters; longer ones make
+  // the naive byte search O(body * boundary).
+  if (boundary.length > 70) {
+    throw new MalformedDocumentError("Multipart boundary exceeds 70 characters");
+  }
+  const container: Container = { subtype: type.slice("multipart/".length), boundary };
+  const parts = splitMultipart(entity.body, boundary, output.maxHeaderBytes);
+  const chosen = type === "multipart/alternative" && !output.extractAllAlternatives ? bestAlternative(parts) : parts;
+  for (const part of chosen) {
+    await renderEntity(part, output, depth + 1, container);
+  }
+}
+
+/** The parts of an alternative that MailContentHandler reads: only the first with the top score. */
+function bestAlternative(parts: readonly Entity[]): Entity[] {
+  let best: Entity | undefined;
+  let bestScore = -1;
+  for (const part of parts) {
+    const score = alternativeScore(part);
+    if (score > bestScore) {
+      best = part;
+      bestScore = score;
+    }
+  }
+  return best === undefined ? [] : [best];
+}
+
+/**
+ * MailContentHandler.score: text/plain 1, application/rtf 2, text/html 3, and anything else 4, which includes a part that is
+ * itself a multipart. (A part with no Content-Type is text/plain, as in mime4j.)
+ */
+function alternativeScore(part: Entity): number {
+  switch (contentTypeOf(part.headers).type) {
+    case "text/plain":
+      return 1;
+    case "application/rtf":
+      return 2;
+    case "text/html":
+      return 3;
+    default:
+      return 4;
+  }
 }
 
 async function dispatchEmbedded(
   entity: Entity,
   body: Uint8Array,
   type: string,
-  xhtml: XHTMLContentHandler,
-  ctx: ParseContext,
+  output: Output,
   depth: number,
+  container: Container | undefined,
 ): Promise<void> {
+  const { xhtml, ctx } = output;
   const partMetadata = new Metadata();
   partMetadata.set("Content-Type", type);
+  if (container !== undefined) {
+    partMetadata.set("multipart:subtype", container.subtype);
+    if (container.boundary !== undefined) partMetadata.set("multipart:boundary", container.boundary);
+  }
   const name =
     contentTypeParams(entity.headers).get("name") ??
     dispositionParams(entity.headers).get("filename") ??
@@ -229,7 +319,7 @@ async function dispatchEmbedded(
   }
 }
 
-function splitEntity(data: Uint8Array): Entity {
+function splitEntity(data: Uint8Array, maxHeaderBytes: number): Entity {
   const separator = indexOf(data, [13, 10, 13, 10]);
   const alternate = indexOf(data, [10, 10]);
   let headerEnd = separator;
@@ -239,35 +329,54 @@ function splitEntity(data: Uint8Array): Entity {
     bodyStart = alternate + 2;
   }
   if (headerEnd === -1) {
-    return { headers: parseHeaders(data), body: new Uint8Array(0) };
+    return { headers: parseBlock(data, maxHeaderBytes), body: new Uint8Array(0) };
   }
   return {
-    headers: parseHeaders(data.subarray(0, headerEnd)),
+    headers: parseBlock(data.subarray(0, headerEnd), maxHeaderBytes),
     body: data.subarray(bodyStart),
   };
+}
+
+/** The fields of a header block, after checking its size against the cap (RFC822Parser's `setMaxHeaderLen`). */
+function parseBlock(block: Uint8Array, maxHeaderBytes: number): HeaderField[] {
+  if (block.length > maxHeaderBytes) {
+    // Data that does not start like headers at all is the caller's "no headers" error, not a limit: look at the cap's worth.
+    if (parseHeaders(block.subarray(0, maxHeaderBytes)).length === 0) return [];
+    throw new LimitExceededError(`A mail header block is longer than ${maxHeaderBytes} bytes`);
+  }
+  return parseHeaders(block);
 }
 
 function parseHeaders(data: Uint8Array): HeaderField[] {
   const text = new TextDecoder("utf-8", { fatal: false }).decode(data);
   const fields: HeaderField[] = [];
-  let current: { name: string; value: string } | null = null;
+  let current: { rawName: string; raw: string } | null = null;
 
-  for (const line of text.split(/\r?\n/)) {
+  // Alternating line and line end, so a folded header keeps the line ends it was written with.
+  const pieces = text.split(/(\r?\n)/);
+  for (let index = 0; index < pieces.length; index += 2) {
+    const line = pieces[index]!;
     if (line.length === 0) continue;
     if (/^[ \t]/.test(line) && current !== null) {
-      current.value += ` ${line.trim()}`;
+      current.raw += `${pieces[index - 1] ?? ""}${line}`;
       continue;
     }
     const colon = line.indexOf(":");
     if (colon <= 0) continue;
-    if (current !== null) fields.push(current);
-    current = {
-      name: line.slice(0, colon).trim().toLowerCase(),
-      value: line.slice(colon + 1).trim(),
-    };
+    if (current !== null) fields.push(headerField(current));
+    current = { rawName: line.slice(0, colon).trim(), raw: line.slice(colon + 1).replace(/^[ \t]+/, "") };
   }
-  if (current !== null) fields.push(current);
+  if (current !== null) fields.push(headerField(current));
   return fields;
+}
+
+function headerField(field: { rawName: string; raw: string }): HeaderField {
+  return {
+    name: field.rawName.toLowerCase(),
+    rawName: field.rawName,
+    raw: field.raw,
+    value: field.raw.replace(/\r?\n(?=[ \t])/g, "").trim(),
+  };
 }
 
 function headerValue(
@@ -299,44 +408,17 @@ function dispositionParams(headers: readonly HeaderField[]): Map<string, string>
   return value === undefined ? new Map() : parseStructured(value).parameters;
 }
 
-function parseStructured(value: string): {
-  readonly type: string;
-  readonly parameters: Map<string, string>;
-} {
-  const parts = splitParameters(value);
-  const type = (parts.shift() ?? "text/plain").toLowerCase();
-  const parameters = new Map<string, string>();
-  for (const part of parts) {
-    const equals = part.indexOf("=");
-    if (equals === -1) continue;
-    const name = part.slice(0, equals).trim().toLowerCase();
-    let parameter = part.slice(equals + 1).trim();
-    if (parameter.startsWith('"') && parameter.endsWith('"')) {
-      parameter = parameter.slice(1, -1).replace(/\\(.)/g, "$1");
-    }
-    parameters.set(name, parameter);
-  }
-  return { type: type.split(";")[0]!.trim(), parameters };
+/**
+ * A part of a multipart body, which starts after the delimiter's line break. A part that has no headers has its blank line
+ * first, and what follows is its body (RFC 2046 section 5.1.1); splitEntity would look for a blank line further on.
+ */
+function splitPart(data: Uint8Array, maxHeaderBytes: number): Entity {
+  if (data[0] === 0x0d && data[1] === 0x0a) return { headers: [], body: data.subarray(2) };
+  if (data[0] === 0x0a) return { headers: [], body: data.subarray(1) };
+  return splitEntity(data, maxHeaderBytes);
 }
 
-function splitParameters(value: string): string[] {
-  const parts: string[] = [];
-  let current = "";
-  let quoted = false;
-  for (const char of value) {
-    if (char === '"' && current.at(-1) !== "\\") quoted = !quoted;
-    if (char === ";" && !quoted) {
-      parts.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-  if (current.trim().length > 0) parts.push(current.trim());
-  return parts;
-}
-
-function splitMultipart(body: Uint8Array, boundary: string): Entity[] {
+function splitMultipart(body: Uint8Array, boundary: string, maxHeaderBytes: number): Entity[] {
   const marker = Array.from(encodeLatin1(`--${boundary}`));
   const parts: Entity[] = [];
   let start = indexOf(body, marker, 0);
@@ -352,7 +434,7 @@ function splitMultipart(body: Uint8Array, boundary: string): Entity[] {
       segmentStart += 1;
     }
     if (segmentEnd > segmentStart) {
-      parts.push(splitEntity(body.subarray(segmentStart, segmentEnd)));
+      parts.push(splitPart(body.subarray(segmentStart, segmentEnd), maxHeaderBytes));
     }
     start = next;
   }
@@ -453,8 +535,11 @@ function normalizeCharset(charset: string): string {
   return name;
 }
 
+// RFC 2047 section 6.2: white space between two encoded words is not part of the text.
+const BETWEEN_ENCODED_WORDS = /(=\?[^?\s]+\?[bBqQ]\?[^?\s]*\?=)[ \t\r\n]+(?==\?[^?\s]+\?[bBqQ]\?)/g;
+
 function decodeHeader(value: string): string {
-  return value.replace(
+  return value.replace(BETWEEN_ENCODED_WORDS, "$1").replace(
     /=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g,
     (match, charset: string, encoding: string, text: string) => {
       try {
@@ -488,28 +573,6 @@ function classifySecurity(
   } else if (transfer === "base64" && contentType.startsWith("application/octet-stream")) {
     metadata.set("Message:Security", "unknown-binary");
   }
-}
-
-function applyMailMetadata(
-  metadata: Metadata,
-  headers: readonly HeaderField[],
-): void {
-  const subject = headerValue(headers, "subject");
-  if (subject !== undefined) metadata.set("dc:title", decodeHeader(subject));
-
-  const from = headerValue(headers, "from");
-  if (from !== undefined) {
-    metadata.set("dc:creator", decodeHeader(from));
-    metadata.set("Message:From", decodeHeader(from));
-  }
-  const to = headerValue(headers, "to");
-  if (to !== undefined) metadata.set("Message:To", decodeHeader(to));
-  const cc = headerValue(headers, "cc");
-  if (cc !== undefined) metadata.set("Message:Cc", decodeHeader(cc));
-  const messageId = headerValue(headers, "message-id");
-  if (messageId !== undefined) metadata.set("Message-ID", messageId.trim());
-  const date = headerValue(headers, "date");
-  if (date !== undefined) metadata.set("dcterms:created", date.trim());
 }
 
 function encodeLatin1(value: string): Uint8Array {

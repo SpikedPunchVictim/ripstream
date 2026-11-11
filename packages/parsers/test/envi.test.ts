@@ -191,3 +191,14 @@ test("the character set is detected and recorded as Content-Encoding", async () 
   assert.ok(xml.includes("café"), xml);
   assert.notEqual(metadata.get("Content-Encoding"), null);
 });
+
+test("tk:detected-encoding is the charset the header was read with, as AutoDetectReader writes it (tikajs-68os.65)", async () => {
+  const { metadata } = await parseXml(encoder.encode("ENVI\nsamples = 10\ndescription = {café}\n"));
+  assert.equal(metadata.get("tk:detected-encoding"), "UTF-8");
+});
+
+test("the last line of a header needs no line end", async () => {
+  const { metadata } = await parseXml("ENVI\nsamples = 10\nlines = 20");
+  assert.equal(metadata.get("envi:samples"), "10");
+  assert.equal(metadata.get("envi:lines"), "20");
+});

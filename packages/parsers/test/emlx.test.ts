@@ -142,3 +142,23 @@ test("a digit after the padding is not a count line: the framing is left in plac
   const result = await parseWithMailParser(encoder.encode(`1 5\n${message}${PLIST}`));
   assert.match(result.text, /date-received/);
 });
+
+test("a count of 90 is read: its 9 and its 0 are digits, and the message is bounded to 90 bytes", async () => {
+  const message = `Subject: s\n\n${"x".repeat(90 - "Subject: s\n\n".length)}`;
+  assert.equal(Buffer.byteLength(message), 90);
+  const result = await parseWithMailParser(emlx(message));
+  assert.doesNotMatch(result.text, /date-received/);
+});
+
+test("a count line is at most 11 bytes: eleven digits and the newline are not one, so the plist is not cut off", async () => {
+  const message = "Subject: s\n\nxy\n";
+  const count = `${Buffer.byteLength(message)}`.padStart(11, "0");
+  const result = await parseWithMailParser(emlx(message, count));
+  assert.match(result.text, /date-received/);
+});
+
+test("a plist that is only its first five bytes, at the very end of the data, still bounds the message", async () => {
+  const message = "Subject: s\n\nxy\n";
+  const result = await parseWithMailParser(encoder.encode(`${padded(Buffer.byteLength(message))}\n${message}<?xml`));
+  assert.doesNotMatch(result.text, /<\?xml/);
+});

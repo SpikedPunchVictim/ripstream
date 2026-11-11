@@ -1,0 +1,45 @@
+{
+  "description": "RFC822ParserTest.testBasicAlternativeBodyHandling on testRFC822-multipart: of multipart/alternative [text/plain, text/html] only the HTML is the body (Tika's default, extractAllAlternatives off); the root records the multipart/mixed subtype and boundary. Read from the Tika source, not run against a Tika (tikajs-68os.46).",
+  "tags": [
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "file": "testRFC822-multipart",
+    "filename": "testRFC822-multipart"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "body 2"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "body 1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.multipart:subtype",
+      "value": "mixed"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.multipart:boundary",
+      "value": "0016e64606800312ee04913db790"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "DigitalPebble <julien@digitalpebble.com>"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.message:raw-header:Content-Type"
+    }
+  ]
+}

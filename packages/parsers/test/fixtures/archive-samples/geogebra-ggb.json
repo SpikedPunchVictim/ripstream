@@ -1,0 +1,21 @@
+{
+  "description": "Tika's GeoGebraParserTest.testGGB on testGeoGebra.ggb: title, author, date and the app keys from geogebra.xml, the text of the construction, and the macro's tool name and help text (tikajs-68os.52). Read from the Tika source, not run against a Tika",
+  "tags": ["geogebra", "zip"],
+  "input": { "file": "testGeoGebra.ggb" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Type", "value": "application/vnd.geogebra.file" },
+    { "type": "equals", "field": "metadata.dc:title", "value": "Pythagorean theorem" },
+    { "type": "equals", "field": "metadata.dc:creator", "value": "Ada Lovelace" },
+    { "type": "equals", "field": "metadata.geogebra:date", "value": "15 January 2026" },
+    { "type": "equals", "field": "metadata.geogebra:app-name", "value": "classic" },
+    { "type": "equals", "field": "metadata.geogebra:app-version", "value": "5.0.815.0" },
+    { "type": "equals", "field": "metadata.geogebra:format-version", "value": "5.0" },
+    { "type": "equals", "field": "metadata.geogebra:id", "value": "0c34397e-e3e1-4d1c-9cb6-fe6e54b1e88f" },
+    { "type": "equals", "field": "metadata.geogebra:toolName", "value": "Midpoint tool" },
+    { "type": "equals", "field": "metadata.tk:parsed-by", "value": "GeoGebraParser" },
+    { "type": "contains", "field": "text", "value": "In a right triangle a² + b² = c²" },
+    { "type": "contains", "field": "text", "value": "Theorem statement" },
+    { "type": "contains", "field": "text", "value": "Drag the vertices to explore." },
+    { "type": "contains", "field": "text", "value": "Select two points to construct their midpoint" }
+  ]
+}
