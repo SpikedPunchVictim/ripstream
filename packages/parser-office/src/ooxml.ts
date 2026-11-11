@@ -16,12 +16,14 @@ import {
   RipstreamInputStream,
   TIKA_KEYS,
 } from "@spikedpunch/ripstream-core";
+import { SaxesParser } from "saxes";
 import { OpcPackage } from "./opc.ts";
 import {
   attribute,
   childrenNamed,
   descendantsNamed,
   localName,
+  MAX_XML_DEPTH,
   parseXmlTree,
   type XmlNode,
 } from "./xml-tree.ts";
@@ -322,77 +324,123 @@ function parseStyles(xml: string | undefined): Styles {
   return { dateStyles, percentStyles, decimals };
 }
 
+/**
+ * Reads the rows of a worksheet while the XML is being parsed, so the caps below fire at the cap and the tree of a
+ * whole sheet is never built (tikajs-kpkn: a 4M-cell sheet cost 2-3 GB before the cell cap was reached). Only one
+ * cell's subtree is held at a time. A `row` is any element so named that is not inside another row, and a cell is a
+ * `c` that is a direct child of it; character data is `text` events only, as parseXmlTree reads it.
+ */
 function parseSheet(xml: string, shared: string[]): SheetRow[] {
   const rows: SheetRow[] = [];
   let row: SheetCell[] = [];
-  let text = "";
-  let cellType = "";
-  let styleIndex = 0;
-  let inInline = false;
-
+  let nextColumn = 0;
   let totalCells = 0;
-  const root = parseXmlTree(xml);
-  for (const rowNode of descendantsNamed(root, "row")) {
-    row = [];
-    let nextColumn = 0;
-    for (const cellNode of childrenNamed(rowNode, "c")) {
-      const reference = attribute(cellNode, "r");
-      const column = reference === undefined ? nextColumn : columnIndex(reference);
 
-      cellType = attribute(cellNode, "t") ?? "";
-      styleIndex = Number(attribute(cellNode, "s") ?? "0");
-      text = "";
-      inInline = false;
-      let hasValue = false;
+  let depth = 0;
+  let rowDepth = 0; // depth of the open row element, 0 when none
+  let cellStack: XmlNode[] = []; // the open cell element and its open descendants, empty outside a cell
 
-      const visit = (node: XmlNode): void => {
-        for (const child of node.children) {
-          const name = localName(child.name);
-          if (name === "v") {
-            hasValue = true;
-            text += child.text;
-          } else if (name === "is") {
-            hasValue = true;
-            inInline = true;
-            visit(child);
-            inInline = false;
-          } else if (name === "t" && inInline) {
-            text += child.text;
-          } else if (name !== "f") {
-            visit(child);
-          }
+  const finishCell = (cellNode: XmlNode): void => {
+    const reference = attribute(cellNode, "r");
+    const column = reference === undefined ? nextColumn : columnIndex(reference);
+
+    const cellType = attribute(cellNode, "t") ?? "";
+    const styleIndex = Number(attribute(cellNode, "s") ?? "0");
+    let text = "";
+    let inInline = false;
+    let hasValue = false;
+
+    const visit = (node: XmlNode): void => {
+      for (const child of node.children) {
+        const name = localName(child.name);
+        if (name === "v") {
+          hasValue = true;
+          text += child.text;
+        } else if (name === "is") {
+          hasValue = true;
+          inInline = true;
+          visit(child);
+          inInline = false;
+        } else if (name === "t" && inInline) {
+          text += child.text;
+        } else if (name !== "f") {
+          visit(child);
         }
-      };
-      visit(cellNode);
-
-      // Tika's TikaSheetXMLHandler writes a cell when its <v> or <is> ends, so a styled cell with no value (the cells
-      // of a merged region) writes nothing; the empty cells in front of the next value cell are padding.
-      if (!hasValue) continue;
-
-      totalCells += column + 1 - nextColumn;
-      if (totalCells > MAX_SHEET_CELLS) {
-        throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_CELLS} cells`);
       }
-      while (nextColumn < column) {
-        row.push({ value: "", styleIndex: 0, type: "" });
-        nextColumn++;
-      }
+    };
+    visit(cellNode);
 
-      row.push({
-        value: cellType === "s" ? (shared[Number(text)] ?? "") : text,
-        styleIndex,
-        type: cellType,
-      });
-      nextColumn = column + 1;
+    // Tika's TikaSheetXMLHandler writes a cell when its <v> or <is> ends, so a styled cell with no value (the cells
+    // of a merged region) writes nothing; the empty cells in front of the next value cell are padding.
+    if (!hasValue) return;
+
+    totalCells += column + 1 - nextColumn;
+    if (totalCells > MAX_SHEET_CELLS) {
+      throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_CELLS} cells`);
     }
-    rows.push({ cells: row });
-  }
+    while (nextColumn < column) {
+      row.push({ value: "", styleIndex: 0, type: "" });
+      nextColumn++;
+    }
+
+    row.push({
+      value: cellType === "s" ? (shared[Number(text)] ?? "") : text,
+      styleIndex,
+      type: cellType,
+    });
+    nextColumn = column + 1;
+  };
+
+  const parser = new SaxesParser({ xmlns: false });
+  parser.on("opentag", (tag) => {
+    depth++;
+    if (depth > MAX_XML_DEPTH) {
+      throw new MalformedDocumentError(`XML nesting exceeds ${MAX_XML_DEPTH} levels`);
+    }
+    const name = localName(tag.name);
+    const node: XmlNode = {
+      name: tag.name,
+      attributes: { ...(tag.attributes as Record<string, string>) },
+      children: [],
+      text: "",
+    };
+    if (cellStack.length > 0) {
+      cellStack[cellStack.length - 1]!.children.push(node);
+      cellStack.push(node);
+    } else if (rowDepth === 0 && name === "row") {
+      rowDepth = depth;
+      row = [];
+      nextColumn = 0;
+    } else if (rowDepth !== 0 && depth === rowDepth + 1 && name === "c") {
+      cellStack.push(node);
+    }
+  });
+  parser.on("text", (text) => {
+    if (cellStack.length > 0) cellStack[cellStack.length - 1]!.text += text;
+  });
+  parser.on("closetag", () => {
+    if (cellStack.length > 0) {
+      const closed = cellStack.pop()!;
+      if (cellStack.length === 0) finishCell(closed);
+    } else if (depth === rowDepth) {
+      // An empty row has no cells, so the cell cap does not bound it; the row cap does.
+      if (rows.length >= MAX_SHEET_ROWS) {
+        throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_ROWS} rows`);
+      }
+      rows.push({ cells: row });
+      rowDepth = 0;
+    }
+    depth--;
+  });
+  parser.write(xml).close();
   return rows;
 }
 
 const MAX_COLUMNS = 16_384;
 /** Cap on materialized (real plus padding) cells per sheet. */
 const MAX_SHEET_CELLS = 1_000_000;
+/** Cap on rows per sheet: Excel's own limit, 2^20. */
+const MAX_SHEET_ROWS = 1_048_576;
 
 function columnIndex(reference: string): number {
   let value = 0;

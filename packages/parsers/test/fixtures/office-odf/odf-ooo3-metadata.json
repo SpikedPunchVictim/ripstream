@@ -1,0 +1,106 @@
+{
+  "description": "Tika testODFwithOOo3.odt through OpenDocumentParser: ODFParserTest.testOO3Metadata (dates, title, description, creator, keywords, editing-cycles, TotalTime, custom:Editor, statistics) (tikajs-68os.48)",
+  "tags": [
+    "office",
+    "odf"
+  ],
+  "input": {
+    "file": "testODFwithOOo3.odt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:modified",
+      "value": "2009-10-05T21:22:38"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2009-10-05T19:04:01"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Apache Tika"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:description",
+      "value": "A rather complex document"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Bart Hanssens"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.editing-cycles",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:TotalTime",
+      "value": "PT02H03M24S"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.generator",
+      "value": "OpenOffice.org/3.1$Unix OpenOffice.org_project/310m19$Build-9420"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Apache, Lucene, Tika"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.custom:Editor",
+      "value": "Bart Hanssens"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.custom:Info 2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:page-count",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:paragraph-count",
+      "value": "13"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:word-count",
+      "value": "54"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:character-count",
+      "value": "351"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:table-count",
+      "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:object-count",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:image-count",
+      "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.odf:version",
+      "value": "1.1"
+    }
+  ]
+}

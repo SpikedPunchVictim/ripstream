@@ -1,7 +1,7 @@
 import { MalformedDocumentError } from "@spikedpunch/ripstream-core";
 import { SaxesParser } from "saxes";
 
-const MAX_XML_DEPTH = 256;
+export const MAX_XML_DEPTH = 256;
 
 export interface XmlNode {
   readonly name: string;

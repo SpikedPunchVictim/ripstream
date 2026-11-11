@@ -92,6 +92,106 @@ test("xlsx still writes a cell whose value is empty", async () => {
   assert.equal(result.text, "Sheet1\n\t\t2\n\n\n");
 });
 
+/** Parses one worksheet (and optional extra parts) and returns the text written for it. */
+async function parseSheetText(sheetXml: string, extra: Record<string, string> = {}): Promise<string> {
+  const result = await parse({
+    "[Content_Types].xml": "<Types/>",
+    "xl/workbook.xml": '<workbook xmlns="x"><sheets><sheet name="Sheet1" sheetId="1"/></sheets></workbook>',
+    "xl/worksheets/sheet1.xml": sheetXml,
+    ...extra,
+  });
+  return result.text;
+}
+
+const sheetOf = (rows: string): string => `<worksheet xmlns="x"><sheetData>${rows}</sheetData></worksheet>`;
+
+test("xlsx reads a sheet whose elements carry a namespace prefix", async () => {
+  const text = await parseSheetText(
+    '<x:worksheet xmlns:x="x"><x:sheetData><x:row><x:c r="A1"><x:v>5</x:v></x:c></x:row></x:sheetData></x:worksheet>',
+  );
+  assert.equal(text, "Sheet1\n\t5\n\n\n");
+});
+
+test("xlsx ignores a row nested inside another row", async () => {
+  const text = await parseSheetText(
+    sheetOf('<row><c r="A1"><v>1</v></c><row><c r="A2"><v>2</v></c></row></row><row><c r="A3"><v>3</v></c></row>'),
+  );
+  assert.equal(text, "Sheet1\n\t1\n\t3\n\n\n");
+});
+
+test("xlsx takes only the direct c children of a row as cells", async () => {
+  const text = await parseSheetText(
+    sheetOf('<row><ext><c r="A1"><v>x</v></c></ext><foo><v>z</v></foo><c r="B1"><v>y</v></c></row>'),
+  );
+  assert.equal(text, "Sheet1\n\t\ty\n\n\n");
+});
+
+test("xlsx does not take a c element outside any row as a cell", async () => {
+  // A cell reference that would be rejected inside a row is not even looked at here.
+  assert.equal(await parseSheetText('<c r="ZZZZZZ1"><v>1</v></c>'), "Sheet1\n\n\n");
+});
+
+test("xlsx reads the value of a cell from elements nested in it, once", async () => {
+  const text = await parseSheetText(sheetOf('<row><c r="A1"><extLst><ext><v>2</v></ext></extLst></c></row>'));
+  assert.equal(text, "Sheet1\n\t2\n\n\n");
+});
+
+test("xlsx joins the text events of one value", async () => {
+  const text = await parseSheetText(sheetOf("<row><c><v>12<!-- c -->34</v></c></row>"));
+  assert.equal(text, "Sheet1\n\t1234\n\n\n");
+});
+
+test("xlsx joins several values of one cell", async () => {
+  const text = await parseSheetText(sheetOf("<row><c><v>1</v><v>2</v></c></row>"));
+  assert.equal(text, "Sheet1\n\t12\n\n\n");
+});
+
+test("xlsx does not read the content of a formula as the value", async () => {
+  const text = await parseSheetText(sheetOf("<row><c><f><v>9</v></f><v>3</v></c></row>"));
+  assert.equal(text, "Sheet1\n\t3\n\n\n");
+});
+
+test("xlsx reads a t element as text only inside an inline string", async () => {
+  const text = await parseSheetText(
+    sheetOf('<row><c r="A1" t="inlineStr"><t>stray</t><is><t>in</t></is><t>after</t></c></row>'),
+  );
+  assert.equal(text, "Sheet1\n\tin\n\n\n");
+});
+
+test("xlsx writes a cell for an inline string that has no text", async () => {
+  assert.equal(await parseSheetText(sheetOf('<row><c r="A1" t="inlineStr"><is/></c></row>')), "Sheet1\n\t\n\n\n");
+  assert.equal(await parseSheetText(sheetOf('<row><c r="A1" t="inlineStr"/></row>')), "Sheet1\n\n\n\n");
+});
+
+test("xlsx reads an out-of-range shared string index as empty text", async () => {
+  const text = await parseSheetText(sheetOf('<row><c r="A1" t="s"><v>7</v></c></row>'), {
+    "xl/sharedStrings.xml": '<sst xmlns="x"><si><t>Alpha</t></si></sst>',
+  });
+  assert.equal(text, "Sheet1\n\t\n\n\n");
+});
+
+test("xlsx places a reference-less cell after a cell with a reference and keeps counting from it", async () => {
+  const text = await parseSheetText(
+    sheetOf('<row><c r="C1"><v>c</v></c><c><v>d</v></c><c r="E1"><v>e</v></c></row>'),
+  );
+  assert.equal(text, "Sheet1\n\t\t\tc\td\te\n\n\n");
+});
+
+test("xlsx styles a cell with no s attribute as style 0", async () => {
+  const text = await parseSheetText(sheetOf('<row><c r="A1"><v>45292</v></c><c r="B1" s="1"><v>45292</v></c></row>'), {
+    "xl/styles.xml":
+      '<styleSheet xmlns="x"><numFmts><numFmt numFmtId="164" formatCode="yyyy-mm-dd"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>',
+  });
+  assert.equal(text, "Sheet1\n\t45292\t2024-01-01\n\n\n");
+});
+
+test("xlsx rejects a sheet that ends before its elements are closed", async () => {
+  await assert.rejects(
+    parseSheetText('<worksheet xmlns="x"><sheetData><row><c><v>1</v></c></row>'),
+    /unclosed tag/,
+  );
+});
+
 test("extracts pptx slide text", async () => {
   const result = await parse({
     "[Content_Types].xml": "<Types/>",

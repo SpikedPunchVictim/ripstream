@@ -10,6 +10,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { boundedUnzip, type BoundedZip } from "./bounded-unzip.ts";
+import { applyOdfMetadata } from "./odf-meta.ts";
 import { SaxesParser } from "saxes";
 import {
   attribute,
@@ -270,53 +271,6 @@ async function renderOdfPage(
   await xhtml.startElement("div", "class", "slide");
   await renderOdfBlocks(page, xhtml);
   await xhtml.endElement("div");
-}
-
-function applyOdfMetadata(metadata: Metadata, xml: string): void {
-  const values: Record<string, string> = {};
-  let current: string | null = null;
-  let text = "";
-  const parser = new SaxesParser({ xmlns: false });
-  parser.on("opentag", (tag) => {
-    current = tag.name;
-    text = "";
-    for (const [key, value] of Object.entries(
-      tag.attributes as Record<string, string>,
-    )) {
-      if (localName(tag.name) === "document-statistic") {
-        values[key] = value;
-      }
-    }
-  });
-  parser.on("text", (value) => {
-    text += value;
-  });
-  parser.on("closetag", () => {
-    if (current !== null) {
-      values[current] = text;
-      const local = localName(current);
-      if (values[local] === undefined) values[local] = text;
-    }
-    current = null;
-  });
-  parser.write(xml).close();
-
-  assign(metadata, "dc:title", values.title);
-  assign(metadata, "dc:creator", values.creator);
-  assign(metadata, "meta:initial-creator", values["meta:initial-creator"]);
-  assign(metadata, "dc:description", values.description);
-  assign(metadata, "dc:subject", values.subject);
-  assign(metadata, "pdf:Keywords", values["meta:keyword"] ?? values.keyword);
-  assign(metadata, "meta:generator", values.generator);
-  assign(metadata, "dcterms:created", values["meta:creation-date"]);
-  assign(metadata, "dcterms:modified", values["dc:date"]);
-  assign(metadata, "meta:editing-cycles", values["meta:editing-cycles"]);
-  assign(metadata, "meta:page-count", values["meta:page-count"]);
-  assign(metadata, "meta:word-count", values["meta:word-count"]);
-  assign(metadata, "meta:paragraph-count", values["meta:paragraph-count"]);
-  assign(metadata, "meta:table-count", values["meta:table-count"]);
-  assign(metadata, "meta:object-count", values["meta:object-count"]);
-  assign(metadata, "meta:image-count", values["meta:image-count"]);
 }
 
 function assign(metadata: Metadata, key: string, value: string | undefined): void {

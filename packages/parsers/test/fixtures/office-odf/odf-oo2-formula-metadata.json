@@ -1,0 +1,79 @@
+{
+  "description": "Tika testOpenOffice2.odf through OpenDocumentParser: ODFParserTest.testOO2Metadata (dates, title, keywords joined into the first dc:subject, editing-cycles, generator, extended-properties:TotalTime, custom:Info n, odf:version, no statistics) (tikajs-68os.48)",
+  "tags": [
+    "office",
+    "odf"
+  ],
+  "input": {
+    "file": "testOpenOffice2.odf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2006-01-27T11:55:22"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.dcterms:modified"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "The quick brown fox jumps over the lazy dog"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Pangram, fox, dog"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:TotalTime",
+      "value": "PT0S"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.editing-cycles",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.generator",
+      "value": "OpenOffice.org/2.2$Win32 OpenOffice.org_project/680m14$Build-9134"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.custom:Info 1",
+      "value": "Text 1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.custom:Info 2",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.custom:Info 3",
+      "value": "false"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.custom:Info 4",
+      "value": "true"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:page-count"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:word-count"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.odf:version",
+      "value": "1.0"
+    }
+  ]
+}
