@@ -10,10 +10,36 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import exifr from "exifr";
+import { readIcns } from "./icns.ts";
+import { readIco } from "./ico.ts";
+import { readJbig2 } from "./jbig2.ts";
+import { readPnm } from "./pnm.ts";
+import { readWbmp } from "./wbmp.ts";
+import type { HeaderReader } from "./imageio-metadata.ts";
+
+/**
+ * The formats read from their header alone, by the type the document was detected as, as Tika picks a parser or an
+ * ImageIO reader by `Content-Type`. Each reads only a bounded prefix of the stream. XCF has no reader in Tika's
+ * ImageParser (the module carries no XCF reader for javax.imageio), which then writes nothing but the type, so
+ * nothing is read.
+ */
+const HEADER_READERS: ReadonlyMap<string, HeaderReader> = new Map<string, HeaderReader>([
+  ["image/icns", readIcns],
+  ["image/vnd.microsoft.icon", readIco],
+  ["image/x-icon", readIco],
+  ["image/x-win-bitmap", readIco],
+  ["image/vnd.wap.wbmp", readWbmp],
+  ["image/x-jbig2", readJbig2],
+  ["image/x-jb2", readJbig2],
+  ["image/x-portable-pixmap", readPnm],
+  ["image/x-xcf", async () => {}],
+  ["image/xcf", async () => {}],
+]);
 
 /**
  * Image metadata parser. EXIF/IPTC/XMP via exifr; dimensions from PNG/GIF/JPEG
- * headers when EXIF does not carry them. No pixel decoding.
+ * headers when EXIF does not carry them. No pixel decoding. ICNS, ICO/CUR, WBMP,
+ * JBIG2, PPM and XCF are read from their headers alone (see HEADER_READERS).
  */
 export class ImageParser implements Parser {
   readonly name = "ImageParser";
@@ -47,6 +73,12 @@ export class ImageParser implements Parser {
         "image/x-pentax-pef",
         "image/x-fuji-raf",
         "image/x-panasonic-rw2",
+        "image/icns",
+        "image/x-win-bitmap",
+        "image/vnd.wap.wbmp",
+        "image/x-jbig2",
+        "image/x-portable-pixmap",
+        "image/x-xcf",
       ].map((type) => MediaType.parse(type)!),
     );
   }
@@ -57,6 +89,13 @@ export class ImageParser implements Parser {
     metadata: Metadata,
     _ctx: ParseContext,
   ): Promise<void> {
+    const type = MediaType.parse(metadata.get("Content-Type"))?.getBaseType().toString();
+    const readHeader = type === undefined ? undefined : HEADER_READERS.get(type);
+    if (readHeader !== undefined) {
+      await readHeader(stream, metadata);
+      return;
+    }
+
     const chunks: Uint8Array[] = [];
     let total = 0;
     for await (const chunk of stream) {
@@ -476,12 +515,6 @@ function imageDimensions(
       width: Math.abs(view.getInt32(18, true)),
       height: Math.abs(view.getInt32(22, true)),
     };
-  }
-
-  if (data.length >= 22 && data[0] === 0 && data[1] === 0 && (data[2] === 1 || data[2] === 2)) {
-    const width = data[6] === 0 ? 256 : data[6]!;
-    const height = data[7] === 0 ? 256 : data[7]!;
-    return { width, height };
   }
 
   if (
