@@ -362,6 +362,7 @@ export class Ripstream {
     });
     const metadata = metadataFor(options.filename);
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
+    metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
     const stream = await RipstreamInputStream.from(source, {
       context: ctx,

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LIMITS,
   IsolationError,
   type IsolatedException,
   type IsolatedParseRecord,
@@ -32,13 +33,14 @@ export const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
  */
 export const DEFAULT_MAX_FRAMES = 1_000_000;
 /**
- * Most keys in one metadata object (a meta frame or one record). Real documents have tens to low thousands, but a
- * legitimate spreadsheet or mail archive can reach tens of thousands, so the bound is generous: it exists to stop a
- * hostile child, and exceeding it is a LimitExceededError like any other size cap.
+ * Most keys in one metadata object (a meta frame or one record). Core caps a document's metadata at
+ * `maxMetadataTotalChars`, counting every name as its length plus one and every value likewise, so a document has at
+ * most half that many keys (a name and one value cost at least 2). Sizing this to core's cap, not to a smaller guess,
+ * keeps it from refusing a document that core accepted (tikajs-vaak); it still stops a hostile child.
  */
-export const DEFAULT_MAX_METADATA_KEYS = 200_000;
-/** Most strings, over all keys, in one metadata object. */
-export const DEFAULT_MAX_METADATA_VALUES = 1_000_000;
+export const DEFAULT_MAX_METADATA_KEYS = DEFAULT_LIMITS.maxMetadataTotalChars / 2;
+/** Most strings, over all keys, in one metadata object: core's total cap, as a value costs at least 1 of it. */
+export const DEFAULT_MAX_METADATA_VALUES = DEFAULT_LIMITS.maxMetadataTotalChars;
 
 /** Raw bytes in one bytes frame, at most: the child cuts a document's bytes at this size. */
 export const MAX_BYTES_CHUNK = 192 * 1024;

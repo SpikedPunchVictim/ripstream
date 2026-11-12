@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_LIMITS, LimitExceededError, type IsolationConfig } from "@spikedpunch/ripstream-core";
+import { DEFAULT_LIMITS, LimitExceededError, Metadata, type IsolationConfig } from "@spikedpunch/ripstream-core";
 import {
   DEFAULT_MAX_DISK_MB,
   DEFAULT_MAX_INPUT_BYTES,
@@ -29,8 +29,8 @@ test("defaults: a text request with no overrides", () => {
     maxOutputChars: 100_000,
     maxEmbeddedResources: 10_000,
     output: "text",
-    maxResultBytes: 600_000 + 8 * MIB + 64 * 1024, // 100,000 * 6 + metadata allowance + slack
-    maxFrameBytes: 8 * MIB, // the meta frame: all metadata travels in one frame
+    maxResultBytes: 600_000 + 12 * MIB + 64 * 1024, // 100,000 * 6 + metadata allowance + slack
+    maxFrameBytes: 12 * MIB, // the meta frame: all metadata travels in one frame
     unpackCeiling: 256 * MIB, // min(256 MiB, a quarter of the 1536 MiB a child has)
   });
 });
@@ -129,8 +129,8 @@ test("maxResultBytes: 6 bytes per output character plus the metadata allowance p
   assert.ok(text(2) > text(1));
 });
 
-test("text: the frame cap is the metadata allowance (8 MiB), whatever the result cap", () => {
-  assert.equal(TEXT_METADATA_BYTES, 8 * MIB);
+test("text: the frame cap is the metadata allowance (12 MiB), whatever the result cap", () => {
+  assert.equal(TEXT_METADATA_BYTES, 12 * MIB);
   assert.equal(deriveLimits(strict, { output: "text", maxOutputChars: 50_000_000 }).maxFrameBytes, TEXT_METADATA_BYTES);
   assert.equal(deriveLimits(strict, { output: "text", maxOutputChars: 10 }).maxFrameBytes, TEXT_METADATA_BYTES);
 });
@@ -143,13 +143,13 @@ test("records: a record is one frame, so the frame cap equals the result cap", (
   }
 });
 
-test("records: the metadata allowance is 4 KiB per record, between the 8 MiB text allowance and 16 MiB", () => {
+test("records: the metadata allowance is 4 KiB per record, between the 12 MiB text allowance and 16 MiB", () => {
   const bytes = (maxEmbeddedResources: number): number =>
     deriveLimits(strict, { output: "records", maxOutputChars: 0, maxEmbeddedResources }).maxResultBytes - RESULT_SLACK_BYTES;
   assert.equal(bytes(0), TEXT_METADATA_BYTES); // 1 record = 4 KiB, raised to the text allowance
   assert.equal(bytes(100), TEXT_METADATA_BYTES);
-  assert.equal(bytes(1000), TEXT_METADATA_BYTES); // 1001 * 4096 is about 4 MiB, still under the floor
-  assert.equal(bytes(3000), 3001 * 4096);
+  assert.equal(bytes(2000), TEXT_METADATA_BYTES); // 2001 * 4096 is about 8 MiB, still under the floor
+  assert.equal(bytes(3500), 3501 * 4096);
   assert.equal(bytes(10_000), MAX_RECORDS_METADATA_BYTES); // the default would be 40 MB, capped
   assert.equal(MAX_RECORDS_METADATA_BYTES, 16 * MIB);
 });
@@ -276,4 +276,76 @@ test("unpackCeiling: every derivation says what unpackBytes may be, whether or n
   const small: IsolationConfig = { mode: "strict", perChildMb: 400, heapMb: 100 };
   assert.equal(deriveLimits(small).unpackCeiling, 100 * MIB);
   assert.equal(deriveLimits(small, { output: "records", unpackBytes: 100 * MIB }).unpackBytes, deriveLimits(small).unpackCeiling);
+});
+
+/*
+ * One metadata object, at the most core lets a document have (DEFAULT_LIMITS.maxMetadataTotalChars), must fit the frame
+ * that carries it: otherwise an input parses in-process and is a LimitExceededError only when isolated (tikajs-vaak).
+ * An isolated child always applies the default limits, so the default is the one to size for. The worst case is JSON
+ * escaping: a control character or a lone surrogate is 6 bytes on the wire.
+ */
+
+/** The meta frame the child sends for `metadata` (child-main.ts), as the parent counts it: the line plus its newline. */
+function metaFrameBytes(metadata: Metadata): number {
+  const record = Object.fromEntries(metadata.names().map((name) => [name, [...metadata.getAll(name)]]));
+  return Buffer.byteLength(JSON.stringify({ t: "meta", metadata: record }) + "\n");
+}
+
+function metadataAtTheCap(shape: (metadata: Metadata) => void): Metadata {
+  const metadata = new Metadata();
+  metadata.setMaxTotalChars(DEFAULT_LIMITS.maxMetadataTotalChars);
+  shape(metadata);
+  return metadata;
+}
+
+const TEXT_FRAME_CAP = deriveLimits(strict, { output: "text" }).maxFrameBytes;
+
+test("the text frame cap holds the default total-metadata cap in one escaped value", () => {
+  const metadata = metadataAtTheCap((m) => m.set("k", "\u0001".repeat(DEFAULT_LIMITS.maxMetadataTotalChars - 4))); // (1 + 1) + (n + 1)
+  assert.ok(metaFrameBytes(metadata) > 11 * MIB, "the probe really is near the cap");
+  assert.ok(metaFrameBytes(metadata) <= TEXT_FRAME_CAP, `${metaFrameBytes(metadata)} > ${TEXT_FRAME_CAP}`);
+});
+
+test("the text frame cap holds the default total-metadata cap in the most keys of the worst shape", () => {
+  // Names of two lone surrogates (12 wire bytes) and an empty value each: 4 counted characters become 20 bytes.
+  const metadata = metadataAtTheCap((m) => {
+    for (let i = 0; ; i++) {
+      const name = String.fromCharCode(0xd800 + Math.floor(i / 1024), 0xd800 + (i % 1024)); // two high surrogates, each one lone
+      try {
+        m.add(name, "");
+      } catch (error) {
+        if (error instanceof LimitExceededError) return;
+        throw error;
+      }
+    }
+  });
+  assert.ok(metadata.size() > 400_000);
+  assert.ok(metaFrameBytes(metadata) <= TEXT_FRAME_CAP, `${metaFrameBytes(metadata)} > ${TEXT_FRAME_CAP}`);
+});
+
+test("the text frame cap holds the default total-metadata cap in the most values of the worst shape", () => {
+  const metadata = metadataAtTheCap((m) => {
+    for (let i = 0; i < 20; i++) {
+      for (let j = 0; j < 100_000; j++) {
+        try {
+          m.add(`k${i}`, "\u0001");
+        } catch (error) {
+          if (error instanceof LimitExceededError) return;
+          throw error;
+        }
+      }
+    }
+  });
+  assert.ok(metaFrameBytes(metadata) <= TEXT_FRAME_CAP, `${metaFrameBytes(metadata)} > ${TEXT_FRAME_CAP}`);
+});
+
+test("the records metadata allowance is never below what one record's metadata can be, and stays under its own cap", () => {
+  const wire = DEFAULT_LIMITS.maxMetadataTotalChars * 6;
+  assert.ok(TEXT_METADATA_BYTES > wire);
+  assert.ok(TEXT_METADATA_BYTES < wire + MIB, "no more than the worst case plus slack, rounded up to a MiB");
+  assert.ok(MAX_RECORDS_METADATA_BYTES >= TEXT_METADATA_BYTES);
+  for (const maxEmbeddedResources of [0, 10, 10_000]) {
+    const bytes = deriveLimits(strict, { output: "records", maxOutputChars: 0, maxEmbeddedResources }).maxResultBytes - RESULT_SLACK_BYTES;
+    assert.ok(bytes >= wire, `${maxEmbeddedResources}: ${bytes}`);
+  }
 });

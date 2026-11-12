@@ -48,15 +48,21 @@ const HEAP_BYTES_PER_OUTPUT_CHAR = 8;
  */
 const WIRE_BYTES_PER_OUTPUT_CHAR = 6;
 
+/** Room, in one meta frame, for what is not metadata: `{"t":"meta","metadata":{...}}`, the newline and an exception. */
+const META_FRAME_SLACK_BYTES = 64 * 1024;
+
 /**
  * Metadata allowance of a "text" result. All metadata travels in ONE meta frame, so this is also the text frame cap.
- * Core caps each metadata VALUE at 1,000,000 characters but not their sum, and real documents exceed 1 MiB of
- * metadata JSON (a 300,000-character CJK title is stored under two keys, about 1.8 MB; XMP ancestor lists reach
- * several MB). Measured by the P3 review: with a 1 MiB cap such a document parsed in-process but was refused when
- * isolated. 8 MiB covers those with room; the parent reserves 6x the result cap for text, so this costs ~42 MiB of
- * pool per child. Metadata above it is a LimitExceededError, the same answer as any other result cap.
+ * Core caps one document's metadata at `maxMetadataTotalChars` (names and values, each counted as its length plus
+ * one, see Metadata.setMaxTotalChars) and an isolated child always runs with the default, so the frame is sized for
+ * that cap and no input is refused here that core accepted: the worst case is 6 wire bytes per counted character
+ * (JSON-escaping a control character or a lone surrogate; a name or value costs its length plus one, which covers
+ * its quotes and separators), plus slack, rounded up to a whole MiB. With the default of 2,000,000 that is 12 MiB (the P3 review found
+ * documents with ~10 MiB of metadata that parsed in-process and were refused here when the allowance was a
+ * hand-picked 8 MiB). The parent reserves 6x the result cap for text, so this costs ~72 MiB of pool per child.
  */
-export const TEXT_METADATA_BYTES = 8 * MIB;
+export const TEXT_METADATA_BYTES =
+  Math.ceil((DEFAULT_LIMITS.maxMetadataTotalChars * WIRE_BYTES_PER_OUTPUT_CHAR + META_FRAME_SLACK_BYTES) / MIB) * MIB;
 
 /**
  * Metadata allowance of a "records" result, per record: the serialized record envelope (about 150 bytes) plus its

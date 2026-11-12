@@ -2,16 +2,18 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AttributesImpl,
+  BodyContentHandler,
   CONTEXT_KEYS,
   LimitExceededError,
   MediaType,
   Metadata,
+  ParseContext,
+  RecursiveParserWrapper,
   Ripstream,
   RipstreamInputStream,
   type ContentHandler,
   type Detector,
   type Parser,
-  type ParseContext,
 } from "../src/index.ts";
 import {
   ParsingEmbeddedDocumentExtractor,
@@ -123,6 +125,52 @@ test("parseRecursive maxDocumentOutputChars caps each document without changing 
   assert.ok(records.every((r) => r.exception === null));
   await assert.rejects(
     ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxDocumentOutputChars: 50 } }),
+    LimitExceededError,
+  );
+});
+
+/** A root that embeds one child; the child (any document at depth > 0) writes `chars` characters of metadata. */
+function childMetadataParser(chars: number): Parser {
+  const inner = embeddingParser(1, 1);
+  return {
+    name: "ChildMetadata",
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse(stream, handler, metadata, ctx): Promise<void> {
+      if ((ctx.get(CONTEXT_KEYS.EMBEDDED_DEPTH) ?? 0) > 0) metadata.set("big", "x".repeat(chars));
+      else await inner.parse(stream, handler, metadata, ctx);
+    },
+  };
+}
+
+test("the default extractor applies maxMetadataTotalChars to an embedded document's metadata", async () => {
+  const ripstream = new Ripstream({ detector, parser: childMetadataParser(600) });
+  await assert.rejects(
+    ripstream.parseToString(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 500 } }),
+    LimitExceededError,
+  );
+  await ripstream.parseToString(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 5000 } });
+});
+
+test("parseRecursive applies maxMetadataTotalChars to an embedded document, whose failure it records on that document", async () => {
+  const ripstream = new Ripstream({ detector, parser: childMetadataParser(600) });
+  const refused = await ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 500 } });
+  assert.ok(refused[1]?.exception instanceof LimitExceededError);
+  assert.equal(refused[1]?.metadata.has("big"), false);
+  assert.equal(refused[0]?.exception, null);
+  const records = await ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 5000 } });
+  assert.equal(records[1]?.exception, null);
+  assert.equal(records[1]?.metadata.get("big")?.length, 600);
+});
+
+test("RecursiveParserWrapper applies maxMetadataTotalChars to the metadata it is given, not only to the facade's", async () => {
+  const root: Parser = {
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    parse: async (_stream, _handler, metadata) => metadata.set("big", "x".repeat(600)),
+  };
+  const ctx = new ParseContext({ limits: { maxMetadataTotalChars: 500 } });
+  const stream = await RipstreamInputStream.from(new Uint8Array([1]));
+  await assert.rejects(
+    new RecursiveParserWrapper(root).parse(stream, new BodyContentHandler(), new Metadata(), ctx),
     LimitExceededError,
   );
 });

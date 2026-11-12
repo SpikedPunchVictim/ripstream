@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   AttributesImpl,
   BodyContentHandler,
+  DEFAULT_LIMITS,
   OutputLimitContentHandler,
   LimitExceededError,
   MediaType,
@@ -99,4 +100,66 @@ test("Ripstream.parse truncates root metadata values at maxMetadataValueChars", 
     limits: { maxMetadataValueChars: 10 },
   });
   assert.equal(result.metadata.get("title"), "x".repeat(10));
+});
+
+/*
+ * The total-metadata cap. Core capped each metadata value (1,000,000 characters) but not their sum, so a document with
+ * ~10 MiB of metadata parsed in-process and was refused only when isolated (tikajs-vaak). Every route into a parse
+ * now carries the cap, and the default is the one isolation sizes its frames for.
+ */
+
+const lotsOfMetadata: Parser = {
+  getSupportedTypes(): ReadonlySet<MediaType> {
+    return new Set([MediaType.TEXT_PLAIN]);
+  },
+  async parse(_stream, _handler, metadata): Promise<void> {
+    for (let i = 0; i < 10; i++) metadata.add(`k${i}`, "x".repeat(100));
+  },
+};
+
+test("DEFAULT_LIMITS.maxMetadataTotalChars is 2,000,000, twice the per-value cap", () => {
+  assert.equal(DEFAULT_LIMITS.maxMetadataTotalChars, 2_000_000);
+  assert.equal(DEFAULT_LIMITS.maxMetadataTotalChars, 2 * DEFAULT_LIMITS.maxMetadataValueChars);
+});
+
+test("Ripstream.parse refuses root metadata past maxMetadataTotalChars", async () => {
+  const ripstream = new Ripstream({ detector, parser: lotsOfMetadata });
+  await assert.rejects(
+    ripstream.parse(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 500 } }),
+    LimitExceededError,
+  );
+  const ok = await ripstream.parse(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 2000 } });
+  assert.equal(ok.metadata.size(), 10);
+});
+
+test("Ripstream.parse with the default limits accepts a 1,000,000-character value plus 500,000 more", async () => {
+  const parser: Parser = {
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse(_stream, _handler, metadata): Promise<void> {
+      metadata.set("a", "x".repeat(1_000_000));
+      metadata.set("b", "y".repeat(500_000));
+    },
+  };
+  const result = await new Ripstream({ detector, parser }).parse(new Uint8Array([1]));
+  assert.equal(result.metadata.get("a")?.length, 1_000_000);
+});
+
+test("Ripstream.parse with the default limits refuses 3,000,000 characters of metadata", async () => {
+  const parser: Parser = {
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse(_stream, _handler, metadata): Promise<void> {
+      for (const key of ["a", "b", "c"]) metadata.set(key, "x".repeat(1_000_000));
+    },
+  };
+  await assert.rejects(new Ripstream({ detector, parser }).parse(new Uint8Array([1])), LimitExceededError);
+});
+
+test("Ripstream.parseRecursive refuses metadata past maxMetadataTotalChars", async () => {
+  const ripstream = new Ripstream({ detector, parser: lotsOfMetadata });
+  await assert.rejects(
+    ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 500 } }),
+    LimitExceededError,
+  );
+  const records = await ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 2000 } });
+  assert.equal(records[0]?.metadata.getAll("k9").length, 1);
 });

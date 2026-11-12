@@ -176,8 +176,8 @@ test("a protocol violation kills the child and is an IsolationError crash, never
 });
 
 test("a meta frame with too many keys kills the child at once: LimitExceededError, metadata_cap", async () => {
-  // 250,000 empty-valued keys is ~3 MB of JSON: raise the byte caps so the key bound is what trips, not the frame cap.
-  const { outcome, diag } = await supervised("meta-flood", { maxFrameBytes: 8 * 1024 * 1024, maxResultBytes: 8 * 1024 * 1024 });
+  // 1,000,001 empty-valued keys is ~17 MB of JSON: raise the byte caps so the key bound is what trips, not the frame cap.
+  const { outcome, diag } = await supervised("meta-flood", { maxFrameBytes: 32 * 1024 * 1024, maxResultBytes: 32 * 1024 * 1024 });
   const error = failure(outcome);
   assert.ok(error instanceof LimitExceededError, String(error));
   assert.match((error as Error).message, /metadata/i);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { IsolationError } from "@spikedpunch/ripstream-core";
+import { DEFAULT_LIMITS, IsolationError } from "@spikedpunch/ripstream-core";
 import {
   DEFAULT_MAX_FRAMES,
   DEFAULT_MAX_METADATA_KEYS,
@@ -785,7 +785,13 @@ test("exactly maxFrames frames is fine", () => {
 });
 
 test("the defaults are the documented values", () => {
-  assert.deepEqual([DEFAULT_MAX_FRAMES, DEFAULT_MAX_METADATA_KEYS, DEFAULT_MAX_METADATA_VALUES], [1_000_000, 200_000, 1_000_000]);
+  assert.deepEqual([DEFAULT_MAX_FRAMES, DEFAULT_MAX_METADATA_KEYS, DEFAULT_MAX_METADATA_VALUES], [1_000_000, 1_000_000, 2_000_000]);
+});
+
+test("the metadata key and value caps are derived from core's total-metadata cap, so they never refuse what it allows", () => {
+  // Every name and every value counts at least 2 and 1 characters toward the total (Metadata.setMaxTotalChars).
+  assert.equal(DEFAULT_MAX_METADATA_VALUES, DEFAULT_LIMITS.maxMetadataTotalChars);
+  assert.equal(DEFAULT_MAX_METADATA_KEYS, DEFAULT_LIMITS.maxMetadataTotalChars / 2);
 });
 
 function metadataWith(keys: number, valuesPerKey: number): Record<string, string[]> {

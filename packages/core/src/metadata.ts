@@ -19,10 +19,14 @@ const MAX_VALUES_PER_KEY = 100_000;
 export class Metadata implements Iterable<[string, string]> {
   private readonly values = new Map<string, string[]>();
   private maxValueChars = Infinity;
+  private maxTotalChars = Infinity;
+  /** The cost (see `setMaxTotalChars`) of everything stored now. */
+  private totalChars = 0;
 
   constructor(initial?: Metadata | Readonly<Record<string, MetadataValue>>) {
     if (initial instanceof Metadata) {
       this.maxValueChars = initial.maxValueChars;
+      this.maxTotalChars = initial.maxTotalChars;
       this.merge(initial);
     } else if (initial !== undefined) {
       for (const [name, value] of Object.entries(initial)) this.set(name, value);
@@ -35,6 +39,7 @@ export class Metadata implements Iterable<[string, string]> {
     const encoded = this.encodeValue(value);
     const existing = this.values.get(name);
     if (existing === undefined) {
+      this.charge(nameCost(name) + valueCost(encoded));
       this.values.set(name, [encoded]);
     } else {
       if (existing.length >= MAX_VALUES_PER_KEY) {
@@ -42,16 +47,17 @@ export class Metadata implements Iterable<[string, string]> {
           `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
         );
       }
+      this.charge(valueCost(encoded));
       existing.push(encoded);
     }
   }
 
   set(name: string, value: MetadataValue | null | undefined): void {
     if (value == null) {
-      this.values.delete(name);
+      this.remove(name);
       return;
     }
-    this.values.set(name, [this.encodeValue(value)]);
+    this.replace(name, [this.encodeValue(value)]);
   }
 
   /**
@@ -64,8 +70,50 @@ export class Metadata implements Iterable<[string, string]> {
     }
     this.maxValueChars = max;
     for (const list of this.values.values()) {
-      for (let i = 0; i < list.length; i++) list[i] = list[i]!.slice(0, max);
+      for (let i = 0; i < list.length; i++) {
+        const truncated = list[i]!.slice(0, max);
+        this.totalChars -= list[i]!.length - truncated.length;
+        list[i] = truncated;
+      }
     }
+  }
+
+  /**
+   * Refuses (LimitExceededError) any value that would take everything stored here past `max` characters. The total
+   * counts every string stored, each name once and each value, as its length plus one so that an empty string is not
+   * free. That also bounds the JSON an isolated child sends for this metadata: at most 6 bytes per counted
+   * character. It is checked after the per-value cap, so a truncated value counts its truncated length. Callers wire this to
+   * ParseLimits.maxMetadataTotalChars. Throws LimitExceededError if what is stored already exceeds `max`.
+   */
+  setMaxTotalChars(max: number): void {
+    if (Number.isNaN(max) || max < 0) {
+      throw new RangeError(`maxTotalChars must be a non-negative number, got ${String(max)}`);
+    }
+    this.maxTotalChars = max;
+    this.charge(0);
+  }
+
+  /** Adds `cost` to the total, or throws and changes nothing when that passes the cap. */
+  private charge(cost: number): void {
+    if (this.totalChars + cost > this.maxTotalChars) {
+      throw new LimitExceededError(`Metadata exceeds ${this.maxTotalChars} characters in total (names and values)`);
+    }
+    this.totalChars += cost;
+  }
+
+  /** Stores `encoded` as the whole of `name`, charging the difference from what it held. */
+  private replace(name: string, encoded: string[]): void {
+    const old = this.values.get(name);
+    const oldCost = old === undefined ? 0 : nameCost(name) + sumValueCosts(old);
+    const cost = nameCost(name) + sumValueCosts(encoded);
+    this.totalChars -= oldCost;
+    try {
+      this.charge(cost);
+    } catch (error) {
+      this.totalChars += oldCost;
+      throw error;
+    }
+    this.values.set(name, encoded);
   }
 
   private encodeValue(value: MetadataValue): string {
@@ -94,6 +142,9 @@ export class Metadata implements Iterable<[string, string]> {
   }
 
   remove(name: string): void {
+    const old = this.values.get(name);
+    if (old === undefined) return;
+    this.totalChars -= nameCost(name) + sumValueCosts(old);
     this.values.delete(name);
   }
 
@@ -115,7 +166,7 @@ export class Metadata implements Iterable<[string, string]> {
 
   setAll(name: string, values: readonly MetadataValue[]): void {
     if (values.length === 0) {
-      this.values.delete(name);
+      this.remove(name);
       return;
     }
     // Keep the per-key cap a true invariant: the replace path must bound count
@@ -125,7 +176,7 @@ export class Metadata implements Iterable<[string, string]> {
         `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
       );
     }
-    this.values.set(name, values.map((v) => this.encodeValue(v)));
+    this.replace(name, values.map((v) => this.encodeValue(v)));
   }
 
   getInt(name: string): number | null {
@@ -205,6 +256,22 @@ export class Metadata implements Iterable<[string, string]> {
 }
 
 const EMPTY: readonly string[] = Object.freeze([]);
+
+/** What one stored name counts toward the total cap: its length, and one more so an empty name is not free. */
+function nameCost(name: string): number {
+  return name.length + 1;
+}
+
+/** What one stored value counts toward the total cap: its length, and one more so an empty value is not free. */
+function valueCost(encoded: string): number {
+  return encoded.length + 1;
+}
+
+function sumValueCosts(encoded: readonly string[]): number {
+  let sum = 0;
+  for (const value of encoded) sum += valueCost(value);
+  return sum;
+}
 
 function encode(value: MetadataValue): string {
   if (value instanceof Date) return value.toISOString();

@@ -142,6 +142,7 @@ export class ParsingEmbeddedDocumentExtractor
     child.remove(CONTEXT_KEYS.DIGESTS);
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
+    metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     // Forward each chunk as it is produced so the enclosing handler's output
     // cap fires mid-child instead of after the whole child text is buffered.
     // A trailing high surrogate waits for the next chunk: the enclosing handler

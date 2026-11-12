@@ -18,6 +18,7 @@ const COUNT_LIMITS = [
   "maxTotalEmbeddedBytes",
   "maxNodeDepth",
   "maxMetadataValueChars",
+  "maxMetadataTotalChars",
   "maxZipEntries",
   "maxXmlEntityExpansions",
 ] as const;

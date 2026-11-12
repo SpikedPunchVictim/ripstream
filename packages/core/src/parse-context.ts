@@ -33,6 +33,15 @@ export interface ParseLimits {
   readonly maxTaskMillis: number;
   /** Metadata values longer than this are truncated (see Metadata.setMaxValueChars). */
   readonly maxMetadataValueChars: number;
+  /**
+   * One document's metadata may hold at most this many characters in total: every name (once) and every value counts
+   * its length plus one (see Metadata.setMaxTotalChars). Past it the parse fails with a LimitExceededError. The value
+   * cap bounds one value, this bounds their sum. The default, 2,000,000, is ten times the most any document in the
+   * test corpora produced (about 2,000 characters) and small enough that a text-mode isolated result still fits its
+   * metadata frame in the worst case (6 wire bytes per character), so an isolated and an in-process parse refuse the
+   * same documents. An isolated child always applies the default.
+   */
+  readonly maxMetadataTotalChars: number;
   readonly maxZipEntries: number;
   /**
    * Reserved. A DOCTYPE is accepted but its DTD is never read, and saxes
@@ -53,6 +62,7 @@ export const DEFAULT_LIMITS: ParseLimits = Object.freeze({
   maxParseMillis: 60_000,
   maxTaskMillis: 60_000,
   maxMetadataValueChars: 1_000_000,
+  maxMetadataTotalChars: 2_000_000,
   maxZipEntries: 10_000,
   maxXmlEntityExpansions: 0,
 });
@@ -89,6 +99,7 @@ const LIMIT_CHECKS: Readonly<Record<keyof ParseLimits, LimitCheck>> = {
   maxParseMillis: timerMillis(0),
   maxTaskMillis: timerMillis(1),
   maxMetadataValueChars: nonNegativeInteger,
+  maxMetadataTotalChars: nonNegativeInteger,
   maxZipEntries: nonNegativeInteger,
   maxXmlEntityExpansions: nonNegativeInteger,
 };

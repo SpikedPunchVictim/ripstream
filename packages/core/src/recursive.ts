@@ -125,6 +125,7 @@ export class RecursiveParserWrapper implements Parser {
       counted ? ctx.limits.maxDocumentOutputChars : undefined,
     );
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
+    metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     const startedAt = performance.now();
     try {
       await this.delegate.parse(stream, budgeted, metadata, ctx);
@@ -242,6 +243,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     const capture = new OutputBudgetHandler(body, this.output, this.counted ? ctx.limits.maxDocumentOutputChars : undefined);
     let truncated = false;
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
+    metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     const startedAt = performance.now();
     let source = stream;
     try {

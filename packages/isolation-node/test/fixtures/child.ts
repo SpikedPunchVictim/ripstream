@@ -136,11 +136,12 @@ switch (mode) {
     break;
   }
   case "meta-flood": {
-    // One meta frame (~2 MB, under the text frame cap) with more keys than the metadata bound allows.
+    // One meta frame (~17 MB, under the raised frame cap of the test) with more keys than the metadata bound allows
+    // (DEFAULT_MAX_METADATA_KEYS, half of core's total-metadata cap: 1,000,000).
     ready();
     await readInput();
     const metadata: Record<string, string[]> = {};
-    for (let i = 0; i < 250_000; i++) metadata[`k${i}`] = [];
+    for (let i = 0; i < 1_000_001; i++) metadata[`k${i}`] = [];
     sendFrame({ t: "meta", metadata });
     hangForever();
     break;
