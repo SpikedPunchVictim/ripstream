@@ -38,6 +38,7 @@ throw `LimitExceededError` (or `ParseTimeoutError` for time).
 | `maxParseMillis` | 60,000 | Wall-clock parse time (aborts via `ctx.signal`) |
 | `maxTaskMillis` | 60,000 | Wall-clock budget of one isolated request (default of `isolation.maxTaskMillis`) |
 | `maxMetadataValueChars` | 1,000,000 | Metadata values are truncated at this length |
+| `maxMetadataTotalChars` | 2,000,000 | A document whose metadata (every name and value, one extra per string) passes this is a `LimitExceededError`; in-process and isolated runs refuse the same inputs |
 | `maxXmlEntityExpansions` | 0 | Moot: a DOCTYPE is accepted but its DTD is never read, and saxes expands only the predefined entities, so a reference to a DTD-declared entity is malformed XML |
 
 Parser-specific caps outside `ParseLimits`:

@@ -4,6 +4,30 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Failed embedded children are marked, total metadata is capped, RTF writes lazily (`tikajs-4iu3`, `vaak`, `68os.73`)
+
+Fixed: mail, HTTP, archive entries, SQLite blobs, universal executables, TSD, OOXML parts and PDF attachments caught a failed
+child and recorded the failure only on the child's metadata, which a plain parse drops, so the parent kept the partial text
+with no marker. Each now also adds `tk:exception:embedded-exception` (one value per failed child) to its own metadata, as
+Tika's `CompositeParser.recordEmbeddedMetadata` does for the container (read from source, not run). PDF attachments
+swallowed limit, timeout and abort errors with a bare catch; they now end the parse like every other container. Not done: in a
+nested container (zip inside mail) the marker lands on the immediate parent, not the root (`tikajs-6nr0`).
+
+Added, in `@spikedpunch/ripstream-core`: `ParseLimits.maxMetadataTotalChars` (default 2,000,000) and
+`Metadata.setMaxTotalChars`. Every stored name and value counts its length plus one; a write that passes the cap throws
+`LimitExceededError` and changes nothing. Before, a document with ~10 MiB of metadata parsed in-process and failed isolated.
+The isolation frame cap (12 MiB, was 8) and the frame reader's key and value count caps (1,000,000 and 2,000,000, were
+200,000 and 1,000,000) now derive from it, so both modes refuse the same inputs. The largest metadata measured: 5,934 chars
+over 389 repo fixtures, 1,924 over the POI corpus, 42,924 over about 1,270 pdf.js files (partial run). Costs: a text-mode
+child reserves about 72 MiB of pool, up from about 42; core's own bookkeeping keys count against the cap; records mode is still
+bounded per document only (`zgg2.6`). An isolated ripstream refuses the new limit in `limits`, as it does the value cap.
+
+Changed, in `@spikedpunch/ripstream-parsers`: `RtfParser` writes each line as its newline arrives and takes the `\info` values
+for the head from a metadata-only first pass, so the output cap fires early (64 MB RTF with a 10k-character cap: 2.05 s to
+0.96 s, peak RSS 350-475 MB to 270-285 MB; a full parse is unchanged in time and 410-520 MB to 280-390 MB). The input is still
+read whole and a paragraph with no `\par` is held whole. A document nested past 1,000 groups now writes the paragraphs before
+the nesting point and then throws the same `MalformedDocumentError`.
+
 ### Parquet bounds, allocator limits, XmlParser, ZIP64 clamp and the stream read (`tikajs-5bg6`, `zcs2`, `68os.27`, `00bw`, `0vn4`)
 
 Fixed:
@@ -135,9 +159,9 @@ Fixed:
 - RTF: read with `readFully(maxEmbeddedResourceBytes)` and the tokenizer output collected in 8192-character pieces, not
   character by character (20 MB RTF: 837 MB RSS before, 306 MB now).
 
-Not done: RTF still tokenizes the whole capped input before its first write, so its output cap does not fire early; a
-streaming tokenizer has to solve the head metadata (`\info` can come late). Whole-mailbox size is not capped: the cap is per
-message. No new public option: both caps reuse `maxEmbeddedResourceBytes`, which is large by default (512 MB).
+Not done: whole-mailbox size is not capped (the cap is per message); RTF is no longer collected before its first write (see
+the RTF section below) but its input is still read whole. No new public option: both caps reuse `maxEmbeddedResourceBytes`, which
+is large by default (512 MB).
 
 ### SQLite3, WARC, XLIFF and ODF follow Tika's output (`tikajs-68os.48`, `.49`, `.50`, `.64`)
 

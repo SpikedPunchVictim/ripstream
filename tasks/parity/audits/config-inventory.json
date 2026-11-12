@@ -4,7 +4,7 @@
     "area": "loader.top-level",
     "upstreamKey": "metadata-list",
     "upstreamSource": "tika-serialization/src/main/java/org/apache/tika/config/loader/TikaJsonConfig.java:104-133; TikaLoader.java:584-660",
-    "ripstream": "none (ParseLimits.maxMetadataValueChars only: packages/core/src/parse-context.ts:33)",
+    "ripstream": "none (ParseLimits.maxMetadataValueChars and maxMetadataTotalChars only: packages/core/src/parse-context.ts:33)",
     "status": "non-goal-candidate",
     "evidence": "J07,C12",
     "unknownKeyBehaviour": "loud (ripstream rejects): unknown top-level key \"metadata-list\"",

@@ -109,7 +109,7 @@ Shared: OLE2 property sets (`\x05SummaryInformation`, `\x05DocumentSummaryInform
 
 | Format | Upstream | TS | Prio |
 |---|---|---|---|
-| RTF | `RTFParser` | Tokenizer over the input capped at `maxEmbeddedResourceBytes` (output collected in pieces; not streamed): groups, control words, `\uN` escapes, code pages, font/color tables, `\bin` skipping, embedded objects, pictures (`\pict`) as embedded | P1 |
+| RTF | `RTFParser` | Tokenizer over the input capped at `maxEmbeddedResourceBytes` (read whole; text written line by line as it is tokenized, `\info` for the head taken from a metadata-only first pass): groups, control words, `\uN` escapes, code pages, font/color tables, `\bin` skipping, embedded objects, pictures (`\pict`) as embedded | P1 |
 | WordPerfect 5-6, 7-8 | `WordPerfectParser` | Custom WPD prefix/stream parser; text + metadata | P3 |
 
 ---
