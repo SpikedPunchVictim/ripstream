@@ -6,6 +6,7 @@ import {
   Metadata,
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
@@ -98,10 +99,11 @@ export async function parseEntry(
     await extractor.parseEmbedded(stream, handler, childMetadata, ctx);
   } catch (error) {
     if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
-    childMetadata.add(
-      "tk:exception:embedded-exception",
-      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-    );
+    // The entry's metadata is dropped by a plain parse, so the archive carries the marker too, as Tika's
+    // CompositeParser.recordEmbeddedMetadata puts each failed child's exception on the container.
+    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    childMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+    metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
   } finally {
     await stream.close();
   }

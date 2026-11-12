@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import {
+  AbortError,
   EncryptedDocumentError,
   LimitExceededError,
   MalformedDocumentError,
@@ -7,6 +8,7 @@ import {
   Metadata,
   CONTEXT_KEYS,
   MissingDependencyError,
+  ParseTimeoutError,
   TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
@@ -209,8 +211,21 @@ export class PdfParser implements Parser {
               embeddedMetadata,
               ctx,
             );
-          } catch {
-            // Unsupported attachments are listed by name only.
+          } catch (error) {
+            // A limit, timeout or abort ends the parse; any other failure is that attachment's: it is listed by name and
+            // the exception goes on the PDF's metadata, as Tika's CompositeParser records each failed child.
+            if (
+              error instanceof LimitExceededError ||
+              error instanceof ParseTimeoutError ||
+              error instanceof AbortError ||
+              ctx.signal.aborted
+            ) {
+              throw error;
+            }
+            metadata.add(
+              TIKA_KEYS.EMBEDDED_EXCEPTION,
+              error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            );
           } finally {
             await attachmentStream.close();
           }

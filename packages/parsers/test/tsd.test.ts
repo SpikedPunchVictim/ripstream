@@ -6,6 +6,7 @@ import {
   CONTEXT_KEYS,
   EmbeddedDocumentBytesHandler,
   LimitExceededError,
+  TIKA_KEYS,
   MalformedDocumentError,
   Metadata,
   ParseContext,
@@ -326,4 +327,25 @@ test("a value that starts with a number sign is escaped, and a UniversalString i
 
 test("a GeneralName that is not context-tagged is refused", () => {
   assert.throws(() => nameText(seq()), MalformedDocumentError);
+});
+
+test("a failed embedded document puts its exception on the TSD's metadata; a limit still ends the parse", async () => {
+  const run = async (failure: Error): Promise<Metadata> => {
+    const context = new ParseContext();
+    context.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, {
+      shouldParseEmbedded: () => true,
+      parseEmbedded: () => Promise.reject(failure),
+    });
+    const metadata = new Metadata();
+    const stream = await RipstreamInputStream.from(file("Test1.txt.tsd"));
+    try {
+      await new TsdParser().parse(stream, new BodyContentHandler(), metadata, context);
+    } finally {
+      await stream.close();
+    }
+    return metadata;
+  };
+  const metadata = await run(new MalformedDocumentError("content is cut short"));
+  assert.deepEqual(metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION), ["MalformedDocumentError: content is cut short"]);
+  await assert.rejects(run(new LimitExceededError("too big")), LimitExceededError);
 });

@@ -8,6 +8,7 @@ import {
   ParsingEmbeddedDocumentExtractor,
   RipstreamError,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   signalCheckpoint,
   type ContentHandler,
@@ -119,7 +120,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     const budget = { rows: 0, chars: 0 };
     for (const tableName of tableNames) {
       tick();
-      await this.#writeTable(database, tableName, xhtml, budget, ctx, tick);
+      await this.#writeTable(database, tableName, xhtml, metadata, budget, ctx, tick);
     }
     await xhtml.endDocument();
   }
@@ -128,6 +129,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     database: SqlDatabase,
     tableName: string,
     xhtml: XHTMLContentHandler,
+    metadata: Metadata,
     budget: { rows: number; chars: number },
     ctx: ParseContext,
     tick: () => void,
@@ -145,7 +147,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     await xhtml.endElement("thead");
     await xhtml.startElement("tbody");
     if (columns !== null && columns.length > 0) {
-      await this.#writeRows(database, tableName, columns, xhtml, budget, ctx, tick);
+      await this.#writeRows(database, tableName, columns, xhtml, metadata, budget, ctx, tick);
     }
     await xhtml.endElement("tbody");
     await xhtml.endElement("table");
@@ -156,6 +158,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     tableName: string,
     columns: readonly Column[],
     xhtml: XHTMLContentHandler,
+    metadata: Metadata,
     budget: { rows: number; chars: number },
     ctx: ParseContext,
     tick: () => void,
@@ -173,7 +176,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
         for (const [index, column] of columns.entries()) {
           await xhtml.startElement("td");
           const cell = { valueType: String(values[index * 3]), value: values[index * 3 + 1] ?? null, realText: values[index * 3 + 2] };
-          await this.#writeCell(tableName, column, rowNumber, cell, xhtml, budget, ctx);
+          await this.#writeCell(tableName, column, rowNumber, cell, xhtml, metadata, budget, ctx);
           await xhtml.endElement("td");
         }
         await xhtml.endElement("tr");
@@ -190,12 +193,13 @@ class SqliteTablesParser implements Parser, SqliteTables {
     rowNumber: number,
     cell: Cell,
     xhtml: XHTMLContentHandler,
+    metadata: Metadata,
     budget: { rows: number; chars: number },
     ctx: ParseContext,
   ): Promise<void> {
     const kind = cellKind(column.typeName ?? valueTypeName(cell.valueType), cell.valueType);
     if (kind === "blob") {
-      await this.#writeBlob(tableName, column.name, rowNumber, cell, xhtml, ctx);
+      await this.#writeBlob(tableName, column.name, rowNumber, cell, xhtml, metadata, ctx);
       return;
     }
     const text = cellText(kind, cell);
@@ -214,6 +218,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     rowNumber: number,
     cell: Cell,
     xhtml: XHTMLContentHandler,
+    databaseMetadata: Metadata,
     ctx: ParseContext,
   ): Promise<void> {
     const attributes = new AttributesImpl();
@@ -236,7 +241,7 @@ class SqliteTablesParser implements Parser, SqliteTables {
     metadata.set("database:ROW_NUM", String(rowNumber));
     metadata.set("database:IS_BLOB", "true");
     metadata.set("tk:resource-name", resourceName(`${columnName}_${rowNumber}`));
-    await parseEmbeddedBlob(cell.value, xhtml, metadata, ctx);
+    await parseEmbeddedBlob(cell.value, xhtml, metadata, databaseMetadata, ctx);
     await xhtml.endElement("", "span", "span");
   }
 }
@@ -400,6 +405,7 @@ async function parseEmbeddedBlob(
   bytes: Uint8Array,
   xhtml: XHTMLContentHandler,
   metadata: Metadata,
+  databaseMetadata: Metadata,
   ctx: ParseContext,
 ): Promise<void> {
   const extractor =
@@ -411,7 +417,10 @@ async function parseEmbeddedBlob(
     await extractor.parseEmbedded(stream, xhtml, metadata, ctx);
   } catch (error) {
     if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
-    metadata.add("tk:exception:embedded-exception", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+    // The blob's metadata is dropped by a plain parse, so the database carries the marker too.
+    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+    databaseMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
   } finally {
     await stream.close();
   }

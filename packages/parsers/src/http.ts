@@ -8,6 +8,7 @@ import {
   ParseTimeoutError,
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
@@ -86,7 +87,7 @@ export class HttpParser implements Parser {
     const head = await this.#readHead(stream);
     if (head.contentLength !== null && head.contentLength > 0n) {
       await stream.seek(head.end);
-      await parsePayload(stream, head.contentLength, xhtml, ctx);
+      await parsePayload(stream, head.contentLength, xhtml, metadata, ctx);
     }
 
     await xhtml.endDocument();
@@ -181,6 +182,7 @@ async function parsePayload(
   stream: RipstreamInputStream,
   contentLength: bigint,
   xhtml: XHTMLContentHandler,
+  responseMetadata: Metadata,
   ctx: ParseContext,
 ): Promise<void> {
   const extractor =
@@ -203,7 +205,10 @@ async function parsePayload(
     ) {
       throw error;
     }
-    payloadMetadata.add("tk:exception:embedded-exception", error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+    // The payload's metadata is dropped by a plain parse, so the response carries the marker too.
+    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    payloadMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+    responseMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
   } finally {
     await payload.close();
   }

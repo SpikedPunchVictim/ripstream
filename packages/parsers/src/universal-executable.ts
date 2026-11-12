@@ -75,7 +75,7 @@ export class UniversalExecutableParser implements Parser {
     // Offsets in the table are from the start of the file, which is where the stream is.
     const base = stream.position;
     const table = await readTable(stream);
-    await extractArchs(stream, base, table, xhtml, extractor, ctx);
+    await extractArchs(stream, base, table, xhtml, metadata, extractor, ctx);
     await xhtml.endDocument();
   }
 }
@@ -126,6 +126,7 @@ async function extractArchs(
   base: number,
   table: FatTable,
   xhtml: XHTMLContentHandler,
+  parentMetadata: Metadata,
   extractor: EmbeddedDocumentExtractor,
   ctx: ParseContext,
 ): Promise<void> {
@@ -161,7 +162,10 @@ async function extractArchs(
     } catch (error) {
       // A document that cannot be read is recorded and the next one is taken, as Tika's extractor does.
       if (isFatal(error, ctx)) throw error;
-      embedded.add(TIKA_KEYS.EMBEDDED_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+      // The document's metadata is dropped by a plain parse, so the executable carries the marker too.
+      const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      embedded.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+      parentMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
     } finally {
       await archStream.close();
     }

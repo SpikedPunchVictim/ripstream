@@ -102,7 +102,7 @@ export class OoxmlParser implements Parser {
       throw new UnsupportedFormatError("Unrecognized OOXML package");
     }
 
-    await renderEmbeddedParts(files, xhtml, ctx);
+    await renderEmbeddedParts(files, xhtml, metadata, ctx);
     await xhtml.endDocument();
   }
 }
@@ -703,6 +703,7 @@ function resolveTarget(sourceFolder: string, target: string): string {
 async function renderEmbeddedParts(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
+  parentMetadata: Metadata,
   ctx: ParseContext,
 ): Promise<void> {
   const types = embeddedTypesByPart(files);
@@ -724,7 +725,7 @@ async function renderEmbeddedParts(
     const bytes = files[name]!;
     await xhtml.startElement("div", "class", "embedded");
     await xhtml.element("h1", embedded[2] ?? name);
-    await parseEmbeddedPart(xhtml, embedded[2] ?? name, bytes, ctx, types.get(name));
+    await parseEmbeddedPart(xhtml, embedded[2] ?? name, bytes, parentMetadata, ctx, types.get(name));
     await xhtml.endElement("div");
   }
 }
@@ -733,6 +734,7 @@ async function parseEmbeddedPart(
   handler: XHTMLContentHandler,
   name: string,
   bytes: Uint8Array,
+  parentMetadata: Metadata,
   ctx: ParseContext,
   type: string | undefined,
 ): Promise<void> {
@@ -757,7 +759,12 @@ async function parseEmbeddedPart(
     ) {
       throw error;
     }
-    // Unsupported embedded formats must not fail the package.
+    // An embedded part that fails must not fail the package; its exception goes on the package's metadata, as Tika's
+    // CompositeParser records each failed child.
+    parentMetadata.add(
+      TIKA_KEYS.EMBEDDED_EXCEPTION,
+      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    );
   } finally {
     await stream.close();
   }

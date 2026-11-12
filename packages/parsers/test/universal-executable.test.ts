@@ -423,6 +423,16 @@ test("a document that fails to parse is recorded on its own metadata and the nex
   assert.equal(recording.seen[1]!.get(TIKA_KEYS.EMBEDDED_EXCEPTION), null);
 });
 
+test("a document that fails to parse is marked on the executable's metadata too, once per failure (tikajs-4iu3)", async () => {
+  const recording = new Recording((index) => (index === 0 ? new MalformedDocumentError("cannot read arch 0") : null));
+  const bytes = fat({
+    entries: [{ offset: 0x40, size: 32 }, { offset: 0x80, size: 32 }],
+    place: [[0x40, thin(1)], [0x80, thin(2)]],
+  });
+  const { metadata } = await runWith(bytes, recording);
+  assert.deepEqual(metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION), ["MalformedDocumentError: cannot read arch 0"]);
+});
+
 test("a limit reached inside an embedded document ends the parse", async () => {
   const recording = new Recording((index) => (index === 0 ? new LimitExceededError("too many") : null));
   const bytes = fat({

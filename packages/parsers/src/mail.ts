@@ -310,10 +310,11 @@ async function dispatchEmbedded(
     ) {
       throw error;
     }
-    partMetadata.add(
-      "tk:exception:embedded-exception",
-      error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-    );
+    // The part's metadata is dropped by a plain parse, so the message carries the marker too, as Tika's
+    // CompositeParser.recordEmbeddedMetadata puts each failed child's exception on the container.
+    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    partMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+    output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
   } finally {
     await stream.close();
   }

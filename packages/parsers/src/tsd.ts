@@ -70,7 +70,7 @@ export class TsdParser implements Parser {
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    await parseContent(envelope, xhtml, embeddedMetadata, ctx);
+    await parseContent(envelope, xhtml, embeddedMetadata, metadata, ctx);
     await xhtml.endDocument();
   }
 }
@@ -120,6 +120,7 @@ async function parseContent(
   envelope: Envelope,
   xhtml: XHTMLContentHandler,
   metadata: Metadata,
+  parentMetadata: Metadata,
   ctx: ParseContext,
 ): Promise<void> {
   const extractor =
@@ -138,6 +139,9 @@ async function parseContent(
   } catch (error) {
     // Tika logs a failure of the embedded document and ends the parse normally; a limit or an abort is not one of those.
     if (isFatal(error, ctx)) throw error;
+    // The embedded document's metadata is dropped by a plain parse, so the TSD carries the marker, as Tika's CompositeParser
+    // puts each failed child's exception on the container.
+    parentMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
   } finally {
     await embedded.close();
   }
