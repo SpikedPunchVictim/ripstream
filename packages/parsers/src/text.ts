@@ -1,4 +1,5 @@
 import {
+  CONTEXT_KEYS,
   MediaType,
   XHTMLContentHandler,
   type ContentHandler,
@@ -59,10 +60,12 @@ export class TextParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     const prefix = await stream.peek(64 * 1024);
-    const encoding = detectEncoding(prefix);
+    // An incoming text/* charset replaces detection, as Tika's text parsers use the hint's parameter.
+    const hinted = ctx.get(CONTEXT_KEYS.CHARSET_HINT);
+    const encoding = hinted === undefined ? detectEncoding(prefix) : { charset: hinted };
 
     const { decoder, charset } = createDecoder(encoding.charset);
     metadata.set("Content-Encoding", charset);

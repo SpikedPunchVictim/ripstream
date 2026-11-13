@@ -1,5 +1,6 @@
 import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import {
+  CONTEXT_KEYS,
   LimitExceededError,
   MediaType,
   XHTMLContentHandler,
@@ -151,7 +152,10 @@ export class CsvParser implements Parser {
     }
     // Enough bytes for the sniffer's window at up to four bytes a character; the encoding is detected from the first 64 KiB.
     const head = await stream.peek(this.#markLimit * 4);
-    const { decoder, charset } = createDecoder(detectEncoding(head.subarray(0, 64 * 1024)).charset);
+    const hinted = ctx.get(CONTEXT_KEYS.CHARSET_HINT);
+    const { decoder, charset } = createDecoder(
+      hinted ?? detectEncoding(head.subarray(0, 64 * 1024)).charset,
+    );
     metadata.set("Content-Encoding", charset);
     recordDetectedEncoding(metadata, charset);
 

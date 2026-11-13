@@ -264,6 +264,11 @@ export const CONTEXT_KEYS = {
   EMBEDDED_ID_PATH: new ParseContextKey<string>("embedded-id-path"),
   /** The digests to make (Tika's DigesterFactory in the ParseContext); AutoDetectParser reads it. Absent: none. */
   DIGESTS: new ParseContextKey<DigestSettings>("digests"),
+  /**
+   * A charset from the incoming Content-Type hint (`ParseOptions.contentType`), which text parsers decode with instead
+   * of detecting one. Set on the root document only; embedded documents detect their own.
+   */
+  CHARSET_HINT: new ParseContextKey<string>("charset-hint"),
   /** Mutable budget shared by a context and all of its descendants. */
   EMBEDDED_BUDGET: new ParseContextKey<{ count: number; bytes: number }>(
     "embedded-budget",

@@ -474,7 +474,7 @@ export class Ripstream {
 
 export interface ParseOptions {
   filename?: string;
-  contentType?: string;             // hint
+  contentType?: string;             // text/* charset hint; never selects a parser
   handler?: 'text' | 'html' | 'xhtml' | 'xml' | 'markdown' | 'json' | ContentHandler;
   limits?: Partial<ParseLimits>;
   password?: string | PasswordProvider;

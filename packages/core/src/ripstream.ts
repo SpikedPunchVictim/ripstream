@@ -9,6 +9,7 @@ import {
   type ParseLimits,
 } from "./parse-context.ts";
 import type { Detector, Parser } from "./parser.ts";
+import { MediaType } from "./media-type.ts";
 import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
 import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
@@ -39,6 +40,11 @@ export interface RipstreamOptions {
 
 export interface ParseOptions {
   readonly filename?: string;
+  /**
+   * An incoming Content-Type hint. Only the charset parameter of a `text/*` type is used: text parsers decode with it
+   * instead of detecting one. It never selects a parser, so an untrusted hint cannot route bytes to a parser the
+   * detector would not have chosen. The isolated path refuses it (the child detects the type and encoding itself).
+   */
   readonly contentType?: string;
   readonly limits?: Partial<ParseLimits>;
   readonly signal?: AbortSignal;
@@ -334,7 +340,7 @@ export class Ripstream {
 
   private async withStream<T>(
     source: InputSource,
-    options: { filename?: string; signal?: AbortSignal; limits?: Partial<ParseLimits> },
+    options: { filename?: string; contentType?: string; signal?: AbortSignal; limits?: Partial<ParseLimits> },
     action: (
       stream: RipstreamInputStream,
       metadata: Metadata,
@@ -364,6 +370,8 @@ export class Ripstream {
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
+    const charset = charsetHint(options.contentType);
+    if (charset !== undefined) ctx.set(CONTEXT_KEYS.CHARSET_HINT, charset);
     const stream = await RipstreamInputStream.from(source, {
       context: ctx,
       signal,
@@ -384,6 +392,18 @@ export class Ripstream {
 }
 
 export type MediaTypeResult = Awaited<ReturnType<Detector["detect"]>>;
+
+/**
+ * The charset of a `text/*` incoming Content-Type, which text parsers decode with instead of detecting one. A hint is
+ * never used to choose a parser (the detector and the in-process allowlist still decide that), and any other type is
+ * ignored.
+ */
+function charsetHint(contentType: string | undefined): string | undefined {
+  if (contentType === undefined) return undefined;
+  const type = MediaType.parse(contentType);
+  if (type === null || !type.getBaseType().toString().startsWith("text/")) return undefined;
+  return type.getParameter("charset") ?? undefined;
+}
 
 function metadataFor(filename: string | undefined): Metadata {
   const metadata = new Metadata();

@@ -1,0 +1,26 @@
+{
+  "description": "A text/* Content-Type hint's charset replaces encoding detection (tikajs-68os.41): latin1 bytes decode as ISO-8859-1, not the detected charset",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "base64": "Y2Fm6Qo=",
+    "filename": "note.txt"
+  },
+  "options": {
+    "contentType": "text/plain; charset=ISO-8859-1"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "café"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Encoding",
+      "value": "ISO-8859-1"
+    }
+  ]
+}

@@ -140,6 +140,7 @@ export class ParsingEmbeddedDocumentExtractor
     // it: its digest would be made and thrown away (MD2 of a nested archive costs seconds). A recursive parse keeps
     // each document's metadata and digests it in its own extractor.
     child.remove(CONTEXT_KEYS.DIGESTS);
+    child.remove(CONTEXT_KEYS.CHARSET_HINT);
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);

@@ -234,6 +234,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     }
 
     const child = ctx.createChild();
+    child.remove(CONTEXT_KEYS.CHARSET_HINT);
     child.set(CONTEXT_KEYS.EMBEDDED_DEPTH, depth);
     child.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
     child.set(CONTEXT_KEYS.EMBEDDED_ID_PATH, idPath);
