@@ -83,10 +83,22 @@ function stts(entries: Array<[number, number]>): number[] {
   return box("stts", [0, 0, 0, 0, ...u32(entries.length), ...entries.flatMap(([count, delta]) => [...u32(count), ...u32(delta)])]);
 }
 
-function mediaTrack(handler: string, sampleEntry: number[], options: { mdhd?: number[]; stts?: number[] } = {}): number[] {
+function mediaTrack(handler: string, sampleEntry: number[], options: { mdhd?: number[]; stts?: number[]; edts?: number[] } = {}): number[] {
   const hdlr = box("hdlr", [0, 0, 0, 0, 0, 0, 0, 0, ...[...handler].map((c) => c.charCodeAt(0)), ...new Array(13).fill(0)]);
   const stsd = box("stsd", [0, 0, 0, 0, ...u32(1), ...sampleEntry]);
-  return box("trak", box("mdia", [...hdlr, ...(options.mdhd ?? []), ...box("minf", box("stbl", [...(options.stts ?? []), ...stsd]))]));
+  return box("trak", [...(options.edts ?? []), ...box("mdia", [...hdlr, ...(options.mdhd ?? []), ...box("minf", box("stbl", [...(options.stts ?? []), ...stsd]))])]);
+}
+
+/** A timed metadata track's `mebx` sample entry declaring one `keyd` key name. */
+function mebxEntry(name: string): number[] {
+  const keyd = box("keyd", [...u32(0x6d647461), ...[...name].map((c) => c.charCodeAt(0))]);
+  const key = [...u32(8 + keyd.length), ...u32(1), ...keyd];
+  return box("mebx", [...new Array(6).fill(0), ...u16(1), ...box("keys", key)]);
+}
+
+/** An `edts`/`elst` with one leading empty edit (media time -1). */
+function edts(segmentDuration: number): number[] {
+  return box("edts", box("elst", [0, 0, 0, 0, ...u32(1), ...u32(segmentDuration), ...u32(0xffffffff), ...u32(0x00010000)]));
 }
 
 /** A VisualSampleEntry with a Pascal-string compressor name and optional child boxes. */
@@ -333,6 +345,26 @@ test("reads the year form of ©day as xmpDM:releaseDate", async () => {
     ),
   );
   assert.equal(metadata.get("xmpDM:releaseDate"), "2008");
+});
+
+test("reads a Live Photo still-image-time as the leading empty edit in microseconds", async () => {
+  const name = "com.apple.quicktime.still-image-time";
+  const noEdit = await parseMp4(movie(mvhd(0, 0, 0, 600, 6000), mediaTrack("meta", mebxEntry(name), { stts: stts([[1, 1]]) })));
+  assert.equal(noEdit.get("quicktime:still-image-time"), "0");
+  const delayed = await parseMp4(
+    movie(mvhd(0, 0, 0, 600, 6000), mediaTrack("meta", mebxEntry(name), { stts: stts([[1, 1]]), edts: edts(3000) })),
+  );
+  assert.equal(delayed.get("quicktime:still-image-time"), "5000000");
+});
+
+test("a metadata track with several samples or another key writes no still-image-time", async () => {
+  const name = "com.apple.quicktime.still-image-time";
+  const twoSamples = await parseMp4(movie(mvhd(0, 0, 0, 600, 6000), mediaTrack("meta", mebxEntry(name), { stts: stts([[2, 1]]) })));
+  assert.equal(twoSamples.get("quicktime:still-image-time"), null);
+  const otherKey = await parseMp4(
+    movie(mvhd(0, 0, 0, 600, 6000), mediaTrack("meta", mebxEntry("com.apple.quicktime.content.identifier"), { stts: stts([[1, 1]]) })),
+  );
+  assert.equal(otherKey.get("quicktime:still-image-time"), null);
 });
 
 test("rejects files without moov", async () => {

@@ -75,6 +75,7 @@ export class Mp4Parser implements Parser {
       movie.start + movie.size,
       "mvhd",
     );
+    let movieTimescale = 0;
     if (movieHeader !== null) {
       const start = movieHeader.start;
       const version = data[start]!;
@@ -84,6 +85,7 @@ export class Mp4Parser implements Parser {
       const timescaleOffset = version === 1 ? start + 20 : start + 12;
       const durationOffset = version === 1 ? start + 24 : start + 16;
       const timescale = readU32(view, timescaleOffset);
+      movieTimescale = timescale;
       const duration =
         version === 1
           ? Number(view.getBigUint64(durationOffset))
@@ -97,7 +99,7 @@ export class Mp4Parser implements Parser {
       metadata.set("xmpDM:audioSampleRate", String(timescale));
     }
     for (const track of boxes(data, view, movie.start, movie.start + movie.size)) {
-      if (track.type === "trak") parseTrack(data, view, track, metadata);
+      if (track.type === "trak") parseTrack(data, view, track, movieTimescale, metadata);
     }
     scanQuickTimeMetadata(data, view, movie.start, movie.start + movie.size, metadata);
   }
@@ -348,7 +350,13 @@ function decodeAngle(token: string, degreeDigits: number): number {
   return sign * value;
 }
 
-function parseTrack(data: Uint8Array, view: DataView, track: Box, metadata: Metadata): void {
+function parseTrack(
+  data: Uint8Array,
+  view: DataView,
+  track: Box,
+  movieTimescale: number,
+  metadata: Metadata,
+): void {
   const media = findBox(data, view, track.start, track.start + track.size, "mdia");
   if (media === null) return;
   const mediaEnd = media.start + media.size;
@@ -356,7 +364,7 @@ function parseTrack(data: Uint8Array, view: DataView, track: Box, metadata: Meta
   // hdlr: version and flags, a pre-defined field, then the four-character handler type.
   if (handler === null || handler.size < 12) return;
   const handlerType = fourCC(data, handler.start + 8);
-  if (handlerType !== "vide" && handlerType !== "soun") return;
+  if (handlerType !== "vide" && handlerType !== "soun" && handlerType !== "meta") return;
 
   const info = findBox(data, view, media.start, mediaEnd, "minf");
   const table = info === null ? null : findBox(data, view, info.start, info.start + info.size, "stbl");
@@ -364,9 +372,77 @@ function parseTrack(data: Uint8Array, view: DataView, track: Box, metadata: Meta
   const entry = descriptions === null ? null : firstSampleEntry(data, view, descriptions);
   if (handlerType === "vide") {
     parseVideoTrack(data, view, entry, table, mediaHeader(data, view, media.start, mediaEnd), metadata);
-  } else {
+  } else if (handlerType === "soun") {
     parseSoundTrack(data, view, entry, mediaHeader(data, view, media.start, mediaEnd), metadata);
+  } else {
+    parseMetaTrack(data, view, track, entry, table, movieTimescale, metadata);
   }
+}
+
+/**
+ * A timed metadata track (`hdlr` 'meta'): for a Live Photo's still-image-time track, the presentation time of its
+ * single sample is the leading empty edit, in movie timescale units, emitted as microseconds.
+ */
+function parseMetaTrack(
+  data: Uint8Array,
+  view: DataView,
+  track: Box,
+  entry: Box | null,
+  table: Box | null,
+  movieTimescale: number,
+  metadata: Metadata,
+): void {
+  if (entry === null || entry.type !== "mebx" || !mebxHasStillImageKey(data, view, entry)) return;
+  const stts = table === null ? null : findBox(data, view, table.start, table.start + table.size, "stts");
+  if (stts === null) return;
+  let samples = 0;
+  const count = readU32(view, stts.start + 4);
+  for (let i = 0, offset = stts.start + 8; i < count && offset + 8 <= stts.start + stts.size; i++, offset += 8) {
+    samples += readU32(view, offset);
+  }
+  if (samples !== 1) return;
+  const emptyEdit = leadingEmptyEdit(data, view, track);
+  if (emptyEdit <= 0) {
+    metadata.set("quicktime:still-image-time", "0");
+  } else if (movieTimescale > 0 && emptyEdit <= Number.MAX_SAFE_INTEGER / 1_000_000) {
+    metadata.set("quicktime:still-image-time", String(Math.floor((emptyEdit * 1_000_000) / movieTimescale)));
+  }
+}
+
+/** Whether a `mebx` sample entry declares the QuickTime still-image-time key in its `keys`/`keyd` boxes. */
+function mebxHasStillImageKey(data: Uint8Array, view: DataView, entry: Box): boolean {
+  const end = entry.start + entry.size;
+  for (const keys of boxes(data, view, entry.start + SAMPLE_ENTRY_FIELDS, end)) {
+    if (keys.type !== "keys") continue;
+    for (const key of boxes(data, view, keys.start, keys.start + keys.size)) {
+      for (const declaration of boxes(data, view, key.start, key.start + key.size)) {
+        if (declaration.type !== "keyd" || declaration.size <= 4) continue;
+        const name = new TextDecoder().decode(data.subarray(declaration.start + 4, declaration.start + declaration.size));
+        if (name === "com.apple.quicktime.still-image-time") return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** The total duration of a track's leading empty edits (media time -1) from its `edts`/`elst`, or -1. */
+function leadingEmptyEdit(data: Uint8Array, view: DataView, track: Box): number {
+  const edts = findBox(data, view, track.start, track.start + track.size, "edts");
+  if (edts === null) return -1;
+  const elst = findBox(data, view, edts.start, edts.start + edts.size, "elst");
+  if (elst === null || elst.size < 8) return -1;
+  const version = data[elst.start]!;
+  const count = readU32(view, elst.start + 4);
+  const entrySize = version === 1 ? 20 : 12;
+  const end = elst.start + elst.size;
+  let leading = 0;
+  for (let i = 0, offset = elst.start + 8; i < count && offset + entrySize <= end; i++, offset += entrySize) {
+    const segmentDuration = version === 1 ? Number(view.getBigUint64(offset)) : readU32(view, offset);
+    const mediaTime = version === 1 ? Number(view.getBigInt64(offset + 8)) : view.getInt32(offset + 4);
+    if (mediaTime !== -1) break;
+    leading += segmentDuration;
+  }
+  return leading > 0 ? leading : -1;
 }
 
 function parseVideoTrack(
