@@ -35,6 +35,11 @@ export function detectEncoding(data: Uint8Array): EncodingDetection {
     return { charset: declared, confidence: 0.9, bom: false, binary: false };
   }
 
+  const iso2022 = detectIso2022(data);
+  if (iso2022 !== null) {
+    return { charset: iso2022, confidence: 0.9, bom: false, binary: false };
+  }
+
   if (isBinary(data)) {
     return { charset: "ISO-8859-1", confidence: 0.1, bom: false, binary: true };
   }
@@ -69,6 +74,39 @@ export function decodeText(data: Uint8Array, charset: string): string {
   } catch {
     return new TextDecoder("utf-8", { fatal: false }).decode(data);
   }
+}
+
+/**
+ * Tika's StructuralEncodingRules.detectIso2022: the ESC designation sequences that distinguish ISO-2022-JP, -KR and
+ * -CN. The text is 7-bit, so this must run before the pure-ASCII answer.
+ */
+function detectIso2022(data: Uint8Array): string | null {
+  for (let index = 0; index < data.length - 1; index++) {
+    if (data[index] !== 0x1b) continue;
+    const next = data[index + 1]!;
+    if (next === 0x28) continue; // ESC ( is a single-byte designation in every variant
+    if (next !== 0x24) continue;
+    if (index + 2 >= data.length) return "ISO-2022-JP";
+    const third = data[index + 2]!;
+    switch (third) {
+      case 0x42: // ESC $ B — JIS X 0208-1983
+      case 0x40: // ESC $ @ — JIS X 0208-1978
+      case 0x28: // ESC $ ( — JIS X 0212 supplementary
+        return "ISO-2022-JP";
+      case 0x29: {
+        if (index + 3 >= data.length) return "ISO-2022-JP";
+        const fourth = data[index + 3]!;
+        if (fourth === 0x43) return "ISO-2022-KR"; // ESC $ ) C
+        if (fourth === 0x41 || fourth === 0x47) return "ISO-2022-CN"; // GB2312, CNS plane 1
+        return "ISO-2022-JP";
+      }
+      case 0x2a: // ESC $ * — CNS 11643 plane 2
+        return "ISO-2022-CN";
+      default:
+        return "ISO-2022-JP";
+    }
+  }
+  return null;
 }
 
 function detectBom(data: Uint8Array): { charset: string } | null {

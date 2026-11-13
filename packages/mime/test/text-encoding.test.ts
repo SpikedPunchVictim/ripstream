@@ -76,3 +76,13 @@ test("decodes text with replacement rather than throwing", () => {
   const decoded = decodeText(new Uint8Array([0xff, 0x41]), "UTF-8");
   assert.match(decoded, /A/);
 });
+
+test("an ISO-2022 escape sequence selects the variant before the pure-ASCII answer", () => {
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x24, 0x42, 0x41])).charset, "ISO-2022-JP");
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x24, 0x40, 0x41])).charset, "ISO-2022-JP");
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x24, 0x29, 0x43, 0x41])).charset, "ISO-2022-KR");
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x24, 0x29, 0x41, 0x41])).charset, "ISO-2022-CN");
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x24, 0x2a, 0x48, 0x41])).charset, "ISO-2022-CN");
+  // ESC ( alone is not an ISO-2022 designation; the control byte makes it binary.
+  assert.equal(detectEncoding(new Uint8Array([0x1b, 0x28, 0x42, 0x41])).charset, "ISO-8859-1");
+});
