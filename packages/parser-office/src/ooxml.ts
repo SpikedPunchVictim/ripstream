@@ -27,7 +27,7 @@ import {
   parseXmlTree,
   type XmlNode,
 } from "./xml-tree.ts";
-import { formatExcelDate, isDateFormat } from "./excel-format.ts";
+import { formatExcelDate, formatExcelDateCode, isDateFormat } from "./excel-format.ts";
 
 const DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -120,9 +120,9 @@ async function collectParts(
 
 const SHARED_PARTS = /^docProps\/(core|app|custom)\.xml$/;
 const DOCX_PARTS =
-  /^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments)\.xml$|^word\/(charts\/chart\d+\.xml|diagrams\/data\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
+  /^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments|glossary\/document)\.xml$|^word\/(charts\/chart\d+\.xml|diagrams\/data\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
 const XLSX_PARTS =
-  /^xl\/(workbook|sharedStrings|styles)\.xml$|^xl\/(worksheets\/sheet\d+\.xml|charts\/chart\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
+  /^xl\/(workbook|sharedStrings|styles)\.xml$|^xl\/(worksheets\/sheet\d+\.xml|charts\/chart\d+\.xml|drawings\/drawing\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/i;
 const PPTX_PARTS =
   /^ppt\/(presentation)\.xml$|^ppt\/(slides\/slide\d+\.xml|notesSlides\/notesSlide\d+\.xml|charts\/chart\d+\.xml|diagrams\/data\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
 
@@ -160,6 +160,11 @@ async function renderWord(
   await renderNotes(files, "word/footnotes.xml", "footnote", xhtml);
   await renderNotes(files, "word/endnotes.xml", "endnote", xhtml);
   await renderNotes(files, "word/comments.xml", "comment", xhtml);
+  // A glossary building block's body holds the content-control text Tika extracts from the glossary part.
+  const glossary = parsePart(files, "word/glossary/document.xml");
+  if (glossary !== undefined) {
+    for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml);
+  }
 }
 
 async function renderWordPartGroup(
@@ -260,6 +265,20 @@ function wordParagraphText(node: XmlNode): string {
   return text;
 }
 
+/** A row's cells, looking through the content-control wrappers a cell may sit in. */
+function rowCells(row: XmlNode): XmlNode[] {
+  const cells: XmlNode[] = [];
+  const visit = (node: XmlNode): void => {
+    for (const child of node.children) {
+      const name = localName(child.name);
+      if (name === "tc") cells.push(child);
+      else if (name === "sdt" || name === "sdtContent" || name === "customXml") visit(child);
+    }
+  };
+  visit(row);
+  return cells;
+}
+
 async function renderWordTable(
   table: XmlNode,
   xhtml: XHTMLContentHandler,
@@ -267,7 +286,7 @@ async function renderWordTable(
   await xhtml.startElement("table");
   for (const row of childrenNamed(table, "tr")) {
     await xhtml.startElement("tr");
-    for (const cell of childrenNamed(row, "tc")) {
+    for (const cell of rowCells(row)) {
       await xhtml.startElement("td");
       await renderWordBlocks(cell, xhtml);
       await xhtml.endElement("td");
@@ -295,13 +314,23 @@ interface Styles {
   readonly dateStyles: boolean[];
   readonly percentStyles: boolean[];
   readonly decimals: number[];
+  /** The number format code of each cell style, builtin codes included, or null for General. */
+  readonly codes: (string | null)[];
 }
+
+/** Builtin number formats (ECMA-376 18.8.30), the subset whose display differs from the raw value. */
+const BUILTIN_FORMATS: Readonly<Record<number, string>> = {
+  1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00",
+  9: "0%", 10: "0.00%", 11: "0.00E+00", 37: "#,##0 ;(#,##0)", 38: "#,##0 ;[Red](#,##0)",
+  39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 48: "##0.0E+0", 49: "@",
+};
 
 function parseStyles(xml: string | undefined): Styles {
   const dateStyles: boolean[] = [];
   const percentStyles: boolean[] = [];
   const decimals: number[] = [];
-  if (xml === undefined) return { dateStyles, percentStyles, decimals };
+  const codes: (string | null)[] = [];
+  if (xml === undefined) return { dateStyles, percentStyles, decimals, codes };
 
   const root = parseXmlTree(xml);
   const custom = new Map<number, string>();
@@ -320,8 +349,9 @@ function parseStyles(xml: string | undefined): Styles {
     dateStyles.push(code === undefined ? builtinDate : isDateFormat(code));
     percentStyles.push(id === 9 || id === 10);
     decimals.push(id === 10 ? 2 : 0);
+    codes.push(code ?? BUILTIN_FORMATS[id] ?? null);
   }
-  return { dateStyles, percentStyles, decimals };
+  return { dateStyles, percentStyles, decimals, codes };
 }
 
 /**
@@ -330,8 +360,21 @@ function parseStyles(xml: string | undefined): Styles {
  * cell's subtree is held at a time. A `row` is any element so named that is not inside another row, and a cell is a
  * `c` that is a direct child of it; character data is `text` events only, as parseXmlTree reads it.
  */
-function parseSheet(xml: string, shared: string[]): SheetRow[] {
+interface ParsedSheet {
+  readonly rows: SheetRow[];
+  /** `oddHeader`/`oddFooter`/... text, raw `&` codes included, as Tika's sheet handler emits it. */
+  readonly headerFooter: string[];
+}
+
+const HEADER_FOOTER_ELEMENTS: ReadonlySet<string> = new Set([
+  "oddHeader", "evenHeader", "firstHeader", "oddFooter", "evenFooter", "firstFooter",
+]);
+
+function parseSheet(xml: string, shared: string[]): ParsedSheet {
   const rows: SheetRow[] = [];
+  const headerFooter: string[] = [];
+  let captureDepth = 0;
+  let captured = "";
   let row: SheetCell[] = [];
   let nextColumn = 0;
   let totalCells = 0;
@@ -398,6 +441,10 @@ function parseSheet(xml: string, shared: string[]): SheetRow[] {
       throw new MalformedDocumentError(`XML nesting exceeds ${MAX_XML_DEPTH} levels`);
     }
     const name = localName(tag.name);
+    if (HEADER_FOOTER_ELEMENTS.has(name)) {
+      captureDepth = depth;
+      captured = "";
+    }
     const node: XmlNode = {
       name: tag.name,
       attributes: { ...(tag.attributes as Record<string, string>) },
@@ -416,9 +463,14 @@ function parseSheet(xml: string, shared: string[]): SheetRow[] {
     }
   });
   parser.on("text", (text) => {
+    if (captureDepth !== 0) captured += text;
     if (cellStack.length > 0) cellStack[cellStack.length - 1]!.text += text;
   });
   parser.on("closetag", () => {
+    if (captureDepth !== 0 && captureDepth === depth) {
+      headerFooter.push(captured);
+      captureDepth = 0;
+    }
     if (cellStack.length > 0) {
       const closed = cellStack.pop()!;
       if (cellStack.length === 0) finishCell(closed);
@@ -433,7 +485,7 @@ function parseSheet(xml: string, shared: string[]): SheetRow[] {
     depth--;
   });
   parser.write(xml).close();
-  return rows;
+  return { rows, headerFooter };
 }
 
 const MAX_COLUMNS = 16_384;
@@ -467,10 +519,64 @@ function formatCell(cell: SheetCell, styles: Styles): string {
     const decimals = styles.decimals[cell.styleIndex] ?? 0;
     return `${(number * 100).toFixed(decimals)}%`;
   }
+  const code = styles.codes[cell.styleIndex];
   if (styles.dateStyles[cell.styleIndex] === true) {
-    return formatExcelDate(number);
+    return code === null || code === undefined ? formatExcelDate(number) : formatExcelDateCode(code, number);
   }
-  return cell.value;
+  // POI's General format writes the numeric cell value, not the text stored in the file.
+  return code === null || code === undefined ? String(number) : formatNumber(code, number);
+}
+
+/**
+ * A display value for a cell's number format code, as POI's DataFormatter writes it. Covers the common case: a
+ * positive/negative/zero section, thousands separators, fixed decimals, a percent sign, and quoted or currency
+ * literals around the digits; anything else falls back to the raw value.
+ */
+function formatNumber(code: string, value: number): string {
+  const sections = code.split(";");
+  const section = sections[value < 0 ? 1 : value === 0 ? 2 : 0] ?? sections[0]!;
+  const percent = section.includes("%");
+  const decimals = /\.(0+)/.exec(section)?.[1]?.length ?? 0;
+  const grouping = /[#0],[#0]/.test(section);
+  const magnitude = Math.abs(value) * (percent ? 100 : 1);
+  let digits = magnitude.toFixed(decimals);
+  if (grouping) {
+    const [whole = "", fraction] = digits.split(".");
+    digits = `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${fraction === undefined ? "" : `.${fraction}`}`;
+  }
+  const [prefix, suffix] = numberAffixes(section);
+  const negative = value < 0 && sections.length < 2 ? "-" : "";
+  return `${negative}${prefix}${digits}${percent ? "%" : ""}${suffix}`;
+}
+
+/** Literal text before and after the digit placeholders: quoted text, escaped characters and currency symbols. */
+function numberAffixes(section: string): [string, string] {
+  const literal = (part: string): string => {
+    let text = "";
+    for (let index = 0; index < part.length; index++) {
+      const char = part[index]!;
+      if (char === '"') {
+        const end = part.indexOf('"', index + 1);
+        if (end < 0) break;
+        text += part.slice(index + 1, end);
+        index = end;
+      } else if (char === "\\" && index + 1 < part.length) {
+        text += part[++index]!;
+      } else if (char === "_" || char === "*") {
+        index++;
+      } else if (char === "[") {
+        const end = part.indexOf("]", index + 1);
+        index = end < 0 ? part.length : end;
+      } else if (!"#0.,%?/Ee+".includes(char)) {
+        text += char;
+      }
+    }
+    return text;
+  };
+  const first = section.search(/[#0]/);
+  const last = section.search(/[#0](?!.*[#0])/);
+  if (first < 0) return ["", ""];
+  return [literal(section.slice(0, first)), literal(section.slice(last + 1))];
 }
 
 async function renderWorkbook(
@@ -488,7 +594,7 @@ async function renderWorkbook(
   const names = workbook === undefined ? [] : sheetNames(workbook);
 
   const sheetFiles = Object.keys(files)
-    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
     .sort((a, b) => sheetNumber(a) - sheetNumber(b));
 
   for (let index = 0; index < sheetFiles.length; index++) {
@@ -499,7 +605,7 @@ async function renderWorkbook(
       await xhtml.characters(name);
       await xhtml.endElement("h1");
     }
-    const rows = parseSheet(decode(files[sheetFiles[index]!]!), shared);
+    const { rows, headerFooter } = parseSheet(decode(files[sheetFiles[index]!]!), shared);
     await xhtml.startElement("table");
     for (const row of rows) {
       await xhtml.startElement("tr");
@@ -512,6 +618,7 @@ async function renderWorkbook(
       await xhtml.endElement("tr");
     }
     await xhtml.endElement("table");
+    for (const text of headerFooter) if (text.length > 0) await xhtml.element("p", text);
     await xhtml.endElement("div");
   }
 }
@@ -622,7 +729,7 @@ async function renderDrawingTable(
   await xhtml.startElement("table");
   for (const row of childrenNamed(table, "tr")) {
     await xhtml.startElement("tr");
-    for (const cell of childrenNamed(row, "tc")) {
+    for (const cell of rowCells(row)) {
       await xhtml.startElement("td");
       await renderDrawingBlocks(cell, xhtml);
       await xhtml.endElement("td");
@@ -637,6 +744,8 @@ async function renderDrawingTable(
 // ---------------------------------------------------------------------------
 
 const CHART_PART = /^(word|xl|ppt)\/charts\/chart\d+\.xml$/;
+/** Text boxes in a spreadsheet live in the sheet's drawing part (`a:t` runs). */
+const XLSX_DRAWING_PART = /^xl\/drawings\/drawing\d+\.xml$/;
 const DIAGRAM_PART = /^(word|ppt)\/diagrams\/data\d+\.xml$/;
 const EMBEDDED_PART = /^(word|xl|ppt)\/embeddings\/([^/]+)$/;
 const MEDIA_PART = /^(word|xl|ppt)\/media\/([^/]+)$/;
@@ -717,6 +826,17 @@ async function renderEmbeddedParts(
     if (CHART_PART.test(name)) {
       await xhtml.startElement("div", "class", "chart");
       await renderChart(files[name]!, xhtml);
+      await xhtml.endElement("div");
+      continue;
+    }
+    if (XLSX_DRAWING_PART.test(name)) {
+      await xhtml.startElement("div", "class", "drawing");
+      const drawing = parsePart(files, name);
+      if (drawing !== undefined) {
+        for (const text of descendantsNamed(drawing, "t")) {
+          if (text.text.length > 0) await xhtml.element("p", text.text);
+        }
+      }
       await xhtml.endElement("div");
       continue;
     }

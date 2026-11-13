@@ -22,13 +22,19 @@ function atom(type: number, payload: number[]): number[] {
   return [...u16(0), ...u16(type), ...u32(payload.length), ...payload];
 }
 
+/** A container atom: recVer 0xf and the record instance in the high 12 bits. */
+function container(type: number, instance: number, payload: number[]): number[] {
+  return [...u16((instance << 4) | 0x000f), ...u16(type), ...u32(payload.length), ...payload];
+}
+
 function buildPpt(): Uint8Array {
   const text = new TextEncoder().encode("Slide one\r");
   const utf16 = [...text].flatMap((byte) => [byte, 0]);
-  const bytes = [
+  // Slide text lives in the SlideListWithText record, not at the stream root.
+  const bytes = container(0x0ff0, 0, [
     ...atom(0x0fa0, utf16),
     ...atom(0x0fa8, [...new TextEncoder().encode("Slide two\r")]),
-  ];
+  ]);
   const stream = new Uint8Array(4096);
   stream.set(bytes);
   return buildCompound(stream);
