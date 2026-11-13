@@ -4,6 +4,7 @@ export {
 } from "./media-type.ts";
 export { MediaTypeRegistry } from "./media-type-registry.ts";
 export { Metadata, type MetadataValue } from "./metadata.ts";
+export { javaDoubleString, javaFloatString } from "./java-double.ts";
 export {
   coerceMetadataValue,
   metadataToCsv,

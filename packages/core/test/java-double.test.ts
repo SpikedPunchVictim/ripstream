@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { javaDoubleString } from "../src/java-double.ts";
+import { javaDoubleString, javaFloatString } from "../src/java-double.ts";
 
 /*
  * `Double.toString`, which is how Tika writes a REAL metadata value (`Metadata.set(Property, double)`). The expected texts
@@ -43,4 +43,12 @@ test("a 32-bit float is written as the double it widens to, with all of that dou
   assert.equal(javaDoubleString(Math.fround(0.9)), "0.8999999761581421");
   assert.equal(javaDoubleString(Math.fround(0.5)), "0.5");
   assert.equal(javaDoubleString(Math.fround(0.99999)), "0.9999899864196777");
+});
+
+test("javaFloatString writes the fewest digits that read back as the same 32-bit float", () => {
+  // The values Tika's MP4Parser writes for video:frame-rate.
+  assert.equal(javaFloatString(29.987504959106445), "29.987505");
+  assert.equal(javaFloatString(25), "25.0");
+  assert.equal(javaFloatString(1 / 3), "0.33333334");
+  assert.equal(javaFloatString(Number.POSITIVE_INFINITY), "Infinity");
 });

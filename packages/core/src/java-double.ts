@@ -33,3 +33,18 @@ export function javaDoubleString(value: number): string {
   }
   return `${sign}${digits[0]}.${digits.slice(1) || "0"}E${exponent}`;
 }
+
+/**
+ * `Float.toString(f)` for the nearest 32-bit float to `value`: the fewest digits that read back as that float, written as
+ * Java writes a double with those digits. Java wants two digits at least and, when one would do, takes the closest pair
+ * (Float.MIN_VALUE is 1.4E-45, not 1.0E-45), so the search starts at two.
+ */
+export function javaFloatString(value: number): string {
+  const single = Math.fround(value);
+  if (!Number.isFinite(single) || single === 0) return javaDoubleString(single);
+  for (let digits = 2; digits <= 9; digits++) {
+    const candidate = Number(single.toPrecision(digits));
+    if (Math.fround(candidate) === single) return javaDoubleString(candidate);
+  }
+  return javaDoubleString(single);
+}
