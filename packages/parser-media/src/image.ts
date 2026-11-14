@@ -2,6 +2,7 @@ import {
   LimitExceededError,
   MalformedDocumentError,
   MediaType,
+  XHTMLContentHandler,
   RipstreamError,
   type ContentHandler,
   type Metadata,
@@ -9,6 +10,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { scanXmpPacket } from "./xmp-packet-scanner.ts";
 import exifr from "exifr";
 import { EXIFR_OPTIONS, guardExifAmplification } from "./exif-guard.ts";
 import { readIcns } from "./icns.ts";
@@ -89,7 +91,7 @@ export class ImageParser implements Parser {
 
   async parse(
     stream: RipstreamInputStream,
-    _handler: ContentHandler,
+    handler: ContentHandler,
     metadata: Metadata,
     _ctx: ParseContext,
   ): Promise<void> {
@@ -144,7 +146,35 @@ export class ImageParser implements Parser {
 
     const comments = jpegComments(data);
     for (const comment of comments) metadata.add("comments", comment);
+
+    // Tika's ImageParser writes the XMP dc:title text as content.
+    const titles = await xmpTitles(data);
+    if (titles.length > 0) {
+      const xhtml = new XHTMLContentHandler(handler, metadata);
+      await xhtml.startDocument();
+      for (const title of titles) await xhtml.element("p", title);
+      await xhtml.endDocument();
+    }
   }
+}
+
+/** The dc:title values of the first XMP packet, as Tika's JPEGParser writes them as text. */
+async function xmpTitles(data: Uint8Array): Promise<string[]> {
+  const packet = await scanXmpPacket(
+    (async function* () {
+      yield data;
+    })(),
+  );
+  if (packet === null) return [];
+  const xml = new TextDecoder("utf-8", { fatal: false }).decode(packet);
+  const block = /<dc:title\b[^>]*>([\s\S]*?)<\/dc:title>/.exec(xml)?.[1];
+  if (block === undefined) return [];
+  const titles: string[] = [];
+  for (const match of block.matchAll(/<rdf:li\b[^>]*>([\s\S]*?)<\/rdf:li>/g)) {
+    const value = match[1]!.replace(/<[^>]+>/g, "").trim();
+    if (value.length > 0) titles.push(value);
+  }
+  return titles;
 }
 
 function isAbortError(error: unknown): boolean {

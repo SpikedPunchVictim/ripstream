@@ -18,7 +18,7 @@ import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, Brotli
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
 import { AsfParser, AudioParser, AviParser, FlacParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
 import { ColumnarParser, GeoPkgParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
-import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, IWork18Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OldExcelParser, OleContainerParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser } from "@spikedpunch/ripstream-parser-office";
+import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, IWork18Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OldExcelParser, OleContainerParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser, WordPerfectParser, XlsbParser } from "@spikedpunch/ripstream-parser-office";
 import { FeedParser } from "./feed.ts";
 import { MarkdownParser } from "./markdown.ts";
 import { TmxParser, WarcParser, XliffParser } from "./web.ts";
@@ -197,6 +197,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new OpenPgpParser(),
       new ColumnarParser(),
       new OoxmlParser(),
+      new XlsbParser(),
       new WordBinaryParser(),
       new ExcelBinaryParser(),
       new OldExcelParser(),
@@ -207,6 +208,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
       new IWork13Parser(),
       new IWork18Parser(),
       new LegacyOfficeParser(),
+      new WordPerfectParser(),
       new LegacyFormatParser(),
       new PstParser(),
       new OpenDocumentParser(),

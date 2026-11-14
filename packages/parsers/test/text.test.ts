@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { UnsupportedFormatError } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "../src/index.ts";
 
 const encoder = new TextEncoder();
@@ -23,9 +22,9 @@ test("withCharset replaces the incoming charset and keeps its other parameters",
   assert.equal(withCharset("not a type", "text/plain", "UTF-8"), "text/plain; charset=UTF-8");
 });
 
-test("unsupported binary throws", async () => {
+test("unsupported binary parses empty, as Tika's EmptyParser answers it", async () => {
   const binary = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0xff, 0xfe]);
-  await assert.rejects(ripstream.parseToString(binary), UnsupportedFormatError);
+  assert.equal(await ripstream.parseToString(binary), "");
 });
 
 test("parseToStream yields text chunks", async () => {

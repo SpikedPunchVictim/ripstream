@@ -336,12 +336,12 @@ test("the digest is made before the type is detected, and the stream is back at 
   assert.deepEqual(seen, [{ md5: "900150983cd24fb0d6963f7d28e17f72", length: "3", position: 0 }]);
 });
 
-test("a document no parser reads still has its digest: it is made before the parse can fail", async () => {
+test("a document no parser reads still has its digest: it is made before EmptyParser answers", async () => {
   const { parser } = detecting(() => Promise.reject(new UnsupportedFormatError("no parser")));
   const stream = await streamOf([text("abc")]);
   const metadata = new Metadata();
   try {
-    await assert.rejects(parser.parse(stream, new BodyContentHandler(), metadata, contextWith(MD5_ONLY)), UnsupportedFormatError);
+    await parser.parse(stream, new BodyContentHandler(), metadata, contextWith(MD5_ONLY));
   } finally {
     await stream.close();
   }

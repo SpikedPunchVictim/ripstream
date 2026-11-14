@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DefaultDetector } from "@spikedpunch/ripstream-mime";
-import { RipstreamConfigError, UnsupportedFormatError, loadConfig } from "@spikedpunch/ripstream-core";
+import { RipstreamConfigError, loadConfig } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "../src/index.ts";
 
 // A `detectors` section reaches the facade through createRipstream({ config }), the way `parsers` does
@@ -22,7 +22,10 @@ test("both sections apply together", async () => {
     config: loadConfig({ parsers: [{ "default-parser": { exclude: ["text-and-csv-parser"] } }], detectors: ["mime-types"] }),
   });
   assert.equal((await ripstream.detect(text, { filename: "a.txt" })).toString(), "text/plain");
-  await assert.rejects(ripstream.parse(text, { filename: "a.txt" }), UnsupportedFormatError);
+  // With its only parser excluded the type has no parser: Tika's EmptyParser answers an empty document.
+  const result = await ripstream.parse(text, { filename: "a.txt" });
+  assert.equal(result.text, "");
+  assert.equal(result.metadata.get("tk:parsed-by"), "EmptyParser");
 });
 
 test("a detectors section cannot be combined with an explicit detector", () => {

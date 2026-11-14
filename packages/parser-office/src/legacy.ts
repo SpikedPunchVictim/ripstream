@@ -60,9 +60,14 @@ export class LegacyOfficeParser implements Parser {
           // Optional metadata.
         }
       }
-      for (const entry of compound.entries) {
-        if (entry.type !== "stream") continue;
-        appendStrings(strings, printableStrings(compound.read(entry.path)));
+      if (type === "application/x-mspublisher" && compound.has("Quill/QuillSub/CONTENTS")) {
+        // Publisher text lives in the Quill CONTENTS stream as UTF-16LE text chunks; the other streams are binary.
+        appendStrings(strings, utf16Runs(compound.read("Quill/QuillSub/CONTENTS")));
+      } else {
+        for (const entry of compound.entries) {
+          if (entry.type !== "stream") continue;
+          appendStrings(strings, printableStrings(compound.read(entry.path)));
+        }
       }
     } else if (type.startsWith("application/onenote")) {
       appendStrings(strings, printableStrings(data));
@@ -96,6 +101,27 @@ function appendStrings(target: string[], source: readonly string[]): void {
     }
     target.push(value);
   }
+}
+
+/**
+ * Runs of printable ASCII in a UTF-16LE byte stream, kept only where a paragraph ends (CR or LF). Publisher stores
+ * its text chunks that way; the font tables' names are length-prefixed and are not paragraphs.
+ */
+function utf16Runs(data: Uint8Array): string[] {
+  const runs: string[] = [];
+  let current = "";
+  for (let index = 0; index + 1 < data.length; index += 2) {
+    const code = data[index]! | (data[index + 1]! << 8);
+    if (code >= 0x20 && code <= 0x7e) {
+      current += String.fromCharCode(code);
+    } else {
+      const next = data[index + 2]! | (data[index + 3]! << 8);
+      if (current.trim().length > 0 && code === 0x0d && next === 0x0a) runs.push(current.trim());
+      current = "";
+    }
+  }
+  if (current.trim().length > 0) runs.push(current.trim());
+  return runs;
 }
 
 function printableStrings(data: Uint8Array): string[] {

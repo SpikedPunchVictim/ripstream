@@ -209,7 +209,9 @@ test("a parsers section cannot be combined with an explicit parser list", () => 
 test("createRipstream applies the section end to end", async () => {
   const pdf = new TextEncoder().encode("%PDF-1.4\n%%EOF\n");
   const refused = createRipstream({ config: loadConfig({ parsers: [{ "default-parser": { exclude: ["pdf-parser"] } }] }) });
-  await assert.rejects(refused.parse(pdf), UnsupportedFormatError);
+  const refusedResult = await refused.parse(pdf);
+  assert.equal(refusedResult.text, "");
+  assert.equal(refusedResult.metadata.get("tk:parsed-by"), "EmptyParser");
   // The default still takes it as a PDF (and finds it malformed, which is a different failure).
   await assert.rejects(createRipstream().parse(pdf), (error: unknown) => !(error instanceof UnsupportedFormatError));
   // Other formats are untouched.

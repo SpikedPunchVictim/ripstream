@@ -277,7 +277,14 @@ export class AutoDetectParser implements Parser {
     ctx.set(CONTEXT_KEYS.CONTENT_TYPE, type);
     // After the type is recorded, as Tika does: an empty document still reports what it was detected as.
     if ((await stream.peek(1)).length === 0) throw new ZeroByteFileError();
-    await this.parser.parse(stream, handler, metadata, ctx);
+    try {
+      await this.parser.parse(stream, handler, metadata, ctx);
+    } catch (error) {
+      // Tika's EmptyParser is the fallback for a type no parser claims: an empty success, not a failure.
+      if (!(error instanceof UnsupportedFormatError)) throw error;
+      // What Tika's EmptyParser leaves behind: it is named as the parser, and nothing else.
+      if (!metadata.getAll(TIKA_KEYS.PARSED_BY).includes("EmptyParser")) metadata.add(TIKA_KEYS.PARSED_BY, "EmptyParser");
+    }
   }
 }
 

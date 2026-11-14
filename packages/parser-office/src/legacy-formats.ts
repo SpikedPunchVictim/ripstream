@@ -27,7 +27,6 @@ const FORMATS: readonly Signature[] = [
     format: "CHM",
     reportedType: "application/vnd.ms-htmlhelp",
   },
-  { types: ["application/vnd.wordperfect", "application/wordperfect5.1"], magic: [0xff, 0x57, 0x50, 0x43], format: "WordPerfect" },
   { types: ["application/x-tika-staroffice", "application/x-staroffice-template"], magic: [0xd0, 0xcf, 0x11, 0xe0], format: "StarOffice" },
 ];
 

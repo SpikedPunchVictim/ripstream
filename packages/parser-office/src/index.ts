@@ -16,6 +16,8 @@ export { IWork13Parser } from "./iwork13.ts";
 export { IWork18Parser } from "./iwork18.ts";
 export { LegacyOfficeParser } from "./legacy.ts";
 export { LegacyFormatParser } from "./legacy-formats.ts";
+export { WordPerfectParser } from "./wordperfect.ts";
+export { XlsbParser } from "./xlsb.ts";
 export { PstParser } from "./pst.ts";
 export {
   applyPropertySetMetadata,
