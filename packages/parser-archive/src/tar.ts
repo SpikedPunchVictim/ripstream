@@ -60,7 +60,7 @@ export class TarParser implements Parser {
         entries++;
         if (entries > ctx.limits.maxZipEntries) {
           throw new LimitExceededError(
-            `Tar entry count exceeds ${ctx.limits.maxZipEntries}`,
+            `Tar entries exceed ${ctx.limits.maxZipEntries}`,
           );
         }
         if (

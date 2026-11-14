@@ -126,7 +126,7 @@ export class OpcPackage {
       inflate.push(compressed, true);
     } catch (error) {
       if (error instanceof LimitExceededError) throw error;
-      throw new MalformedDocumentError(`Unable to inflate ${name}`, { cause: error });
+      throw new MalformedDocumentError(`Corrupt ZIP member ${name}: invalid deflate data`, { cause: error });
     }
     const out = new Uint8Array(produced);
     let offset = 0;
@@ -206,7 +206,7 @@ async function readCentralDirectory(
 
   if (entryCount > limits.maxZipEntries) {
     throw new LimitExceededError(
-      `OPC entry count ${entryCount} exceeds ${limits.maxZipEntries}`,
+      `OPC entries ${entryCount} exceed ${limits.maxZipEntries}`,
     );
   }
   if (directorySize > limits.maxTotalEmbeddedBytes) {

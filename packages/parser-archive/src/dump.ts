@@ -241,7 +241,7 @@ class Volume {
   private charge(size: number): void {
     this.files++;
     if (this.files > this.ctx.limits.maxZipEntries) {
-      throw new LimitExceededError(`Unix dump entry count exceeds ${this.ctx.limits.maxZipEntries}`);
+      throw new LimitExceededError(`Unix dump entries exceed ${this.ctx.limits.maxZipEntries}`);
     }
     this.total += size;
     if (this.total > this.ctx.limits.maxTotalEmbeddedBytes) {

@@ -151,14 +151,22 @@ function decode(bytes: Uint8Array): string {
 // WordprocessingML
 // ---------------------------------------------------------------------------
 
+/** A word/document.xml over this size is read as a text stream: a 50 MB part's tree costs more than the child's heap. */
+const LARGE_WORD_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
 async function renderWord(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
 ): Promise<void> {
-  const document = parsePart(files, "word/document.xml");
-  if (document !== undefined) {
-    const body = findFirst(document, "body") ?? document;
-    await renderWordBlocks(body, xhtml);
+  const raw = files["word/document.xml"];
+  if (raw !== undefined && raw.byteLength > LARGE_WORD_DOCUMENT_BYTES) {
+    await renderLargeWordDocument(decode(raw), xhtml);
+  } else {
+    const document = parsePart(files, "word/document.xml");
+    if (document !== undefined) {
+      const body = findFirst(document, "body") ?? document;
+      await renderWordBlocks(body, xhtml);
+    }
   }
 
   await renderWordPartGroup(files, /^word\/header\d*\.xml$/, "header", xhtml);
@@ -171,6 +179,37 @@ async function renderWord(
   if (glossary !== undefined) {
     for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml);
   }
+}
+
+/**
+ * Text of a very large document.xml in one streaming pass: paragraphs break where `w:p` closes, `w:t` carries the
+ * text, and tabs/breaks become their characters. Structure (tables, drawings) is not rebuilt; the text is.
+ */
+async function renderLargeWordDocument(xml: string, xhtml: XHTMLContentHandler): Promise<void> {
+  const paragraphs: string[] = [];
+  let current = "";
+  let inText = 0;
+  const parser = new SaxesParser({ xmlns: false });
+  parser.on("opentag", (tag) => {
+    const name = localName(tag.name);
+    if (name === "t") inText++;
+    else if (name === "tab") current += "\t";
+    else if (name === "br" || name === "cr") current += "\n";
+  });
+  parser.on("text", (text) => {
+    if (inText > 0) current += text;
+  });
+  parser.on("closetag", (tag) => {
+    const name = localName(tag.name);
+    if (name === "t") inText = Math.max(0, inText - 1);
+    else if (name === "p") {
+      if (current.length > 0) paragraphs.push(current);
+      current = "";
+    }
+  });
+  parser.write(xml).close();
+  if (current.length > 0) paragraphs.push(current);
+  for (const paragraph of paragraphs) await xhtml.element("p", paragraph);
 }
 
 async function renderWordPartGroup(

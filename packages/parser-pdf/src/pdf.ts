@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
 import {
   AbortError,
   EncryptedDocumentError,
@@ -135,6 +135,7 @@ export class PdfParser implements Parser {
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
       const pages = Math.min(ready.numPages, MAX_PAGES);
+      let totalText = 0;
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
         channel.post({ type: "page", index });
@@ -157,6 +158,7 @@ export class PdfParser implements Parser {
           if (line.length > 0) await xhtml.characters(line);
           await xhtml.endElement("p");
         }
+        totalText += characters;
         metadata.add("pdf:charsPerPage", String(characters));
         if (this.#extractAnnotationText) {
           for (const annotation of message.annotations) {
@@ -169,6 +171,12 @@ export class PdfParser implements Parser {
         if (index < pages && this.#pageSeparator.length > 0) {
           await xhtml.characters(this.#pageSeparator);
         }
+      }
+
+      // A PDF cut off before its %%EOF that yields no usable text is truncated, not an empty document: Tika's
+      // PDFBox reports the damage, and a clean empty result would hide it.
+      if (totalText === 0 && !(await hasEofMarker(path))) {
+        throw new MalformedDocumentError("PDF is truncated: missing %%EOF");
       }
 
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
@@ -328,6 +336,20 @@ async function renderAnnotation(
       await xhtml.endElement("div");
     }
     await xhtml.endElement("div");
+  }
+}
+
+/** Whether the last 1 KiB of the file carries the %%EOF trailer every complete PDF ends with. */
+async function hasEofMarker(path: string): Promise<boolean> {
+  const handle = await open(path, "r");
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(1024, size);
+    const buffer = new Uint8Array(length);
+    await handle.read(buffer, 0, length, size - length);
+    return new TextDecoder("latin1").decode(buffer).includes("%%EOF");
+  } finally {
+    await handle.close();
   }
 }
 

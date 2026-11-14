@@ -47,18 +47,18 @@ export class ZipParser implements Parser {
           entries++;
           if (entries > ctx.limits.maxZipEntries) {
             throw new LimitExceededError(
-              `ZIP entry count exceeds ${ctx.limits.maxZipEntries}`,
+              `ZIP entries exceed ${ctx.limits.maxZipEntries}`,
             );
           }
           originalTotal += file.originalSize;
           if (originalTotal > ctx.limits.maxTotalEmbeddedBytes) {
             throw new LimitExceededError(
-              "ZIP archive exceeds the embedded byte limit",
+              "ZIP archive expanded size exceeds the embedded byte limit",
             );
           }
           if (file.originalSize > ctx.limits.maxEmbeddedResourceBytes) {
             throw new LimitExceededError(
-              `ZIP entry ${file.name} exceeds the per-entry limit`,
+              `ZIP entry ${file.name} expanded size exceeds the per-entry limit`,
             );
           }
           if (
@@ -81,7 +81,7 @@ export class ZipParser implements Parser {
     const names = Object.keys(files);
     if (names.length > ctx.limits.maxZipEntries) {
       throw new LimitExceededError(
-        `ZIP entry count ${names.length} exceeds ${ctx.limits.maxZipEntries}`,
+        `ZIP entries ${names.length} exceed ${ctx.limits.maxZipEntries}`,
       );
     }
 
@@ -99,10 +99,10 @@ export class ZipParser implements Parser {
         const bytes = files[name]!;
         total += bytes.byteLength;
         if (bytes.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
-          throw new LimitExceededError(`Entry ${name} exceeds the per-entry limit`);
+          throw new LimitExceededError(`Entry ${name} expanded size exceeds the per-entry limit`);
         }
         if (total > ctx.limits.maxTotalEmbeddedBytes) {
-          throw new LimitExceededError("Archive exceeds the embedded byte limit");
+          throw new LimitExceededError("Archive expanded size exceeds the embedded byte limit");
         }
 
         await xhtml.startElement("div", "class", "package-entry");

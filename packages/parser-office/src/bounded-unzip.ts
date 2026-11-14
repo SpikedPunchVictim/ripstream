@@ -30,7 +30,7 @@ export function boundedUnzip(data: Uint8Array, limits: ParseLimits): BoundedZip 
   scan(data, (file) => {
     entries += 1;
     if (entries > limits.maxZipEntries) {
-      throw new LimitExceededError(`ZIP entry count exceeds ${limits.maxZipEntries}`);
+      throw new LimitExceededError(`ZIP entries exceed ${limits.maxZipEntries}`);
     }
     ordinals.set(file.name, entries);
     compressedSizes.set(file.name, file.size ?? data.byteLength);
