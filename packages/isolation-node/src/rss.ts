@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { rssPollKind } from "./containment.ts";
 
 /**
- * L3: resident-set-size polling of the child. Linux reads /proc/<pid>/statm
- * every `pollMs` (default 20 ms, synchronous, microseconds per sample). macOS
- * has no /proc, so it shells out to `ps -o rss=` no more often than every
- * 250 ms: a much weaker bound, and a fast page-touch can overshoot by
- * gigabytes between samples. Even on Linux the poll is only a kill trigger for
- * slow growth (see the P0 d-row), not a precise cap.
+ * L3: memory polling of the child. Linux reads /proc/<pid>/statm every
+ * `pollMs` (default 20 ms, synchronous, microseconds per sample). macOS has no
+ * /proc and `ps -o rss=` misses compressed pages, so it reads `footprint -p`
+ * (physical footprint, which includes the compressor) no more often than every
+ * 250 ms: still a weaker bound than Linux, and a fast page-touch can overshoot
+ * between samples. Even on Linux the poll is only a kill trigger for slow
+ * growth (see the P0 d-row), not a precise cap.
  */
 
 export const DEFAULT_POLL_MS = 20;
@@ -16,6 +17,7 @@ export const PS_MIN_POLL_MS = 250;
 
 const BYTES_PER_MB = 1048576;
 const PS_PATH = "/bin/ps";
+const FOOTPRINT_PATH = "/usr/bin/footprint";
 const MAX_INTERVAL_SAMPLES = 1024;
 
 let cachedPageSize: number | undefined;
@@ -51,6 +53,36 @@ function statmRssMb(pid: number): number | null {
   }
 }
 
+/** The `Footprint:` line of `footprint -p`, in MiB; null when the command failed or printed none. */
+export function parseFootprintMb(stdout: string): number | null {
+  const match = /Footprint:\s+([\d.]+)\s*([KMG])B\b/i.exec(stdout);
+  if (match === null) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  const scale = match[2]!.toUpperCase() === "K" ? 1 / 1024 : match[2]!.toUpperCase() === "G" ? 1024 : 1;
+  return value * scale;
+}
+
+/**
+ * macOS physical footprint in MiB: `ps` reports the resident set, which leaves out pages the compressor moved aside.
+ * A child that briefly touches gigabytes can therefore stay under an RSS limit; the footprint sees it.
+ */
+function footprintMb(pid: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    execFile(FOOTPRINT_PATH, ["-p", String(pid)], { timeout: 2000 }, (error, stdout) => {
+      resolve(error !== null ? null : parseFootprintMb(stdout));
+    });
+  });
+}
+
+/** The larger of `ps` RSS and the physical footprint: the footprint catches compressed pages, `ps` is fast enough to sample short children. */
+async function macRssMb(pid: number): Promise<number | null> {
+  const [ps, footprint] = await Promise.all([psRssMb(pid), footprintMb(pid)]);
+  if (ps === null) return footprint;
+  if (footprint === null) return ps;
+  return Math.max(ps, footprint);
+}
+
 function psRssMb(pid: number): Promise<number | null> {
   return new Promise((resolve) => {
     execFile(PS_PATH, ["-o", "rss=", "-p", String(pid)], { timeout: 2000 }, (error, stdout) => {
@@ -64,7 +96,7 @@ function psRssMb(pid: number): Promise<number | null> {
 export async function sampleRssMb(pid: number, platform: NodeJS.Platform = process.platform): Promise<number | null> {
   const kind = rssPollKind(platform);
   if (kind === "proc") return statmRssMb(pid);
-  if (kind === "ps") return psRssMb(pid);
+  if (kind === "ps") return macRssMb(pid);
   return null;
 }
 
@@ -150,7 +182,9 @@ export class RssPoller {
     const { pid, sample } = this.#options;
     if (sample !== undefined) void Promise.resolve(sample(pid)).then((rss) => this.#record(rss));
     else if (this.#kind === "proc") this.#record(statmRssMb(pid));
-    else void psRssMb(pid).then((rss) => this.#record(rss));
+    // `ps` first: a short child can exit before `footprint` returns, and a sample that arrives after the exit is lost.
+    // Later samples read both, so a compressed page the compressor hid from `ps` still counts.
+    else void (this.#samples === 0 ? psRssMb(pid) : macRssMb(pid)).then((rss) => this.#record(rss));
   }
 
   #record(rssMb: number | null): void {

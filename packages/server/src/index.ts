@@ -536,11 +536,16 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const ceilinged = withCeilings(ripstream, options.maxLimits, options.defaultLimits);
   // Tika's detector: /language answers from it, and so does the language filter of the settings unless it is given another.
   const languageDetector = new CharSoupLanguageDetector();
+  // Under isolation one /pipes run holds one gate slot, so it parses one document at a time: a slot is one child.
+  const pipesConcurrency = isolating ? 1 : undefined;
   const tikaPipes =
     options.pipes?.settings === undefined
       ? undefined
       : new TikaPipes({
-          settings: options.pipes.settings,
+          settings:
+            pipesConcurrency === undefined
+              ? options.pipes.settings
+              : { ...options.pipes.settings, concurrency: Math.min(options.pipes.settings.concurrency ?? 4, pipesConcurrency) },
           ripstream: ceilinged,
           // Pipes' UNPACK with `suffixStrategy: DETECTED` names files as /unpack does: by the server's media type registry.
           extensionOf: (contentType) => extensionFor(contentType, options.mimeTypes),
@@ -748,7 +753,11 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       if (isRecord(parsedBody) && "fetcher" in parsedBody) {
         throw new HttpError(400, "This server takes batch jobs only: Tika tuples need the pipes.settings option");
       }
-      const config = await buildPipesConfig(parsedBody, { ...options.pipes, sourceRoot: options.pipes.sourceRoot });
+      const config = await buildPipesConfig(parsedBody, {
+        ...options.pipes,
+        sourceRoot: options.pipes.sourceRoot,
+        ...(pipesConcurrency === undefined ? {} : { maxConcurrency: pipesConcurrency }),
+      });
       // The run goes on after an input that fails: what each came to is in `stats.byStatus`, and the ones that failed
       // (a category other than SUCCESS) are listed, up to a cap so a run of a million bad files is not a million rows.
       const failures: PipesResult[] = [];

@@ -116,3 +116,14 @@ test("http: a payload that parses leaves no marker", async () => {
   const { metadata } = await parseWith(new HttpParser(), httpResponse, clean);
   assert.equal(metadata.get(TIKA_KEYS.EMBEDDED_EXCEPTION), null);
 });
+
+test("mail: a part that is a container records its own failed children on the message too", async () => {
+  const nested: EmbeddedDocumentExtractor = {
+    shouldParseEmbedded: () => true,
+    async parseEmbedded(_stream, _handler, metadata): Promise<void> {
+      metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, "MalformedDocumentError: nested child");
+    },
+  };
+  const { metadata } = await parseWith(new MailParser(), eml(attachment), nested);
+  assert.deepEqual(metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION), ["MalformedDocumentError: nested child"]);
+});

@@ -34,8 +34,9 @@ import { createStandardIsolation, type StandardIsolation } from "../src/isolatio
  *   hyparquet (no limits of its own; the ColumnarParser asks for rows 0..100 of every column of the first row groups)
  *     dictionary page + data page of 2^31-1 values with bit width 0 (119 bytes): bare 4.1 s, 1.0 GiB, ok (it
  *       allocated an Int32Array of 2^31-1 and filled it). tight: LIMIT_EXCEEDED by the RSS poll (child 783 MiB
- *       against 256). default (macOS): OK after 5.6 s, child RSS 895 MiB, inside its 1536 MiB budget (see the
- *       todo at the end of this file). The BYTE_ARRAY variant crashes bare with SIGABRT after 7 s and 1.1 GiB.
+ *       against 256). default (macOS): before tikajs-ubpo this was OK after 5.6 s with `ps` RSS at 895 MiB while
+ *       `footprint` peaked at 9,574 MiB; the poll now reads `footprint`, and it is LIMIT_EXCEEDED. The BYTE_ARRAY
+ *       variant crashes bare with SIGABRT after 7 s and 1.1 GiB.
  *     one RLE run of 2^31-1 levels (117 bytes): bare 3.5 s, 1.6 GiB; tight: LIMIT_EXCEEDED (heap) after 0.8 s.
  *     DELTA_BINARY_PACKED with 2^31-1 values and a bit-width-0 miniblock (118 bytes): bare did not finish in 20 s;
  *       tight: LIMIT_EXCEEDED by RSS after 1.3 s; default: PARSE_TIMEOUT after 15.5 s.
@@ -560,14 +561,17 @@ test("zip: a 10,000-entry archive is parsed recursively in one child in seconds,
   );
 });
 
-// ---- not contained ----------------------------------------------------------------------------------------------------
+// ---- fixed: the macOS poll sees the compressor ----------------------------------------------------------------
 
-test.todo(
-  "tikajs-ubpo, tikajs-5bg6: hyparquet on macOS with the DEFAULT limits: the 119-byte bit-width-0 dictionary page is NOT ended by the memory layer. " +
-    "Measured (Darwin 25.3, Node 24.18, perChildMb 1536, no heapMb): the parse finished ok after 4.5 - 5.6 s, `ps` RSS peaked at " +
-    "804 - 895 MiB, but `footprint` (phys_footprint, which includes compressed pages) peaked at 9,574 MiB: " +
-    "the child filled an 8 GiB Int32Array, which the macOS memory compressor squeezed out of sight of the ps-based " +
-    "RSS poll. Six times its budget, with no limit firing, and any machine with less than about 10 GiB free swaps. Expected: " +
-    "LIMIT_EXCEEDED. Linux is contained (RLIMIT_AS, MALFORMED_DOCUMENT in 4 s). Fix options: refuse a data page whose num_values " +
-    "exceeds what its bytes can hold (src, hyparquet/ColumnarParser) or sample phys_footprint on macOS instead of RSS (isolation-node).",
-);
+test("tikajs-ubpo: hyparquet on macOS with DEFAULT limits ends the 119-byte bit-width-0 dictionary page by memory", async (t) => {
+  // `footprint -p` sees physical footprint (including compressed pages); `ps` RSS missed an 8 GiB Int32Array compressed
+  // to about 900 MiB. The array can never fit a 1536 MiB budget, so any outcome but success is a containment success.
+  await assertContained(t, {
+    name: "dictionary bit width 0, INT32, default limits",
+    bytes: dictionaryBitWidthZero(PT.INT32),
+    filename: "dict-int32-default.parquet",
+    config: DEFAULT_LIKE,
+    allowed: HUGE_ARRAY,
+    control: PARQUET_CONTROL,
+  });
+});

@@ -92,6 +92,20 @@ test("walks past an undefined-length sequence to later tags", async () => {
   assert.equal(metadata.get("dicom:PatientName"), "Doe^Jane");
 });
 
+test("a UN undefined-length item is read as Implicit VR, as PS3.5 says, and later tags are reached", async () => {
+  // (0008,1111) UN, undefined; one undefined item whose dataset has an implicit-VR
+  // (0010,0010) length 6, a decoy, then the delimiters; then the real PatientName.
+  const implicitElement = [...u16(0x0010), ...u16(0x0010), ...u32(5), ...[...Buffer.from("Decoy")]];
+  const metadata = await parseDicom(
+    withBody([
+      ...u16(0x0008), ...u16(0x1111), ...[0x55, 0x4e, 0, 0], ...UNDEFINED,
+      ...ITEM, ...UNDEFINED, ...implicitElement, ...ITEM_END, ...SEQ_END,
+      ...element(0x0010, 0x0010, "PN", "Doe^Jane"),
+    ]),
+  );
+  assert.equal(metadata.get("dicom:PatientName"), "Doe^Jane");
+});
+
 test("an unterminated undefined-length sequence stops the walk without throwing", async () => {
   const metadata = await parseDicom(
     withBody([

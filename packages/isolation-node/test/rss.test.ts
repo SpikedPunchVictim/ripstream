@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
-import { RssPoller, pageSizeBytes, sampleRssMb } from "../src/rss.ts";
+import { RssPoller, pageSizeBytes, parseFootprintMb, sampleRssMb } from "../src/rss.ts";
 
 const measurable = process.platform === "linux" || process.platform === "darwin";
 
@@ -12,6 +12,12 @@ test("sampleRssMb reads this process on a supported platform", { skip: !measurab
 
 test("sampleRssMb is null for a process that does not exist", { skip: !measurable }, async () => {
   assert.equal(await sampleRssMb(2 ** 22 - 3), null);
+});
+
+test("the footprint header's KB is read as MiB", () => {
+  assert.equal(parseFootprintMb("  Footprint: 2016 KB (16384 bytes per page)"), 2016 / 1024);
+  assert.equal(parseFootprintMb("Footprint: 1.5 GB"), 1536);
+  assert.equal(parseFootprintMb("no header"), null);
 });
 
 test("sampleRssMb is null on a platform with no measurement", async () => {

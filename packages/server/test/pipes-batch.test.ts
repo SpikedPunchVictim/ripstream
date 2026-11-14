@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
+import type { Ripstream } from "@spikedpunch/ripstream-core";
 import { createRipstreamServer } from "../src/index.ts";
 
 /*
@@ -105,6 +106,52 @@ test("a run with no failures lists none", async () => {
       assert.deepEqual(answer.failures, []);
       assert.equal(answer.count, 1);
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("under isolation a /pipes run parses one document at a time: its one gate slot is one child", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ripstream-server-pipes-isolated-"));
+  try {
+    for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) writeFileSync(join(root, name), "text");
+    const base = createRipstream();
+    let active = 0;
+    let most = 0;
+    const counting = {
+      detect: base.detect.bind(base),
+      parse: async (...args: Parameters<Ripstream["parse"]>): ReturnType<Ripstream["parse"]> => {
+        active++;
+        most = Math.max(most, active);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        try {
+          return await base.parse(...args);
+        } finally {
+          active--;
+        }
+      },
+      parseRecursive: base.parseRecursive.bind(base),
+    } satisfies Ripstream;
+    await withPipes(
+      root,
+      async (post) => {
+        const response = await post({ source: { type: "filesystem", path: "." }, concurrency: 4 });
+        assert.equal(response.status, 200);
+        assert.equal(most, 1, "one child for the run's one gate slot");
+      },
+      {
+        ripstream: counting,
+        maxLimits: { maxOutputChars: 1000 },
+        isolation: {
+          status: () => ({
+            mode: "strict",
+            degraded: false,
+            pool: { poolMb: 4096, maxQueue: 4 },
+            defaultReservationMb: { text: 1024, records: 2048 },
+          }),
+        },
+      },
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

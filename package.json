@@ -35,7 +35,8 @@
     "corpus:scan": "node scripts/corpus-scan.ts",
     "bundle:check": "node scripts/bundle-check.ts",
     "bench": "pnpm --filter @spikedpunch/ripstream-parsers run benchmark",
-    "bench:check": "pnpm --filter @spikedpunch/ripstream-parsers run benchmark -- --check"
+    "bench:check": "pnpm --filter @spikedpunch/ripstream-parsers run benchmark -- --check",
+    "floors:check": "node scripts/floors.ts --check"
   },
   "devDependencies": {
     "@spikedpunch/cbd": "0.0.7",

@@ -128,3 +128,26 @@ test("when a Unicode path field repeats, the last one decides, and a bad last on
   assert.deepEqual(await namesOf(zip([{ name: "", nameBytes: headerName, extra: join(bad, good) }])), ["first"]);
   assert.deepEqual(await namesOf(zip([{ name: "", nameBytes: headerName, extra: join(good, bad) }])), ["plain.bin"]);
 });
+
+test("a ZIP64 local offset above 2^53 reads as an absent entry, not a raw RangeError from the file handle", async () => {
+  const bytes = zip([{ name: "x", data: "hello", zip64: true }]);
+  const view = new DataView(bytes.buffer);
+  // The central entry starts after the one local entry; its ZIP64 extra's last field is the local offset.
+  const central = bytes.byteLength - 22 - 46 - 1 - 28;
+  assert.equal(view.getUint32(central, true), 0x02014b50);
+  const extra = central + 46 + 1;
+  assert.equal(view.getUint16(extra, true), 0x0001);
+  view.setBigUint64(extra + 20, 2n ** 63n, true);
+  const stream = await RipstreamInputStream.from(bytes, { spoolThreshold: 32 });
+  try {
+    const archive = await ZipArchive.open(await stream.getFile());
+    assert.notEqual(archive, null);
+    try {
+      assert.equal(await archive!.read("x", 100), null);
+    } finally {
+      await archive!.close();
+    }
+  } finally {
+    await stream.close();
+  }
+});

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "description": "Per-cohort floors for packages/parsers/scripts/benchmark.ts. CI runs the benchmark and scripts/floors.ts --check; a cohort below any floor fails the job. Re-baseline on purpose: run `pnpm bench`, review artifacts/benchmark.json against a quiet machine, then raise the numbers here in the same commit as the change that justifies them (never lower a floor to make a red build green).",
+  "cohorts": {
+    "text": { "minScore": 1, "minOpsPerSecond": 50, "maxMedianMs": 100, "maxPeakRssMb": 2048 },
+    "html": { "minScore": 1, "minOpsPerSecond": 50, "maxMedianMs": 100, "maxPeakRssMb": 2048 },
+    "xml": { "minScore": 1, "minOpsPerSecond": 50, "maxMedianMs": 100, "maxPeakRssMb": 2048 }
+  }
+}

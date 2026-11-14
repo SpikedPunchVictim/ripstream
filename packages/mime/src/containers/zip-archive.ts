@@ -110,6 +110,9 @@ export class ZipArchive {
 
   /** Exactly `length` bytes of the entry's data, or null when the file ends first (a truncated entry is not read short). */
   private async readCompressed(entry: ZipEntry, length: number): Promise<Uint8Array | null> {
+    // A ZIP64 extra field can name an offset above 2^53: Number() has already lost precision, and FileHandle.read
+    // throws a raw RangeError for it. Detection reads a hostile container as not a container, so the entry is absent.
+    if (!Number.isSafeInteger(entry.localOffset) || entry.localOffset < 0) return null;
     const header = await readAt(this.handle, entry.localOffset, 30);
     if (header.length < 30) return null;
     const view = new DataView(header.buffer, header.byteOffset, header.byteLength);

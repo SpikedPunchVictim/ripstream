@@ -61,7 +61,18 @@ export class TsdParser implements Parser {
     metadata: Metadata,
     ctx: ParseContext,
   ): Promise<void> {
-    const envelope = openEnvelope(await readAll(stream));
+    let envelope: Envelope;
+    try {
+      envelope = openEnvelope(await readAll(stream));
+    } catch (error) {
+      // Tika's extractMetas logs and clears every exception but a security one, and its content parse then fails and is
+      // logged; a stream that is not an envelope is an empty success, not a malformed document.
+      if (!(error instanceof MalformedDocumentError)) throw error;
+      const empty = new XHTMLContentHandler(handler, metadata);
+      await empty.startDocument();
+      await empty.endDocument();
+      return;
+    }
 
     // The time stamp metadata goes on the document itself only when nothing is on it yet; otherwise, as when the
     // document was detected first, it goes on the embedded document's metadata.

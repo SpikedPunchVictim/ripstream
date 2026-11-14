@@ -237,8 +237,10 @@ waits has not buffered a byte: a burst costs sockets, not memory. A waiting requ
 `requestTimeoutMs` (60 s) is a `408`; one that finds the queue full is refused with `503` and `Retry-After: 1`. The gate
 keeps the number of bodies held in memory near what the pool can run and queue; it is not an exact bound. A request
 that reserves more than the default (a larger ceiling is in the reservation already) can still be refused by the pool
-with `queue_full` after its body was read, and `/pipes` spends one slot on a run that parses several documents at once.
-`maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
+with `queue_full` after its body was read. Under isolation a `/pipes` run holds one gate slot and parses one document
+at a time, so one slot is one child, whatever concurrency the request or the settings ask for. Its file-system fetcher
+still reads each input whole in the parent before handing the bytes to the child: the pool accounts for the child, not
+that copy (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
 
 **Errors.** Isolation failures keep their meaning across the boundary:
 

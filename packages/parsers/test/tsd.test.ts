@@ -203,36 +203,20 @@ test("an envelope cut inside its content gives the bytes before the cut, and say
   assert.match(embedded[0]!.metadata.get("tk:exception:embedded-stream-exception") ?? "", /cut short/);
 });
 
-test("every prefix of Test1.txt.tsd is parsed, with a prefix of the content, or refused as malformed", async () => {
+test("every prefix of Test1.txt.tsd parses, with a prefix of the content or as an empty non-envelope", async () => {
   const full = file("Test1.txt.tsd");
   const whole = (await parseDirect(full)).embedded[0]!.bytes;
-  let parsed = 0;
-  let refused = 0;
   for (let length = 0; length <= full.length; length++) {
-    try {
-      const { embedded } = await parseDirect(full.subarray(0, length));
-      parsed++;
-      for (const part of embedded) {
-        assert.deepEqual(part.bytes, whole.subarray(0, part.bytes.length), `prefix of ${length} bytes`);
-      }
-    } catch (error) {
-      if (!(error instanceof MalformedDocumentError)) throw error;
-      refused++;
+    const { embedded } = await parseDirect(full.subarray(0, length));
+    for (const part of embedded) {
+      assert.deepEqual(part.bytes, whole.subarray(0, part.bytes.length), `prefix of ${length} bytes`);
     }
   }
-  assert.equal(parsed + refused, full.length + 1);
-  assert.ok(parsed > 0 && refused > 0, `parsed ${parsed}, refused ${refused}`);
 });
 
-test("prefixes of Test3.docx.tsd are parsed or refused as malformed", async () => {
+test("prefixes of Test3.docx.tsd parse", async () => {
   const full = file("Test3.docx.tsd");
-  for (let length = 0; length <= full.length; length += 127) {
-    try {
-      await parseDirect(full.subarray(0, length));
-    } catch (error) {
-      if (!(error instanceof MalformedDocumentError)) throw error;
-    }
-  }
+  for (let length = 0; length <= full.length; length += 127) await parseDirect(full.subarray(0, length));
 });
 
 // ---- hostile input ----
@@ -288,11 +272,16 @@ test("a TSTInfo of more than a mebibyte is not read as a time stamp", { timeout:
   assert.equal(embedded.length, 1);
 });
 
-test("text, an empty file and a ContentInfo of another type are not envelopes", async () => {
-  await assert.rejects(parseDirect(new TextEncoder().encode("this is not a time stamped data envelope")), MalformedDocumentError);
-  await assert.rejects(parseDirect(new Uint8Array(0)), MalformedDocumentError);
-  const signedData = seq(oid("1.2.840.113549.1.7.2"), explicit(0, seq(integer(1n))));
-  await assert.rejects(parseDirect(signedData), MalformedDocumentError);
+test("text, an empty file and a ContentInfo of another type are an empty success, as Tika's TSDParser", async () => {
+  for (const input of [
+    new TextEncoder().encode("this is not a time stamped data envelope"),
+    new Uint8Array(0),
+    seq(oid("1.2.840.113549.1.7.2"), explicit(0, seq(integer(1n)))),
+  ]) {
+    const { metadata, embedded } = await parseDirect(input);
+    assert.deepEqual(keysWithLabel(metadata), []);
+    assert.equal(embedded.length, 0);
+  }
 });
 
 // ---- GeneralName text ----

@@ -14,19 +14,42 @@ const fixtures = {
 };
 
 const ripstream = createRipstream();
-const results: Record<string, { iterations: number; opsPerSecond: number }> = {};
+const expected: Record<string, readonly string[]> = {
+  text: ["alpha", "beta", "gamma", "delta"],
+  html: ["hello", "world"],
+  xml: ["title", "text"],
+};
+interface Measurement {
+  iterations: number;
+  opsPerSecond: number;
+  score: number;
+  medianMs: number;
+  peakRssMb: number;
+}
+const results: Record<string, Measurement> = {};
 
 for (const [name, bytes] of Object.entries(fixtures)) {
   for (let index = 0; index < 5; index++) await ripstream.parseToString(bytes);
   const iterations = 50;
   const started = performance.now();
+  let recalled = 0;
+  let peakRss = 0;
+  const times: number[] = [];
   for (let index = 0; index < iterations; index++) {
-    await ripstream.parseToString(bytes);
+    const before = performance.now();
+    const text = (await ripstream.parseToString(bytes)).toLowerCase();
+    times.push(performance.now() - before);
+    peakRss = Math.max(peakRss, process.memoryUsage.rss());
+    recalled += expected[name]!.filter((token) => text.includes(token)).length / expected[name]!.length;
   }
   const seconds = (performance.now() - started) / 1000;
+  times.sort((a, b) => a - b);
   results[name] = {
     iterations,
     opsPerSecond: Number((iterations / seconds).toFixed(2)),
+    score: Number((recalled / iterations).toFixed(4)),
+    medianMs: Number((times[Math.floor(times.length / 2)] ?? 0).toFixed(3)),
+    peakRssMb: Number((peakRss / 1024 / 1024).toFixed(1)),
   };
 }
 

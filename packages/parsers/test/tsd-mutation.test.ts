@@ -379,7 +379,7 @@ test("a TSTInfo cut into OCTET STRING segments is joined, and one with a bad seg
   assert.deepEqual(await stampsInToken(signed(tlv(0x24, octets(info), integer(5n)))), []);
 });
 
-test("an envelope whose ContentInfo is shorter than its data is bounded by its own length", async () => {
+test("an envelope whose ContentInfo is shorter than its data is an empty non-envelope", async () => {
   const data = envelope({ content: new TextEncoder().encode("body"), tokens: [tstInfo()] });
   // Shorten the outer SEQUENCE by one octet: the [0] it holds now runs past it, though the bytes are all there.
   const shortened = Uint8Array.from(data);
@@ -388,22 +388,26 @@ test("an envelope whose ContentInfo is shorter than its data is bounded by its o
   if (shortened[1]! < 0x80) shortened[1] = shortened[1]! - 1;
   else shortened[2] = shortened[2]! - 1;
   assert.ok(lengthAt >= 1);
-  await assert.rejects(parseTsd(shortened), MalformedDocumentError);
+  const parsed = await parseTsd(shortened);
+  assert.deepEqual(stampKeys(parsed.metadata), []);
+  assert.deepEqual(embeddedText(parsed), []);
 });
 
-test("refusals of what is not an envelope say so", async () => {
-  const refused = async (data: Uint8Array): Promise<void> => {
-    await assert.rejects(parseTsd(data), (error: unknown) => error instanceof MalformedDocumentError && /Not a time stamped data envelope/.test(error.message));
+test("what is not an envelope is an empty success, as Tika's TSDParser", async () => {
+  const empty = async (data: Uint8Array): Promise<void> => {
+    const parsed = await parseTsd(data);
+    assert.deepEqual(stampKeys(parsed.metadata), []);
+    assert.deepEqual(embeddedText(parsed), []);
   };
-  await refused(integer(1n));
-  await refused(seq(integer(1n)));
-  await refused(seq(oid("1.2.3"), explicit(0, seq())));
-  await refused(seq(oid(ID_CT_TIMESTAMPED_DATA)));
-  await refused(seq(oid(ID_CT_TIMESTAMPED_DATA), tlv(0x80, Uint8Array.of(1))));
-  await refused(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(1, seq())));
-  await refused(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(0)));
-  await refused(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(0, integer(1n))));
-  await refused(seq(tlv(0x04, Uint8Array.of(1)), explicit(0, seq(integer(1n)))));
+  await empty(integer(1n));
+  await empty(seq(integer(1n)));
+  await empty(seq(oid("1.2.3"), explicit(0, seq())));
+  await empty(seq(oid(ID_CT_TIMESTAMPED_DATA)));
+  await empty(seq(oid(ID_CT_TIMESTAMPED_DATA), tlv(0x80, Uint8Array.of(1))));
+  await empty(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(1, seq())));
+  await empty(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(0)));
+  await empty(seq(oid(ID_CT_TIMESTAMPED_DATA), explicit(0, integer(1n))));
+  await empty(seq(tlv(0x04, Uint8Array.of(1)), explicit(0, seq(integer(1n)))));
 });
 
 // ---- the embedded document hand-off ----
@@ -639,7 +643,9 @@ test("the type of a ContentInfo is a primitive OBJECT IDENTIFIER, not another ta
   assert.equal(stampKeys((await parseTsd(good)).metadata).length, 9);
   for (const tag of [0x26, 0x04, 0x0c]) {
     const data = seq(tlv(tag, typeBytes), explicit(0, seq(integer(1n), octets(body), explicit(0, tokenBytes()))));
-    await assert.rejects(parseTsd(data), MalformedDocumentError, `tag ${tag}`);
+    const parsed = await parseTsd(data);
+    assert.deepEqual(stampKeys(parsed.metadata), [], `tag ${tag}`);
+    assert.deepEqual(embeddedText(parsed), [], `tag ${tag}`);
   }
 });
 

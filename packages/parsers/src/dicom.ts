@@ -97,7 +97,8 @@ function readTags(data: Uint8Array): Record<string, string> {
       // Undefined length is standard for sequences: walk past the items to the
       // sequence delimiter and keep reading the remaining tags.
       if (vrChars !== "SQ" && vrChars !== "UN") break;
-      const next = skipUndefinedSequence(data, view, valueOffset, 0);
+      // PS3.5 6.2.2: the datasets of a UN element's items are Implicit VR Little Endian.
+      const next = skipUndefinedSequence(data, view, valueOffset, 0, vrChars === "UN");
       if (next === -1) break;
       offset = next;
       continue;
@@ -130,6 +131,7 @@ function skipUndefinedSequence(
   view: DataView,
   offset: number,
   depth: number,
+  implicit = false,
 ): number {
   if (depth > MAX_SEQUENCE_DEPTH) return -1;
   while (offset + 8 <= data.length) {
@@ -145,7 +147,7 @@ function skipUndefinedSequence(
       offset += length;
       continue;
     }
-    offset = skipUndefinedItem(data, view, offset, depth);
+    offset = skipUndefinedItem(data, view, offset, depth, implicit);
     if (offset === -1) return -1;
   }
   return -1;
@@ -157,26 +159,34 @@ function skipUndefinedItem(
   view: DataView,
   offset: number,
   depth: number,
+  implicit = false,
 ): number {
   while (offset + 8 <= data.length) {
     const group = view.getUint16(offset, true);
     const element = view.getUint16(offset + 2, true);
     if (group === 0xfffe && element === 0xe00d) return offset + 8;
-    const vr = String.fromCharCode(data[offset + 4]!, data[offset + 5]!);
-    if (!/^[A-Z]{2}$/.test(vr)) return -1;
     let length: number;
     let valueOffset: number;
-    if (LONG_VR.has(vr)) {
-      if (offset + 12 > data.length) return -1;
-      length = view.getUint32(offset + 8, true);
-      valueOffset = offset + 12;
-    } else {
-      length = view.getUint16(offset + 6, true);
+    let vr = "";
+    if (implicit) {
+      // Implicit VR: tag, a 4-byte length, then the value; no VR bytes.
+      length = view.getUint32(offset + 4, true);
       valueOffset = offset + 8;
+    } else {
+      vr = String.fromCharCode(data[offset + 4]!, data[offset + 5]!);
+      if (!/^[A-Z]{2}$/.test(vr)) return -1;
+      if (LONG_VR.has(vr)) {
+        if (offset + 12 > data.length) return -1;
+        length = view.getUint32(offset + 8, true);
+        valueOffset = offset + 12;
+      } else {
+        length = view.getUint16(offset + 6, true);
+        valueOffset = offset + 8;
+      }
     }
     if (length === UNDEFINED_LENGTH) {
-      if (vr !== "SQ" && vr !== "UN") return -1;
-      offset = skipUndefinedSequence(data, view, valueOffset, depth + 1);
+      if (!implicit && vr !== "SQ" && vr !== "UN") return -1;
+      offset = skipUndefinedSequence(data, view, valueOffset, depth + 1, implicit || vr === "UN");
       if (offset === -1) return -1;
       continue;
     }

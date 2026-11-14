@@ -1,10 +1,12 @@
 import {
   CONTEXT_KEYS,
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
@@ -23,6 +25,7 @@ import {
   is,
   type Element,
 } from "./ber.ts";
+import { inflateBounded } from "@spikedpunch/ripstream-core";
 import { readAll } from "./bytes.ts";
 
 /*
@@ -31,18 +34,20 @@ import { readAll } from "./bytes.ts";
  * document. Tika reads the CMS with BouncyCastle's CMSSignedDataParser; the BER reading here is ber.ts, which reads the
  * indefinite lengths of a streamed message. Read from the Tika source, not run against a Tika.
  *
- * Not ported: the extraction of CMS compressedData (RFC 3274), which Tika inflates up to 100 MiB and parses. Here such a
- * message is labelled compressed-data and gives an empty document.
+ * A CMS compressedData (RFC 3274) is inflated with zlib up to 100 MiB and its payload is parsed, as Tika does; past the
+ * cap the bytes read so far are parsed and a warning is recorded.
  */
 
 const SUPPORTED = ["application/pkcs7-mime", "application/pkcs7-signature"];
 
 const ID_SIGNED_DATA = "1.2.840.113549.1.7.2";
+const ID_COMPRESSED_DATA = "1.2.840.113549.1.9.16.1.9";
+/** Tika's MAX_DECOMPRESSED. */
+const MAX_DECOMPRESSED = 100 * 1024 * 1024;
 
 /** CmsClassifier.nonSignedType: the ContentInfo OIDs that are labelled but whose payload is not extracted. */
 const NON_SIGNED_TYPES = new Map<string, string>([
   ["1.2.840.113549.1.7.3", "enveloped-data"],
-  ["1.2.840.113549.1.9.16.1.9", "compressed-data"],
   ["1.2.840.113549.1.7.5", "digested-data"],
   ["1.2.840.113549.1.7.6", "encrypted-data"],
 ]);
@@ -79,6 +84,11 @@ export class Pkcs7Parser implements Parser {
 
     if (type === ID_SIGNED_DATA) {
       await parseSignedData(data, xhtml, metadata, ctx);
+      return;
+    }
+    if (type === ID_COMPRESSED_DATA) {
+      metadata.set("Content-Type", smimeType("compressed-data"));
+      await parseCompressedData(data, xhtml, metadata, ctx);
       return;
     }
     const label = type === null ? undefined : NON_SIGNED_TYPES.get(type);
@@ -146,6 +156,70 @@ async function parseSignedData(
     }
   }
   await xhtml.endDocument();
+}
+
+/**
+ * Inflates the zlib payload of a CMS CompressedData (RFC 3274) and hands it to the embedded extractor. The compressed
+ * bytes are never longer than the message, and the inflater stops at Tika's 100 MiB; what it has by then is parsed.
+ */
+async function parseCompressedData(
+  data: Uint8Array,
+  xhtml: XHTMLContentHandler,
+  metadata: Metadata,
+  ctx: ParseContext,
+): Promise<void> {
+  const ber = new Ber(data);
+  const contentInfo = ber.element(0, data.length);
+  const infoLimit = limitOf(contentInfo, data.length);
+  const fields = ber.children(contentInfo, data.length);
+  fields.next(); // the content type, which the caller read
+  const tagged = fields.next().value;
+  if (tagged === undefined || !is(tagged, CONTEXT, 0, true)) throw malformed("compressedData has no content");
+  const compressed = ber.children(tagged, infoLimit).next().value;
+  if (compressed === undefined || !is(compressed, UNIVERSAL, TAG_SEQUENCE, true)) {
+    throw malformed("compressedData is not a SEQUENCE");
+  }
+  const compressedFields = ber.children(compressed, limitOf(tagged, infoLimit));
+  compressedFields.next(); // version
+  compressedFields.next(); // compressionAlgorithm
+  const encap = compressedFields.next().value;
+  if (encap === undefined || !is(encap, UNIVERSAL, TAG_SEQUENCE, true)) throw malformed("compressedData has no eContent");
+  const encapFields = ber.children(encap, limitOf(compressed, limitOf(tagged, infoLimit)));
+  encapFields.next(); // eContentType
+  const wrapper = encapFields.next().value;
+  if (wrapper === undefined || !is(wrapper, CONTEXT, 0, true)) throw malformed("compressedData has no eContent value");
+  const octetString = ber.children(wrapper, limitOf(wrapper, data.length)).next().value;
+  if (octetString === undefined || !is(octetString, UNIVERSAL, TAG_OCTET_STRING)) {
+    throw malformed("compressedData eContent is not an OCTET STRING");
+  }
+  const packed = ber.readOctets(octetString, limitOf(octetString, data.length), data.length);
+  if (packed.error !== null) throw packed.error;
+  let content: Uint8Array;
+  let truncated = false;
+  try {
+    content = inflateBounded(packed.bytes, "deflate", { maxOutputBytes: MAX_DECOMPRESSED, maxRatio: Number.MAX_SAFE_INTEGER });
+  } catch (error) {
+    if (!(error instanceof LimitExceededError)) throw error;
+    truncated = true;
+    content = new Uint8Array(0);
+  }
+  await xhtml.startDocument();
+  const extractor =
+    (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor | undefined) ??
+    new ParsingEmbeddedDocumentExtractor();
+  const embeddedMetadata = new Metadata();
+  if (extractor.shouldParseEmbedded(embeddedMetadata)) {
+    const embedded = await RipstreamInputStream.from(content, { context: ctx });
+    try {
+      await extractor.parseEmbedded(embedded, xhtml, embeddedMetadata, ctx);
+    } finally {
+      await embedded.close();
+    }
+  }
+  await xhtml.endDocument();
+  if (truncated) {
+    metadata.set(TIKA_KEYS.CONTAINER_EXCEPTION, `CMS compressedData payload exceeded ${MAX_DECOMPRESSED} bytes and was truncated`);
+  }
 }
 
 /** CmsClassifier.refinedSignedType: content, then certificates without signers, then a detached signature. */

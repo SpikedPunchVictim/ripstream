@@ -1,7 +1,7 @@
 name: isolation-chaos
 
 # Linux chaos fixtures for parse isolation (packages/isolation-node/test/chaos), run on NATIVE runners:
-# x86_64 and arm64, glibc (node:24-slim) and musl (node:24-alpine). Native means run-docker.sh does not label the
+# x86_64 and arm64, glibc (node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54) and musl (node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5). Native means run-docker.sh does not label the
 # run "emulated", so fixtures d and h keep their FAIL verdicts and the result is authoritative.
 # Local runs on a Mac are arm64-native or Rosetta-emulated and are not.
 
@@ -39,14 +39,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-slim" }
-          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-alpine" }
-          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-slim" }
-          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-alpine" }
+          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54" }
+          - { runner: ubuntu-latest, platform: linux/amd64, image: "node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5" }
+          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b20e00be48fb23fceb061c54" }
+          - { runner: ubuntu-24.04-arm, platform: linux/arm64, image: "node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5" }
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm

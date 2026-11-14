@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { deflateSync } from "node:zlib";
 import {
   BodyContentHandler,
   CONTEXT_KEYS,
@@ -135,7 +136,6 @@ for (const [name, type, label] of [
   ["enveloped", ID_ENVELOPED_DATA, "enveloped-data"],
   ["digested", ID_DIGESTED_DATA, "digested-data"],
   ["encrypted", ID_ENCRYPTED_DATA, "encrypted-data"],
-  ["compressed", ID_COMPRESSED_DATA, "compressed-data"],
 ] as const) {
   test(`${name} data is labelled ${label} and gives an empty document`, async () => {
     const { metadata, extractor, text } = await parse(contentInfo(type, seq(integer(0n))));
@@ -144,6 +144,19 @@ for (const [name, type, label] of [
     assert.equal(text.trim(), "");
   });
 }
+
+test("compressedData inflates its zlib payload and embeds it (RFC 3274)", async () => {
+  const payload = bytes("<xml>compressed</xml>");
+  const compressed = new Uint8Array(deflateSync(payload));
+  const body = seq(
+    integer(0n),
+    seq(oid("1.2.840.113549.1.9.16.3.8")),
+    seq(oid(ID_DATA), tlv(0xa0, octets(compressed))),
+  );
+  const { metadata, extractor } = await parse(contentInfo(ID_COMPRESSED_DATA, body));
+  assert.equal(metadata.get("Content-Type"), "application/pkcs7-mime; smime-type=compressed-data");
+  assert.deepEqual(decoded(extractor), ["<xml>compressed</xml>"]);
+});
 
 test("a ContentInfo of another type is an empty document with the type left alone", async () => {
   const { metadata, text } = await parse(contentInfo(ID_DATA, octets(bytes("x"))));
