@@ -1,0 +1,5 @@
+{
+  "parse-context": {
+    "output-limits": { "writeLimit": -1 }
+  }
+}
