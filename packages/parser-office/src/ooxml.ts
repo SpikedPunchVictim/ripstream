@@ -35,6 +35,8 @@ const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const PPTX =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const VSDX = "application/vnd.ms-visio.drawing";
+const VSDM = "application/vnd.ms-visio.drawing.macroenabled.12";
 
 /**
  * OOXML parser for docx/xlsx/pptx. ZIP parts are read with fflate, XML is
@@ -46,7 +48,7 @@ export class OoxmlParser implements Parser {
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
-      [DOCX, XLSX, PPTX, "application/x-tika-ooxml"].map((type) =>
+      [DOCX, XLSX, PPTX, VSDX, VSDM, "application/x-tika-ooxml", "application/x-tika-visio-ooxml"].map((type) =>
         MediaType.parse(type)!,
       ),
     );
@@ -98,6 +100,8 @@ export class OoxmlParser implements Parser {
       await renderWorkbook(files, xhtml);
     } else if (files["ppt/presentation.xml"] !== undefined) {
       await renderPresentation(files, xhtml);
+    } else if (files["visio/document.xml"] !== undefined) {
+      await renderVisio(files, xhtml);
     } else {
       throw new UnsupportedFormatError("Unrecognized OOXML package");
     }
@@ -127,13 +131,15 @@ const PPTX_PARTS =
   /^ppt\/(presentation)\.xml$|^ppt\/(slides\/slide\d+\.xml|notesSlides\/notesSlide\d+\.xml|charts\/chart\d+\.xml|diagrams\/data\d+\.xml|embeddings\/[^/]+|media\/[^/]+)$/;
 
 // The relationships of any part under word/, xl/ or ppt/: they say what each embedded part is (see embeddedTypesByPart).
-const RELATIONSHIP_PARTS = /^(?:word|xl|ppt)\/(?:.+\/)?_rels\/[^/]+\.rels$/;
+const RELATIONSHIP_PARTS = /^(?:word|xl|ppt|visio)\/(?:.+\/)?_rels\/[^/]+\.rels$/;
+const VISIO_PARTS = /^visio\/(document|pages\/page\d+|masters\/master\d+)\.xml$/;
 
 function neededPart(name: string): boolean {
   if (SHARED_PARTS.test(name) || RELATIONSHIP_PARTS.test(name)) return true;
   if (name.startsWith("word/")) return DOCX_PARTS.test(name);
   if (name.startsWith("xl/")) return XLSX_PARTS.test(name);
   if (name.startsWith("ppt/")) return PPTX_PARTS.test(name);
+  if (name.startsWith("visio/")) return VISIO_PARTS.test(name);
   return false;
 }
 
@@ -737,6 +743,28 @@ async function renderDrawingTable(
     await xhtml.endElement("tr");
   }
   await xhtml.endElement("table");
+}
+
+/** Visio DrawingML: the shape text lives in each page's `Text` elements. */
+async function renderVisio(
+  files: Record<string, Uint8Array>,
+  xhtml: XHTMLContentHandler,
+): Promise<void> {
+  const pages = Object.keys(files)
+    .filter((name) => /^visio\/pages\/page\d+\.xml$/.test(name))
+    .sort((left, right) => pageIndex(left) - pageIndex(right));
+  for (const name of pages) {
+    const root = parsePart(files, name);
+    if (root === undefined) continue;
+    for (const text of descendantsNamed(root, "Text")) {
+      const value = text.text.trim();
+      if (value.length > 0) await xhtml.element("p", value);
+    }
+  }
+}
+
+function pageIndex(name: string): number {
+  return Number(/page(\d+)\.xml$/.exec(name)?.[1] ?? "0");
 }
 
 // ---------------------------------------------------------------------------

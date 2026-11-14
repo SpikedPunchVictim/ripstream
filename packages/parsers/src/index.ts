@@ -55,6 +55,7 @@ import { EnviHeaderParser } from "./envi.ts";
 import { ISArchiveParser } from "./isatab.ts";
 import { GeographicInformationParser } from "./iso19139.ts";
 import { applyParserConfig } from "./parser-config.ts";
+import { EmptyFormatParser } from "./empty-format.ts";
 
 export { applyParserConfig } from "./parser-config.ts";
 export { TextParser } from "./text.ts";
@@ -145,6 +146,8 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
     ]);
   }
   const parsers = options.parsers ?? [
+      // Tika detects these but has no text extractor: its EmptyParser answers an empty document.
+      new EmptyFormatParser(["image/x-pict", "application/vnd.lotus-1-2-3", "application/x-mobipocket-ebook"]),
       new TextParser(),
       new CsvParser(options.csv),
       new HtmlDocumentParser(),
