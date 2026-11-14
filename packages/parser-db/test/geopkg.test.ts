@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -402,4 +403,25 @@ test("the options are positive integers, and ignoreBlobColumns is a list of name
   assert.throws(() => new GeoPkgParser({ maxRows: Number.NaN }), RangeError);
   assert.throws(() => new GeoPkgParser({ maxChars: 0 }), RangeError);
   assert.throws(() => new GeoPkgParser({ ignoreBlobColumns: "geom" as unknown as string[] }), TypeError);
+});
+
+test("a real GDAL GeoPackage: the tile table and its matrix are read from a file this project did not make", async () => {
+  // OSGeo/gdal autotest/gdrivers/data/gpkg/byte.gpkg (fixtures/README.md).
+  const data = new Uint8Array(readFileSync(new URL("./fixtures/gdal-byte.gpkg", import.meta.url)));
+  const { metadata, xml } = await parseGeoPkg(data, { ignoreBlobColumns: ["tile_data"] });
+  assert.deepEqual(metadata.getAll("database:table-name"), [
+    "gpkg_spatial_ref_sys",
+    "gpkg_contents",
+    "gpkg_ogr_contents",
+    "gpkg_tile_matrix_set",
+    "gpkg_tile_matrix",
+    "byte",
+    "sqlite_sequence",
+  ]);
+  assert.equal(metadata.get("sqlite3:application_id"), "47503130");
+  const found = tables(xml);
+  assert.deepEqual(found.get("gpkg_contents")!.rows[0]!.slice(0, 3), ["byte", "tiles", "byte"]);
+  assert.deepEqual(found.get("gpkg_tile_matrix")!.rows[0]!.slice(0, 5), ["byte", "0", "1", "1", "256"]);
+  assert.deepEqual(found.get("byte")!.headers, ["id", "zoom_level", "tile_column", "tile_row", "tile_data"]);
+  assert.equal(found.get("byte")!.rows[0]![0], "1");
 });

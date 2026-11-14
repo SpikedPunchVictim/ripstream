@@ -88,18 +88,19 @@ export class PowerPointBinaryParser implements Parser {
 }
 
 /**
- * The text of every slide and of its notes, as POI's `HSLFSlide.getTextParagraphs` gives it to Tika: the master
- * placeholder prompts ("Click to edit ..."), the CString persist-directory names and the master bodies are not slide
- * text. A slide whose placeholder text is empty presents its prompt; the document title stands in for the first one.
+ * The text of every slide and of its notes, as POI's `HSLFSlide.getTextParagraphs` gives it to Tika: a master's
+ * non-placeholder text shapes are written before each slide's text, the master placeholder prompts are not text, and a
+ * stream edited in PowerPoint has gaps of zeroes between the records of one edit and the next: the newest edit's records
+ * are the ones Tika reads, so the slide text is taken from the last block after a gap.
  */
 function extractText(stream: Uint8Array, title: string | null): string {
-  // Text repeated in the document-level copy of a list is the master's, not the slide's notes.
-  const documentTexts = new Set<string>();
-  walk(stream, 0, stream.byteLength, 0, "document", [], title, documentTexts);
+  const state: WalkState = { documentTexts: new Set(), masterPrompts: new Set(), masterText: [], lastGap: -1 };
+  walk(stream, 0, stream.byteLength, 0, "document", [], title, state, false, false, 0);
   const parts: string[] = [];
-  // Tika writes the presentation title ahead of the slides (the title placeholder's prompt when it is empty).
   if (title !== null && title.trim().length > 0) parts.push(title.trim());
-  walk(stream, 0, stream.byteLength, 0, "document", parts, title, documentTexts);
+  // The records after the last gap are the current edit; if there is none, the whole stream is current.
+  const start = state.lastGap > 0 ? state.lastGap : 0;
+  walk(stream, start, stream.byteLength, 0, "document", parts, title, state, true, false, 0);
   return parts
     .join("\n")
     .replace(/[\u000b\u000c]/g, "\r")
@@ -109,6 +110,17 @@ function extractText(stream: Uint8Array, title: string | null): string {
 
 type TextContext = "document" | "slide" | "notes" | "master";
 
+interface WalkState {
+  /** Text in the document-level copy of a list, which is the master's, not the slide's notes. */
+  readonly documentTexts: Set<string>;
+  /** The master's placeholder prompts, in whatever language: not slide text. */
+  readonly masterPrompts: Set<string>;
+  /** The master's non-placeholder text shapes, which Tika writes before every slide's text. */
+  readonly masterText: string[];
+  /** Where the last zero-filled gap ended, or -1 when the stream has none. Mutated by the collecting pass only. */
+  lastGap: number;
+}
+
 /** Returns the number of text atoms emitted under this range, so an empty slide list can present its prompt. */
 function walk(
   data: Uint8Array,
@@ -117,10 +129,12 @@ function walk(
   depth: number,
   context: TextContext,
   emit: string[],
-  title: string | null = null,
-  documentTexts: Set<string> | null = null,
-  listState: { title: boolean } | null = null,
-  enclosing = 0,
+  title: string | null,
+  state: WalkState,
+  emitting: boolean,
+  placeholder: boolean,
+  enclosing: number,
+  headerFooterMask: number | null = null,
 ): number {
   if (depth > MAX_CONTAINER_DEPTH) {
     throw new MalformedDocumentError(
@@ -128,41 +142,51 @@ function walk(
     );
   }
   let emitted = 0;
-  let slideNumber = 0;
-  let pendingTextType: number | null = null;
+  let textHeaderType: number | null = null;
   let position = start;
   while (position + 8 <= end) {
     const versionInstance = readUInt16(data, position);
     const type = readUInt16(data, position + 2);
     const length = readUInt32(data, position + 4);
+    if (versionInstance === 0 && type === 0 && length === 0) {
+      // A zero-filled gap between the records of an edited stream: the next record starts at the next plausible header.
+      const next = nextRecord(data, position + 1, end);
+      if (next === -1) break;
+      if (!emitting) state.lastGap = Math.max(state.lastGap, next);
+      position = next;
+      continue;
+    }
     if (length > end - position - 8) break;
     const payload = data.subarray(position + 8, position + 8 + length);
     const instance = versionInstance >> 4;
 
     if (type === TEXT_HEADER_ATOM) {
-      pendingTextType = readUInt32(payload, 0);
+      textHeaderType = readUInt32(payload, 0);
     } else if (type === TEXT_CHARS_ATOM || type === TEXT_BYTES_ATOM) {
       const value = type === TEXT_CHARS_ATOM
         ? decodeUtf16(payload)
         : new TextDecoder("windows-1252").decode(payload);
-      const isText = value !== "*" && !value.startsWith("Click to edit");
-      if (isText && context === "slide" && pendingTextType === 0 && listState !== null) listState.title = true;
-      pendingTextType = null;
-      if (context === "document" && isText) {
-        documentTexts?.add(value);
-      } else if ((context === "slide" || context === "notes") && isText) {
-        // Master placeholders are prompts, in whatever language; Tika leaves them out.
-        if (!(context === "notes" && documentTexts?.has(value))) {
-          emit.push(value);
-          emitted++;
-        }
+      const isText = !value.startsWith("Click to edit");
+      const runType = textHeaderType;
+      textHeaderType = null;
+      if (context === "master" && isText) {
+        if (placeholder) state.masterPrompts.add(value);
+        else if (!state.masterText.includes(value)) state.masterText.push(value);
+      } else if (context === "document" && isText) {
+        if (!emitting) state.documentTexts.add(value);
+      } else if (isText && !(context === "notes" && runType === 2)) {
+        // A notes master body placeholder (run type 2) is a prompt; Tika leaves it out of the notes.
+        if (emitting) emit.push(value);
+        emitted++;
       }
     } else if (type === CSTRING_ATOM) {
-      // A header/footer text is a UTF-16 CString; persist-directory names are not text.
+      // A header/footer text is a UTF-16 CString, written only when its atom says it is visible.
       if (enclosing === HEADERS_FOOTERS) {
+        const option = versionInstance >> 4;
+        const visible = option === 1 ? (headerFooterMask ?? 0) & 16 : option === 2 ? (headerFooterMask ?? 0) & 32 : 0;
         const value = new TextDecoder("utf-16le").decode(payload).replace(/\u0000/g, "");
-        if (value.trim().length > 0) {
-          emit.push(value);
+        if (visible !== 0 && value.trim().length > 0) {
+          if (emitting) emit.push(value);
           emitted++;
         }
       }
@@ -173,22 +197,72 @@ function walk(
         : type === MAIN_MASTER_CONTAINER ? "master"
         : type === SLIDE_LIST_WITH_TEXT && instance === 0 ? "slide"
         : context;
-      const before = emit.length;
-      const state = type === SLIDE_LIST_WITH_TEXT && instance === 0 ? { title: false } : listState;
-      emitted += walk(payload, 0, payload.byteLength, depth + 1, childContext, emit, title, documentTexts, state, type);
-      if (type === SLIDE_LIST_WITH_TEXT && instance === 0 && state !== null) {
-        slideNumber++;
-        // The title already stands in for an empty title placeholder in decks that have one.
-        if (!state.title && (title === null || title.trim().length === 0)) {
-          emit.push(`Slide ${slideNumber}`);
-          emitted++;
-        }
+      // A placeholder mark lives in the shape's ClientData (f011), beside the textbox (f00d).
+      const childPlaceholder = type === 0xf004 ? hasPlaceholderInShape(payload) : placeholder;
+      const childMask = type === HEADERS_FOOTERS ? headerFooterMaskOf(payload) : headerFooterMask;
+      // A master's non-placeholder text is written before each slide's own text.
+      if (emitting && type === SLIDE_CONTAINER && state.masterText.length > 0) {
+        for (const value of state.masterText) emit.push(value);
+        emitted += state.masterText.length;
       }
+      emitted += walk(payload, 0, payload.byteLength, depth + 1, childContext, emit, title, state, emitting, childPlaceholder, type, childMask);
     }
 
     position += 8 + length;
   }
   return emitted;
+}
+
+/** The mask of a HeadersFootersAtom (fda) in a headers/footers container, or null when it has none. */
+function headerFooterMaskOf(payload: Uint8Array): number | null {
+  let position = 0;
+  while (position + 8 <= payload.byteLength) {
+    const type = readUInt16(payload, position + 2);
+    const length = readUInt32(payload, position + 4);
+    if (length > payload.byteLength - position - 8) return null;
+    if (type === 0x0fda && length >= 4) return readUInt16(payload, position + 8 + 2);
+    position += 8 + length;
+  }
+  return null;
+}
+
+/** Whether a shape's ClientData carries the OEPlaceholderAtom that marks the shape a placeholder. */
+function hasPlaceholderInShape(payload: Uint8Array): boolean {
+  let position = 0;
+  while (position + 8 <= payload.byteLength) {
+    const type = readUInt16(payload, position + 2);
+    const length = readUInt32(payload, position + 4);
+    if (length > payload.byteLength - position - 8) return false;
+    if (type === 0xf011) {
+      const clientData = payload.subarray(position + 8, position + 8 + length);
+      let at = 0;
+      while (at + 8 <= clientData.byteLength) {
+        const dataType = readUInt16(clientData, at + 2);
+        const dataLength = readUInt32(clientData, at + 4);
+        if (dataLength > clientData.byteLength - at - 8) break;
+        if (dataType === 0x0bc3) return true;
+        at += 8 + dataLength;
+      }
+    }
+    position += 8 + length;
+  }
+  return false;
+}
+
+/** The next offset from \`from\` at which a record this reader knows begins and fits, or -1. */
+function nextRecord(data: Uint8Array, from: number, end: number): number {
+  for (let at = from; at + 8 <= end; at++) {
+    const versionInstance = readUInt16(data, at);
+    const type = readUInt16(data, at + 2);
+    const length = readUInt32(data, at + 4);
+    if (length > end - at - 8) continue;
+    if ((versionInstance & 0x000f) === CONTAINER_VERSION) {
+      if (type === SLIDE_CONTAINER || type === NOTES_CONTAINER || type === MAIN_MASTER_CONTAINER || type === SLIDE_LIST_WITH_TEXT || type === HEADERS_FOOTERS) return at;
+      if (type === 0x040c || type === 0x03ef || type === 0x03f1 || type === 0x0fda) return at;
+    }
+    if (type === TEXT_HEADER_ATOM || type === TEXT_CHARS_ATOM || type === TEXT_BYTES_ATOM || type === CSTRING_ATOM) return at;
+  }
+  return -1;
 }
 
 function decodeUtf16(bytes: Uint8Array): string {

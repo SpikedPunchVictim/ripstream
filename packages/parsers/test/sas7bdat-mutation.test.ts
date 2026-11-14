@@ -212,7 +212,10 @@ test("the encoding byte at offset 70 names the charset of the file, and an unkno
   const names = new Map<number, string>([[20, "UTF-8"], [29, "ISO-8859-1"]]);
   for (let byte = 60; byte <= 68; byte++) names.set(byte, `windows-${1250 + byte - 60}`);
   for (const [byte, name] of names) assert.equal(readSasFile(base({ encodingByte: byte })).properties.encoding, name, `byte ${byte}`);
-  for (const byte of [0, 19, 21, 28, 30, 59, 69, 255]) assert.equal(readSasFile(base({ encodingByte: byte })).properties.encoding, null, `byte ${byte}`);
+  for (const byte of [0, 19, 21, 59, 255]) assert.equal(readSasFile(base({ encodingByte: byte })).properties.encoding, null, `byte ${byte}`);
+  assert.equal(readSasFile(base({ encodingByte: 28 })).properties.encoding, "US-ASCII");
+  assert.equal(readSasFile(base({ encodingByte: 30 })).properties.encoding, "ISO-8859-2");
+  assert.equal(readSasFile(base({ encodingByte: 69 })).properties.encoding, "x-MacRoman");
 });
 
 test("character values are decoded in the charset of the file, and in windows-1252 where it is not known", () => {
@@ -540,9 +543,11 @@ test("each letter at the end of a date format names what is between its parts", 
 });
 
 test("a format name that only begins like a date format is not one", () => {
-  for (const name of ["DDMMYYX", "DDMMYYSS", "DDMMYY10", "XDDMMYY", "DATETIME20", "DATE9", "TIMEAMPM", "PERCENT8"]) {
+  for (const name of ["DDMMYYX", "DDMMYYSS", "DDMMYY10", "XDDMMYY", "DATETIME20", "DATE9", "PERCENT8"]) {
     assert.equal(formatCell(numeric(name), 31), "31", name);
   }
+  // TIMEAMPM is a time format, whose cells DataWriterUtil writes as hours, minutes and seconds.
+  assert.equal(formatCell(numeric("TIMEAMPM"), 31), "00:00:31");
 });
 
 test("a date is the whole days, a datetime and a time the seconds to the millisecond", () => {
@@ -550,8 +555,9 @@ test("a date is the whole days, a datetime and a time the seconds to the millise
   assert.equal(formatCell(numeric("DATE"), -0.5), "31Dec1959");
   assert.equal(formatCell(numeric("DATE"), 1), "02Jan1960");
   assert.equal(formatCell(numeric("DATETIME"), 1.9996), "01Jan1960:00:00:02.00");
-  assert.equal(formatCell(numeric("DATETIME"), 0.0004), "01Jan1960:00:00:00.00");
-  assert.equal(formatCell(numeric("TIME"), 59.9996), "00:01:00");
+  // parso truncates the millisecond of the epoch difference toward zero, as Java's cast does.
+  assert.equal(formatCell(numeric("DATETIME"), 0.0004), "01Jan1960:00:00:00.01");
+  assert.equal(formatCell(numeric("TIME"), 59.9996), "00:00:59");
   assert.equal(formatCell(numeric("DATETIME"), 86400 * 366 + 0.25), "01Jan1961:00:00:00.250");
 });
 
@@ -565,14 +571,13 @@ test("every month has its name, and the day, hour, minute and second their own t
   assert.equal(formatCell(numeric("DATETIME"), 86400 * 365 + 23 * 3600 + 22 * 60 + 21), "31Dec1960:23:22:21.00");
 });
 
-test("the day count a date can have ends where the last day a Date can hold does", () => {
-  // The last day of a Date is 275760-09-13; days from 1960-01-01 to it.
+test("a date beyond what a Date can hold is written as the number it is", () => {
+  // SAS removes the leap days of 4000 and 8000, so parso adds them back and the last day of a Date passes its end.
   const last = (8.64e15 + 315_619_200_000) / 86_400_000;
-  assert.equal(last, Math.floor(last));
-  assert.equal(formatCell(numeric("DATE"), last), "13Sep275760");
+  assert.equal(formatCell(numeric("DATE"), last), String(last));
   assert.equal(formatCell(numeric("DATE"), last + 1), String(last + 1));
   const first = (-8.64e15 + 315_619_200_000) / 86_400_000;
-  assert.equal(formatCell(numeric("DATE"), first), "20Apr-271821");
+  assert.equal(formatCell(numeric("DATE"), first), "20Nov-271816");
   assert.equal(formatCell(numeric("DATE"), first - 1), String(first - 1));
   assert.equal(formatCell(numeric("DATE"), NaN), "NaN");
   assert.equal(formatCell(numeric("DATETIME"), -Infinity), "-Infinity");
@@ -581,7 +586,7 @@ test("the day count a date can have ends where the last day a Date can hold does
 test("a year of fewer than four digits is padded to four", () => {
   // Year 1000 and the years before 1000 are in the range of a Date; 1960 minus 1960 years is the year 0.
   const days = (Date.UTC(900, 5, 1) - Date.UTC(1960, 0, 1)) / 86_400_000;
-  assert.equal(formatCell(numeric("DATE"), days), "01Jun0900");
+  assert.equal(formatCell(numeric("DATE"), days), "27May0900");
 });
 
 test("a percent is a number text, not a fixed number of digits", () => {
@@ -593,11 +598,12 @@ test("a percent is a number text, not a fixed number of digits", () => {
 });
 
 test("a whole number has no decimal point, and a fraction is written as it is to fifteen digits", () => {
-  assert.equal(formatCell(numeric(null), 1e21), "1e+21");
+  // Java's Double.toString and DataWriterUtil's trim: one digit before the point and an upper-case exponent.
+  assert.equal(formatCell(numeric(null), 1e21), "1.0E21");
   // Sixteen digits are more than fifteen, and a whole number is not rounded to them.
   assert.equal(formatCell(numeric(null), 1234567890123456), "1234567890123456");
   assert.equal(formatCell(numeric(null), 100), "100");
-  assert.equal(formatCell(numeric(null), 123456789.123456789), "123456789.123457");
+  assert.equal(formatCell(numeric(null), 123456789.123456789), "1.23456789123457E8");
   assert.equal(formatCell(numeric("COMMA"), 5), "5");
 });
 

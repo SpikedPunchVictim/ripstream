@@ -2,16 +2,11 @@ import { LimitExceededError, MalformedDocumentError, UnsupportedFormatError } fr
 import { rdcDecompress, rleDecompress } from "./sas-compression.ts";
 
 /*
- * A reader for SAS7BDAT files. Tika reads the format with parso, whose source was not available: nothing here is parso's code
- * or was checked against it. What is checked is the two files of Tika's SAS7BDATParserTest (testSAS.sas7bdat and
- * test-columnar.sas7bdat), read with a hex dump: both 32-bit, little-endian and uncompressed.
- *
- * The 64-bit and big-endian layouts and the RLE and RDC compressions are read as the pandas and ReadStat readers are remembered
- * to read them, with no file of any of those to check against (tikajs-68os.69). In the 64-bit layout every integer that is a
- * count or an offset is eight bytes wide and the page header and the subheader pointers grow with it; a big-endian file has
- * every integer and double the other way round; in a compressed file the rows are subheaders of the metadata pages, packed by
- * sas-compression.ts. Rows are also read from the mixed page (type 512) and from data pages (type 256), whose layout is the
- * published one, from memory, and no file here has one.
+ * A reader for SAS7BDAT files, with parso's own source and its test corpus to check it against. In the 64-bit layout every
+ * integer that is a count or an offset is eight bytes wide and the page header and the subheader pointers grow with it; a
+ * big-endian file has every integer and double the other way round; in a compressed file the rows are subheaders of the
+ * metadata pages, packed by sas-compression.ts. Rows are read from the mixed page (types 512 and 640) and from data pages
+ * (types 256 and 384), and a page's deleted-map ends the rows at its first deleted one, as parso's reader does.
  *
  * Everything is bounded by the bytes present: pages are located by arithmetic and checked against the length of the file,
  * nothing is allocated by a declared count, the subheaders read are budgeted by the size of the file so that pointers pointing
@@ -71,13 +66,18 @@ const MAGIC = [
 const MIN_HEADER_LENGTH = 288;
 
 const PAGE_META = 0;
+/** The compressed-metadata page type (PAGE_CMETA_TYPE). */
+const PAGE_CMETA = 128;
 const PAGE_DATA = 256;
+/** A data or mixed page whose rows carry a deleted-map: the first deleted row ends the parse, as it does in Tika. */
+const PAGE_DATA_DELETED = 384;
+const PAGE_MIX_DELETED = 640;
 const PAGE_MIX = [512, 640];
 const PAGE_AMD = 1024;
 const PAGE_METC = 16384;
-const SUBHEADER_PAGES = new Set([PAGE_META, PAGE_AMD, PAGE_METC, ...PAGE_MIX]);
+const SUBHEADER_PAGES = new Set([PAGE_META, PAGE_CMETA, PAGE_AMD, PAGE_METC, ...PAGE_MIX]);
 /** The pages whose subheaders can be rows, when the file is compressed. */
-const PACKED_ROW_PAGES = new Set([PAGE_META, PAGE_METC]);
+const PACKED_ROW_PAGES = new Set([PAGE_META, PAGE_CMETA, PAGE_METC]);
 
 /** The first four bytes of a subheader, read as the file's integers; in a 64-bit file these are the low four of eight. */
 const ROW_SIZE = 0xf7f7f7f7;
@@ -91,6 +91,30 @@ const SUBHEADER_COUNTS = 0xfffffc00;
 const COLUMN_LIST = 0xfffffffe;
 const KNOWN_SIGNATURES = new Set([
   ROW_SIZE, COLUMN_SIZE, COLUMN_TEXT, COLUMN_NAME, COLUMN_ATTRIBUTES, FORMAT_AND_LABEL, SUBHEADER_COUNTS, COLUMN_LIST,
+]);
+/**
+ * The eight-byte signatures of a 64-bit file, as parso maps them: a 32-bit signature in either half (the row and column
+ * size are written with the other half zero or, in the files parso tested against, with `fffffbfe` there) and the
+ * others sign-extended. The value is read in the file's byte order, so one table covers both byte orders.
+ */
+const SIGNATURES_64 = new Map<bigint, number>([
+  [0x00000000f7f7f7f7n, ROW_SIZE],
+  [0xf7f7f7f700000000n, ROW_SIZE],
+  [0xf7f7f7f7fffffbfen, ROW_SIZE],
+  [0x00000000f6f6f6f6n, COLUMN_SIZE],
+  [0xf6f6f6f600000000n, COLUMN_SIZE],
+  [0xf6f6f6f6fffffbfen, COLUMN_SIZE],
+  [0x00fcffffffffffffn, SUBHEADER_COUNTS],
+  [0xfffffffffffffc00n, SUBHEADER_COUNTS],
+  [0xfdffffffffffffffn, COLUMN_TEXT],
+  [0xfffffffffffffffdn, COLUMN_TEXT],
+  [0xffffffffffffffffn, COLUMN_NAME],
+  [0xfcffffffffffffffn, COLUMN_ATTRIBUTES],
+  [0xfffffffffffffffcn, COLUMN_ATTRIBUTES],
+  [0xfefbffffffffffffn, FORMAT_AND_LABEL],
+  [0xfffffffffffffbfen, FORMAT_AND_LABEL],
+  [0xfeffffffffffffffn, COLUMN_LIST],
+  [0xfffffffffffffffen, COLUMN_LIST],
 ]);
 
 /** A subheader pointer's flags: the pointer to a truncated subheader, and the compression and type of a packed row. */
@@ -114,11 +138,119 @@ const DEFAULT_INFLATION_SLACK = 1024 * 1024;
 const SAS_EPOCH_MS = Date.UTC(1960, 0, 1);
 const MAX_DATE_MS = 8.64e15;
 
-/** The encoding byte at offset 70 of the header, for the bytes this reader knows (62 is the one the Tika test shows). */
+/** The encoding byte at offset 70, named as parso names it (SasFileConstants.SAS_CHARACTER_ENCODINGS). */
 const ENCODINGS = new Map<number, string>([
-  [20, "UTF-8"],
-  [29, "ISO-8859-1"],
-  ...[60, 61, 62, 63, 64, 65, 66, 67, 68].map((byte): [number, string] => [byte, `windows-${1250 + byte - 60}`]),
+  [0x46, "x-MacArabic"],
+  [0xf5, "x-MacCroatian"],
+  [0xf6, "x-MacCyrillic"],
+  [0x48, "x-MacGreek"],
+  [0x47, "x-MacHebrew"],
+  [0xa3, "x-MacIceland"],
+  [0x22, "ISO-8859-6"],
+  [0x45, "x-MacRoman"],
+  [0xf7, "x-MacRomania"],
+  [0x49, "x-MacThai"],
+  [0x4b, "x-MacTurkish"],
+  [0x4c, "x-MacUkraine"],
+  [0x7b, "Big5"],
+  [0x21, "ISO-8859-5"],
+  [0x4e, "IBM037"],
+  [0x5f, "x-IBM1025"],
+  [0xcf, "x-IBM1097"],
+  [0x62, "x-IBM1112"],
+  [0x63, "x-IBM1122"],
+  [0xb7, "IBM01140"],
+  [0xb8, "IBM01141"],
+  [0xb9, "IBM01142"],
+  [0xba, "IBM01143"],
+  [0xbb, "IBM01144"],
+  [0xbc, "IBM01145"],
+  [0xbd, "IBM01146"],
+  [0xbe, "IBM01147"],
+  [0xbf, "IBM01148"],
+  [0xd3, "IBM01149"],
+  [0x57, "IBM424"],
+  [0x58, "IBM500"],
+  [0x59, "IBM-Thai"],
+  [0x5a, "IBM870"],
+  [0x5b, "x-IBM875"],
+  [0x7d, "GBK"],
+  [0x86, "EUC-JP"],
+  [0x8c, "EUC-KR"],
+  [0x77, "x-EUC-TW"],
+  [0xcd, "GB18030"],
+  [0x23, "ISO-8859-7"],
+  [0x24, "ISO-8859-8"],
+  [0x80, "x-IBM1381"],
+  [0x82, "x-IBM930"],
+  [0x8b, "x-IBM933"],
+  [0x7c, "x-IBM935"],
+  [0x75, "x-IBM937"],
+  [0x81, "x-IBM939"],
+  [0x89, "x-IBM942"],
+  [0x8e, "x-IBM949"],
+  [0xac, "x-ISO2022-CN-CNS"],
+  [0xa9, "x-ISO2022-CN-GB"],
+  [0xa7, "ISO-2022-JP"],
+  [0xa8, "ISO-2022-KR"],
+  [0x1d, "ISO-8859-1"],
+  [0x1e, "ISO-8859-2"],
+  [0x1f, "ISO-8859-3"],
+  [0x20, "ISO-8859-4"],
+  [0x25, "ISO-8859-9"],
+  [0xf2, "ISO-8859-13"],
+  [0x28, "ISO-8859-15"],
+  [0x88, "x-windows-iso2022jp"],
+  [0x7e, "x-mswin-936"],
+  [0x8d, "x-windows-949"],
+  [0x76, "x-windows-950"],
+  [0xad, "IBM037"],
+  [0x6c, "x-IBM1025"],
+  [0x6d, "IBM1026"],
+  [0x6e, "IBM1047"],
+  [0xd0, "x-IBM1097"],
+  [0x6f, "x-IBM1112"],
+  [0x70, "x-IBM1122"],
+  [0xc0, "IBM01140"],
+  [0xc1, "IBM01141"],
+  [0xc2, "IBM01142"],
+  [0xc3, "IBM01143"],
+  [0xc4, "IBM01144"],
+  [0xc5, "IBM01145"],
+  [0xc6, "IBM01146"],
+  [0xc7, "IBM01147"],
+  [0xc8, "IBM01148"],
+  [0xd4, "IBM01149"],
+  [0x66, "IBM424"],
+  [0x67, "IBM-Thai"],
+  [0x68, "IBM870"],
+  [0x69, "x-IBM875"],
+  [0xea, "x-IBM930"],
+  [0xeb, "x-IBM933"],
+  [0xec, "x-IBM935"],
+  [0xed, "x-IBM937"],
+  [0xee, "x-IBM939"],
+  [0x2b, "IBM437"],
+  [0x2c, "IBM850"],
+  [0x2d, "IBM852"],
+  [0x3a, "IBM857"],
+  [0x2e, "IBM00858"],
+  [0x2f, "IBM862"],
+  [0x33, "IBM866"],
+  [0x8a, "Shift_JIS"],
+  [0xf8, "JIS_X0201"],
+  [0x27, "x-iso-8859-11"],
+  [0x1c, "US-ASCII"],
+  [0x14, "UTF-8"],
+  [0x42, "windows-1256"],
+  [0x43, "windows-1257"],
+  [0x3d, "windows-1251"],
+  [0x3f, "windows-1253"],
+  [0x41, "windows-1255"],
+  [0x3e, "windows-1252"],
+  [0x3c, "windows-1250"],
+  [0x40, "windows-1254"],
+  [0x44, "windows-1258"],
 ]);
 const FALLBACK_CHARSET = "windows-1252";
 
@@ -189,7 +321,7 @@ export function readSasFile(data: Uint8Array, options: SasReadOptions = {}): Sas
   const meta = scanSubheaders(data, view, header);
   const compression = compressionOf(meta);
   const charset = ENCODINGS.get(data[70]!) ?? null;
-  const decoder = new TextDecoder(charset ?? FALLBACK_CHARSET);
+  const decoder = decoderFor(charset);
   const columns = buildColumns(meta, decoder);
 
   const properties: SasProperties = {
@@ -286,7 +418,8 @@ function scanSubheaders(data: Uint8Array, view: DataView, header: Header): Metad
 function signatureOf(bytes: Uint8Array, layout: Layout): number | null {
   if (bytes.length < layout.int) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return view.getUint32(layout.int === 8 && !layout.little ? 4 : 0, layout.little);
+  if (layout.int === 8) return SIGNATURES_64.get(view.getBigUint64(0, layout.little)) ?? null;
+  return view.getUint32(0, layout.little);
 }
 
 function readSubheader(bytes: Uint8Array, meta: Metadata, layout: Layout): void {
@@ -426,11 +559,12 @@ function* readRows(reader: RowReader): Generator<SasValue[]> {
     }
     let first: number;
     let wanted: number;
+    const deleted = type === PAGE_DATA_DELETED || type === PAGE_MIX_DELETED;
     if (PAGE_MIX.includes(type)) {
       // The rows follow the pointers, on the next multiple of eight.
       first = (layout.pointersAt + view.getUint16(start + layout.pageHeader + 4, layout.little) * layout.pointerSize + 7) & ~7;
       wanted = meta.mixPageRowCount;
-    } else if (type === PAGE_DATA) {
+    } else if (type === PAGE_DATA || type === PAGE_DATA_DELETED) {
       first = layout.pointersAt;
       wanted = view.getUint16(start + layout.pageHeader + 2, layout.little);
     } else {
@@ -440,9 +574,37 @@ function* readRows(reader: RowReader): Generator<SasValue[]> {
     const rowLength = meta.rowLength!;
     const room = first >= header.pageLength ? 0 : Math.floor((header.pageLength - first) / rowLength);
     const count = Math.min(remaining, wanted, room);
-    for (let index = 0; index < count; index++) yield readRow(reader, reader.data, start + first + index * rowLength);
+    const deletedMap = deleted ? deletedMapOf(reader, start) : null;
+    for (let index = 0; index < count; index++) {
+      // Tika's reader stops at the first deleted row, so what its parse has is what this one gives.
+      if (deletedMap !== null && deletedMap.isDeleted(index)) return;
+      yield readRow(reader, reader.data, start + first + index * rowLength);
+    }
     remaining -= count;
   }
+}
+
+/**
+ * The deleted-map of a page whose rows can be deleted: one bit a row, the most significant bit of a byte first, as parso
+ * finds it after the rows. A map that is not inside the page marks nothing, so no row is taken for deleted.
+ */
+function deletedMapOf(reader: RowReader, start: number): { isDeleted(index: number): boolean } | null {
+  const { view, header, meta } = reader;
+  const { layout } = header;
+  const blockCount = view.getUint16(start + layout.pageHeader + 2, layout.little);
+  const pointerCount = view.getUint16(start + layout.pageHeader + 4, layout.little);
+  const align = (layout.pointersAt + pointerCount * layout.pointerSize) % 8;
+  const rowsAt = layout.pointersAt + align + pointerCount * layout.pointerSize;
+  const deletedPointer = view.getUint32(start + (layout.int === 8 ? 24 : 12), layout.little);
+  const at = rowsAt + deletedPointer + (blockCount - pointerCount) * meta.rowLength!;
+  const bytes = Math.ceil((blockCount - pointerCount) / 8);
+  if (bytes <= 0 || at + bytes > header.pageLength) return null;
+  return {
+    isDeleted(index: number): boolean {
+      if (index >= blockCount - pointerCount) return false;
+      return ((view.getUint8(start + at + Math.floor(index / 8)) >> (7 - (index % 8))) & 1) === 1;
+    },
+  };
 }
 
 /**
@@ -501,12 +663,22 @@ function readNumber(bytes: Uint8Array, little: boolean): number | null {
   const eight = new Uint8Array(8);
   eight.set(bytes, little ? 8 - bytes.length : 0);
   const value = new DataView(eight.buffer).getFloat64(0, little);
-  return Number.isNaN(value) ? null : value;
+  // parso reads a positive number below 1E-300 as missing, and NaN as missing too.
+  return Number.isNaN(value) || (value > 0 && value < 1e-300) ? null : value;
 }
 
 function toDate(seconds: number): Date | null {
   const millis = SAS_EPOCH_MS + seconds * 1000;
   return Number.isFinite(millis) && Math.abs(millis) <= MAX_DATE_MS ? new Date(millis) : null;
+}
+
+/** The decoder of an encoding name, or the fallback when the runtime does not know the name Java uses for it. */
+function decoderFor(charset: string | null): TextDecoder {
+  try {
+    return new TextDecoder(charset ?? FALLBACK_CHARSET);
+  } catch {
+    return new TextDecoder(FALLBACK_CHARSET);
+  }
 }
 
 /** String.trim in Java: every character up to U+0020 comes off both ends, the NULs and the padding of SAS strings with it. */

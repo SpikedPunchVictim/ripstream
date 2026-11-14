@@ -63,15 +63,15 @@ test("RLE input that ends inside a command is malformed", () => {
   assert.throws(() => rleDecompress(bytes(0x00), 64), MalformedDocumentError);
 });
 
-test("RLE commands 0x20 and 0x30 are not defined and are malformed", () => {
+test("RLE 0x00 to 0x30 copy 64 bytes and the byte after them, and the command byte times 256 more", () => {
+  assert.equal(text(rleDecompress(bytes(0x00, 0x00, ...new TextEncoder().encode("A".repeat(64))), 64)), "A".repeat(64));
+  assert.equal(text(rleDecompress(bytes(0x01, 0x00, ...new TextEncoder().encode("B".repeat(320))), 320)), "B".repeat(320));
   assert.throws(() => rleDecompress(bytes(0x30, 0x00), 1), MalformedDocumentError);
 });
 
-test("RLE commands whose length the sources of this port do not agree on are unsupported, not guessed", () => {
-  for (const command of [0x10, 0x20, 0x40]) {
-    assert.throws(() => rleDecompress(bytes(command, 0x00, 0x41), 18), UnsupportedFormatError);
-  }
-  assert.throws(() => rleDecompress(bytes(0x01, 0x00), 64), UnsupportedFormatError);
+test("RLE 0x40 repeats the byte two after the command 18 times and the nibble times 16 more", () => {
+  assert.equal(text(rleDecompress(bytes(0x40, 0x00, 0x58), 18)), "X".repeat(18));
+  assert.equal(text(rleDecompress(bytes(0x42, 0x00, 0x59), 50)), "Y".repeat(50));
 });
 
 test("RLE with a length asked for of nothing and no input is nothing", () => {
@@ -146,7 +146,8 @@ test("RDC does not run past the length asked for, however much a command says", 
 const CUT = /ends inside a command/;
 
 test("RLE commands that need a byte after them say the data ends inside a command when it does", () => {
-  assert.throws(() => rleDecompress(bytes(0x00), 64), CUT);
+  // A command that is the last byte copies nothing, as the sources of this port read it.
+  assert.throws(() => rleDecompress(bytes(0x00), 64), MalformedDocumentError);
   assert.throws(() => rleDecompress(bytes(0x60), 17), CUT);
   assert.throws(() => rleDecompress(bytes(0xc0), 3), CUT);
 });

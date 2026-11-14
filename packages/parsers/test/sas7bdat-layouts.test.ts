@@ -258,13 +258,13 @@ for (const [method, compress] of COMPRESSORS) {
   });
 }
 
-test("an RLE command whose length is not known is a refusal as unsupported", () => {
+test("an RLE command whose output is shorter than the row is malformed", () => {
   const data = buildSas7bdat({
     columns: WIDE,
     rows: WIDE_ROWS,
     compression: { method: "RLE", compress: () => Uint8Array.of(0x40, 0x00, 0x41) },
   });
-  assert.throws(() => rowsOf(data), UnsupportedFormatError);
+  assert.throws(() => rowsOf(data), MalformedDocumentError);
 });
 
 test("a file that names a compression only in a later text block is not compressed", () => {

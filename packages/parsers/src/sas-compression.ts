@@ -2,8 +2,8 @@ import { MalformedDocumentError, UnsupportedFormatError } from "@spikedpunch/rip
 
 /*
  * The two row compressions of SAS7BDAT: RLE (the literal "SASYZCRL" in the first text block) and RDC (Ross Data Compression,
- * "SASYZCR2"). Neither is in the Tika tree, where parso reads them; no file of either kind was available. This is written
- * from the algorithms as they are remembered from the pandas and ReadStat readers, and is not checked against a file.
+ * "SASYZCR2"). Both follow parso's CharDecompressor and BinDecompressor, and both are checked against real compressed files
+ * (tikajs-68os.69).
  *
  * Each function is given the length the row must come to (the row length of the file) and returns exactly that many bytes
  * or throws: nothing is written past that length, so the output is bounded by it and not by anything the input says.
@@ -59,13 +59,12 @@ function need(input: Uint8Array, position: number, count: number): void {
 }
 
 /**
- * RLE: each command is a byte whose high nibble is the command and whose low nibble is a length, then what the command
- * needs. 0x80 to 0xB0 copy 1, 17, 33 or 49 bytes (and the nibble more); 0xC0 repeats the byte after it 3 times and the
- * nibble more; 0xD0, 0xE0 and 0xF0 insert 2 '@', blanks or NULs and the nibble more; 0x50, 0x60 and 0x70 insert 17 of those
- * and the byte after the command and the nibble times 256 more; 0x00 copies 64 bytes and the byte after the command more.
- *
- * 0x10, 0x20 and 0x40, and a 0x00 with a low nibble, are given different lengths by the sources this was remembered from,
- * so they are refused as unsupported rather than guessed at.
+ * RLE, as parso's CharDecompressor reads it: each command is a byte whose high nibble is the command and whose low nibble
+ * is a length, then what the command needs. 0x00 to 0x30 copy 64 bytes and the byte after the command more, and the command
+ * byte times 256 more; 0x40 repeats the byte two bytes later 18 times and the nibble times 16 more; 0x50, 0x60 and 0x70
+ * insert 17 '@', blanks or NULs and the byte after the command and the nibble times 256 more; 0x80 to 0xB0 copy 1, 17, 33
+ * or 49 bytes and the nibble more; 0xC0 repeats the byte after it 3 times and the nibble more; 0xD0, 0xE0 and 0xF0 insert
+ * 2 '@', blanks or NULs and the nibble more, without a byte after them.
  */
 export function rleDecompress(input: Uint8Array, rowLength: number): Uint8Array {
   const out = new Output(rowLength);
@@ -76,14 +75,21 @@ export function rleDecompress(input: Uint8Array, rowLength: number): Uint8Array 
     const nibble = control & 0x0f;
     switch (command) {
       case 0x0:
-        if (nibble !== 0) throw unsupported(control);
-        need(input, position, 1);
-        position = copyRun(out, input, position + 1, input[position]! + 64);
-        break;
       case 0x1:
       case 0x2:
-      case 0x4:
-        throw unsupported(control);
+      case 0x3:
+        // The last byte of the input has no count after it, and copies nothing.
+        if (position >= input.length) break;
+        need(input, position, 1);
+        position = copyRun(out, input, position + 1, input[position]! + 64 + control * 256);
+        break;
+      case 0x4: {
+        need(input, position, 2);
+        const count = nibble * 16 + input[position]! + 18;
+        out.fill(input[position + 1]!, count);
+        position += 2;
+        break;
+      }
       case 0x5:
       case 0x6:
       case 0x7: {

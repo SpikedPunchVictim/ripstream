@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   BodyContentHandler,
@@ -61,4 +62,20 @@ test("ZipParser decodes an entry stored with method 9 (Deflate64)", async () => 
   await new ZipParser().parse(stream, handler, new Metadata(), ctx);
   await stream.close();
   assert.match(handler.toString(), /hello deflate64/);
+});
+
+test("ZipParser decodes a real archive whose four entries are method 9 (Deflate64)", async () => {
+  // brianhelba/zipfile-deflate64's archive, written by a real Deflate64 encoder (fixtures/deflate64/README.md).
+  const data = new Uint8Array(readFileSync(new URL("./fixtures/deflate64/zipfile-deflate64.zip", import.meta.url)));
+  const stream = await RipstreamInputStream.from(data);
+  const handler = new BodyContentHandler();
+  const ctx = new ParseContext();
+  ctx.set(CONTEXT_KEYS.PARSER, plainTextParser);
+  await new ZipParser().parse(stream, handler, new Metadata(), ctx);
+  await stream.close();
+  const text = handler.toString();
+  for (const name of ["10_lines.txt", "100_lines.txt", "10k_lines.txt", "100k_lines.txt"]) {
+    assert.ok(text.includes(name), name);
+  }
+  assert.match(text, /Sample content 99999\./);
 });
