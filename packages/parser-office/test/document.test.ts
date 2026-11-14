@@ -43,7 +43,7 @@ test("extracts ODT text and metadata", async () => {
   assert.match(result.text, /Heading/);
   assert.equal(result.metadata.get("dc:title"), "ODF Doc");
   assert.equal(result.metadata.get("dc:creator"), "Ada");
-  assert.equal(result.metadata.get("meta:generator"), "Writer");
+  assert.equal(result.metadata.get("generator"), "Writer");
 });
 
 test("extracts ODT tables, lists, notes and statistics", async () => {
@@ -289,14 +289,16 @@ test("ODF writes generator, editing-cycles and editing-duration under Tika's key
   assert.equal(metadata.get("meta:character-count"), "9");
 });
 
-test("ODF still writes the keys it wrote before Tika's were matched, next to Tika's", async () => {
+test("ODF writes only Tika's keys, not the four pre-parity ones", async () => {
   const metadata = await odfMetadata(
     `<office:document-meta ${NS}><office:meta><meta:generator>Writer</meta:generator><meta:editing-cycles>3</meta:editing-cycles><meta:initial-creator>Ada</meta:initial-creator><meta:keyword>k</meta:keyword></office:meta></office:document-meta>`,
   );
-  assert.equal(metadata.get("meta:generator"), "Writer");
-  assert.equal(metadata.get("meta:editing-cycles"), "3");
-  assert.equal(metadata.get("meta:initial-creator"), "Ada");
-  assert.equal(metadata.get("pdf:Keywords"), "k");
+  assert.equal(metadata.get("generator"), "Writer");
+  assert.equal(metadata.get("editing-cycles"), "3");
+  assert.equal(metadata.get("dc:creator"), "Ada");
+  assert.equal(metadata.get("pdf:Keywords"), null);
+  assert.equal(metadata.get("meta:editing-cycles"), null);
+  assert.equal(metadata.get("meta:initial-creator"), null);
 });
 
 test("ODF user-defined properties become custom:<name>; one without text adds nothing", async () => {
@@ -448,11 +450,11 @@ test("ODF joined text is ended by an element of its own namespace and name only"
   assert.deepEqual(metadata.getAll("meta:keyword"), ["ab"]);
 });
 
-test("ODF joined text is kept as it is under Tika's key and trimmed under the legacy one, which a blank value does not write", async () => {
+test("ODF joined text is kept as written under Tika's key; the legacy keys are gone", async () => {
   const metadata = await odfMetadata(metaDoc("<meta:generator> Writer </meta:generator><meta:keyword> </meta:keyword>"));
   assert.equal(metadata.get("generator"), " Writer ");
-  assert.equal(metadata.get("meta:generator"), "Writer");
   assert.equal(metadata.get("meta:keyword"), " ");
+  assert.equal(metadata.get("meta:generator"), null);
   assert.equal(metadata.get("pdf:Keywords"), null);
 });
 

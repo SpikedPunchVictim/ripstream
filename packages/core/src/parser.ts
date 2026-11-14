@@ -120,16 +120,27 @@ export class CompositeParser implements Parser {
           if (supported.type === "*") match = { parser, kind: "wildcard", via: null, rank: chain.length + 1 };
           else if (supported.type === type.type) match = { parser, kind: "wildcard", via: null, rank: wildcardRank };
         } else {
-          const key = (this.registry?.normalize(supported) ?? supported).getBaseType().toString();
-          const index = position.get(key);
-          if (index !== undefined) {
-            match = {
-              parser,
-              kind: index === 0 ? "exact" : "supertype",
-              via: (chain[index] as MediaType).getBaseType(),
-              rank: index,
-            };
+          const normalized = this.registry?.normalize(supported) ?? supported;
+          // A claim for the full parameterised type first: `image/vnd.dgn; version=8` is never offered a version 7
+          // request, and it outranks a bare `image/vnd.dgn` claim for a version 8 one.
+          if (normalized.toString() === type.toString()) {
+            match = { parser, kind: "exact", via: normalized.getBaseType(), rank: -1 };
+          } else if (!normalized.hasParameters) {
+            // A bare claim can take the type's versions through the base type; a parameterised claim matches only its
+            // own full type, as Tika's CompositeParser does.
+            const key = normalized.getBaseType().toString();
+            const index = position.get(key);
+            if (index !== undefined) {
+              match = {
+                parser,
+                kind: index === 0 ? "exact" : "supertype",
+                via: (chain[index] as MediaType).getBaseType(),
+                rank: index,
+              };
+            }
           }
+          if (match !== null && (best === null || match.rank < best.rank)) best = match;
+          continue;
         }
         if (match !== null && (best === null || match.rank < best.rank)) best = match;
       }

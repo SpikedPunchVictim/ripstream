@@ -1,4 +1,5 @@
 import {
+  isFatalParseError,
   AbortError,
   CONTEXT_KEYS,
   LimitExceededError,
@@ -301,7 +302,7 @@ export async function extractPictures(
       await extractor.parseEmbedded(stream, xhtml, embedded, ctx);
     } catch (error) {
       // A picture that cannot be read is recorded, and the others go on; a limit or an abort ends the parse.
-      if (isFatal(error, ctx)) throw error;
+      if (isFatalParseError(error, ctx)) throw error;
       metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
     } finally {
       await stream.close();
@@ -309,15 +310,7 @@ export async function extractPictures(
   }
 }
 
-function isFatal(error: unknown, ctx: ParseContext): boolean {
-  return (
-    error instanceof LimitExceededError ||
-    error instanceof ParseTimeoutError ||
-    error instanceof AbortError ||
-    error instanceof WriteLimitReachedError ||
-    ctx.signal.aborted
-  );
-}
+
 
 /** OggAudioParser.extractDuration: xmpDM:duration as DecimalFormat("0.0#") does it, and a paragraph of hours, minutes and seconds. */
 export async function extractDuration(metadata: Metadata, xhtml: XHTMLContentHandler, seconds: number): Promise<void> {

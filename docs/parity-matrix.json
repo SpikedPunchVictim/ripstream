@@ -1174,16 +1174,10 @@
    "tier": "standard",
    "status": "partial",
    "typeCount": 27,
-   "exact": 3,
+   "exact": 6,
    "open": [
     {
      "type": "application/vnd.ms-excel.addin.macroenabled.12",
-     "resolution": "fallback",
-     "by": "OOXMLParser",
-     "declared": "af-ooxml-subtypes"
-    },
-    {
-     "type": "application/vnd.ms-excel.sheet.binary.macroenabled.12",
      "resolution": "fallback",
      "by": "OOXMLParser",
      "declared": "af-ooxml-subtypes"
@@ -1226,18 +1220,6 @@
     },
     {
      "type": "application/vnd.ms-powerpoint.template.macroenabled.12",
-     "resolution": "fallback",
-     "by": "OOXMLParser",
-     "declared": "af-ooxml-subtypes"
-    },
-    {
-     "type": "application/vnd.ms-visio.drawing",
-     "resolution": "fallback",
-     "by": "OOXMLParser",
-     "declared": "af-ooxml-subtypes"
-    },
-    {
-     "type": "application/vnd.ms-visio.drawing.macroenabled.12",
      "resolution": "fallback",
      "by": "OOXMLParser",
      "declared": "af-ooxml-subtypes"
@@ -1322,7 +1304,8 @@
     }
    ],
    "implementedBy": [
-    "OOXMLParser"
+    "OOXMLParser",
+    "XSSFBParser"
    ],
    "declared": null
   },
@@ -1542,7 +1525,6 @@
    "exact": 2,
    "open": [],
    "implementedBy": [
-    "OggParser",
     "OpusParser"
    ],
    "declared": null
@@ -1556,7 +1538,6 @@
    "exact": 2,
    "open": [],
    "implementedBy": [
-    "OggParser",
     "SpeexParser"
    ],
    "declared": null
@@ -1790,7 +1771,7 @@
    "exact": 3,
    "open": [],
    "implementedBy": [
-    "LegacyFormatParser"
+    "WordPerfectParser"
    ],
    "declared": null
   },

@@ -16,7 +16,7 @@ import {
   type ParseContext,
   type Parser,
 } from "@spikedpunch/ripstream-core";
-import { javaDoubleString, javaFloatString } from "./java-number.ts";
+import { javaDoubleString, javaFloatString } from "@spikedpunch/ripstream-core";
 import { loadSqlJs, quoteIdentifier, type SqlDatabase, type SqlValue } from "./sql-js.ts";
 
 const SQLITE_MAGIC = "SQLite format 3\0";

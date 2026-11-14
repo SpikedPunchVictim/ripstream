@@ -23,7 +23,7 @@ import {
   GeoPkgParser,
   type GeoPkgParserOptions,
 } from "../src/index.ts";
-import { javaDoubleString, javaFloatString } from "../src/java-number.ts";
+import { javaDoubleString, javaFloatString } from "@spikedpunch/ripstream-core";
 import { quoteIdentifier } from "../src/sql-js.ts";
 
 /*

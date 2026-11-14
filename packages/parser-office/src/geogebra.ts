@@ -1,3 +1,4 @@
+import { recordStreamException } from "@spikedpunch/ripstream-core";
 import {
   CONTEXT_KEYS,
   MediaType,
@@ -495,7 +496,3 @@ async function detect(bytes: Uint8Array, metadata: Metadata, ctx: ParseContext):
   }
 }
 
-/** EmbeddedDocumentUtil.recordEmbeddedStreamException: the exception's name and message, not a stack trace. */
-function recordStreamException(metadata: Metadata, error: unknown): void {
-  metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, describeFailure(error));
-}

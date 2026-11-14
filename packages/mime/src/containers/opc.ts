@@ -18,7 +18,7 @@ import { scanXmlElements } from "./xml-scan.ts";
  * 40 MiB `[Content_Types].xml`; a real package has tens of kilobytes. Detection runs before any parser limit, so a
  * part is read only up to this, and a larger one is treated as unreadable (a deliberate deviation).
  */
-const MAX_XML_BYTES = 16 * 1024 * 1024;
+const MAX_XML_BYTES = 40 * 1024 * 1024;
 /**
  * POI parses the relationships of every part when it opens a package. Detection runs before any parser limit, so the
  * inflated size of those parts is budgeted; a package past it is taken as readable rather than read to the end.

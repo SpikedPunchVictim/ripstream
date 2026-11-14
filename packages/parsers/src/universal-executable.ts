@@ -1,3 +1,4 @@
+import { isFatalParseError } from "@spikedpunch/ripstream-core";
 import {
   AbortError,
   CONTEXT_KEYS,
@@ -161,7 +162,7 @@ async function extractArchs(
       await extractor.parseEmbedded(archStream, xhtml, embedded, ctx);
     } catch (error) {
       // A document that cannot be read is recorded and the next one is taken, as Tika's extractor does.
-      if (isFatal(error, ctx)) throw error;
+      if (isFatalParseError(error, ctx)) throw error;
       // The document's metadata is dropped by a plain parse, so the executable carries the marker too.
       const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
       embedded.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
@@ -198,13 +199,3 @@ async function* slice(stream: RipstreamInputStream, start: number, size: number)
   }
 }
 
-/** A failure that ends the parse rather than one document of it: a limit, a timeout, an abort, the output cut. */
-function isFatal(error: unknown, ctx: ParseContext): boolean {
-  return (
-    error instanceof LimitExceededError ||
-    error instanceof ParseTimeoutError ||
-    error instanceof AbortError ||
-    error instanceof WriteLimitReachedError ||
-    ctx.signal.aborted
-  );
-}

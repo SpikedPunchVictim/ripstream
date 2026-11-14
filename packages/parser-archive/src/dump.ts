@@ -1,3 +1,4 @@
+import { isFatalParseError } from "@spikedpunch/ripstream-core";
 import {
   AbortError,
   CONTEXT_KEYS,
@@ -304,7 +305,7 @@ class Volume {
     try {
       await this.extractor.parseEmbedded(stream, this.xhtml, embedded, this.ctx);
     } catch (error) {
-      if (this.isFatal(error)) throw error;
+      if (isFatalParseError(error, this.ctx)) throw error;
       this.metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, describe(error));
     } finally {
       await stream.close();
@@ -312,16 +313,6 @@ class Volume {
     await this.xhtml.endElement("div");
   }
 
-  /** A failure that ends the parse rather than one entry of it: a limit, a timeout, an abort, the output cut. */
-  private isFatal(error: unknown): boolean {
-    return (
-      error instanceof LimitExceededError ||
-      error instanceof ParseTimeoutError ||
-      error instanceof AbortError ||
-      error instanceof WriteLimitReachedError ||
-      this.ctx.signal.aborted
-    );
-  }
 }
 
 function describe(error: unknown): string {

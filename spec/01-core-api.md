@@ -250,7 +250,7 @@ export interface ParseLimits {
   maxEmbeddedResources: number;       // default 10_000
   maxEmbeddedResourceBytes: number;   // per embedded document
   maxTotalEmbeddedBytes: number;      // per top-level parse
-  maxDecompressionRatio: number;      // default 100
+  maxDecompressionRatio: number;      // default 1000 (Tika zipBombRatio)
   maxNodeDepth: number;               // default 100
   maxParseMillis: number;             // wall clock per document
   maxTaskMillis: number;              // per parser task; cooperative + worker kill

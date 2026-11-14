@@ -151,13 +151,13 @@ test("a prefix declared on every nested element costs time in proportion to size
 });
 
 // Tika opens a package whose [Content_Types].xml is 40 MiB (measured); a part is read up to a bound.
-test("a content types part is read up to the 16 MiB bound", async () => {
+test("a content types part is read up to the 40 MiB bound", async () => {
   const padding = (mebibytes: number): string => `<!-- ${"x".repeat(mebibytes * 1024 * 1024)} -->`;
   await assertAnswers(packageWith(`${TYPES}${padding(12)}</Types>`, `${ROOT_RELS}</Relationships>`), DOCX);
 });
 
-test("a content types part past the bound is not read (a known deviation: Tika opens it)", async () => {
-  const bytes = packageWith(`${TYPES}<!-- ${"x".repeat(17 * 1024 * 1024)} -->`.concat("</Types>"), `${ROOT_RELS}</Relationships>`);
+test("a content types part past the 40 MiB bound is not read", async () => {
+  const bytes = packageWith(`${TYPES}<!-- ${"x".repeat(41 * 1024 * 1024)} -->`.concat("</Types>"), `${ROOT_RELS}</Relationships>`);
   // Neither the package nor the content-type scan is reached, so the zip is only recognised as OOXML.
   assert.equal(await detect(bytes, "x.bin"), "application/x-tika-ooxml");
 });

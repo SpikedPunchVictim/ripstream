@@ -39,6 +39,8 @@ export interface PdfAnnotation {
   readonly fieldName?: string | undefined;
   readonly fieldValue?: unknown;
   readonly fieldType?: string | undefined;
+  /** The annotation's `/IT` intent name, e.g. `FreeTextTypewriter`. */
+  readonly it?: string | undefined;
 }
 
 export type PdfRequest =
@@ -52,6 +54,8 @@ export type PdfResponse =
       readonly xmp: Record<string, unknown>;
       readonly numPages: number;
       readonly attachments: readonly PdfAttachment[];
+      /** Outline (bookmark) titles in document order; Tika writes them as text. */
+      readonly outline: readonly string[];
     }
   | {
       readonly type: "page";
@@ -85,6 +89,7 @@ interface PdfjsAnnotation {
   readonly fieldName?: string;
   readonly fieldValue?: unknown;
   readonly fieldType?: string;
+  readonly it?: string;
 }
 
 interface PdfPage {
@@ -105,6 +110,7 @@ interface PdfDocument {
     readonly filename?: string;
     readonly content?: Uint8Array;
   }>>;
+  getOutline?(): Promise<unknown>;
 }
 
 interface RangeTransport {
@@ -127,6 +133,25 @@ interface PdfModule {
 }
 
 const PDF_DATA_LIMIT = 8 * 1024 * 1024;
+
+interface PdfOutlineItem {
+  readonly title?: unknown;
+  readonly items?: readonly PdfOutlineItem[];
+}
+
+/** Flattened outline titles, parents before their children, as Tika writes bookmarks as text. */
+function outlineTitles(outline: unknown): string[] {
+  const titles: string[] = [];
+  const visit = (items: readonly PdfOutlineItem[] | undefined): void => {
+    if (!Array.isArray(items)) return;
+    for (const item of items) {
+      if (typeof item.title === "string" && item.title.length > 0) titles.push(item.title);
+      visit(item.items);
+    }
+  };
+  visit(outline as readonly PdfOutlineItem[] | undefined);
+  return titles;
+}
 
 export class PdfSession {
   readonly #input: PdfSessionInput;
@@ -168,6 +193,12 @@ export class PdfSession {
       }
       // Check sizes here, before the response hands every attachment to the parser.
       this.#checkAttachments(attachments);
+      let outline: string[] = [];
+      try {
+        outline = outlineTitles(await document.getOutline?.());
+      } catch {
+        outline = [];
+      }
       this.#document = document;
       return {
         type: "ready",
@@ -175,6 +206,7 @@ export class PdfSession {
         xmp,
         numPages: document.numPages,
         attachments,
+        outline,
       };
     } catch (error) {
       return { type: "error", ...describe(error) };
@@ -289,6 +321,7 @@ export class PdfSession {
           fieldName: annotation.fieldName,
           fieldValue: annotation.fieldValue,
           fieldType: annotation.fieldType,
+          it: typeof annotation.it === "string" ? annotation.it : undefined,
         }));
       } catch {
         annotations = [];

@@ -83,6 +83,14 @@ parser, so a file whose first 64 KiB look like text can never reach one inside t
 (`application/ld+json` and `text/xml` are never produced by the detector today: a JSON-LD file detects as
 `text/plain` and `text/xml` is normalised to `application/xml`. Those two entries are inert.)
 
+The library options behind that routing are `inProcessTypes` (a set of media types) and `inProcessMaxBytes` (the size
+above which everything is isolated), both on `createNodeIsolator` and, through `StandardIsolationOptions`, on
+`createStandardIsolation`. Pass `inProcessTypes: new Set()` to isolate every document, text included: each request then
+costs a child and the pool has to be sized for it (see the memory table below). `ripstream serve` and the CLI do not
+expose a switch for either option; an operator who needs all-isolated parsing builds the engine in code. The other
+containment limits in this file (no network or filesystem denial, no temp sweep after a parent SIGKILL, memory defaults
+measured on glibc arm64 only) stand as documented.
+
 `/detect` is answered in the parent. Detection looks at a bounded prefix, except that a ZIP's central directory is
 read from the end of the file; that walk is capped at 10,000 entries and 8 MiB (before the cap, a crafted directory
 cost 20 s of CPU, now 138 ms). Detection cost on other adversarial inputs has not been measured.

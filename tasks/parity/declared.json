@@ -3,100 +3,155 @@
   "rules": [
     {
       "id": "ng-external-binary",
-      "match": { "class": "\\.(ExternalParser|GDALParser|LibPstParser|UnrarParser|DWGReadParser|StringsParser|Latin1StringsParser|EncodeOCRParser)$" },
+      "match": {
+        "class": "\\.(ExternalParser|GDALParser|LibPstParser|UnrarParser|DWGReadParser|StringsParser|Latin1StringsParser|EncodeOCRParser)$"
+      },
       "status": "non-goal",
       "reason": "Shells out to a native binary or service (arbitrary command, gdalinfo, readpst, unrar, dwgread, strings, encode-ocr). A JS library does not ship or spawn these; Tesseract is the one opt-in exception (parser-media TesseractOcrParser, bounded and flagged unsafe). Formats with a JS route are covered by our own parsers (OutlookPSTParser, ArchiveMetadataParser for RAR, ScienceMetadataParser for DWG)."
     },
     {
       "id": "ng-nlp-ml",
-      "match": { "class": "\\.(GeoParser|JournalParser|NamedEntityParser)$" },
+      "match": {
+        "class": "\\.(GeoParser|JournalParser|NamedEntityParser)$"
+      },
       "status": "non-goal",
       "reason": "NLP/ML parsers (Lucene geo-gazetteer, GROBID journal extraction, named-entity models) need JVM-resident models or external services; not a parser concern in a JS runtime."
     },
     {
       "id": "ng-vendor-ai",
-      "match": { "class": "\\.(AmazonTranscribe|ClaudeVLMParser|GeminiVLMParser|OpenAIVLMParser)$" },
+      "match": {
+        "class": "\\.(AmazonTranscribe|ClaudeVLMParser|GeminiVLMParser|OpenAIVLMParser)$"
+      },
       "status": "non-goal",
       "reason": "Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install."
     },
     {
       "id": "ng-jni",
-      "match": { "class": "\\.Tess4JParser$" },
+      "match": {
+        "class": "\\.Tess4JParser$"
+      },
       "status": "non-goal",
       "reason": "JNI binding to Tesseract. The CLI route (TesseractOcrParser) covers OCR."
     },
     {
       "id": "ng-bpg",
-      "match": { "class": "\\.BPGParser$" },
+      "match": {
+        "class": "\\.BPGParser$"
+      },
       "status": "non-goal",
       "reason": "BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain."
     },
     {
       "id": "ng-prt",
-      "match": { "class": "\\.PRTParser$" },
+      "match": {
+        "class": "\\.PRTParser$"
+      },
       "status": "non-goal",
       "reason": "Siemens/Creo PRT is proprietary and Tika's parser only reads a header; low value, decline unless a user needs it."
     },
     {
       "id": "ng-activemime",
-      "match": { "class": "\\.ActiveMimeParser$" },
+      "match": {
+        "class": "\\.ActiveMimeParser$"
+      },
       "status": "non-goal",
       "reason": "ActiveMime is a macro-malware container; the useful output is the embedded VBA, which the OLE route already exposes."
     },
     {
       "id": "ng-pst-mail-item",
-      "match": { "class": "\\.PSTMailItemParser$" },
+      "match": {
+        "class": "\\.PSTMailItemParser$"
+      },
       "status": "non-goal",
       "reason": "application/x-tika-pst-mail-item is an internal type Tika's PSTParser feeds to itself; OutlookPSTParser emits the mail items directly."
     },
     {
       "id": "ng-pack200",
-      "match": { "class": "\\.CompressorParser$", "type": "^application/x-java-pack200$" },
+      "match": {
+        "class": "\\.CompressorParser$",
+        "type": "^application/x-java-pack200$"
+      },
       "status": "non-goal",
       "reason": "Pack200 is a JVM-only JAR compression removed from the JDK in 14; no JS decoder."
     },
     {
       "id": "ng-camera-raw",
-      "match": { "class": "\\.RawTiffParser$" },
+      "match": {
+        "class": "\\.RawTiffParser$"
+      },
       "status": "non-goal",
       "reason": "Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them."
     },
-
     {
       "id": "af-ooxml-subtypes",
-      "match": { "class": "\\.OOXMLParser$" },
+      "match": {
+        "class": "\\.OOXMLParser$"
+      },
       "status": "accepted-fallback",
       "reason": "Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential."
     },
     {
       "id": "af-epub-ibooks",
-      "match": { "class": "\\.EpubParser$" },
+      "match": {
+        "class": "\\.EpubParser$"
+      },
       "status": "accepted-fallback",
       "reason": "application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3)."
     },
     {
       "id": "af-msworks-spreadsheet",
-      "match": { "class": "\\.OfficeParser$", "type": "^application/x-tika-msworks-spreadsheet$" },
+      "match": {
+        "class": "\\.OfficeParser$",
+        "type": "^application/x-tika-msworks-spreadsheet$"
+      },
       "status": "accepted-fallback",
       "reason": "Subtype of application/vnd.ms-excel; Tika's OfficeParser reaches the Excel extractor the same way (tikajs-68os.3)."
     },
     {
       "id": "af-m4v",
-      "match": { "class": "\\.MP4Parser$", "type": "^video/x-m4v$" },
+      "match": {
+        "class": "\\.MP4Parser$",
+        "type": "^video/x-m4v$"
+      },
       "status": "accepted-fallback",
       "reason": "Subtype of video/mp4; same MP4Parser through the supertype (tikajs-68os.3)."
     },
-
     {
       "id": "af-groovy",
-      "match": { "class": "\\.SourceCodeParser$", "type": "^text/x-groovy$" },
+      "match": {
+        "class": "\\.SourceCodeParser$",
+        "type": "^text/x-groovy$"
+      },
       "status": "accepted-fallback",
       "reason": "Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10)."
     },
-
-    { "id": "gap-image", "match": { "class": "\\.JXLParser$" }, "status": "tracked", "bead": "tikajs-68os.44", "reason": "JPEG XL: the XMP packet scanner and extractor are not ported." },
-    { "id": "gap-extended", "match": {"class": "\\.GribParser$"}, "status": "tracked", "bead": "tikajs-68os.66", "reason": "GRIB1/2 reads through netcdf-java's model, which is not portable, and the GRIB2 type is undetectable in Tika too. Owner decision pending (tikajs-68os.66)." },
-    { "id": "gap-opt-in-utility", "match": { "class": "\\.(RegexCaptureParser|XMLProfiler)$" }, "status": "tracked", "bead": "tikajs-68os.23", "reason": "Opt-in utility parsers." }
+    {
+      "id": "gap-image",
+      "match": {
+        "class": "\\.JXLParser$"
+      },
+      "status": "tracked",
+      "bead": "tikajs-68os.44",
+      "reason": "JPEG XL: the XMP packet scanner and extractor are not ported."
+    },
+    {
+      "id": "gap-extended",
+      "match": {
+        "class": "\\.GribParser$"
+      },
+      "status": "tracked",
+      "bead": "tikajs-68os.66",
+      "reason": "GRIB1/2 reads through netcdf-java's model, which is not portable, and the GRIB2 type is undetectable in Tika too. Owner decision pending (tikajs-68os.66)."
+    },
+    {
+      "id": "gap-opt-in-utility",
+      "match": {
+        "class": "\\.(RegexCaptureParser|XMLProfiler)$"
+      },
+      "status": "tracked",
+      "bead": "tikajs-68os.23",
+      "reason": "Opt-in utility parsers."
+    }
   ],
   "implementedBy": {
     "org.apache.tika.parser.DefaultParser": "CompositeParser",
@@ -112,5 +167,174 @@
     "org.apache.tika.parser.hdf.HDFParser": "ScienceMetadataParser",
     "org.apache.tika.parser.netcdf.NetCDFParser": "ScienceMetadataParser",
     "org.apache.tika.parser.ocr.TesseractOCRParser": "TesseractOCRParser"
-  }
+  },
+  "featureNonGoals": [
+    {
+      "id": "ng-pipes-kafka",
+      "area": "pipes",
+      "reason": "Kafka emitter/iterator needs a broker client and cluster wiring; ripstream pipes are file/HTTP streams plus caller-injected emitters."
+    },
+    {
+      "id": "ng-pipes-cloud-fetchers",
+      "area": "pipes",
+      "reason": "Google Drive, Microsoft Graph and Atlassian JWT fetchers put OAuth apps, tenant IDs and network egress in the default install; a caller injects a fetcher."
+    },
+    {
+      "id": "ng-pipes-ignite",
+      "area": "pipes",
+      "reason": "Apache Ignite ConfigStore is a JVM cache/cluster product; configuration is files plus caller objects."
+    },
+    {
+      "id": "ng-pipes-pf4j",
+      "area": "pipes",
+      "reason": "pf4j plugin loading is JVM class loading; ripstream configuration composes exported parser objects."
+    },
+    {
+      "id": "ng-jvm-tunables",
+      "area": "pipes",
+      "reason": "forkedJvmArgs, javaPath, useSharedServer, IPC payload size and socket/heartbeat/startup timeouts do not exist in a JS runtime; isolation has its own worker/process knobs."
+    },
+    {
+      "id": "ng-httpclient-commons",
+      "area": "pipes",
+      "reason": "tika-httpclient-commons is the JVM HTTP client stack; fetch is the platform fetch plus caller-provided transports."
+    },
+    {
+      "id": "ng-server-introspection",
+      "area": "server",
+      "reason": "/detectors and /parsers[/details] expose the JVM class graph; ripstream has the parity matrix and parser names instead."
+    },
+    {
+      "id": "ng-tls",
+      "area": "server",
+      "reason": "TLS/mTLS termination is the deployer's job (spec/04); the server accepts a plain HTTP listener behind a proxy."
+    },
+    {
+      "id": "ng-config-engines",
+      "area": "config",
+      "reason": "engines, inference and external-parser/OCR selection configure JVM services and models; ripstream exposes OCR/VLM providers as code."
+    },
+    {
+      "id": "ng-config-jvm",
+      "area": "config",
+      "reason": "grpc, plugin-roots, tika.extras.dir, xml-reader-utils, service-loader, metadata-list, allowHttp2 and fork-mode keys have no JS analogue or are decided in code."
+    },
+    {
+      "id": "ng-config-iterators",
+      "area": "config",
+      "reason": "kafka/jdbc/solr/graph iterators are JVM pipe sources; a caller supplies an iterator/stream."
+    },
+    {
+      "id": "ng-filters-renderers",
+      "area": "filters",
+      "reason": "PopplerRenderer, PDFBox PageDrawer and POIMetafileRenderer are page renderers; ripstream has no render SPI (tikajs-68os.9.4)."
+    },
+    {
+      "id": "ng-detectors-ml",
+      "area": "filters",
+      "reason": "Optimaize, OpenNLP, MITLL and Lingo24 language detectors/filters need JVM models; ripstream's language detector is its own and configurable."
+    },
+    {
+      "id": "ng-translators",
+      "area": "filters",
+      "reason": "TikaEval and the Lingo24/Yandex/Moses/External/Joshua/Marian/RTG translators are external services or JVM integrations; callers post-process text."
+    },
+    {
+      "id": "ng-loader-leniency",
+      "area": "config",
+      "reason": "comments, case-insensitive enums, ${env:} interpolation, TIKA_PASSWORD and JVM sysprops are Tika loader behaviour; ripstream config is strict JSON with explicit precedence."
+    },
+    {
+      "id": "ng-per-request-config",
+      "area": "config",
+      "reason": "Tika presets, per-request config and instantiated parse-context components are JVM server mechanics; ripstream passes options per call and a ParseContext per document."
+    },
+    {
+      "id": "ng-cli-tika-app-flags",
+      "area": "cli",
+      "reason": "Decision: the CLI keeps its own flags and does not emulate tika-app's; the flag mapping is documented in docs/migration.md."
+    },
+    {
+      "id": "ng-grib2",
+      "area": "formats",
+      "reason": "GRIB2 content is netcdf-java's CDM model (dimensions/variables/attributes) built from GRIB2 IOSP and WMO/NCEP/ECMWF tables that are not in the Tika tree; Tika also cannot detect the type (registry has only application/x-grib, sent to GDALParser). A sections 0-8 reader would produce a different content model, so the port is declared a non-goal."
+    },
+    {
+      "id": "ng-isatab-siblings",
+      "area": "formats",
+      "reason": "ISA-Tab investigation/assay types and isatab:* keys require sibling files; a single stream cannot reach them. The study file itself is implemented."
+    },
+    {
+      "id": "ng-iso19115-3",
+      "area": "formats",
+      "reason": "ISO 19115-3 namespaces and SIS-only model coverage are not ported; ISO 19139 is implemented."
+    },
+    {
+      "id": "ng-rtree",
+      "area": "formats",
+      "reason": "GeoPackage R-tree virtual-table contents need SQLite's R-tree module, which sql.js does not ship; GeoPackage data tables are read."
+    }
+  ],
+  "detectionDeviations": [
+    {
+      "id": "det-archive-half",
+      "item": "DefaultZipContainerDetector archive half",
+      "status": "declared",
+      "reason": "commons-compress ArchiveStreamFactory.detect (tar header checksum, cpio, ar, arj, dump, 7z) is not ported; the registry's magic covers these types and the 1201-file Tika differential has 0 mismatches. No synthetic-fixture measurement."
+    },
+    {
+      "id": "det-ogg-prefix",
+      "item": "Ogg BOS pages outside the 64 KiB prefix",
+      "status": "declared",
+      "reason": "Detection reads the 64 KiB sniffing prefix; Tika reads the whole file. Stream identification was probed from the oracle because vorbis-java is not in the Tika tree."
+    },
+    {
+      "id": "det-bplist-root",
+      "item": "bplist root dictionaries over 4096 keys",
+      "status": "declared",
+      "reason": "A bplist whose root exceeds the key budget is typed by its keys; Tika fails the parse and answers octet-stream."
+    },
+    {
+      "id": "det-ole2-caps",
+      "item": "OLE2 DIFAT chains and resource caps",
+      "status": "declared",
+      "reason": "DIFAT chains over 130 sectors are rejected where Tika reads them; FAT 8 MiB, directory 8 MiB, mini FAT 1 MiB and mini stream 16 MiB are deliberate caps; shared entries have a 4096-revisit budget. CompObj is searched whole."
+    },
+    {
+      "id": "det-opc-hints",
+      "item": "OPC streaming hint-counter path",
+      "status": "declared",
+      "reason": "The hint-counter path is not ported; part relationships stop at a 16 MiB budget and the package is accepted."
+    },
+    {
+      "id": "det-gzip-partial",
+      "item": "Gzip corrupt deflate body",
+      "status": "declared",
+      "reason": "A corrupt body after valid output loses the output; Tika keeps bytes read before the error."
+    },
+    {
+      "id": "det-opc-xml-decode",
+      "item": "OPC package XML decode errors",
+      "status": "declared",
+      "reason": "Xerces drops the whole block on an immediate decode error; ripstream keeps start tags seen before the bad byte (lenient scan) and refuses for the strict POI read. Two oracle cases left out of the goldens."
+    },
+    {
+      "id": "det-xml-charsets",
+      "item": "Java-only XML charsets",
+      "status": "declared",
+      "reason": "XML charsets are WHATWG TextDecoder labels; a Java-only charset is refused."
+    },
+    {
+      "id": "det-saxes-colon",
+      "item": "saxes namespace checks on PI/entity names",
+      "status": "declared",
+      "reason": "saxes' namespace-mode checks on PI targets and entity names with a colon are not replicated by xml-parse.ts, which resolves namespaces itself in linear time."
+    },
+    {
+      "id": "det-xml-root-decode",
+      "item": "xml-root.ts decoding",
+      "status": "declared",
+      "reason": "Root refinement does not get Xerces-style decoding; it uses the same WHATWG decoder as the rest."
+    }
+  ]
 }

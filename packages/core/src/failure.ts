@@ -1,6 +1,9 @@
 import {
+  AbortError,
   EncryptedDocumentError,
+  LimitExceededError,
   MalformedDocumentError,
+  ParseTimeoutError,
   UnsupportedFormatError,
   WriteLimitReachedError,
 } from "./errors.ts";
@@ -35,4 +38,24 @@ export function isWriteLimitReached(error: unknown): boolean {
     seen.add(current);
   }
   return false;
+}
+
+/**
+ * A failure that ends the parse rather than one part of it: a limit, a timeout, an abort, the output cut. A parser that
+ * records a failed embedded part and goes on rethrows these, so a hostile archive is refused and not read around.
+ */
+export function isFatalParseError(error: unknown, ctx: { readonly signal: AbortSignal }): boolean {
+  return (
+    error instanceof LimitExceededError ||
+    error instanceof ParseTimeoutError ||
+    error instanceof AbortError ||
+    error instanceof WriteLimitReachedError ||
+    ctx.signal.aborted
+  );
+}
+
+/** Tika's EmbeddedDocumentUtil.recordEmbeddedStreamException: the exception's name and message, not a stack trace. */
+export function recordStreamException(metadata: { add(name: string, value: string): void }, error: unknown): void {
+  const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  metadata.add("tk:exception:embedded-stream-exception", text);
 }

@@ -456,7 +456,11 @@ function imageDimensions(
     data[3] === 0x47
   ) {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    return { width: view.getUint32(16), height: view.getUint32(20) };
+    // PNG stores IHDR width and height as unsigned, but Java's ImageIO reads them as (signed) ints and fails above
+    // 2^31-1; Tika writes no dimensions for such a file.
+    const width = view.getUint32(16);
+    const height = view.getUint32(20);
+    return width > 0x7fff_ffff || height > 0x7fff_ffff ? null : { width, height };
   }
 
   if (data.length >= 10 && data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46) {
@@ -541,6 +545,10 @@ function imageDimensions(
 
   if (data.length >= 26 && data[0] === 0x42 && data[1] === 0x4d) {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    // A 12-byte OS/2 BITMAPCOREHEADER has 16-bit width and height; the later headers have signed 32-bit ones.
+    if (view.getUint32(14, true) === 12) {
+      return { width: view.getUint16(18, true), height: view.getUint16(20, true) };
+    }
     return {
       width: Math.abs(view.getInt32(18, true)),
       height: Math.abs(view.getInt32(22, true)),

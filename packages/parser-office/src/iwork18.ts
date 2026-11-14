@@ -8,6 +8,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { emitPackageEntry, entryMetadata, openPackage } from "./iwork-package.ts";
+import { isFatal } from "./failures.ts";
 
 /*
  * Port of Tika 4.2.0's IWork18PackageParser: the 2018 iWork layout, a ZIP holding one directory named like the document
@@ -44,9 +45,17 @@ export class IWork18Parser implements Parser {
       ctx.throwIfAborted();
       type ??= typeOfEntry(name);
       if (isPreview(name)) {
-        const embedded = entryMetadata(name, "THUMBNAIL");
-        embedded.set("Content-Type", "image/jpeg");
-        await emitPackageEntry(xhtml, files.get(name)!, embedded, metadata, ctx);
+        // Tika's ZipFile path checks canReadEntryData first and skips a preview it cannot read.
+        try {
+          const bytes = files.get(name);
+          if (bytes !== undefined) {
+            const embedded = entryMetadata(name, "THUMBNAIL");
+            embedded.set("Content-Type", "image/jpeg");
+            await emitPackageEntry(xhtml, bytes, embedded, metadata, ctx);
+          }
+        } catch (error) {
+          if (isFatal(error, ctx)) throw error;
+        }
       }
     }
     if (type !== undefined) metadata.set("Content-Type", type);

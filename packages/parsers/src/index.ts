@@ -56,6 +56,7 @@ import { ISArchiveParser } from "./isatab.ts";
 import { GeographicInformationParser } from "./iso19139.ts";
 import { applyParserConfig } from "./parser-config.ts";
 import { EmptyFormatParser } from "./empty-format.ts";
+export { RegexCaptureParser, XMLProfiler, type RegexCaptureParserOptions } from "./utility.ts";
 
 export { applyParserConfig } from "./parser-config.ts";
 export { TextParser } from "./text.ts";

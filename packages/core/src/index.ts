@@ -348,3 +348,4 @@ export {
   throwIfAborted,
   type SignalHolder,
 } from "./signal-checkpoint.ts";
+export { isFatalParseError, recordStreamException } from "./failure.ts";

@@ -203,3 +203,21 @@ test("tk:parsed-by names the parser that handled the document, not one that decl
   await parser.parse(await RipstreamInputStream.from(new TextEncoder().encode("abc")), new BodyContentHandler(), metadata, context);
   assert.deepEqual(metadata.getAll("tk:parsed-by"), ["takes"]);
 });
+
+test("a parameterised claim outranks the bare type and is not offered another version", async () => {
+  const calls: string[] = [];
+  const r = new MediaTypeRegistry();
+  r.addType(type("image/vnd.dgn"));
+  const parser = new CompositeParser({
+    registry: r,
+    parsers: [
+      named("v8", ["image/vnd.dgn; version=8"], () => calls.push("v8")),
+      named("bare", ["image/vnd.dgn"], () => calls.push("bare")),
+    ],
+  });
+  await run(parser, "image/vnd.dgn; version=8");
+  assert.deepEqual(calls, ["v8"]);
+  calls.length = 0;
+  await run(parser, "image/vnd.dgn; version=7");
+  assert.deepEqual(calls, ["bare"]);
+});

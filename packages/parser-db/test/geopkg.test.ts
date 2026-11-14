@@ -15,7 +15,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import initSqlJs from "sql.js";
 import { GeoPkgParser, type GeoPkgParserOptions } from "../src/index.ts";
-import { javaDoubleString, javaFloatString } from "../src/java-number.ts";
+import { javaDoubleString, javaFloatString } from "@spikedpunch/ripstream-core";
 
 /*
  * Tika's GeoPkgParser (tika-parser-sqlite3-module): SQLite3Parser with the BLOB columns `geom` and `data` written as an

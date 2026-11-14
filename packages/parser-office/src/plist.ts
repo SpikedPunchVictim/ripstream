@@ -1,6 +1,6 @@
 import { LimitExceededError, MalformedDocumentError } from "@spikedpunch/ripstream-core";
 import { decodeUtf8 } from "./bytes.ts";
-import { javaDoubleString } from "./java-double.ts";
+import { javaDoubleString } from "@spikedpunch/ripstream-core";
 import { localName, parseXmlTree, type XmlNode } from "./xml-tree.ts";
 
 /*

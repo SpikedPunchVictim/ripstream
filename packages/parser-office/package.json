@@ -18,8 +18,7 @@
   "dependencies": {
     "@spikedpunch/ripstream-core": "workspace:*",
     "fflate": "^0.8.2",
-    "saxes": "^6.0.0",
-    "snappyjs": "0.7.0"
+    "saxes": "^6.0.0"
   },
   "engines": {
     "node": ">=22.18"

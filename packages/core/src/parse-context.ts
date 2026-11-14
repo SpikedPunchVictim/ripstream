@@ -57,7 +57,7 @@ export const DEFAULT_LIMITS: ParseLimits = Object.freeze({
   maxEmbeddedResources: 10_000,
   maxEmbeddedResourceBytes: 512 * 1024 * 1024,
   maxTotalEmbeddedBytes: 1024 * 1024 * 1024,
-  maxDecompressionRatio: 100,
+  maxDecompressionRatio: 1000,
   maxNodeDepth: 100,
   maxParseMillis: 60_000,
   maxTaskMillis: 60_000,

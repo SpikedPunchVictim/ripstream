@@ -122,12 +122,12 @@ test("an entry that is not a preview is not inflated, so a damaged one does not 
   assert.equal((await run(damaged)).metadata.get("Content-Type"), "application/vnd.apple.keynote.18");
 });
 
-test("a preview whose data cannot be inflated fails the parse", async () => {
+test("a preview whose data cannot be inflated is skipped, as Tika skips an unreadable entry", async () => {
   const data = archive({ "Deck.key/preview.jpg": "x".repeat(100) });
   const damaged = data.slice();
   const at = 30 + "Deck.key/preview.jpg".length;
   damaged.fill(0xff, at, at + 4);
-  await assert.rejects(run(damaged), MalformedDocumentError);
+  await assert.doesNotReject(run(damaged));
 });
 
 test("a preview that inflates past the embedded limit is refused as a limit", async () => {

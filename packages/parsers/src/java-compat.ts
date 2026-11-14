@@ -5,6 +5,8 @@
  * grammar than `Number()`, and `Double.toString` always writes a digit after the point.
  */
 
+export { javaDoubleString } from "@spikedpunch/ripstream-core";
+
 /** String.trim(). */
 export function javaTrim(value: string): string {
   let start = 0;
@@ -51,34 +53,3 @@ export function parseJavaInt(text: string): number | null {
   return Object.is(value, -0) ? 0 : value;
 }
 
-/**
- * Double.toString(value): the shortest decimal that reads back as the same double (JDK 19 and later; JDK 17 gives more digits
- * for a few doubles), in decimal from 10^-3 up to but not including 10^7 and in scientific notation outside that, always with
- * a digit after the point. The same algorithm as packages/core/src/java-double.ts, which core does not export.
- */
-export function javaDoubleString(value: number): string {
-  if (Number.isNaN(value)) return "NaN";
-  if (value === Number.POSITIVE_INFINITY) return "Infinity";
-  if (value === Number.NEGATIVE_INFINITY) return "-Infinity";
-  if (value === 0) return Object.is(value, -0) ? "-0.0" : "0.0";
-
-  const magnitude = Math.abs(value);
-  let scientific = magnitude.toExponential();
-  if (!scientific.split("e")[0]!.includes(".")) {
-    const twoDigits = magnitude.toExponential(1);
-    if (Number(twoDigits) === magnitude) scientific = twoDigits;
-  }
-  const [mantissaText, exponentText] = scientific.split("e") as [string, string];
-  const exponent = Number(exponentText);
-  const digits = mantissaText.replace(".", "").replace(/0+$/, "") || "0";
-  const sign = value < 0 ? "-" : "";
-
-  if (exponent >= -3 && exponent < 7) {
-    if (exponent >= 0) {
-      const whole = digits.slice(0, exponent + 1).padEnd(exponent + 1, "0");
-      return `${sign}${whole}.${digits.slice(exponent + 1) || "0"}`;
-    }
-    return `${sign}0.${"0".repeat(-exponent - 1)}${digits}`;
-  }
-  return `${sign}${digits[0]}.${digits.slice(1) || "0"}E${exponent}`;
-}

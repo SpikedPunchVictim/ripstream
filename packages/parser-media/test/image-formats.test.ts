@@ -739,3 +739,22 @@ test("xcf: a real GIMP header is not interpreted either", async () => {
   const header = Uint8Array.from([...ascii("gimp xcf v011"), 0, ...be32(8), ...be32(8), ...be32(0)]);
   assert.deepEqual((await parseAs("image/x-xcf", header)).toObject(), { "Content-Type": "image/x-xcf" });
 });
+
+test("BMP with a 12-byte OS/2 core header reads 16-bit dimensions", async () => {
+  const bytes = new Uint8Array([
+    ...ascii("BM"), ...le32(26), ...le16(0), ...le16(0), ...le32(0),
+    ...le32(12), ...le16(10), ...le16(20), ...le16(1), ...le16(24),
+  ]);
+  const metadata = await parseAs("image/bmp", bytes);
+  assert.equal(metadata.get("tiff:ImageWidth"), "10");
+  assert.equal(metadata.get("tiff:ImageLength"), "20");
+});
+
+test("PNG width above 2^31 writes no dimensions, as Java ImageIO fails on it", async () => {
+  const bytes = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ...be32(13), ...ascii("IHDR"), ...be32(0x8000_0001), ...be32(10),
+  ]);
+  const metadata = await parseAs("image/png", bytes);
+  assert.equal(metadata.get("tiff:ImageWidth"), null);
+});

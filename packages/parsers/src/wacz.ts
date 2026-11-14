@@ -1,3 +1,4 @@
+import { isFatalParseError, recordStreamException } from "@spikedpunch/ripstream-core";
 import {
   AbortError,
   CONTEXT_KEYS,
@@ -72,7 +73,7 @@ export class WACZParser implements Parser {
             maxRatio: ctx.limits.maxDecompressionRatio,
           });
         } catch (error) {
-          if (isFatal(error, ctx)) throw error;
+          if (isFatalParseError(error, ctx)) throw error;
           // Tika reads the gzip while parsing the embedded document, where a failure of the stream is recorded.
           recordStreamException(metadata, error);
           continue;
@@ -90,7 +91,7 @@ export class WACZParser implements Parser {
       try {
         await extractor.parseEmbedded(embeddedStream, xhtml, embedded, ctx);
       } catch (error) {
-        if (isFatal(error, ctx)) throw error;
+        if (isFatalParseError(error, ctx)) throw error;
         recordStreamException(metadata, error);
       } finally {
         await embeddedStream.close();
@@ -131,19 +132,3 @@ function gzipHeaderLength(gzip: Uint8Array): number {
   return offset;
 }
 
-/** A failure that ends the parse rather than one entry of it: a limit, a timeout, an abort, the output cut. */
-function isFatal(error: unknown, ctx: ParseContext): boolean {
-  return (
-    error instanceof LimitExceededError ||
-    error instanceof ParseTimeoutError ||
-    error instanceof AbortError ||
-    error instanceof WriteLimitReachedError ||
-    ctx.signal.aborted
-  );
-}
-
-/** EmbeddedDocumentUtil.recordEmbeddedStreamException: the exception's name and message, not a stack trace. */
-function recordStreamException(metadata: Metadata, error: unknown): void {
-  const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, text);
-}

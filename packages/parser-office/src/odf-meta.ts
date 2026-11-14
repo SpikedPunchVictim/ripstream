@@ -101,13 +101,10 @@ class MetaElementJoined implements Handler {
   private readonly metadata: Metadata;
   private readonly local: string;
   private readonly key: string;
-  private readonly legacyKey: string | undefined;
-
-  constructor(metadata: Metadata, local: string, key: string, legacyKey?: string) {
+  constructor(metadata: Metadata, local: string, key: string) {
     this.metadata = metadata;
     this.local = local;
     this.key = key;
-    this.legacyKey = legacyKey;
   }
 
   start(uri: string, local: string): void {
@@ -127,7 +124,6 @@ class MetaElementJoined implements Handler {
     // MetadataHandler.addMetadata: a value after an earlier one is appended to it; the property is set, not added.
     const previous = this.metadata.get(this.key);
     this.metadata.set(this.key, previous !== null && previous.length > 0 ? `${previous}, ${value}` : value);
-    if (this.legacyKey !== undefined && value.trim().length > 0) this.metadata.set(this.legacyKey, value.trim());
   }
 }
 
@@ -278,12 +274,12 @@ function buildHandlers(metadata: Metadata): Handler[] {
     new DateElement(metadata, DC_NS, "date", "dcterms:modified"),
     // ODF uses dc:subject for the description.
     dc("subject", "dc:subject"),
-    new MetaElementJoined(metadata, "keyword", "meta:keyword", "pdf:Keywords"),
+    new MetaElementJoined(metadata, "keyword", "meta:keyword"),
     new MetaElementJoined(metadata, "editing-duration", "extended-properties:TotalTime"),
-    new MetaElementJoined(metadata, "editing-cycles", "editing-cycles", "meta:editing-cycles"),
+    new MetaElementJoined(metadata, "editing-cycles", "editing-cycles"),
     // initial-creator shares dc:creator with the Dublin Core handler above, so the two interleave in document order.
-    new MetaElementJoined(metadata, "initial-creator", "dc:creator", "meta:initial-creator"),
-    new MetaElementJoined(metadata, "generator", "generator", "meta:generator"),
+    new MetaElementJoined(metadata, "initial-creator", "dc:creator"),
+    new MetaElementJoined(metadata, "generator", "generator"),
     new UserDefined(metadata),
     new StatisticAttribute(metadata, "object-count", ["meta:object-count"]),
     new StatisticAttribute(metadata, "image-count", ["meta:image-count"]),

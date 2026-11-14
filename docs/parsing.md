@@ -293,3 +293,11 @@ same format, so a file written for Tika works unchanged. The path is relative to
 
 `BodyContentHandler`, `XHTMLContentHandler`, `MarkdownContentHandler`, `ToXMLContentHandler`,
 `JsonContentHandler`, `TeeContentHandler`, `XmpContentHandler`.
+
+## Opt-in utility parsers
+
+`RegexCaptureParser` and `XMLProfiler` are exported from `@spikedpunch/ripstream-parsers` but are not in the default
+parser list, as in Tika (where they are configured explicitly). `RegexCaptureParser` applies operator-supplied
+`captureMap` / `matchMap` patterns to each `text/plain` line and writes the captures as metadata; patterns go through
+`compileSafeRegex`. `XMLProfiler` writes `xmlprofiler:root-entity`, `xmlprofiler:entity-uris` and the parallel
+`xmlprofiler:entity-local-names` for `application/xml`, `application/rdf+xml` and `application/vnd.adobe.xdp+xml`.

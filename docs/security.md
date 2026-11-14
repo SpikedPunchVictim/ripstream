@@ -32,7 +32,7 @@ throw `LimitExceededError` (or `ParseTimeoutError` for time).
 | `maxEmbeddedResources` | 10,000 | Count of embedded documents/attachments per parse |
 | `maxEmbeddedResourceBytes` | 512 MiB | Size of any single embedded resource |
 | `maxTotalEmbeddedBytes` | 1 GiB | Sum of all embedded resource bytes |
-| `maxDecompressionRatio` | 100 | Compressed-to-expanded ratio for ZIP/OPC and other inflated streams. A ZIP entry is checked only once it holds more than 1,000,000 uncompressed bytes (Tika's `zipBombThreshold`); its byte limits apply from the first byte |
+| `maxDecompressionRatio` | 1000 | Compressed-to-expanded ratio for ZIP/OPC and other inflated streams. A ZIP entry is checked only once it holds more than 1,000,000 uncompressed bytes (Tika's `zipBombThreshold`); its byte limits apply from the first byte |
 | `maxZipEntries` | 10,000 | Entries in a ZIP/OPC container (checked before extraction) |
 | `maxNodeDepth` | 100 | Embedded-document recursion depth |
 | `maxParseMillis` | 60,000 | Wall-clock parse time (aborts via `ctx.signal`) |

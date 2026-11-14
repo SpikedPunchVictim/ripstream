@@ -41,6 +41,12 @@ is skipped and noted (`tk:exception:embedded-stream-exception`). Each embedded d
 that handled the document (ripstream's parser names, not Java class names) and `tk:parsed-by-full-set` on the
 container lists every parser used. `Content-Length` is the size of the input once it has been read in full.
 
+Deliberate extensions where Tika has no parser: for AVI, ASF/WMV and Matroska/WebM, Tika 4.2.0 dispatches
+`EmptyParser` and writes no format metadata, while ripstream's own container parsers write `audio:spi-duration` and
+(for some files) `tiff:ImageWidth`/`ImageLength`. These keys are ripstream-only, not parity gaps. A Matroska file whose
+structure ripstream's parser rejects stays a `MalformedDocumentError`, where Tika's empty parser would answer an empty
+success; that strictness is intentional.
+
 Not the same: the per-format keys a parser writes (`img:*`, `exif:*`, page counts) follow `tikajs-68os.10.5`; content is
 plain text by default where Tika 4's default handler is Markdown (see *Content shapes and routes*); `tk:internal-path` and `tk:embedded-relationship-id`
 are not written, and `tk:embedded-resource-type` only for what the mail, OOXML and PDF parsers extract. A failure is noted as `Name: message`, where

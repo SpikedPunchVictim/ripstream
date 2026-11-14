@@ -174,7 +174,8 @@ export function parseS3Fetcher(id: string, config: Record<string, unknown>, cont
     if (value !== undefined && typeof value !== "boolean") issues.push(`${at}.${key} must be a boolean`);
   }
   if (config.spoolToTemp === false) notices.push(`${at}.spoolToTemp false streams the object into the parse; ripstream holds a fetched document's bytes in memory, so it changes nothing`);
-  if (config.extractUserMetadata === true) {
+  // Tika's S3FetcherConfig defaults extractUserMetadata to true, so an omitted key asks for it too.
+  if (config.extractUserMetadata !== false) {
     notices.push(`${at}.extractUserMetadata asks for the object's user metadata as s3:* fields; ripstream's fetchers return bytes only, so no field is added`);
   }
   const maxLength = config.maxLength;

@@ -131,6 +131,12 @@ export class PdfParser implements Parser {
       const xhtml = new XHTMLContentHandler(handler, metadata);
       await xhtml.startDocument();
 
+      // Tika's markdown output starts with the document title and the outline titles; the text handler sees the
+      // body only, so write them into it.
+      const documentTitle = metadata.get("dc:title");
+      if (documentTitle !== null && documentTitle.trim().length > 0) await xhtml.element("p", documentTitle);
+      for (const title of ready.outline) await xhtml.element("p", title);
+
       const annotationTypes = new Set<string>();
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
@@ -161,10 +167,11 @@ export class PdfParser implements Parser {
         totalText += characters;
         metadata.add("pdf:charsPerPage", String(characters));
         if (this.#extractAnnotationText) {
+          let fieldIndex = 0;
           for (const annotation of message.annotations) {
             recordAnnotation(annotation, annotationTypes, annotationSubtypes);
             if (annotation.fieldName !== undefined) hasAcroForm = true;
-            await renderAnnotation(annotation, xhtml);
+            await renderAnnotation(annotation, xhtml, annotation.fieldName === undefined ? 0 : ++fieldIndex);
           }
         }
         await xhtml.endElement("div");
@@ -295,6 +302,7 @@ function recordAnnotation(
 async function renderAnnotation(
   annotation: PdfAnnotation,
   xhtml: XHTMLContentHandler,
+  fieldIndex: number,
 ): Promise<void> {
   if (annotation.url !== undefined && annotation.url.length > 0) {
     await xhtml.startElement("div", "class", "annotation");
@@ -307,16 +315,19 @@ async function renderAnnotation(
   if (annotation.fieldName !== undefined) {
     await xhtml.startElement("div", "class", "annotation");
     await xhtml.startElement("div", "class", "annotationField");
-    await xhtml.characters(
-      `${annotation.fieldName}: ${String(annotation.fieldValue ?? "")}`.trim(),
-    );
+    const field = `${annotation.fieldName}: ${String(annotation.fieldValue ?? "")}`.trim();
+    await xhtml.characters(fieldIndex > 0 ? `${fieldIndex}. ${field}` : field);
     await xhtml.endElement("div");
     await xhtml.endElement("div");
   }
 
+  // pdf.js does not expose /Subj; Acrobat writes these subjects for the two standard annotation kinds.
+  const subject =
+    annotation.subject ??
+    (annotation.it === "FreeTextTypewriter" ? "Typewritten Text" : annotation.subtype === "Text" ? "Sticky Note" : undefined);
   if (
     annotation.title !== undefined ||
-    annotation.subject !== undefined ||
+    subject !== undefined ||
     annotation.contents !== undefined
   ) {
     await xhtml.startElement("div", "class", "annotation");
@@ -325,9 +336,9 @@ async function renderAnnotation(
       await xhtml.characters(annotation.title);
       await xhtml.endElement("div");
     }
-    if (annotation.subject !== undefined) {
+    if (subject !== undefined) {
       await xhtml.startElement("div", "class", "annotationSubject");
-      await xhtml.characters(annotation.subject);
+      await xhtml.characters(subject);
       await xhtml.endElement("div");
     }
     if (annotation.contents !== undefined) {

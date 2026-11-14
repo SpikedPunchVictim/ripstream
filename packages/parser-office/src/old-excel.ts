@@ -20,7 +20,7 @@ import {
   readUInt16,
   readUInt32,
 } from "./excel-binary.ts";
-import { javaDoubleString } from "./java-double.ts";
+import { javaDoubleString } from "@spikedpunch/ripstream-core";
 
 const TYPES = [
   "application/vnd.ms-excel.sheet.2",

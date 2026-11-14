@@ -289,7 +289,7 @@ test("a file of holes that inflates past the ratio limit is refused", async () =
   ];
   for (let i = 1; i < 8; i++) records.push(header({ type: SEGMENT.ADDR, ino: 3, mode: MODE.FILE, size, count: 512 }));
   records.push(END_RECORD());
-  await assert.rejects(run(volume(records)), LimitExceededError);
+  await assert.rejects(run(volume(records), { limits: { maxDecompressionRatio: 100 } }), LimitExceededError);
 });
 
 test("an address count over 512 is refused", async () => {
@@ -1044,9 +1044,11 @@ test("a path of as many names as the depth limit is read, one more is refused", 
 
 test("a file of holes is read whole up to 1,000,000 bytes and refused as soon as it is past them", async () => {
   const extractor = recording();
-  await run(holeVolume(1_000_000), {}, { extractor });
+  // The ratio limit is Tika's 1000 by default; this test pins the 1,000,000-byte ratio-check threshold with a limit of 100.
+  const limits = { maxDecompressionRatio: 100 };
+  await run(holeVolume(1_000_000), { limits }, { extractor });
   assert.equal(extractor.seen[0]!.bytes.length, 1_000_000);
-  await assert.rejects(run(holeVolume(1_000_001), {}, { extractor: recording() }), LimitExceededError);
+  await assert.rejects(run(holeVolume(1_000_001), { limits }, { extractor: recording() }), LimitExceededError);
 });
 
 test("the ratio of a file to the records it takes is its bytes over 1024 for the inode, 1024 per ADDR header and per block", async () => {

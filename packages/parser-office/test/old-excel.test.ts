@@ -10,7 +10,7 @@ import {
   createOutputHandler,
 } from "@spikedpunch/ripstream-core";
 import { OldExcelParser, type OldExcelOptions } from "../src/index.ts";
-import { javaDoubleString } from "../src/java-double.ts";
+import { javaDoubleString } from "@spikedpunch/ripstream-core";
 
 /*
  * Tika's OldExcelParser hands the file to POI's OldExcelExtractor, which is not among the sources read for this port, so
