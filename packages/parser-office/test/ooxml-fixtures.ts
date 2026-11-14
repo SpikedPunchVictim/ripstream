@@ -23,6 +23,17 @@ export function docxFixture(): Uint8Array {
   });
 }
 
+/** A docx whose document.xml declares a DTD entity (the billion-laughs shape, without the expansion). */
+export function entityDocxFixture(): Uint8Array {
+  return zip({
+    "[Content_Types].xml":
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    "_rels/.rels": `<?xml version="1.0"?><Relationships xmlns="${RELS}"><Relationship Id="rId1" Type="${OFFICE_RELS}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    "word/document.xml":
+      `<?xml version="1.0"?><!DOCTYPE w:document [<!ENTITY lol "lol">]><w:document ${W}><w:body><w:p><w:r><w:t>&lol;</w:t></w:r></w:p></w:body></w:document>`,
+  });
+}
+
 export function xlsxFixture(): Uint8Array {
   return zip({
     "[Content_Types].xml":

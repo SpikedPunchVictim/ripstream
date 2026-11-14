@@ -117,9 +117,33 @@ async function collectParts(
   const files: Record<string, Uint8Array> = {};
   for (const name of packageFile.names) {
     if (!neededPart(name)) continue;
-    files[name] = await packageFile.read(name);
+    const bytes = await packageFile.read(name);
+    // A DTD entity declaration is refused before any XML parser sees it: expansion is the billion-laughs vector, and
+    // ripstream never expands DTD entities. Tika's limit trips on the expansion; this names the same limit up front.
+    if ((name.endsWith(".xml") || name.endsWith(".rels")) && containsAscii(bytes, "<!ENTITY")) {
+      throw new LimitExceededError("XML entity expansion exceeds the expanded-size limit");
+    }
+    files[name] = bytes;
   }
   return files;
+}
+
+/** Whether the bytes contain an ASCII needle, without decoding them. */
+function containsAscii(bytes: Uint8Array, needle: string): boolean {
+  const first = needle.charCodeAt(0);
+  const last = bytes.length - needle.length;
+  for (let index = 0; index <= last; index++) {
+    if (bytes[index] !== first) continue;
+    let matched = true;
+    for (let offset = 1; offset < needle.length; offset++) {
+      if (bytes[index + offset] !== needle.charCodeAt(offset)) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+  return false;
 }
 
 const SHARED_PARTS = /^docProps\/(core|app|custom)\.xml$/;
