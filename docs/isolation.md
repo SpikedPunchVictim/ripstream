@@ -93,7 +93,9 @@ measured on glibc arm64 only) stand as documented.
 
 `/detect` is answered in the parent. Detection looks at a bounded prefix, except that a ZIP's central directory is
 read from the end of the file; that walk is capped at 10,000 entries and 8 MiB (before the cap, a crafted directory
-cost 20 s of CPU, now 138 ms). Detection cost on other adversarial inputs has not been measured.
+cost 20 s of CPU, now 138 ms). The 34-file hostile corpus used for the extractor bake-off (50 MB text documents,
+50,000-entry archives, entity expansion, byte flips, truncation) detects in at most 134 ms (50 MB DOCX), and the whole
+run leaves the parent at 387 MiB RSS; detection stays in the parent (tikajs-mq38).
 
 ## Containment layers
 
@@ -125,7 +127,10 @@ counts what it occupies, not its length) and kills the process group when they p
 The request is then a 422 like a heap or RSS kill, and its message names the budget ("temporary disk budget of N MiB
 exceeded"). The default leaves room for the measured 3x amplification of an input at the 100 MiB cap and for the OCR
 image. The walk is bounded: more than 10,000 files and directories, or directories nested deeper than 8 levels,
-counts as over budget however small they are.
+counts as over budget however small they are. The bound is also the walk's end: a directory that reaches it ends the
+call on that same sample, so a hostile child pays for one walk, not a poll per 100 ms (tikajs-tuqe). Measured on
+macOS: one 10,000-entry walk takes about 0.7 s, and eight concurrent bound walks take about 0.6 s of wall time in all;
+a child that would keep the directory there is killed after that first sample.
 
 The directory is removed after the child's process group has been reaped, whatever the outcome: a result, an error
 frame, a crash, a timeout, an abort, a memory or disk kill, `dispose()`. The caller is answered after the removal, and
@@ -238,9 +243,9 @@ waits has not buffered a byte: a burst costs sockets, not memory. A waiting requ
 keeps the number of bodies held in memory near what the pool can run and queue; it is not an exact bound. A request
 that reserves more than the default (a larger ceiling is in the reservation already) can still be refused by the pool
 with `queue_full` after its body was read. Under isolation a `/pipes` run holds one gate slot and parses one document
-at a time, so one slot is one child, whatever concurrency the request or the settings ask for. Its file-system fetcher
-still reads each input whole in the parent before handing the bytes to the child: the pool accounts for the child, not
-that copy (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
+at a time, so one slot is one child, whatever concurrency the request or the settings ask for. For CONTENT_ONLY and
+RMETA its file-system fetcher hands the child the validated path, so a large input is not also copied into the parent;
+NO_PARSE (which digests and detects) and UNPACK (which builds a package) read the bytes in the parent (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
 
 **Errors.** Isolation failures keep their meaning across the boundary:
 
@@ -281,9 +286,9 @@ isolator's own status: `mode`, `configuredMode`, `degraded` and `degradedReason`
 
 **`/async` and `/pipes`** parse under the server's output ceiling like any other request. `/pipes` runs through the
 same isolated engine; before this release it built its own in-process pipeline. A `queue_full` or `unavailable` answer
-for one document is `CLIENT_UNAVAILABLE_WITHIN_MS` for it, listed in the answer's `failures`, and the run goes on. One
-limit remains: a file source is read whole in the server process before it is handed to a child, so a large file costs
-parent memory that the pool does not account for.
+for one document is `CLIENT_UNAVAILABLE_WITHIN_MS` for it, listed in the answer's `failures`, and the run goes on.
+A file source is handed to the child as a validated path in CONTENT_ONLY and RMETA; NO_PARSE and UNPACK still read it
+whole in the parent, so those modes cost parent memory the pool does not account for.
 
 ## Limits of the design
 

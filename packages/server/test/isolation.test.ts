@@ -33,6 +33,8 @@ interface Call {
   readonly filename: string | undefined;
   readonly limits: unknown;
   readonly bytes: number | undefined;
+  /** The path a file source was handed to the engine as, when it was not read in the parent. */
+  readonly path: string | undefined;
 }
 
 interface FakeEngine extends ServerRipstream {
@@ -56,6 +58,7 @@ function fakeEngine(onCall: (call: Call) => Promise<void> | void = () => undefin
       filename: options?.filename,
       limits: options?.limits,
       bytes: source instanceof Uint8Array ? source.length : undefined,
+      path: typeof source === "object" && source !== null && "path" in source ? source.path : undefined,
     };
     calls.push(call);
     await onCall(call);
@@ -664,11 +667,12 @@ test("/pipes parses through the injected engine, not a pipeline of its own", asy
         const rmeta = await post("RMETA");
         assert.equal(rmeta.status, 200);
 
+        // The file-system fetcher hands the engine the validated path, not a copy of the body, in both modes.
         assert.deepEqual(
-          engine.calls.map((call) => [call.method, call.bytes]),
+          engine.calls.map((call) => [call.method, call.bytes, call.path?.endsWith("a.txt")]),
           [
-            ["parse", "pipes body".length],
-            ["parseRecursive", "pipes body".length],
+            ["parse", undefined, true],
+            ["parseRecursive", undefined, true],
           ],
         );
         assert.match(engine.calls[0]?.filename ?? "", /a\.txt$/);

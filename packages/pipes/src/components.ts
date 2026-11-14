@@ -53,6 +53,17 @@ export class FileSystemFetcher implements Fetcher {
   }
 
   async fetch(key: string, context: FetchContext): Promise<Uint8Array> {
+    const path = await this.#pathFor(key);
+    const bytes = await readFile(path, { signal: context.signal });
+    return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  /** The validated local path of `key`: the same confinement as `fetch`, without reading the bytes. */
+  async resolve(key: string): Promise<string> {
+    return this.#pathFor(key);
+  }
+
+  async #pathFor(key: string): Promise<string> {
     if (key.includes("\u0000")) throw new PipesPathError("fetchKey must not contain a NUL byte");
     const base = this.#basePath;
     let path: string;
@@ -76,8 +87,7 @@ export class FileSystemFetcher implements Fetcher {
     }
     const info = await stat(path);
     if (!info.isFile()) throw new Error(`not a regular file: ${key}`);
-    const bytes = await readFile(path, { signal: context.signal });
-    return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return path;
   }
 }
 

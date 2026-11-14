@@ -440,10 +440,21 @@ export class PipesEngine {
         id: tuple.id,
         begun,
       });
-      let bytes: Uint8Array;
+      let bytes: Uint8Array | null = null;
+      let source: Uint8Array | { readonly path: string };
       try {
-        // The documents of a `source` are held for one fetch: a second would find them gone.
-        bytes = await (tuple.fetcher === INLINE_FETCHER ? fetcher.fetch(tuple.fetchKey, { signal }) : attempt(() => fetcher.fetch(tuple.fetchKey, { signal })));
+        // A fetcher over local files can name the file instead: the parsers read it, so a large input does not pass
+        // through the parent's memory. NO_PARSE needs the bytes for its length and digests, and UNPACK keeps them for the
+        // package it builds.
+        const resolve = mode === "NO_PARSE" || mode === "UNPACK" ? undefined : fetcher.resolve?.bind(fetcher);
+        if (resolve !== undefined) {
+          const path = await (tuple.fetcher === INLINE_FETCHER ? resolve(tuple.fetchKey, { signal }) : attempt(() => resolve(tuple.fetchKey, { signal })));
+          source = { path };
+        } else {
+          // The documents of a `source` are held for one fetch: a second would find them gone.
+          bytes = await (tuple.fetcher === INLINE_FETCHER ? fetcher.fetch(tuple.fetchKey, { signal }) : attempt(() => fetcher.fetch(tuple.fetchKey, { signal })));
+          source = bytes;
+        }
       } catch (error) {
         // The run is already ending: that failure is what is thrown.
         if (signal.aborted) throw error;
@@ -457,10 +468,10 @@ export class PipesEngine {
           // parser runs to digest it.
           const metadata: Record<string, string> = {
             [TIKA_KEYS.RESOURCE_NAME]: tuple.id,
-            [CONTENT_LENGTH]: String(bytes.length),
+            [CONTENT_LENGTH]: String(bytes!.length),
           };
           if (digest !== undefined && !digest.skipContainerDocumentDigest && digest.digests.length > 0) {
-            for (const [key, value] of await digestBytes(bytes, digest.digests, signal)) metadata[key] = value;
+            for (const [key, value] of await digestBytes(bytes!, digest.digests, signal)) metadata[key] = value;
           }
           const detected = String(await ripstream.detect(bytes, { filename: tuple.id, signal }));
           metadata["Content-Type"] = detected;
@@ -475,7 +486,7 @@ export class PipesEngine {
           ...(limits === undefined ? {} : { limits }),
         };
         if (mode === "RMETA" || mode === "UNPACK") {
-          const records = await ripstream.parseRecursive(bytes, mode === "UNPACK" ? { ...parseOptions, unpackBytes } : parseOptions);
+          const records = await ripstream.parseRecursive(source, mode === "UNPACK" ? { ...parseOptions, unpackBytes } : parseOptions);
           const exception = records[0]?.exception ?? null;
           if (exception !== null && skipFailed) {
             return settled("PARSE_EXCEPTION_NO_EMIT", describeError(exception));
@@ -488,11 +499,11 @@ export class PipesEngine {
           const rmeta = JSON.stringify(objects);
           if (mode === "RMETA") return emitting([{ id: emitKey, mode, text: rmeta, records, objects }], exception);
           return emitting(
-            await unpackDocuments({ emitKey, fetchKey: tuple.fetchKey, bytes, records, objects, rmeta, unpack, extensionOf, now: new Date() }),
+            await unpackDocuments({ emitKey, fetchKey: tuple.fetchKey, bytes: bytes!, records, objects, rmeta, unpack, extensionOf, now: new Date() }),
             exception,
           );
         }
-        const result = await ripstream.parse(bytes, parseOptions);
+        const result = await ripstream.parse(source, parseOptions);
         if (result.exception !== undefined && skipFailed) {
           return settled("PARSE_EXCEPTION_NO_EMIT", describeError(result.exception));
         }

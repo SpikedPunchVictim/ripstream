@@ -329,3 +329,26 @@ test("a ripstream given to the engine does every parse; the default pipeline is 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a file-system fetcher hands the parser a path, not the whole body, in CONTENT_ONLY mode", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "ripstream-pipes-path-"));
+  try {
+    writeFileSync(join(directory, "a.txt"), "alpha text");
+    const seen: unknown[] = [];
+    const ripstream = {
+      parse: async (source: unknown) => {
+        seen.push(source);
+        return { metadata: new Metadata({ "Content-Type": "text/plain" }), text: "alpha text" };
+      },
+      parseRecursive: async () => [],
+      detect: async () => new Metadata({ "Content-Type": "text/plain" }),
+    } as unknown as PipesRipstream;
+    const emitter = new MemoryEmitter();
+    await new PipesEngine({ ...fileSystem(directory), emitter, mode: "CONTENT_ONLY", ripstream }).run();
+    assert.equal(seen.length, 1);
+    assert.deepEqual(seen[0], { path: join(directory, "a.txt") });
+    assert.equal(emitter.documents[0]?.text, "alpha text");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

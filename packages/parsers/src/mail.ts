@@ -302,8 +302,12 @@ async function dispatchEmbedded(
     await extractor.parseEmbedded(stream, xhtml, partMetadata, ctx);
     // A part that is itself a container (a zip in a mail) records its own children's failures on its own metadata and
     // does not throw; a plain parse of the message drops that metadata, so the message carries the markers too.
+    const known = new Set(output.metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION));
     for (const failure of partMetadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION)) {
-      output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+      if (!known.has(failure)) {
+        output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+        known.add(failure);
+      }
     }
   } catch (error) {
     // Resiliency errors must reach the server (422/408) instead of becoming a 200.

@@ -164,6 +164,19 @@ export class ParsingEmbeddedDocumentExtractor
     } finally {
       if (source !== stream) await source.close();
     }
+    // A child that is itself a container records its children's failures on its own metadata and does not throw. Tika's
+    // CompositeParser.recordEmbeddedMetadata puts them on the container whose parse is running; in a plain parse the
+    // intermediate metadata is dropped, so the root carries them too.
+    const root = ctx.get(CONTEXT_KEYS.ROOT_METADATA);
+    if (root !== undefined && root !== metadata) {
+      const known = new Set(root.getAll("tk:exception:embedded-exception"));
+      for (const failure of metadata.getAll("tk:exception:embedded-exception")) {
+        if (!known.has(failure)) {
+          root.add("tk:exception:embedded-exception", failure);
+          known.add(failure);
+        }
+      }
+    }
     // The child ended on a lone high surrogate: let the enclosing handler filter it.
     if (heldHighSurrogate.length > 0) await handler.characters?.(heldHighSurrogate, 0, 1);
   }

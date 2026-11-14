@@ -71,9 +71,9 @@ test("the ZIP based formats that had only the generic ZipParser reach their own 
   }
 });
 
-test("an iBooks file is parsed by EpubParser through its epub supertype (declared af-epub-ibooks)", async () => {
+test("an iBooks file is parsed by EpubParser, which claims its type exactly as Tika's does", async () => {
   const [first] = await selected("application/x-ibooks+zip");
-  assert.deepEqual(first, { name: "EpubParser", kind: "supertype" });
+  assert.deepEqual(first, { name: "EpubParser", kind: "exact" });
 });
 
 test("registration order picks the intended parser for overlapping types", async () => {

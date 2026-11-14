@@ -31,6 +31,12 @@ export interface FetchContext {
 /** Reads one input's bytes by key. Throws when it cannot: the input's result is FETCH_EXCEPTION and the run goes on. */
 export interface Fetcher {
   fetch(key: string, context: FetchContext): Promise<Uint8Array>;
+  /**
+   * A local file the bytes are in, for a parser that can read a path itself (the isolated child, or core's own
+   * stream). The engine hands `{ path }` to the ripstream instead of the whole body, so a large input costs no parent
+   * memory. Optional: a fetcher over a network has no path. The key is validated as `fetch` validates it.
+   */
+  resolve?(key: string, context: FetchContext): Promise<string>;
   close?(): Promise<void> | void;
 }
 

@@ -1,4 +1,5 @@
 import {
+  EncryptedDocumentError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -283,7 +284,7 @@ export class EpubParser implements Parser {
   readonly name = "EpubParser";
 
   getSupportedTypes(): ReadonlySet<MediaType> {
-    return new Set([MediaType.parse("application/epub+zip")!]);
+    return new Set([MediaType.parse("application/epub+zip")!, MediaType.parse("application/x-ibooks+zip")!]);
   }
 
   async parse(
@@ -293,14 +294,47 @@ export class EpubParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     const files = boundedUnzip(await readAll(stream), ctx.limits);
-    const container = files.get("META-INF/container.xml");
-    if (container === undefined) {
-      throw new MalformedDocumentError("Missing EPUB container.xml");
+    const mimetype = files.get("mimetype");
+    if (mimetype !== undefined) {
+      const declared = decode(mimetype).trim();
+      if (declared.length > 0) metadata.set("Content-Type", declared);
     }
-
-    const opfPath = rootfilePath(decode(container));
+    const encryption = files.get("META-INF/encryption.xml");
+    if (encryption !== undefined && decode(encryption).includes("CipherReference")) {
+      // Tika writes what it can and then throws EncryptedDocumentException when the encryption file names encrypted
+      // items; before that point no chapter has been written, which is also a clean refusal.
+      throw new EncryptedDocumentError("EPUB contains encrypted items");
+    }
+    const container = files.get("META-INF/container.xml");
+    const declaredRoot = container === undefined ? null : rootfilePath(decode(container));
+    // Tika's getRoot falls back to the first .opf entry when container.xml is absent or names nothing there.
+    const opfPath =
+      declaredRoot !== null && files.has(declaredRoot)
+        ? declaredRoot
+        : files.names.find((name) => name.toLowerCase().endsWith(".opf")) ?? null;
     if (opfPath === null || !files.has(opfPath)) {
-      throw new UnsupportedFormatError("EPUB package document not found");
+      // Tika's fallback for a truncated EPUB whose OPF is past the cut: write every HTML/XHTML entry in archive order,
+      // then fail so the caller knows the spine could not be followed.
+      const xhtml = new XHTMLContentHandler(handler, metadata);
+      await xhtml.startDocument();
+      let recovered = 0;
+      for (const name of files.names) {
+        const lower = name.toLowerCase();
+        if (!(lower.endsWith(".xhtml") || lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".xml"))) continue;
+        if (lower.endsWith(".opf")) continue;
+        const entry = files.get(name);
+        if (entry === undefined) continue;
+        await xhtml.startElement("div", "class", "chapter");
+        for (const block of htmlBlocks(decode(entry))) {
+          await xhtml.startElement("p");
+          if (block.length > 0) await xhtml.characters(block);
+          await xhtml.endElement("p");
+        }
+        await xhtml.endElement("div");
+        recovered++;
+      }
+      await xhtml.endDocument();
+      throw new MalformedDocumentError(`EPUB: no package document; recovered ${recovered} HTML entries without a spine`);
     }
 
     const opfXml = decode(files.get(opfPath)!);
@@ -415,6 +449,22 @@ const DC_BAGS = [
  */
 function applyOpfMetadata(metadata: Metadata, xml: string): void {
   const root = parseXmlTree(xml);
+  // Tika's OPFParser sets these before the metadata bag: the package version, and a layout that a spine item or meta
+  // element can make pre-paginated.
+  const packageNode = root.name === "package" ? root : descendantsNamed(root, "package")[0];
+  const version = packageNode === undefined ? undefined : attribute(packageNode, "version");
+  if (version !== undefined && version.trim().length > 0) metadata.set("epub:version", version.trim());
+  metadata.set("epub:rendition:layout", "reflowable");
+  for (const itemref of descendantsNamed(root, "itemref")) {
+    if ((attribute(itemref, "properties") ?? "").includes("rendition:layout-pre-paginated")) {
+      metadata.set("epub:rendition:layout", "pre-paginated");
+    }
+  }
+  for (const meta of descendantsNamed(root, "meta")) {
+    if (attribute(meta, "property") === "rendition:layout" && meta.text.trim() === "pre-paginated") {
+      metadata.set("epub:rendition:layout", "pre-paginated");
+    }
+  }
   const metadataNode =
     root.children.find((child) => localName(child.name) === "metadata") ??
     descendantsNamed(root, "metadata")[0];

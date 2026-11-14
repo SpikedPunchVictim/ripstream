@@ -2,6 +2,7 @@ import type { PasswordProvider } from "./passwords.ts";
 import { AbortError, ParseTimeoutError } from "./errors.ts";
 import type { DigestSettings } from "./digest.ts";
 import { outputLimitIssue } from "./handlers/limits.ts";
+import type { Metadata } from "./metadata.ts";
 
 /**
  * Typed context key. The optional phantom field gives TypeScript the value
@@ -276,4 +277,6 @@ export const CONTEXT_KEYS = {
   EMBEDDED_BUDGET: new ParseContextKey<{ count: number; bytes: number }>(
     "embedded-budget",
   ),
+  /** The metadata of the document whose parse started this tree: failures of nested children also land there. */
+  ROOT_METADATA: new ParseContextKey<Metadata>("root-metadata"),
 } as const;

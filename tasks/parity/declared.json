@@ -91,14 +91,6 @@
       "reason": "Macro-enabled, template, slide/slideshow, Visio and XPS types are subtypes of the three base OOXML types and Tika's CompositeParser reaches the same OOXMLParser through the MediaTypeRegistry supertype (tikajs-68os.3). Verified by a forced-type differential."
     },
     {
-      "id": "af-epub-ibooks",
-      "match": {
-        "class": "\\.EpubParser$"
-      },
-      "status": "accepted-fallback",
-      "reason": "application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3)."
-    },
-    {
       "id": "af-msworks-spreadsheet",
       "match": {
         "class": "\\.OfficeParser$",

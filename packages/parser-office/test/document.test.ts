@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   BodyContentHandler,
   CONTEXT_KEYS,
+  EncryptedDocumentError,
   LimitExceededError,
   MalformedDocumentError,
   Metadata,
@@ -549,4 +550,52 @@ test("ODF OpenOffice 1.x element namespaces are mapped below the root too; its a
   );
   assert.equal(attributes.get("meta:word-count"), null);
   assert.equal(attributes.get("odf:version"), null);
+});
+
+test("EPUB reads the mimetype override, the package version and a pre-paginated rendition", async () => {
+  const result = await run(new EpubParser(), {
+    mimetype: "application/x-ibooks+zip\n",
+    "META-INF/container.xml": '<container><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>',
+    "content.opf":
+      '<package version="3.0"><metadata><dc:title>Layout</dc:title><meta property="rendition:layout">pre-paginated</meta></metadata>' +
+      '<manifest><item id="c1" href="chap1.xhtml" media-type="application/xhtml+xml"/></manifest>' +
+      '<spine><itemref idref="c1" properties="rendition:layout-pre-paginated"/></spine></package>',
+    "chap1.xhtml": "<html><body><p>fixed</p></body></html>",
+  });
+  assert.equal(result.metadata.get("Content-Type"), "application/x-ibooks+zip");
+  assert.equal(result.metadata.get("epub:version"), "3.0");
+  assert.equal(result.metadata.get("epub:rendition:layout"), "pre-paginated");
+});
+
+test("EPUB finds the OPF by extension when container.xml is absent, as Tika's getRoot fallback", async () => {
+  const result = await run(new EpubParser(), {
+    "OEBPS/book.opf":
+      '<package><metadata><dc:title>Fallback</dc:title></metadata><manifest><item id="c1" href="chap1.xhtml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+    "OEBPS/chap1.xhtml": "<html><body><p>found</p></body></html>",
+  });
+  assert.equal(result.metadata.get("dc:title"), "Fallback");
+  assert.match(result.text, /found/);
+});
+
+test("EPUB with encrypted items is an EncryptedDocumentError", async () => {
+  await assert.rejects(
+    run(new EpubParser(), {
+      "META-INF/encryption.xml": '<encryption><EncryptedData><CipherData><CipherReference URI="chap1.xhtml"/></CipherData></EncryptedData></encryption>',
+      "META-INF/container.xml": '<container><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>',
+      "content.opf": '<package><manifest><item id="c1" href="chap1.xhtml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+      "chap1.xhtml": "<html><body><p>secret</p></body></html>",
+    }),
+    EncryptedDocumentError,
+  );
+});
+
+test("EPUB without any OPF writes the HTML entries and reports the missing package document", async () => {
+  await assert.rejects(
+    run(new EpubParser(), {
+      "META-INF/container.xml": '<container><rootfiles><rootfile full-path="missing.opf"/></rootfiles></container>',
+      "one.xhtml": "<html><body><p>recovered one</p></body></html>",
+      "two.html": "<html><body><p>recovered two</p></body></html>",
+    }),
+    (error: unknown) => error instanceof MalformedDocumentError && /recovered 3 HTML entries/.test(error.message),
+  );
 });

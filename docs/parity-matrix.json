@@ -12,9 +12,9 @@
   "opt-in.implemented": 5,
   "opt-in.non-goal": 10,
   "opt-in.tracked": 2,
-  "standard.implemented": 78,
+  "standard.implemented": 79,
   "standard.non-goal": 4,
-  "standard.partial": 7
+  "standard.partial": 6
  },
  "parsers": [
   {
@@ -576,17 +576,10 @@
    "class": "org.apache.tika.parser.epub.EpubParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-miscoffice-module",
    "tier": "standard",
-   "status": "partial",
+   "status": "implemented",
    "typeCount": 2,
-   "exact": 1,
-   "open": [
-    {
-     "type": "application/x-ibooks+zip",
-     "resolution": "fallback",
-     "by": "EpubParser",
-     "declared": "af-epub-ibooks"
-    }
-   ],
+   "exact": 2,
+   "open": [],
    "implementedBy": [
     "EpubParser"
    ],

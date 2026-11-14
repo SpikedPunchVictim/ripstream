@@ -24,7 +24,6 @@ test("an accepted fallback really reaches the parser Tika uses", async () => {
   const cases: ReadonlyArray<[string, string]> = [
     ["application/vnd.ms-excel.sheet.macroenabled.12", "OoxmlParser"],
     ["application/vnd.openxmlformats-officedocument.wordprocessingml.template", "OoxmlParser"],
-    ["application/x-ibooks+zip", "EpubParser"],
     ["video/x-m4v", "Mp4Parser"],
   ];
   for (const [type, expected] of cases) {

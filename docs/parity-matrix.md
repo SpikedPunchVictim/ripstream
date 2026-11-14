@@ -12,9 +12,9 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | opt-in | implemented | 5 |
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
-| standard | implemented | 78 |
+| standard | implemented | 79 |
 | standard | non-goal | 4 |
-| standard | partial | 7 |
+| standard | partial | 6 |
 
 ## Open items
 
@@ -40,7 +40,6 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | OpenAIVLMParser | opt-in | (class) | - | non-goal: Vendor SDK and credential parsers. ripstream exposes VlmOcrProvider (core/vlm.ts) so a caller injects any provider; shipping per-vendor clients would put API keys and network egress in the default install. |
 | XMLProfiler | opt-in | (class) | - | tracked tikajs-68os.23: Opt-in utility parsers. |
 | SourceCodeParser | standard | text/x-groovy | fallback via CsvParser | accepted-fallback: Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10). |
-| EpubParser | standard | application/x-ibooks+zip | fallback via EpubParser | accepted-fallback: application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3). |
 | BPGParser | standard | image/bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | BPGParser | standard | image/x-bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | RawTiffParser | standard | image/x-raw-adobe | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
