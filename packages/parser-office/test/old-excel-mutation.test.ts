@@ -8,7 +8,7 @@ import {
   createOutputHandler,
 } from "@spikedpunch/ripstream-core";
 import { OldExcelParser } from "../src/index.ts";
-import { javaDoubleString } from "../src/java-double.ts";
+import { javaDoubleString } from "@spikedpunch/ripstream-core";
 
 /*
  * Pins found by mutation testing the BIFF2-4 reader (tikajs-68os.18): record ids per version, the byte offsets of each

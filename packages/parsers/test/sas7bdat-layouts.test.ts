@@ -250,11 +250,11 @@ for (const [method, compress] of COMPRESSORS) {
   });
 
   test(`${method}: rows that inflate past what the limits allow are a LimitExceededError`, async () => {
-    // One blank-filled row of a megabyte takes a few hundred bytes, so a hundred of them are far past a ratio of 100.
+    // One blank-filled row of a megabyte takes a few hundred bytes; the test pins a ratio of 100, below Tika's 1000.
     const columns: BuiltColumn[] = [{ name: "blank", type: "character", width: 65536 }];
     const rows: SasValue[][] = Array.from({ length: 300 }, () => [""]);
     const data = buildSas7bdat({ columns, rows, pageLength: 8192, compression: { method, compress } });
-    await assert.rejects(parseSas(data), LimitExceededError);
+    await assert.rejects(parseSas(data, new ParseContext({ limits: { maxDecompressionRatio: 100 } })), LimitExceededError);
   });
 }
 

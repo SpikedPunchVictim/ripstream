@@ -12,10 +12,9 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | opt-in | implemented | 5 |
 | opt-in | non-goal | 10 |
 | opt-in | tracked | 2 |
-| standard | implemented | 77 |
+| standard | implemented | 78 |
 | standard | non-goal | 4 |
 | standard | partial | 7 |
-| standard | tracked | 1 |
 
 ## Open items
 
@@ -44,7 +43,6 @@ A type is **exact** when the default registry picks a parser for it directly, **
 | EpubParser | standard | application/x-ibooks+zip | fallback via EpubParser | accepted-fallback: application/x-ibooks+zip is a subtype of application/epub+zip; same EpubParser through the supertype (tikajs-68os.3). |
 | BPGParser | standard | image/bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
 | BPGParser | standard | image/x-bpg | none | non-goal: BPG is a dead format superseded by HEIF/AVIF; no maintained JS decoder, nothing to gain. |
-| JXLParser | standard | image/jxl | none | tracked tikajs-68os.44: JPEG XL: the XMP packet scanner and extractor are not ported. |
 | RawTiffParser | standard | image/x-raw-adobe | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-epson | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |
 | RawTiffParser | standard | image/x-raw-kodak | fallback via ImageParser | non-goal: Camera RAW variants (Adobe, Epson, Kodak, Leaf, Nikon, Olympus, Panasonic, Pentax, Samsung, Sony): low value, decline unless a user needs one. Detection still identifies them. |

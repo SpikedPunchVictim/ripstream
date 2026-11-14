@@ -10,6 +10,7 @@ import {
 } from "./parse-context.ts";
 import type { Detector, Parser } from "./parser.ts";
 import { MediaType } from "./media-type.ts";
+import { StaticPasswordProvider, type PasswordProvider } from "./passwords.ts";
 import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
 import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
@@ -46,6 +47,11 @@ export interface ParseOptions {
    * detector would not have chosen. The isolated path refuses it (the child detects the type and encoding itself).
    */
   readonly contentType?: string;
+  /**
+   * A password, or a provider, for encrypted documents. Tika's PasswordProvider in the ParseContext; the office parser
+   * falls back to the default Office password when it is absent or wrong.
+   */
+  readonly password?: string | PasswordProvider;
   readonly limits?: Partial<ParseLimits>;
   readonly signal?: AbortSignal;
   /**
@@ -340,7 +346,13 @@ export class Ripstream {
 
   private async withStream<T>(
     source: InputSource,
-    options: { filename?: string; contentType?: string; signal?: AbortSignal; limits?: Partial<ParseLimits> },
+    options: {
+      filename?: string;
+      contentType?: string;
+      password?: string | PasswordProvider;
+      signal?: AbortSignal;
+      limits?: Partial<ParseLimits>;
+    },
     action: (
       stream: RipstreamInputStream,
       metadata: Metadata,
@@ -372,6 +384,12 @@ export class Ripstream {
     if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
     const charset = charsetHint(options.contentType);
     if (charset !== undefined) ctx.set(CONTEXT_KEYS.CHARSET_HINT, charset);
+    if (options.password !== undefined) {
+      ctx.set(
+        CONTEXT_KEYS.PASSWORD_PROVIDER,
+        typeof options.password === "string" ? new StaticPasswordProvider(options.password) : options.password,
+      );
+    }
     const stream = await RipstreamInputStream.from(source, {
       context: ctx,
       signal,

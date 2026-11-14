@@ -1,3 +1,4 @@
+import type { PasswordProvider } from "./passwords.ts";
 import { AbortError, ParseTimeoutError } from "./errors.ts";
 import type { DigestSettings } from "./digest.ts";
 import { outputLimitIssue } from "./handlers/limits.ts";
@@ -264,6 +265,8 @@ export const CONTEXT_KEYS = {
   EMBEDDED_ID_PATH: new ParseContextKey<string>("embedded-id-path"),
   /** The digests to make (Tika's DigesterFactory in the ParseContext); AutoDetectParser reads it. Absent: none. */
   DIGESTS: new ParseContextKey<DigestSettings>("digests"),
+  /** A password source for encrypted documents (Tika's PasswordProvider in the ParseContext). */
+  PASSWORD_PROVIDER: new ParseContextKey<PasswordProvider>("password-provider"),
   /**
    * A charset from the incoming Content-Type hint (`ParseOptions.contentType`), which text parsers decode with instead
    * of detecting one. Set on the root document only; embedded documents detect their own.

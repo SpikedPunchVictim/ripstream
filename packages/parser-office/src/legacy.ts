@@ -76,8 +76,8 @@ export class LegacyOfficeParser implements Parser {
       if (!signature.startsWith("Standard Jet DB")) {
         throw new MalformedDocumentError("Not an Access database");
       }
+      // Table/row extraction is a declared non-goal (ng-access-mdb); the stream scrape only produced junk.
       metadata.set("access:engine", signature.trim());
-      appendStrings(strings, printableStrings(data));
     } else {
       throw new MalformedDocumentError("Unsupported legacy Office container");
     }

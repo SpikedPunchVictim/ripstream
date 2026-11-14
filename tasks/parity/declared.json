@@ -126,15 +126,6 @@
       "reason": "Source files are plain text via the text/* registration; the oracle's text is identical except that SourceCodeParser prefixes the resource name (output-quality diff, tikajs-68os.10)."
     },
     {
-      "id": "gap-image",
-      "match": {
-        "class": "\\.JXLParser$"
-      },
-      "status": "tracked",
-      "bead": "tikajs-68os.44",
-      "reason": "JPEG XL: the XMP packet scanner and extractor are not ported."
-    },
-    {
       "id": "gap-extended",
       "match": {
         "class": "\\.GribParser$"
@@ -166,7 +157,8 @@
     "org.apache.tika.parser.sqlite3.SQLite3Parser": "SQLite3Parser",
     "org.apache.tika.parser.hdf.HDFParser": "ScienceMetadataParser",
     "org.apache.tika.parser.netcdf.NetCDFParser": "ScienceMetadataParser",
-    "org.apache.tika.parser.ocr.TesseractOCRParser": "TesseractOCRParser"
+    "org.apache.tika.parser.ocr.TesseractOCRParser": "TesseractOCRParser",
+    "org.apache.tika.parser.image.JXLParser": "JxlParser"
   },
   "featureNonGoals": [
     {
@@ -273,6 +265,16 @@
       "id": "ng-rtree",
       "area": "formats",
       "reason": "GeoPackage R-tree virtual-table contents need SQLite's R-tree module, which sql.js does not ship; GeoPackage data tables are read."
+    },
+    {
+      "id": "ng-access-mdb",
+      "area": "formats",
+      "reason": "Access table extraction needs a Jackcess-class reader of the Jet catalog, table/column definitions and compressed Unicode row data; the current stream scrape yields junk. application/x-msaccess is declared a non-goal (tikajs-68os.10.6.5)."
+    },
+    {
+      "id": "ng-wmf-glyph-text",
+      "area": "formats",
+      "reason": "META_EXTTEXTOUT records that carry font glyph indices, and UTF-16 text outside the normal WMF text records, are not decoded: rendering glyph indices needs the font's character map, and guessing would invent text. WMF/EMF text extraction is otherwise implemented (tikajs-68os.10.7.1)."
     }
   ],
   "detectionDeviations": [

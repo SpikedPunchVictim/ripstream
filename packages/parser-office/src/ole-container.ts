@@ -1,14 +1,19 @@
 import {
+  CONTEXT_KEYS,
   EncryptedDocumentError,
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
+  RipstreamInputStream,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
   type Parser,
-  type RipstreamInputStream,
+  type PasswordProvider,
 } from "@spikedpunch/ripstream-core";
+import { OoxmlParser } from "./ooxml.ts";
+import { decryptOoxmlPackage, defaultOfficePasswords } from "./office-crypto.ts";
 import { readAll } from "./bytes.ts";
 import { CompoundFile, hasSignature } from "./cfb.ts";
 import { applyPropertySetMetadata, parsePropertySets } from "./property-sets.ts";
@@ -22,7 +27,7 @@ const SOLIDWORKS = "application/sldworks";
 // OfficeParser.SUPPORTED_TYPES, the members no other parser here claims. The embedded type carries the format parameter
 // Tika names it with; a composite parser matches on the base type, so the comp_obj container reaches this parser as it
 // reaches OfficeParser.
-const TYPES = [GENERIC, `${EMBEDDED}; format=ole10_native`, DRM_ENCRYPTED, OOXML_PROTECTED, SOLIDWORKS];
+const TYPES = [GENERIC, `${EMBEDDED}; format=ole10_native`, `${EMBEDDED}; format=comp_obj`, DRM_ENCRYPTED, OOXML_PROTECTED, SOLIDWORKS];
 
 const SUMMARY_STREAMS = ["\u0005SummaryInformation", "\u0005DocumentSummaryInformation"];
 
@@ -34,7 +39,7 @@ const SUMMARY_STREAMS = ["\u0005SummaryInformation", "\u0005DocumentSummaryInfor
  * OfficeParser puts the SummaryInformation and DocumentSummaryInformation streams in the metadata first, then switches on
  * the type: for all of these but the encrypted ones it writes no text; the DRM type throws EncryptedDocumentException; and
  * the ooxml-protected type opens the package with the default password (or the PasswordProvider's) and hands it to the
- * OOXML parser. This one refuses that last type as encrypted, since the package cannot be decrypted here.
+ * OOXML parser. This one does the same: standard and agile ECMA-376 decryption, then the OOXML parser.
  */
 export class OleContainerParser implements Parser {
   readonly name = "OfficeParser";
@@ -48,13 +53,40 @@ export class OleContainerParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     const data = await readAll(stream);
     if (!hasSignature(data)) throw new MalformedDocumentError("Not an OLE2 compound file");
     const compound = CompoundFile.parse(data);
     applySummaries(compound, metadata);
-    const refusal = encryptionRefusal(compound, baseTypeOf(metadata));
+    const baseType = baseTypeOf(metadata);
+    if (baseType === OOXML_PROTECTED) {
+      if (!compound.has("EncryptionInfo") || !compound.has("EncryptedPackage")) {
+        throw new EncryptedDocumentError("Password-protected OOXML package is missing its encryption streams");
+      }
+      const encrypted = compound.read("EncryptedPackage");
+      if (encrypted.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
+        throw new LimitExceededError(`Encrypted package is ${encrypted.byteLength} bytes, exceeding the per-document limit`);
+      }
+      const provider = ctx.get(CONTEXT_KEYS.PASSWORD_PROVIDER) as PasswordProvider | undefined;
+      const supplied = provider?.getPassword();
+      const passwords = supplied === null || supplied === undefined
+        ? defaultOfficePasswords()
+        : [supplied, ...defaultOfficePasswords()];
+      const decrypted = decryptOoxmlPackage(compound.read("EncryptionInfo"), encrypted, passwords);
+      if (decrypted === null) throw new EncryptedDocumentError("Password-protected OOXML package: wrong password");
+      if (decrypted.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
+        throw new LimitExceededError(`Decrypted package is ${decrypted.byteLength} bytes, exceeding the per-document limit`);
+      }
+      const packageStream = await RipstreamInputStream.from(decrypted, { context: ctx });
+      try {
+        await new OoxmlParser().parse(packageStream, handler, metadata, ctx);
+      } finally {
+        await packageStream.close();
+      }
+      return;
+    }
+    const refusal = encryptionRefusal(compound, baseType);
     if (refusal !== undefined) throw new EncryptedDocumentError(refusal);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
@@ -84,9 +116,6 @@ function applySummaries(compound: CompoundFile, metadata: Metadata): void {
 /** Why the container cannot be read, where OfficeParser throws EncryptedDocumentException; undefined when it can. */
 function encryptionRefusal(compound: CompoundFile, baseType: string): string | undefined {
   if (baseType === DRM_ENCRYPTED) return "DRM encrypted document is not supported";
-  if (baseType === OOXML_PROTECTED) {
-    return "Password-protected OOXML package: decrypting it with the default password or a supplied one is not supported";
-  }
   if (compound.has("EncryptedPackage")) return "OLE2 file with an unrecognized EncryptedPackage entry";
   return undefined;
 }

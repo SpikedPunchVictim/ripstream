@@ -12,10 +12,9 @@
   "opt-in.implemented": 5,
   "opt-in.non-goal": 10,
   "opt-in.tracked": 2,
-  "standard.implemented": 77,
+  "standard.implemented": 78,
   "standard.non-goal": 4,
-  "standard.partial": 7,
-  "standard.tracked": 1
+  "standard.partial": 7
  },
  "parsers": [
   {
@@ -803,18 +802,13 @@
    "class": "org.apache.tika.parser.image.JXLParser",
    "module": "tika-parsers/tika-parsers-standard/tika-parsers-standard-modules/tika-parser-image-module",
    "tier": "standard",
-   "status": "tracked",
+   "status": "implemented",
    "typeCount": 1,
-   "exact": 0,
-   "open": [
-    {
-     "type": "image/jxl",
-     "resolution": "none",
-     "by": null,
-     "declared": "gap-image"
-    }
+   "exact": 1,
+   "open": [],
+   "implementedBy": [
+    "JXLParser"
    ],
-   "implementedBy": [],
    "declared": null
   },
   {

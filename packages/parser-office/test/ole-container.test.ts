@@ -52,7 +52,7 @@ async function run(data: Uint8Array, type: string | undefined, context = new Par
 
 test("claims the types OfficeParser claims that nothing else here did", () => {
   const claimed = [...new OleContainerParser().getSupportedTypes()].map((type) => type.toString()).sort();
-  assert.deepEqual(claimed, [SOLIDWORKS, MSOFFICE, DRM, PROTECTED, OLE10_NATIVE].sort());
+  assert.deepEqual(claimed, [SOLIDWORKS, MSOFFICE, DRM, PROTECTED, OLE10_NATIVE, COMP_OBJ].sort());
 });
 
 for (const type of [MSOFFICE, OLE10_NATIVE, COMP_OBJ, SOLIDWORKS]) {
@@ -81,10 +81,10 @@ test("the DRM type throws EncryptedDocumentError, after the summaries are in the
   assert.equal(metadata.get("dc:title"), "Hello");
 });
 
-test("the ooxml-protected type is refused as encrypted, saying decryption is what is missing", async () => {
+test("a container with no encryption streams under the ooxml-protected type is refused as encrypted", async () => {
   await assert.rejects(run(container(), PROTECTED), (error: unknown) => {
     assert.ok(error instanceof EncryptedDocumentError);
-    assert.match(error.message, /not supported/);
+    assert.match(error.message, /missing its encryption streams/);
     return true;
   });
 });
