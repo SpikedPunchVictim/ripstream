@@ -93,8 +93,11 @@ function cleanLine(line: string): string {
     .replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    // CommonMark does not open or close underscore emphasis inside a word, so `_gitlab_session` keeps its underscores.
+    .replace(/(^|[\s([{>])__(.+?)__(?=$|[\s)\]}.,;:!?])/g, "$1$2")
+    .replace(/(^|[\s([{>])_(?!_)(.+?)_(?=$|[\s)\]}.,;:!?])/g, "$1$2")
     .replace(/`([^`]*)`/g, "$1")
     .replace(/^\s*\|.*\|\s*$/, (row) => row.replace(/\|/g, " ").trim())
     .trim();

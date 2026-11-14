@@ -175,6 +175,9 @@ async function drain(
     if (event.type === "open") {
       await handler.startElement("", event.name, event.name, event.attributes);
     } else if (event.type === "close") {
+      // Cells and rows are separate values in the text handler, which sees characters only.
+      if (event.name === "td" || event.name === "th") await handler.characters("\t");
+      else if (event.name === "tr") await handler.characters("\n");
       await handler.endElement("", event.name, event.name);
     } else {
       await handler.characters(event.text);

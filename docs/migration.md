@@ -31,9 +31,13 @@ table). There is no 3.x spelling and no switch: a client that reads `X-TIKA:cont
 | `resourceName` | `tk:resource-name` |
 
 The shape follows Tika's `/rmeta` too: one object per document, the container first; a key with one value is a string
-and a key with several is an array. The container has no `tk:embedded-resource-path`; an embedded document's is below
-the container (`/inner.txt`), with `tk:embedded-id` and `tk:embedded-id-path` (`/1/2`) and, once the whole file is read,
-`tk:final-embedded-resource-path`. `tk:content` is present only when it is not blank. `tk:parsed-by` names the parser
+and a key with several is an array. The container has no `tk:embedded-resource-path`; an embedded document's path is
+absolute and every segment is one container step below the previous one: the root document is the container's file name
+(`/archive.zip`), a member appends its entry name (`/archive.zip/member.csv`), and a nested member appends again
+(`/archive.zip/inner.zip/member.csv`). `tk:embedded-depth` is the number of segments below the root, so a direct member
+has depth 1. A member name containing `/` contributes its own path segments, and a name that is unsafe to use as a path
+is skipped and noted (`tk:exception:embedded-stream-exception`). Each embedded document also has `tk:embedded-id` and
+`tk:embedded-id-path` (`/1/2`) and, once the whole file is read, `tk:final-embedded-resource-path`. `tk:content` is present only when it is not blank. `tk:parsed-by` names the parser
 that handled the document (ripstream's parser names, not Java class names) and `tk:parsed-by-full-set` on the
 container lists every parser used. `Content-Length` is the size of the input once it has been read in full.
 

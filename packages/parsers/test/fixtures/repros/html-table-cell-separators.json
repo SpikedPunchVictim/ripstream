@@ -1,0 +1,18 @@
+{
+  "description": "HTML table cells and rows are separated in text output (grizzly R2)",
+  "tags": [
+    "repro",
+    "html"
+  ],
+  "input": {
+    "text": "<html><body><table><tr><td>za passport</td><td>sg uen over M85160766</td><td>12345678A</td></tr></table></body></html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "M85160766\t12345678A"
+    }
+  ]
+}

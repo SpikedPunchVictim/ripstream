@@ -1,0 +1,18 @@
+{
+  "description": "Markdown keeps word-internal underscores in identifiers (grizzly R1): an unmatched _ must not open emphasis",
+  "tags": [
+    "repro",
+    "markdown"
+  ],
+  "input": {
+    "text": "config line\n\n_gitlab_session=v902qplep5p1078as74wrf7frb8kjtfr\n",
+    "filename": "note.md"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "_gitlab_session=v902qplep5p1078as74wrf7frb8kjtfr"
+    }
+  ]
+}
