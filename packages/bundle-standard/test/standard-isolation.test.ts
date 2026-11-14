@@ -396,11 +396,11 @@ test("polyglot: even an allowlist widened to application/zip cannot open a zip i
   const zip = storedZip({ [ZIP_MARKER]: "hidden inside the zip" });
   await withStandard({ inProcessTypes: new Set([...DEFAULT_IN_PROCESS_TYPES, "application/zip"]) }, async ({ ripstream }) => {
     const before = settled.length;
-    await assert.rejects(ripstream.parseRecursive(zip, { filename: "bundle.zip" }), (error: unknown) => {
-      assert.ok(error instanceof UnsupportedFormatError, String(error));
-      assert.match(error.message, /application\/zip/);
-      return true;
-    });
+    // A type no parser claims is Tika's EmptyParser: an empty success, not a refusal (core commit fd27c2b). What this
+    // pins is that the zip is not opened here: no entry records, and the entry's content never reaches the output.
+    const records = await ripstream.parseRecursive(zip, { filename: "bundle.zip" });
+    assert.deepEqual(zipEntryRecords(records), [], "the zip was not opened in this process");
+    assert.ok(!records.some((r) => r.content.includes("hidden inside the zip")), "the entry's content is not in the output");
     assert.equal(settled.length - before, 0, "the request really was routed in-process, not to a child");
   });
 });
@@ -632,12 +632,14 @@ test("a pdf-parser setting reaches the child: the same PDF reads in the order th
 
 test("a parsers section that names a parser only the child has is applied here too, not refused", async () => {
   // Only pdf-parser is on: text is not parsed by the full ripstream, so the in-process one must not parse it either.
+  // Tika's answer for a type no parser claims is EmptyParser, an empty success (core commit fd27c2b), so "turned off"
+  // is an empty result, not a refusal.
   const config = loadConfig({ parsers: [{ "pdf-parser": {} }] });
   const text = encoder.encode("plain words");
-  const expected = await outcomeOf(() => createRipstream({ config }).parse(text, { filename: "a.txt" }));
-  assert.ok("error" in expected, "the section turns text off");
+  const expected = await createRipstream({ config }).parse(text, { filename: "a.txt" });
+  assert.equal(expected.text, "", "the section turns text off");
   await withStandard({ ripstreamConfig: config }, async ({ ripstream }) => {
-    assert.deepEqual(await outcomeOf(() => ripstream.parse(text, { filename: "a.txt" })), expected);
+    assert.equal((await ripstream.parse(text, { filename: "a.txt" })).text, expected.text);
     assert.match((await ripstream.parse(pdf("Hello PDF"), { filename: "a.pdf" })).text, /Hello PDF/);
   });
 });

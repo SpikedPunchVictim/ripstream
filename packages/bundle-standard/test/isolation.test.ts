@@ -316,7 +316,8 @@ test("streaming: a large result under the cap comes back as many bounded frames,
 // ---- failures: the same class and code as in-process ---------------------------------------------------------------
 
 const MALFORMED = "MalformedDocumentError/MALFORMED_DOCUMENT";
-const UNSUPPORTED = "UnsupportedFormatError/UNSUPPORTED_FORMAT";
+// A type no parser claims is Tika's EmptyParser: an empty success, not a refusal (core commit fd27c2b).
+const OK = "ok";
 
 /** What an error of the in-process class arrives as across the boundary: a subclass crosses as the class of its code. */
 const ZERO_BYTE = "ZeroByteFileError/MALFORMED_DOCUMENT";
@@ -326,7 +327,7 @@ const FAILURE_CASES: readonly (readonly [name: string, filename: string, bytes: 
   ["PDF header with garbage", "garbage.pdf", () => encoder.encode("%PDF-1.7\nthis is not a pdf at all\n"), MALFORMED],
   ["DOCX that is not a zip", "fake.docx", () => encoder.encode("PK\u0003\u0004 definitely not a zip file"), MALFORMED],
   ["empty input", "empty.bin", () => new Uint8Array(0), ZERO_BYTE],
-  ["binary noise", "noise.bin", () => Uint8Array.from({ length: 4096 }, (_, i) => (i * 131 + 17) & 0xff), UNSUPPORTED],
+  ["binary noise", "noise.bin", () => Uint8Array.from({ length: 4096 }, (_, i) => (i * 131 + 17) & 0xff), OK],
 ];
 
 for (const [name, filename, bytes, expected] of FAILURE_CASES) {
@@ -341,7 +342,7 @@ for (const [name, filename, bytes, expected] of FAILURE_CASES) {
 
 // ---- recording a failure instead of throwing: the same answer in-process and from a child -------------------------------
 
-for (const [name, filename, bytes] of FAILURE_CASES.filter(([, , , expected]) => expected !== UNSUPPORTED)) {
+for (const [name, filename, bytes] of FAILURE_CASES.filter(([, , , expected]) => expected !== OK)) {
   test(`recorded failure parity: ${name} gives the same text and failure isolated as in-process`, async () => {
     const input = bytes();
     const reference = await inProcess.parse(input, { filename, onDocumentFailure: "record" });
