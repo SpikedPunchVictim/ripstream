@@ -1,5 +1,6 @@
 import {
   MalformedDocumentError,
+  inflateBounded,
   type ParseContext,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
@@ -88,18 +89,88 @@ export function isOnTape(segment: Segment, index: number): boolean {
 export class RecordReader {
   private readonly stream: RipstreamInputStream;
   private readonly ctx: ParseContext;
+  /** Compressed volumes put a 4-byte header before each tape block; a block holds `blockSize` logical bytes. */
+  #compressed = false;
+  #blockSize = RECORD;
+  #block: Uint8Array | null = null;
+  #blockOffset = 0;
+  /** TapeInputStream.resetBlockSize: the rest of the first tape block is raw, headers start with the next block. */
+  #firstBlockRest = 0;
 
   constructor(stream: RipstreamInputStream, ctx: ParseContext) {
     this.stream = stream;
     this.ctx = ctx;
   }
 
+  /** Called after the volume header: the volume is compressed, in tape blocks of `ntrec` records. */
+  enableCompression(ntrec: number): void {
+    if (!Number.isSafeInteger(ntrec) || ntrec < 1 || ntrec > 65_536) {
+      throw new MalformedDocumentError(`Unix dump volume with ${ntrec} records to the block`);
+    }
+    this.#compressed = true;
+    this.#blockSize = ntrec * RECORD;
+    this.#firstBlockRest = this.#blockSize - RECORD;
+    this.#block = null;
+    this.#blockOffset = 0;
+  }
+
   async readRecord(): Promise<Uint8Array> {
     this.ctx.throwIfAborted();
+    if (this.#compressed) return this.#compressedRecord();
     const record = await this.stream.peek(RECORD);
     if (record.byteLength < RECORD) throw truncated();
     await this.stream.seek(RECORD, "current");
     return record;
+  }
+
+  /** One record out of the current decompressed tape block, reading the next block when this one is spent. */
+  async #compressedRecord(): Promise<Uint8Array> {
+    if (this.#block === null || this.#blockOffset + RECORD > this.#block.byteLength) {
+      this.#block = await this.#readBlock();
+      this.#blockOffset = 0;
+    }
+    const record = this.#block.slice(this.#blockOffset, this.#blockOffset + RECORD);
+    this.#blockOffset += RECORD;
+    return record;
+  }
+
+  /** A tape block: 4-byte header, then either `blockSize` raw bytes or a zlib stream that inflates to exactly that. */
+  async #readBlock(): Promise<Uint8Array> {
+    if (this.#firstBlockRest > 0) {
+      const rest = this.#readBytes(this.#firstBlockRest);
+      this.#firstBlockRest = 0;
+      return rest;
+    }
+    const header = await this.#readBytes(4);
+    const view = new DataView(header.buffer, header.byteOffset, 4);
+    const h = view.getUint32(0, true);
+    if ((h & 1) === 0) return this.#readBytes(this.#blockSize);
+    const length = (h >>> 4) & 0x0fff_ffff;
+    if (length === 0) throw new MalformedDocumentError("Unix dump compressed block of no bytes");
+    const packed = await this.#readBytes(length);
+    let plain: Uint8Array;
+    try {
+      plain = inflateBounded(packed, "deflate", { maxOutputBytes: this.#blockSize, maxRatio: Number.MAX_SAFE_INTEGER });
+    } catch (error) {
+      throw new MalformedDocumentError("Unix dump compressed block is not valid zlib data", { cause: error });
+    }
+    if (plain.byteLength !== this.#blockSize) {
+      throw new MalformedDocumentError("Unix dump compressed block does not inflate to one tape block");
+    }
+    return plain;
+  }
+
+  async #readBytes(length: number): Promise<Uint8Array> {
+    const out = new Uint8Array(length);
+    let offset = 0;
+    while (offset < length) {
+      const chunk = await this.stream.peek(length - offset);
+      if (chunk.byteLength === 0) throw truncated();
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+      await this.stream.seek(chunk.byteLength, "current");
+    }
+    return out;
   }
 
   /** The next record, which must be a header. */
@@ -120,6 +191,10 @@ export class RecordReader {
   async skipRecords(count: number): Promise<void> {
     if (count === 0) return;
     this.ctx.throwIfAborted();
+    if (this.#compressed) {
+      for (let index = 0; index < count; index++) await this.readRecord();
+      return;
+    }
     try {
       await this.stream.seek(count * RECORD, "current");
     } catch (error) {

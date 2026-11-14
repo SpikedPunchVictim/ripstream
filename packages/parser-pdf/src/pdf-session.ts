@@ -1,3 +1,4 @@
+import { blockPdfjsCanvas } from "./block-canvas.ts";
 import { repairPdf } from "./pdf-repair.ts";
 import { createRequire } from "node:module";
 import { open, readFile, stat } from "node:fs/promises";
@@ -5,6 +6,9 @@ import { dirname, join } from "node:path";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
 import { preflightPdf } from "./pdf-preflight.ts";
 import { isMissingCatalogError, recoverDocument } from "./pdf-recover.ts";
+
+// Before pdf.js is imported anywhere: it polyfills rendering objects by loading the native canvas at import time.
+blockPdfjsCanvas();
 
 /**
  * One pdf.js document load plus the page requests made against it. It owns no
@@ -245,9 +249,7 @@ export class PdfSession {
 
   async #load(): Promise<PdfDocument> {
     const input = this.#input;
-    const pdfjs = (await import(
-      "pdfjs-dist/legacy/build/pdf.mjs"
-    )) as unknown as PdfModule;
+    const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as PdfModule;
     const options: Record<string, unknown> = {
       isEvalSupported: false,
       useWorkerFetch: false,

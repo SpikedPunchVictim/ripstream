@@ -10,7 +10,6 @@ import {
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
   TIKA_KEYS,
-  UnsupportedFormatError,
   WriteLimitReachedError,
   AttributesImpl,
   type ContentHandler,
@@ -71,7 +70,8 @@ export class UnixDumpParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     const reader = new RecordReader(stream, ctx);
-    await readVolumeHeader(reader);
+    const header = await readVolumeHeader(reader);
+    if (header.compressed) reader.enableCompression(header.blockRecords);
     await skipMap(reader, SEGMENT.CLRI);
     await skipMap(reader, SEGMENT.BITS);
     metadata.set("Content-Type", DUMP_TYPE);
@@ -80,16 +80,15 @@ export class UnixDumpParser implements Parser {
 }
 
 /** The volume header: a valid header record, whose summary says how the volume is laid out. */
-async function readVolumeHeader(reader: RecordReader): Promise<void> {
+async function readVolumeHeader(reader: RecordReader): Promise<{ compressed: boolean; blockRecords: number }> {
   const record = await reader.readRecord();
   if (!isHeader(record)) throw new MalformedDocumentError("Not a Unix dump volume: the first record is not a header");
   const view = new DataView(record.buffer, record.byteOffset, record.byteLength);
-  if (view.getInt32(BLOCK_RECORDS_OFFSET, true) < 1) {
+  const blockRecords = view.getInt32(BLOCK_RECORDS_OFFSET, true);
+  if (blockRecords < 1) {
     throw new MalformedDocumentError("Unix dump volume with no records to the block");
   }
-  if ((view.getInt32(FLAGS_OFFSET, true) & COMPRESSED_FLAG) !== 0) {
-    throw new UnsupportedFormatError("Compressed Unix dump volumes are not supported");
-  }
+  return { compressed: (view.getInt32(FLAGS_OFFSET, true) & COMPRESSED_FLAG) !== 0, blockRecords };
 }
 
 /** The CLRI and BITS maps that follow the volume header: a header of that type, then its blocks, all skipped. */

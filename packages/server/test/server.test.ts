@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { IncomingMessage } from "node:http";
 import { test } from "node:test";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { crc32 } from "node:zlib";
-import { createRipstreamServer } from "../src/index.ts";
+import { bearerTokenAuthenticator, createRipstreamServer } from "../src/index.ts";
 import { readZip } from "./fixtures/zip.ts";
 
 async function withServer<T>(
@@ -633,4 +634,15 @@ test("every other limit stays an error: an embedded-resource limit is still 422 
     assert.equal(response.headers.get("x-ripstream-error"), null);
     assert.match(await response.text(), /embedded/i);
   });
+});
+
+test("the bearer-token authenticator accepts only the exact token", () => {
+  const authenticate = bearerTokenAuthenticator("s3cret");
+  const request = (authorization?: string): IncomingMessage => ({ headers: authorization === undefined ? {} : { authorization } }) as IncomingMessage;
+  assert.equal(authenticate(request("Bearer s3cret")), true);
+  assert.equal(authenticate(request("Bearer wrong")), false);
+  assert.equal(authenticate(request("bearer s3cret")), false);
+  assert.equal(authenticate(request("s3cret")), false);
+  assert.equal(authenticate(request()), false);
+  assert.throws(() => bearerTokenAuthenticator(""), RangeError);
 });

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import { deflateSync } from "node:zlib";
 import {
   AbortError,
   BodyContentHandler,
@@ -11,7 +13,6 @@ import {
   ParseTimeoutError,
   RipstreamInputStream,
   ToXMLContentHandler,
-  UnsupportedFormatError,
   WriteLimitReachedError,
   XHTMLContentHandler,
   type EmbeddedDocumentExtractor,
@@ -218,12 +219,6 @@ test("a volume of the old magic number is refused", async () => {
   const bytes = dumpOf([{ path: "a", data: text("x") }]);
   bytes.set(header({ type: SEGMENT.TAPE, magic: 60011 }), 0);
   await assert.rejects(run(bytes), MalformedDocumentError);
-});
-
-test("a compressed volume is refused as unsupported", async () => {
-  const bytes = dumpOf([{ path: "a", data: text("x") }]);
-  bytes.set(header({ type: SEGMENT.TAPE, flags: 0x0080 }), 0);
-  await assert.rejects(run(bytes), UnsupportedFormatError);
 });
 
 test("a volume that says it has no records to the block is refused", async () => {
@@ -1089,3 +1084,49 @@ test("a directory that names itself is where its own paths start, and is not fol
   const { seen } = await run(volume(records));
   assert.deepEqual(seen.map((s) => s.name), ["self/f"]);
 });
+
+test("a real dump(8) volume from commons-compress parses, and its compressed encoding is read", async () => {
+  const real = new Uint8Array(readFileSync(new URL("./fixtures/dump/commons-bla.dump", import.meta.url)));
+  const plain = await run(real);
+  assert.ok(plain.seen.length > 0);
+  const compressed = compressDump(real);
+  const packed = await run(compressed);
+  assert.deepEqual(
+    packed.seen.map((entry) => [entry.name, entry.bytes.length]),
+    plain.seen.map((entry) => [entry.name, entry.bytes.length]),
+  );
+});
+
+/** Re-encode a real uncompressed volume in TapeInputStream's compressed form: first tape block raw, then zlib blocks. */
+function compressDump(source: Uint8Array): Uint8Array {
+  const view = new DataView(source.buffer, source.byteOffset, source.byteLength);
+  const blockSize = view.getInt32(896, true) * RECORD;
+  // The first tape block is header + the rest raw; every later block gets a 4-byte header.
+  const parts: Uint8Array[] = [source.subarray(0, blockSize)];
+  for (let offset = blockSize; offset < source.length; offset += blockSize) {
+    const block = source.subarray(offset, Math.min(offset + blockSize, source.length));
+    const packed = new Uint8Array(deflateSync(block));
+    if (packed.length < block.length) {
+      const header = new Uint8Array(4);
+      new DataView(header.buffer).setUint32(0, ((packed.length << 4) | 1) >>> 0, true);
+      parts.push(header, packed);
+    } else {
+      const header = new Uint8Array(4);
+      parts.push(header, block);
+    }
+  }
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  // Mark the volume compressed and repair the header checksum over the changed flags word.
+  const outView = new DataView(out.buffer);
+  outView.setInt32(888, outView.getInt32(888, true) | 0x80, true);
+  let sum = 0;
+  for (let word = 0; word < RECORD / 4; word++) sum = (sum + outView.getInt32(4 * word, true)) | 0;
+  const others = (sum - outView.getInt32(28, true)) | 0;
+  outView.setInt32(28, (84446 - others) | 0, true);
+  return out;
+}

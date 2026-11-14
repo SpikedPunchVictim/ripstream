@@ -242,7 +242,10 @@ waits has not buffered a byte: a burst costs sockets, not memory. A waiting requ
 `requestTimeoutMs` (60 s) is a `408`; one that finds the queue full is refused with `503` and `Retry-After: 1`. The gate
 keeps the number of bodies held in memory near what the pool can run and queue; it is not an exact bound. A request
 that reserves more than the default (a larger ceiling is in the reservation already) can still be refused by the pool
-with `queue_full` after its body was read. Under isolation a `/pipes` run holds one gate slot and parses one document
+with `queue_full` after its body was read. A separate body-byte budget (`maxInFlightBodyBytes`, default four times
+`maxBodyBytes`) counts the bodies the admitted requests hold: a known `Content-Length` reserves that many bytes, a
+chunked or gzip body reserves `maxBodyBytes`, and a request that would pass it is answered 503 with `Retry-After: 1`
+before its body is read (tikajs-x1f3). Under isolation a `/pipes` run holds one gate slot and parses one document
 at a time, so one slot is one child, whatever concurrency the request or the settings ask for. For CONTENT_ONLY and
 RMETA its file-system fetcher hands the child the validated path, so a large input is not also copied into the parent;
 NO_PARSE (which digests and detects) and UNPACK (which builds a package) read the bytes in the parent (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.

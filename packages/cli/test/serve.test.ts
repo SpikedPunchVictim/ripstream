@@ -544,3 +544,24 @@ test("serve describes the standard media types at /mime-types, with the custom-m
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("serve reads server.authToken and refuses an unauthenticated request", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ripstream-serve-auth-"));
+  try {
+    const config = join(root, "config.json");
+    writeFileSync(config, JSON.stringify({ server: { authToken: "s3cret", endpoints: ["tika"] } }));
+    const running = await startServe(["--config", config, "--isolation", "off"], {});
+    const { base } = running;
+    try {
+      const denied = await fetch(`${base}/tika`, { method: "PUT", body: "hello" });
+      assert.equal(denied.status, 401);
+      const allowed = await fetch(`${base}/tika`, { method: "PUT", body: "hello", headers: { authorization: "Bearer s3cret" } });
+      assert.equal(allowed.status, 200);
+      assert.match(await allowed.text(), /hello/);
+    } finally {
+      assert.equal(await stop(running), 0);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -26,7 +26,7 @@ import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ri
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
 import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
-import { createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
+import { bearerTokenAuthenticator, createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
 import { formatDoctor, runDoctor, type DoctorProbes } from "./doctor.ts";
 import { serverMimeTypes } from "./mime-types.ts";
 import {
@@ -303,6 +303,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
       ...(defaults?.maxOutputChars === undefined ? {} : { maxOutputChars: defaults.maxOutputChars }),
       ...(defaults?.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: defaults.maxEmbeddedResources }),
     };
+    const pipesSettings = settings.config?.pipes ?? undefined;
     // Info and debug lines are shown when the section asks for request logging, down to the level it names.
     const shown = server.requestLogLevel === "debug" ? ["warn", "info", "debug"] : server.requestLogLevel === "info" ? ["warn", "info"] : ["warn"];
     let instance: ReturnType<typeof createRipstreamServer>;
@@ -321,6 +322,10 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         mimeTypes: serverMimeTypes(settings.config?.customMimeTypes ?? null),
         ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES) }),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
+        ...(server.authToken === undefined ? {} : { authenticate: bearerTokenAuthenticator(server.authToken) }),
+        // The pipes sections are the fetchers, emitters and iterator of /pipes and /async; without a token the server
+        // has no way to authorize them, so they stay off.
+        ...(server.authToken === undefined || pipesSettings === undefined ? {} : { pipes: { settings: pipesSettings } }),
         ...(server.maxRequestSizeBytes === undefined ? {} : { maxBodyBytes: server.maxRequestSizeBytes }),
         ...(server.maxUnpackBytes === undefined ? {} : { maxUnpackBytes: server.maxUnpackBytes }),
         ...(server.requestLogLevel === undefined ? {} : { requestLogLevel: server.requestLogLevel }),

@@ -1,5 +1,5 @@
 /** The endpoints of Tika's server that `ripstream serve` serves, by Tika's names. */
-export const SERVER_ENDPOINTS = ["tika", "rmeta", "meta", "unpack", "detect", "language", "mime-types", "version", "status", "async"] as const;
+export const SERVER_ENDPOINTS = ["tika", "rmeta", "meta", "unpack", "detect", "language", "mime-types", "version", "status", "async", "pipes"] as const;
 
 export type ServerEndpoint = (typeof SERVER_ENDPOINTS)[number];
 
@@ -25,6 +25,12 @@ export interface ServerSettings {
    * can hold, naming it.
    */
   readonly maxUnpackBytes?: number;
+  /**
+   * A bearer token for every endpoint (Tika's server authentication hook). `ripstream serve` builds its authenticate
+   * function from it and can then take /pipes and /async tuples from a `pipes` section. Use a `${env:NAME}` reference
+   * rather than writing the token in the file.
+   */
+  readonly authToken?: string;
   readonly requestLogLevel?: "debug" | "info";
   /** Negative disables the deadline, as in Tika. */
   readonly maxRequestReadMillis?: number;
@@ -34,7 +40,7 @@ export interface ServerSettings {
 const INT_MAX = 2 ** 31 - 1;
 
 /** Tika endpoints (TikaServerProcess.VALID_ENDPOINTS) that ripstream does not serve from a configuration. */
-const NOT_SERVED = new Set(["detectors", "parsers", "pipes"]);
+const NOT_SERVED = new Set(["detectors", "parsers"]);
 
 /** Switches that open a Tika feature ripstream does not have. Off is what ripstream does, so off is accepted. */
 const SWITCHES: Readonly<Record<string, string>> = {
@@ -53,7 +59,7 @@ const REFUSED: Readonly<Record<string, string>> = {
   metricsPort: "ripstream has no metrics listener",
 };
 
-const APPLIED = ["port", "host", "endpoints", "cors", "maxRequestSizeBytes", "maxUnpackBytes", "requestLogLevel", "maxRequestReadMillis", "idleTimeoutMillis"];
+const APPLIED = ["port", "host", "endpoints", "cors", "authToken", "maxRequestSizeBytes", "maxUnpackBytes", "requestLogLevel", "maxRequestReadMillis", "idleTimeoutMillis"];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -120,6 +126,10 @@ export function parseServerSection(value: unknown): { settings: ServerSettings; 
       case "maxUnpackBytes":
         if (whole(raw, 0, Number.MAX_SAFE_INTEGER)) settings.maxUnpackBytes = raw;
         else issues.push("server.maxUnpackBytes must be a whole number of bytes, 0 or more");
+        break;
+      case "authToken":
+        if (typeof raw === "string" && raw.length > 0 && !/[\u0000-\u001f]/.test(raw)) settings.authToken = raw;
+        else issues.push("server.authToken must be a non-empty string without control characters");
         break;
       case "requestLogLevel":
         if (raw === "debug" || raw === "info") settings.requestLogLevel = raw;

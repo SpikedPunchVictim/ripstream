@@ -1,5 +1,6 @@
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { gzip } from "node:zlib";
 import {
   Metadata,
@@ -131,6 +132,13 @@ export interface RipstreamServerOptions {
    */
   readonly onOutputLimit?: "truncate" | "throw";
   readonly maxBodyBytes?: number;
+  /**
+   * The most request-body bytes that may be in flight at once, summed over the requests the server has admitted. A
+   * request with a known length reserves it; a chunked or gzip-encoded one reserves `maxBodyBytes`. Past the budget a
+   * request is answered 503 with `Retry-After: 1` before its body is read. Default four times `maxBodyBytes` (400 MiB
+   * with the default 100 MiB body cap), which is the number of bodies the usual gate can run at the per-request cap.
+   */
+  readonly maxInFlightBodyBytes?: number;
   /**
    * The most bytes of embedded documents one `/unpack` answer carries, summed over the whole document. A document that
    * would take the total past it is left out of the package (its record in `rmeta.json` is still there); Tika does the
@@ -284,6 +292,7 @@ const ENDPOINT_ROUTES: Readonly<Record<ServerEndpoint, readonly string[]>> = {
   version: ["GET /version"],
   status: ["GET /status"],
   async: ["POST /async", "GET /status/{id}"],
+  pipes: ["POST /pipes"],
 };
 
 function servedRoutes(enabled: ReadonlySet<string>): string[] {
@@ -501,6 +510,22 @@ function errorResponse(error: unknown): {
   return { status: 500, headers: {}, code: "ERROR", message };
 }
 
+/**
+ * Tika's server authentication hook, built from one bearer token: a request is authorized when its `Authorization`
+ * header is `Bearer <token>`. The comparison is constant-time and length-aware. The CLI builds this from
+ * `server.authToken`; an embedder can pass any authenticate function instead.
+ */
+export function bearerTokenAuthenticator(token: string): (request: IncomingMessage) => boolean {
+  if (token.length === 0 || /[\u0000-\u001f]/.test(token)) throw new RangeError("authToken must be a non-empty string without control characters");
+  const expected = Buffer.from(token, "utf8");
+  return (request) => {
+    const header = request.headers.authorization;
+    if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
+    const given = Buffer.from(header.slice("Bearer ".length), "utf8");
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  };
+}
+
 export interface RipstreamServer {
   readonly handler: (request: IncomingMessage, response: ServerResponse) => void;
   readonly server: ReturnType<typeof createServer>;
@@ -566,6 +591,25 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const enabled: ReadonlySet<string> = new Set(options.endpoints ?? SERVER_ENDPOINTS);
   const sortedMimeTypes = sortMimeTypes(options.mimeTypes ?? []);
   const maxBodyBytes = options.maxBodyBytes ?? 100 * 1024 * 1024;
+  // Four bodies at the per-request cap: the default gate runs that many at once, and a deployment that raises the gate
+  // can raise this. Held from admission until the response is written, because the buffer lives through the parse.
+  const maxInFlightBodyBytes = options.maxInFlightBodyBytes ?? Math.min(2 ** 31 - 1, maxBodyBytes * 4);
+  let bodyBytesInFlight = 0;
+  const reserveBody = (request: IncomingMessage): (() => void) | null => {
+    const method = request.method ?? "GET";
+    if (method !== "PUT" && method !== "POST" && method !== "PATCH") return null;
+    const gzip = (request.headers["content-encoding"] ?? "").toLowerCase().includes("gzip");
+    const declared = Number(request.headers["content-length"]);
+    const amount = gzip || !Number.isSafeInteger(declared) || declared < 0 ? maxBodyBytes : Math.min(declared, maxBodyBytes);
+    if (amount === 0) return null;
+    if (bodyBytesInFlight + amount > maxInFlightBodyBytes) {
+      throw new HttpError(503, "Server body memory budget is full", { "Retry-After": RETRY_AFTER_FULL });
+    }
+    bodyBytesInFlight += amount;
+    return () => {
+      bodyBytesInFlight -= amount;
+    };
+  };
   const maxUnpackBytes = resolveUnpackBytes(options.maxUnpackBytes, isolating ? startupStatus?.limits?.unpackCeiling : undefined);
   const maxConcurrent = options.maxConcurrent ?? derivedGate?.maxConcurrent ?? 100;
   const maxQueue = options.maxQueue ?? 100;
@@ -670,8 +714,10 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         return;
       }
       let release: (() => void) | null = null;
+      let releaseBody: (() => void) | null = null;
       try {
         release = await acquire();
+        releaseBody = reserveBody(request);
         await route(request, response, () => {
           const held = release;
           release = null;
@@ -691,6 +737,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           }
         }
       } finally {
+        releaseBody?.();
         release?.();
       }
     })().catch(() => {
@@ -1269,6 +1316,7 @@ function requireValidServerOptions(options: RipstreamServerOptions): void {
 function requireValidGateOptions(options: RipstreamServerOptions): void {
   requireCount("maxConcurrent", options.maxConcurrent, 1);
   requireCount("maxQueue", options.maxQueue, 0);
+  requireCount("maxInFlightBodyBytes", options.maxInFlightBodyBytes, 1);
 }
 
 /**

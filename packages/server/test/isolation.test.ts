@@ -804,3 +804,32 @@ test("end to end: a hostile document takes down only its own request", { timeout
     pool.dispose();
   }
 });
+
+test("a body-byte budget refuses a second body before reading it", async () => {
+  const hold = deferred();
+  const engine = fakeEngine(async () => hold.promise);
+  await withServer(
+    {
+      ripstream: engine,
+      isolation: fakeIsolation(),
+      maxLimits: { maxOutputChars: 1000 },
+      maxBodyBytes: 8,
+      maxInFlightBodyBytes: 8,
+      authenticate: () => true,
+    },
+    async (base) => {
+      const put = (): Promise<Response> =>
+        fetch(`${base}/tika?filename=a.txt`, { method: "PUT", body: "12345678" });
+      const first = put();
+      await waitFor(async () => engine.calls.length === 1);
+      const second = await put();
+      assert.equal(second.status, 503);
+      assert.equal(second.headers.get("retry-after"), "1");
+      await second.arrayBuffer();
+      hold.resolve();
+      const answered = await first;
+      assert.equal(answered.status, 200);
+      await answered.arrayBuffer();
+    },
+  );
+});

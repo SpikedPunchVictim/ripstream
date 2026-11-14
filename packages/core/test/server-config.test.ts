@@ -23,6 +23,7 @@ test("every applied key is read, and a loaded configuration keeps them frozen", 
     host: "0.0.0.0",
     endpoints: ["detect", "status"],
     cors: "https://example.com",
+    authToken: "secret",
     maxRequestSizeBytes: 1_048_576,
     maxUnpackBytes: 52_428_800,
     requestLogLevel: "info",
@@ -44,9 +45,9 @@ test("what Tika reads as unset is unset: * for all hosts, an empty cors, an empt
 });
 
 test("the endpoints ripstream serves, and the default set Tika serves without an endpoints key", () => {
-  assert.deepEqual([...SERVER_ENDPOINTS].sort(), ["async", "detect", "language", "meta", "mime-types", "rmeta", "status", "tika", "unpack", "version"]);
+  assert.deepEqual([...SERVER_ENDPOINTS].sort(), ["async", "detect", "language", "meta", "mime-types", "pipes", "rmeta", "status", "tika", "unpack", "version"]);
   // Tika: tika rmeta meta unpack detect language mime mime-types detectors parsers version; status, pipes and async are opt-in.
-  // ripstream serves all but `detectors` and `parsers` (and `pipes`, which is opt-in there).
+  // ripstream serves all but `detectors` and `parsers`; pipes and async are opt-in endpoints.
   assert.deepEqual([...DEFAULT_SERVER_ENDPOINTS].sort(), ["detect", "language", "meta", "mime-types", "rmeta", "tika", "unpack", "version"]);
 });
 
@@ -68,7 +69,7 @@ test("a port, host or endpoint that is not one is refused", () => {
 test("an endpoint Tika does not know is unrecognized; one Tika has and ripstream does not serve is said so", () => {
   const [unknown] = issuesOf({ endpoints: ["tika", "detct"] });
   assert.match(unknown ?? "", /^server\.endpoints\[1\] "detct" is not an endpoint; ripstream serves /);
-  for (const name of ["detectors", "parsers", "pipes"]) {
+  for (const name of ["detectors", "parsers"]) {
     const [issue] = issuesOf({ endpoints: [name] });
     assert.match(issue ?? "", new RegExp(`^server\\.endpoints\\[0\\] "${name}" is a Tika endpoint that ripstream does not serve`), name);
   }
@@ -116,15 +117,24 @@ test("a setting with no ripstream counterpart is refused by name, with the reaso
     const [issue] = issuesOf({ [key]: key === "tlsConfig" ? {} : 1 });
     assert.match(issue ?? "", new RegExp(`^server\\.${key} is not supported: ripstream `), key);
   }
-  assert.match(issuesOf({ bogus: 1 }).join("|"), /^server\.bogus is not a server setting; ripstream applies port, host, endpoints, cors, maxRequestSizeBytes, maxUnpackBytes, /);
+  assert.match(issuesOf({ bogus: 1 }).join("|"), /^server\.bogus is not a server setting; ripstream applies port, host, endpoints, cors, authToken, maxRequestSizeBytes, maxUnpackBytes, /);
 });
 
 test("the section must be an object, and loadConfig reports every problem at once", () => {
   for (const value of [[], "x", 1, null]) assert.deepEqual(issuesOf(value), ["server must be an object"], String(value));
   assert.throws(
     () => loadConfig({ server: { port: -1, endpoints: ["pipes"], id: "a" } }),
-    (error) => error instanceof RipstreamConfigError && error.issues.length === 3,
+    (error) => error instanceof RipstreamConfigError && error.issues.length === 2,
   );
   assert.equal(validateConfig({ server: { port: 8080 } }).length, 0);
   assert.equal(validateConfig({ server: { port: "x" } }).length, 1);
+});
+
+test("an authToken is read and a pipes endpoint is allowed for the CLI's token-authenticated server", () => {
+  assert.deepEqual(section({ authToken: "s3cret", endpoints: ["pipes", "async", "tika"] }).settings, {
+    authToken: "s3cret",
+    endpoints: ["pipes", "async", "tika"],
+  });
+  assert.match(issuesOf({ authToken: "" })[0] ?? "", /authToken/);
+  assert.match(issuesOf({ authToken: "a\u0000b" })[0] ?? "", /authToken/);
 });
