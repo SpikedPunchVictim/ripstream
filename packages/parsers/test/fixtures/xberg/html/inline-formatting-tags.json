@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): b, strong, i, em, s, del, u and ins keep their text. Input html/files/formatting.html (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/formatting.html",
+    "filename": "formatting.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "strong + bold mixed"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "italic + emphasis together"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "double strikethrough (s + del)"
+    }
+  ]
+}

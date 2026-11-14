@@ -1,0 +1,31 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_tests.rs: \\~ \\_ \\- read as the characters they stand for. The optional hyphen may be kept as U+00AD or dropped.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi 5\\~kg, non\\_stop, co\\-operate\\par}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "5 kg"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "non‑stop"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "co­?operate"
+    }
+  ]
+}

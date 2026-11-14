@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/encoding_extraction.rs (plain_text_latin1_decodes_without_replacement): Latin-1 bytes are not turned into U+FFFD.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding"
+  ],
+  "input": {
+    "base64": "Y2Fm6SBuYe92ZSBy6XN1bekgY2Fm6SBhdSBsYWl0",
+    "filename": "note.txt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "café"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "résumé"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_script_formatting.rs: sup/sub text stays in the output.",
+  "tags": [
+    "xberg",
+    "html"
+  ],
+  "input": {
+    "text": "<p>7,2 x 10<sup>9</sup>/l; H<sub>2</sub>O</p>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "7,2 x 10"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "H"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "H\\W*2\\W*O"
+    }
+  ]
+}

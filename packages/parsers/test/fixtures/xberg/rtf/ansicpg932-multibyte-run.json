@@ -1,0 +1,26 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: adjacent escapes decode as one Shift-JIS run.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg932\\deff0{\\fonttbl{\\f0\\fnil\\fcharset128 MS Mincho;}}\\f0 \\'93\\'fa\\'96\\'7b}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "日本"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

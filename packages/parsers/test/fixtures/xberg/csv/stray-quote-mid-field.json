@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_150_csv_midfield_quote.rs: a stray quote inside an unquoted field does not swallow later rows.",
+  "tags": [
+    "xberg",
+    "csv"
+  ],
+  "input": {
+    "text": "Size,Description\n5\" pipe,Steel\nOther,Plastic",
+    "filename": "a.csv"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "5\" pipe,Steel"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Other,Plastic"
+    }
+  ]
+}

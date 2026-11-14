@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/docx_content_control_placeholders.rs (text box shapes): text inside a DrawingML text box is extracted.",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBF93yF5S2KHVgghJJ0wWMJLMoHjOxJYtUvedxS/p5JW7pAhaV9H2d0u9U+eLHDQi7FXt6oVgqMJlkXp15+rF+ae7karrr1V0YS7I3Uy7nW/KA1mRkDkEoZIytjKgEqP8ukM5gNTKhv2/ZOmxQrxtrUpUMO3ROOsPVVPO/5+8gt6EmKx6NxYfUScvbOQGVd76L9RWlOBMXJg4dml+maDVJfJCzK34BT7o2HKM6ieIdSXyGwS3+mYrVNZhs4qf6vuXBnGkdn8Jxf2nJJBol44eDVWQng4s/9+jD38A1QSwMEFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4J1TRN5pWgaEUJMuCKkrKgeIEjeNaB5Kwuv2ZGCgiIHR9u/Pcts97ExuGJPxjkFT1UDQSa+M0wzOw3G9g46v2hPOIpdImkxIpOy4xGDKOewpTXJCK1LlA7oyGX20IpcyahqEvAiNdFPXWxo/DeALk/SKQexVA2R4BvzH9uNoJB68vFp0+ceJr0SRRdSYGdx9VFS921VhgfKWLl7kL1BLAwQUAAAACAAAACFQNv3cwQoBAAD9AQAAEQAAAHdvcmQvZG9jdW1lbnQueG1sjZFNT8MwDIbv/Ioqd5qOA0JV20nj44TEgSHtmiXuWqmJozjQ7t/jfrCJcuFiO7L95nmTYjvYLvmCQC26UmzSTCTgNJrWnUrxsX+5fRAJReWM6tBBKc5AYlvdFH1uUH9acDFhBUd5X4omRp9LSboBqyhFD457NQarIh/DSfYYjA+ogYgvsJ28y7J7aVXrxCIT/iODdd1qeFoAZpEAnYpsgprWk6gY8IjmPGY/hjCGWL2CMmkhx3KM4dIyQfWMxKVnL+R/XHn6A2RbHZCwjqlGu7BMzhhkk608vjfKg5hl43AcJgzOj+gis6/5dm+HZP982P9ClNOMXC3Kq6RcoKehi5PV8vwc8vpx1TdQSwECFAMUAAAACAAAACFQ8LfWC+IAAACdAQAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAxQAAAAIAAAAIVBGtxXZpQAAABkBAAALAAAAAAAAAAAAAACAARMBAABfcmVscy8ucmVsc1BLAQIUAxQAAAAIAAAAIVA2/dzBCgEAAP0BAAARAAAAAAAAAAAAAACAAeEBAAB3b3JkL2RvY3VtZW50LnhtbFBLBQYAAAAAAwADALkAAAAaAwAAAAA=",
+    "filename": "a.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Lead."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "BOX TEXT"
+    }
+  ]
+}

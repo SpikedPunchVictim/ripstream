@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_169_email_extra_headers.rs: a minimal message carries none of the extended raw headers.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUuY29tDQpUbzogcmVjaXBpZW50QGV4YW1wbGUuY29tDQpTdWJqZWN0OiBNaW5pbWFsIGVtYWlsDQpEYXRlOiBNb24sIDEgSmFuIDIwMjQgMTI6MDA6MDAgKzAwMDANCg0KQm9keSB0ZXh0Lg==",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    },
+    {
+      "type": "absent",
+      "field": "metadata.message:raw-header:Reply-To"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.message:raw-header:Message-ID"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.message:raw-header:List-Id"
+    }
+  ]
+}

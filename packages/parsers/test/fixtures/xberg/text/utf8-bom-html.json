@@ -1,0 +1,30 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/text_formats_utf8_bom.rs: a UTF-8 BOM in front of html does not leak into the text.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding",
+    "bom"
+  ],
+  "input": {
+    "base64": "77u/PGh0bWw+PGJvZHk+PGgxPlRpdGxlPC9oMT48cD5Cb2R5IHRleHQuPC9wPjwvYm9keT48L2h0bWw+",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Title"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    }
+  ]
+}

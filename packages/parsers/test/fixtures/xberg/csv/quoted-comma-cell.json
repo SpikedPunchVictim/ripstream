@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): a quoted comma cell is kept verbatim. Input csv/files/csv-comma-in-cell.csv (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "csv",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/csv-comma-in-cell.csv",
+    "filename": "csv-comma-in-cell.csv"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "a,\",\",c,d"
+    }
+  ]
+}

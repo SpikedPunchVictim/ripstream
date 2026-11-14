@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): table cells holding lists and entities keep their text. Input html/files/html_rich_table_cells.html (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/html_rich_table_cells.html",
+    "filename": "html_rich_table_cells.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Basic duck facts"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Often seen near ponds."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Water & wetlands"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "Pond[\\s\\S]*Marsh[\\s\\S]*Riverbank"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_2182_html_whitespace_only_formatting.rs: a heading holding only a space extracts without error.",
+  "tags": [
+    "xberg",
+    "html"
+  ],
+  "input": {
+    "text": "<h1> </h1>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 8
+    }
+  ]
+}

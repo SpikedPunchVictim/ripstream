@@ -1,0 +1,26 @@
+{
+  "description": "xberg rtf/encoding tests: Cyrillic windows-1251 bytes decode through a Content-Type charset hint.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding"
+  ],
+  "input": {
+    "base64": "z/Do4uXyLCDs6PAhIN3y7iDy5fHy7uL76SDk7urz7OXt8i4="
+  },
+  "options": {
+    "contentType": "text/plain; charset=windows-1251"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Привет, мир! Это тестовый документ."
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

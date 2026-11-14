@@ -1,0 +1,18 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_2182_html_whitespace_only_formatting.rs: a paragraph holding only a formatted nbsp does not break extraction.",
+  "tags": [
+    "xberg",
+    "html"
+  ],
+  "input": {
+    "text": "<p>x</p><p><b>&nbsp;</b></p>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "x"
+    }
+  ]
+}

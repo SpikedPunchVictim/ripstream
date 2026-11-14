@@ -1,0 +1,52 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_161_email_header_utf8_boundary.rs: one non-UTF-8 byte in the body must not suppress header extraction (Date, X-Mailer, List-Id ...).",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUuY29tDQpUbzogcmVjaXBpZW50QGV4YW1wbGUuY29tDQpTdWJqZWN0OiBOb24tVVRGOCBib2R5DQpEYXRlOiBNb24sIDEgSmFuIDIwMjQgMTI6MDA6MDAgKzAwMDANCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD1pc28tODg1OS0xDQpNSU1FLVZlcnNpb246IDEuMA0KWC1NYWlsZXI6IFRlc3RNYWlsZXIvMS4wDQpVc2VyLUFnZW50OiBUZXN0QWdlbnQvMi4wDQpMaXN0LUlkOiB0ZXN0LWxpc3QgPGxpc3QuZXhhbXBsZS5jb20+DQpMaXN0LVVuc3Vic2NyaWJlOiA8bWFpbHRvOnVuc3ViQGV4YW1wbGUuY29tPg0KDQpCb2R5IHdpdGggYW4gaW52YWxpZCBieXRlOiD/IGVuZCBvZiBib2R5Lg==",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "end of body."
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Non-UTF8 body"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2024-01-01T12:00:00Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:X-Mailer",
+      "value": "TestMailer/1.0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:User-Agent",
+      "value": "TestAgent/2.0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:List-Unsubscribe",
+      "value": "<mailto:unsub@example.com>"
+    }
+  ]
+}

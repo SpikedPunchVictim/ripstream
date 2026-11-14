@@ -1,0 +1,39 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_1242_xml_entities.rs: XML entities and character references survive in body, table cell, header and footnote.",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "base64": "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",
+    "filename": "a.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Falafel & Hummus <combo> 5>3"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "em—dash and hex—dash"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fish & Chips"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Header: Q&A session"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Footnote: salt & pepper"
+    }
+  ]
+}

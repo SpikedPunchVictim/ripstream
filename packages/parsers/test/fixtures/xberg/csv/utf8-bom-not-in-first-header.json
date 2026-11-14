@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/encoding_extraction.rs (csv_strips_utf8_bom): the BOM of an Excel UTF-8 CSV does not reach the output.",
+  "tags": [
+    "xberg",
+    "csv",
+    "encoding"
+  ],
+  "input": {
+    "base64": "77u/TmFtZSxBZ2UKQWxpY2UsMzAK",
+    "filename": "a.csv"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Name,Age"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:detected-encoding",
+      "value": "UTF-8"
+    }
+  ]
+}

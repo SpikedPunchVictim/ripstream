@@ -1,0 +1,21 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\ansicpg936 decodes \\'c4\\'e3\\'ba\\'c3 to 你好.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg936 \\'c4\\'e3\\'ba\\'c3}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "你好"
+    }
+  ]
+}

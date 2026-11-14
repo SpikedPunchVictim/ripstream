@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): three levels of nested tables keep their text in document order. Input html/files/table_06.html (see ../README.txt). Tika 4.2.0 (oracle, /tika/text) writes a tab BEFORE each cell, not after, and no title text in the body: the assertions follow its output.",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/table_06.html",
+    "filename": "table_06.html"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "Header[\\s\\S]*This is the first paragraph[\\s\\S]*\\tA[\\s\\S]*\\tB[\\s\\S]*\\tA1[\\s\\S]*\\tB1[\\s\\S]*\\tC1[\\s\\S]*\\tD1[\\s\\S]*\\tI[\\s\\S]*\\tII[\\s\\S]*\\tIII[\\s\\S]*\\tIV[\\s\\S]*\\tV[\\s\\S]*\\tE1[\\s\\S]*\\tE2[\\s\\S]*\\tE3"
+    }
+  ]
+}

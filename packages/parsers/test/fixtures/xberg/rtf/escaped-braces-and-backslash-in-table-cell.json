@@ -1,0 +1,26 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_tests.rs: \\{ \\} and \\\\ inside a table row stay in the text.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\trowd\\cellx1000\\cellx2000 set \\{x\\} here\\cell C:\\\\tmp, 5\\~kg\\cell\\row}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "set {x} here"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "C:\\tmp"
+    }
+  ]
+}

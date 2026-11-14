@@ -1,0 +1,57 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_169_email_extra_headers.rs: Reply-To, Message-ID, In-Reply-To, References, List-Id, List-Unsubscribe all reach metadata.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogc2VuZGVyQGV4YW1wbGUuY29tDQpUbzogcmVjaXBpZW50QGV4YW1wbGUuY29tDQpDYzogY2NAZXhhbXBsZS5jb20NCkJjYzogYmNjQGV4YW1wbGUuY29tDQpSZXBseS1UbzogcmVwbHlAZXhhbXBsZS5jb20NClN1YmplY3Q6IFRocmVhZCByZWNvbnN0cnVjdGlvbiBoZWFkZXJzDQpEYXRlOiBNb24sIDEgSmFuIDIwMjQgMTI6MDA6MDAgKzAwMDANCk1lc3NhZ2UtSUQ6IDxtc2cxQGV4YW1wbGUuY29tPg0KSW4tUmVwbHktVG86IDxwYXJlbnRAZXhhbXBsZS5jb20+DQpSZWZlcmVuY2VzOiA8cm9vdEBleGFtcGxlLmNvbT4gPHBhcmVudEBleGFtcGxlLmNvbT4NCkxpc3QtSWQ6IGVuZ2luZWVyaW5nIDxlbmcuZXhhbXBsZS5jb20+DQpMaXN0LVVuc3Vic2NyaWJlOiA8bWFpbHRvOnVuc3ViQGV4YW1wbGUuY29tPg0KDQpCb2R5IHRleHQu",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:Reply-To",
+      "value": "reply@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:Message-ID",
+      "value": "<msg1@example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:In-Reply-To",
+      "value": "<parent@example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:References",
+      "value": "<root@example.com> <parent@example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:List-Id",
+      "value": "engineering <eng.example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:raw-header:List-Unsubscribe",
+      "value": "<mailto:unsub@example.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:cc",
+      "value": "cc@example.com"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: the simplest RTF yields its text.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1 Hello World}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello World"
+    }
+  ]
+}

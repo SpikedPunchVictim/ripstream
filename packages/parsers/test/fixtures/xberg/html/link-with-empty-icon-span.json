@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): a link holding an empty icon span keeps its label and the trailing text. Input html/files/hyperlink_01.html (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/hyperlink_01.html",
+    "filename": "hyperlink_01.html"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "Please follow the link to:\\s+This page\\s+\\."
+    }
+  ]
+}

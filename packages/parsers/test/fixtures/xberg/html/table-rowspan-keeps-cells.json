@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_table_spans.rs: cells under a rowspan keep their text.",
+  "tags": [
+    "xberg",
+    "html",
+    "table"
+  ],
+  "input": {
+    "text": "<table><tr><th>Group</th><th>Name</th><th>Score</th></tr><tr><td rowspan=\"2\">Alpha</td><td>Alice</td><td>10</td></tr><tr><td>Bob</td><td>20</td></tr></table>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Alpha"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Alice"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Bob"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "20"
+    }
+  ]
+}

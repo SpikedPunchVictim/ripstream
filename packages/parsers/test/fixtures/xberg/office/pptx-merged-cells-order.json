@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/pptx_merged_cells.rs: a merged header in a slide table keeps every following cell in order. Input is xberg tests/fixtures/office/merged_table.pptx (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "pptx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "files/merged_table.pptx",
+    "filename": "merged_table.pptx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fuse"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Circuit"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "101[\\s\\S]*40A[\\s\\S]*Blower[\\s\\S]*102[\\s\\S]*50A[\\s\\S]*Cooling"
+    }
+  ]
+}

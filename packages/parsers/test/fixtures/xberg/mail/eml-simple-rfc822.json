@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): plain RFC 822 message. Input mail/files/simple-rfc-822.eml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "eml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/simple-rfc-822.eml",
+    "filename": "simple-rfc-822.eml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "An RFC 822 message is characterized by its simple, text-based format"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Example RFC 822 Email"
+    }
+  ]
+}

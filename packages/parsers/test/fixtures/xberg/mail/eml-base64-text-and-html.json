@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): multipart/alternative with base64 text and html parts. Input mail/files/fake-email-b64.eml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "eml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/fake-email-b64.eml",
+    "filename": "fake-email-b64.eml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This is a test email to use for unit tests."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Roses are red"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Violets are blue"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Test Email"
+    }
+  ]
+}

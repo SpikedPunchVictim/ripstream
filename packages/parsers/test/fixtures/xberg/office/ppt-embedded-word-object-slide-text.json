@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_1660_ppt_embedded_ole_objects.rs: slide text of a binary PowerPoint file that embeds a Word object (issue 1660). Input is xberg tests/fixtures/ppt/embedded_word_object.ppt (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "ppt",
+    "ole2"
+  ],
+  "input": {
+    "file": "files/embedded_word_object.ppt",
+    "filename": "embedded_word_object.ppt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Intro slide"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Plain body text on slide one"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Compounds table"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Closing slide"
+    }
+  ]
+}

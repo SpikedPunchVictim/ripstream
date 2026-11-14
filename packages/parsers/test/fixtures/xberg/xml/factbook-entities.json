@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): ampersand entities in element text. Input xml/files/factbook.xml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "xml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/factbook.xml",
+    "filename": "factbook.xml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Trinidad & Tobado"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Track & Field"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "United States[\\s\\S]*Canada[\\s\\S]*France"
+    }
+  ]
+}

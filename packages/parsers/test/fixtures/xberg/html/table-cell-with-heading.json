@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): a heading inside a table cell and the text after the table. Input html/files/table_with_heading_02.html (see ../README.txt). Tika 4.2.0 (oracle, /tika/text) writes a tab BEFORE each cell, not after: the assertion follows its output.",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/table_with_heading_02.html",
+    "filename": "table_with_heading_02.html"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "Main Title[\\s\\S]*Before the table[\\s\\S]*A\\s+text[\\s\\S]*\\tB[\\s\\S]*\\t1\\.\\.\\.[\\s\\S]*\\t2\\.\\.\\.[\\s\\S]*Section After[\\s\\S]*After the table"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/docx_merged_cells.rs: a merged header keeps every following cell in order. Input is xberg tests/fixtures/office/merged_cells.docx (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "files/merged_cells.docx",
+    "filename": "merged_cells.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fuse"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Circuit"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "101[\\s\\S]*40A[\\s\\S]*Blower[\\s\\S]*102[\\s\\S]*50A[\\s\\S]*Cooling"
+    }
+  ]
+}

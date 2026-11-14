@@ -1,0 +1,36 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_lint_tests.rs: text before and after a one-row table is kept.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1 Before\\par\\trowd\\intbl A\\cell B\\cell\\row After}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Before"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "After"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "A"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "B"
+    }
+  ]
+}

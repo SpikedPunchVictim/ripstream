@@ -1,0 +1,26 @@
+{
+  "description": "xberg rtf/encoding tests: Shift_JIS bytes decode through a Content-Type charset hint.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding"
+  ],
+  "input": {
+    "base64": "k/qWe4zqgsyDZYNMg1iDZ4LFgreBQg=="
+  },
+  "options": {
+    "contentType": "text/plain; charset=Shift_JIS"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "日本語のテキストです。"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/(ppt native tables fixture): table cell text of a binary PowerPoint file is extracted. Input is xberg tests/fixtures/ppt/native_tables.ppt (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "ppt",
+    "ole2"
+  ],
+  "input": {
+    "file": "files/native_tables.ppt",
+    "filename": "native_tables.ppt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cases by region"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "North"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "27,039"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Merged header"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Quarter totals"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Lab A"
+    }
+  ]
+}

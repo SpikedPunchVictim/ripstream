@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/docx_word_footnote_ids.rs: the first footnote and first endnote of a Word document are kept (Word numbers separators -1 and 0, first note 1). Input is xberg tests/fixtures/office/word_footnote_ids.docx (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "files/word_footnote_ids.docx",
+    "filename": "word_footnote_ids.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body sentence continues and ends."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "FIRST FOOTNOTE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "SECOND FOOTNOTE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "FIRST ENDNOTE"
+    }
+  ]
+}

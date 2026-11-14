@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_2182_html_whitespace_only_formatting.rs: Word's HTML blank line (formatted nbsp spans) keeps the text around it.",
+  "tags": [
+    "xberg",
+    "html"
+  ],
+  "input": {
+    "text": "<p class=\"MsoNormal\">First paragraph.</p><p class=\"MsoNormal\"><strong><span style=\"font-size:12pt\"> </span></strong></p><p class=\"MsoNormal\"><em><!-- c -->&nbsp;<br></em></p><p class=\"MsoNormal\">Second paragraph.</p>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "First paragraph."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Second paragraph."
+    }
+  ]
+}

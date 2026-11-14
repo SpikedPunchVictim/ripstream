@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/encoding_extraction.rs (xml_honors_encoding_declaration): an XML declaration of ISO-8859-1 is honoured.",
+  "tags": [
+    "xberg",
+    "xml",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iSVNPLTg4NTktMSI/Pjxkb2M+PG5hbWU+Y2Fm6TwvbmFtZT48L2RvYz4=",
+    "filename": "a.xml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "café"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_1242_xml_entities.rs: JATS body keeps entity text.",
+  "tags": [
+    "xberg",
+    "xml"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<article><front><article-meta><title-group><article-title>Genes &amp; Development</article-title></title-group></article-meta></front><body><p>Expression &lt;0.05 &amp; significant, 5&gt;3</p></body></article>",
+    "filename": "a.xml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Expression <0.05 & significant, 5>3"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Genes & Development"
+    }
+  ]
+}

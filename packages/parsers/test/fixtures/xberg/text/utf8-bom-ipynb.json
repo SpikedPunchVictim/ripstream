@@ -1,0 +1,30 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/text_formats_utf8_bom.rs: a UTF-8 BOM in front of ipynb does not leak into the text.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding",
+    "bom"
+  ],
+  "input": {
+    "base64": "77u/eyJjZWxscyI6IFt7ImNlbGxfdHlwZSI6ICJtYXJrZG93biIsICJtZXRhZGF0YSI6IHt9LCAic291cmNlIjogWyIjIFRpdGxlIiwgIlxuIiwgIkJvZHkgdGV4dC4iXX1dLCAibWV0YWRhdGEiOiB7fSwgIm5iZm9ybWF0IjogNCwgIm5iZm9ybWF0X21pbm9yIjogNX0=",
+    "filename": "a.ipynb"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Title"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    }
+  ]
+}

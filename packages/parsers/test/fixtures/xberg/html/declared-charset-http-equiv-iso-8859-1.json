@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a legacy-encoded page is read in the charset its meta declares (http-equiv-iso-8859-1); no U+FFFD.",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PGh0bWw+PGhlYWQ+PG1ldGEgaHR0cC1lcXVpdj0iQ29udGVudC1UeXBlIiBjb250ZW50PSJ0ZXh0L2h0bWw7IGNoYXJzZXQ9aXNvLTg4NTktMSI+PC9oZWFkPjxib2R5PjxwPkNhZukgliBpdJJzIG5h73ZlPC9wPjwvYm9keT48L2h0bWw+",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

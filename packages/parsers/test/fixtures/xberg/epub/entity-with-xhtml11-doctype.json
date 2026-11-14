@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from xberg (MIT) td/EPUB_EDGE_CASES.md + crates/xberg/tests/epub_hardening_tests.rs: &nbsp; and &copy; in a chapter that declares the XHTML 1.1 DOCTYPE (the normal EPUB 2 shape) are read (#1488).",
+  "tags": [
+    "xberg",
+    "epub",
+    "edge"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVBvYassFgAAABQAAAAIAAAAbWltZXR5cGVLLCjIyUxOLMnMz9NPLShN0q7KLAAAUEsDBBQAAAAIAAAAIVAIbVJwqAAAAO8AAAAWAAAATUVUQS1JTkYvY29udGFpbmVyLnhtbF2OwQrCMBBE735F2au00ZuEpoKgVwX1A2K6rcFkNzSp6N8bPVTxNod5b6ZeP7wr7jhEy6RgWS2gQDLcWuoVnE+7cgXrZlYbpqQt4fDXzTRFBeNAknW0UZL2GGUykgNSy2b0SEl+anKSQFMPzKmzDuM3Ft3oXBl0uirYbzeHo3gDGa84dFB4bK0u0zOgAh2Cs0anfEQwXkLMmLnpHud5CURTix+/mHabF1BLAwQUAAAACAAAACFQ+YbUlPoAAACsAQAAEQAAAE9FQlBTL2NvbnRlbnQub3BmVdDLcoUgDAbgfZ+CYdvRaLtox0HPqg/CQNBMAanGevr2xUs90x3Mn3wkqNs9ePGN00xjbGVdVlJgNKOl2LdyYVe8y1v3pJI2n7pHkavj3MqBOTUA67qWZJMrx6mHl6p6gzE5+eBeN26J9LVgQRYjkyOcsktWdioga6tZH2hjzeWmZfK7aQ2gx5A7Z6jLGnKXNc2DEmRPbZliwzhz82F7VPCvam9iYo/dlR7XLfA69kvercO4J9ddwd+EeVYdyWW+U8QY9mdNLcUwodtO5X3g4KUIaEkX/JOwlTolT0Zz/gnY4+e8p4SNvbA5UcTDzFJmT28vO0M4/777BVBLAwQUAAAACAAAACFQVhUsstIAAAAVAQAADgAAAE9FQlBTL2MxLnhodG1sbc9NT4NAEAbgu79inENv7LjpReyyTQSMTSptzBrtkXaxkNTdDYzS/ntB9ObtzWSe+VDL88cJvqq2a7xLUIobhModvG3cMcFPfo9ucamv1HW2Sc1um0PNQ//25X69SgEjotd5SpSZDN4ezdMapJBEeYGANXO4I+r7XvRz4dsjmWc6j1zKEfxlYdnisOFn8HCM65J/rIzjeBKoVV2VVitu+FRpVjQFRVN57+1Fq6Afmrbjmdt3YRHKtoTZwYfLAvLCrMwu+n0n2hS5ojDgidG4QX8DUEsBAhQDFAAAAAgAAAAhUG9hqywWAAAAFAAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgAAAAhUAhtUnCoAAAA7wAAABYAAAAAAAAAAAAAAIABPAAAAE1FVEEtSU5GL2NvbnRhaW5lci54bWxQSwECFAMUAAAACAAAACFQ+YbUlPoAAACsAQAAEQAAAAAAAAAAAAAAgAEYAQAAT0VCUFMvY29udGVudC5vcGZQSwECFAMUAAAACAAAACFQVhUsstIAAAAVAQAADgAAAAAAAAAAAAAAgAFBAgAAT0VCUFMvYzEueGh0bWxQSwUGAAAAAAQABAD1AAAAPwMAAAAA",
+    "filename": "a.epub"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ENTITY-DOCTYPE-ONE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "First"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "para"
+    }
+  ]
+}

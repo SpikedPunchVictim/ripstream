@@ -1,0 +1,31 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: header and footer destination text is extracted.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1{\\header My Header Text}{\\footer My Footer Text}Body text}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "My Header Text"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "My Footer Text"
+    }
+  ]
+}

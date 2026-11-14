@@ -1,0 +1,26 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_tests.rs: \\annotation (Word comment) text is not dropped with its group.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\nBody text.\\par\n{\\annotation{\\*\\atnid7}Reviewer comment here}\n}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Reviewer comment here"
+    }
+  ]
+}

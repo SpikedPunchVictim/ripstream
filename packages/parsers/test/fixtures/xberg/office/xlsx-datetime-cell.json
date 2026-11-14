@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/xlsx_date_time_cells.rs: the datetime cell reads as the sheet shows it, without a spurious time or date part. Input is xberg tests/fixtures/office/date_time_cells.xlsx (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "xlsx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "files/date_time_cells.xlsx",
+    "filename": "date_time_cells.xlsx"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "datetime\\t2024-09-30 13:45:07\\n"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/xlsx_merged_cells.rs: a merged header keeps each following cell in its own column. Input is xberg tests/fixtures/office/merged_header.xlsx (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "xlsx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "files/merged_header.xlsx",
+    "filename": "merged_header.xlsx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fuse"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Circuit"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "101\\t40A\\tBlower"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "102\\t50A\\tCooling"
+    }
+  ]
+}

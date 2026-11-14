@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_1242_xml_entities.rs: DocBook paragraph keeps entity text.",
+  "tags": [
+    "xberg",
+    "xml"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<article xmlns=\"http://docbook.org/ns/docbook\" version=\"5.0\"><title>R&amp;D report</title><para>Profits &amp; losses &lt;audited&gt; 5&gt;3</para></article>",
+    "filename": "a.xml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Profits & losses <audited> 5>3"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "R&D report"
+    }
+  ]
+}

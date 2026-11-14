@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a Shift_JIS page declared by meta charset decodes to Japanese text.",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0ic2hpZnRfamlzIj48L2hlYWQ+PGJvZHk+PHA+k/qWe4zqgsyDZYNMg1iDZzwvcD48L2JvZHk+PC9odG1sPg==",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "日本語のテキスト"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

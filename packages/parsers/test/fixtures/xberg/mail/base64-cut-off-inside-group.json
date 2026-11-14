@@ -1,0 +1,22 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extraction/email/base64_tests.rs: base64 cut off after two symbols of a group keeps its last whole byte.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogYWxpY2VAZXhhbXBsZS5jb20NClN1YmplY3Q6IEZpZ3VyZXMNCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IGJhc2U2NA0KDQpTR1ZzYkc4Z1YyPg0K",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello W"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/docx_merged_cells.rs / docx_gridspan_vmerge_dedup.rs: gridSpan and vMerge cells keep every cell's text exactly once.",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBF93yF5S2KHVgghJJ0wWMJLMoHjOxJYtUvedxS/p5JW7pAhaV9H2d0u9U+eLHDQi7FXt6oVgqMJlkXp15+rF+ae7karrr1V0YS7I3Uy7nW/KA1mRkDkEoZIytjKgEqP8ukM5gNTKhv2/ZOmxQrxtrUpUMO3ROOsPVVPO/5+8gt6EmKx6NxYfUScvbOQGVd76L9RWlOBMXJg4dml+maDVJfJCzK34BT7o2HKM6ieIdSXyGwS3+mYrVNZhs4qf6vuXBnGkdn8Jxf2nJJBol44eDVWQng4s/9+jD38A1QSwMEFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4J1TRN5pWgaEUJMuCKkrKgeIEjeNaB5Kwuv2ZGCgiIHR9u/Pcts97ExuGJPxjkFT1UDQSa+M0wzOw3G9g46v2hPOIpdImkxIpOy4xGDKOewpTXJCK1LlA7oyGX20IpcyahqEvAiNdFPXWxo/DeALk/SKQexVA2R4BvzH9uNoJB68vFp0+ceJr0SRRdSYGdx9VFS921VhgfKWLl7kL1BLAwQUAAAACAAAACFQPhCYsCkBAAC0AwAAEQAAAHdvcmQvZG9jdW1lbnQueG1spVPbasMwDH3fVwS/r07aMkZIUnahb4PBug9wHSU1OLaR3WT9+7lOsoyxlYa9HGGkc3Qk5Gzz0cioBbRCq5wki5hEoLguhapz8r7b3t6TyDqmSia1gpycwJJNcZN1aan5sQHlIq+gbNrl5OCcSSm1/AANswttQPlcpbFhzj+xpp3G0qDmYK1v0Ei6jOM72jChyCCD18joqhIcngcDvQiCZM4PYQ/CWFJ4g3tdns7R7WUIGJD3+BpeNYryzTAVdWnLZE6WhBYZnfLmDD2v2B4thFyowIBmqJ6UvzOeBPKjcH+T6Jcr/F0hiZN5LdfxwzzCo9Qd4EyL43raF8AaxuUh+ENBd2GFOyblPHu44svZjNW/xvlhn17utp7tb32FPzpcLR2vmE7/rfgEUEsBAhQDFAAAAAgAAAAhUPC31gviAAAAnQEAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACAAAACFQRrcV2aUAAAAZAQAACwAAAAAAAAAAAAAAgAETAQAAX3JlbHMvLnJlbHNQSwECFAMUAAAACAAAACFQPhCYsCkBAAC0AwAAEQAAAAAAAAAAAAAAgAHhAQAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAMAAwC5AAAAOQMAAAAA",
+    "filename": "a.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fuse"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Circuit"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "101"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "40A"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Blower"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "^(?:(?!Tall)[\\s\\S])*Tall(?:(?!Tall)[\\s\\S])*$"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "r4c3"
+    }
+  ]
+}

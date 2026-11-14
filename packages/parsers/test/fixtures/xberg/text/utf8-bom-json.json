@@ -1,0 +1,30 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/text_formats_utf8_bom.rs: a UTF-8 BOM in front of json does not leak into the text.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding",
+    "bom"
+  ],
+  "input": {
+    "base64": "77u/eyJ0aXRsZSI6ICJUaXRsZSIsICJib2R5IjogIkJvZHkgdGV4dC4ifQ==",
+    "filename": "a.json"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Title"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    }
+  ]
+}

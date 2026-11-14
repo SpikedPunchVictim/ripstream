@@ -1,0 +1,27 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extraction/email/base64_tests.rs: each text body is recovered from its own part.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogYWxpY2VAZXhhbXBsZS5jb20NClN1YmplY3Q6IEZpZ3VyZXMNCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IG11bHRpcGFydC9taXhlZDsgYm91bmRhcnk9Ik9VVEVSIg0KDQotLU9VVEVSDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW4NCg0KSW50cm8uDQotLU9VVEVSDQpDb250ZW50LVR5cGU6IG11bHRpcGFydC9hbHRlcm5hdGl2ZTsgYm91bmRhcnk9IklOTkVSIg0KDQotLUlOTkVSDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IGJhc2U2NA0KDQpWMjl5PmJHUT0NCi0tSU5ORVINCkNvbnRlbnQtVHlwZTogdGV4dC9odG1sOyBjaGFyc2V0PXV0Zi04DQoNCjxwPldvcmxkPC9wPg0KLS1JTk5FUi0tDQotLU9VVEVSLS0NCg==",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Intro."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "World"
+    }
+  ]
+}

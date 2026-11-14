@@ -1,0 +1,69 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/doc_subdocuments.rs: footnotes, headers, footers, comments and text boxes of a Word 97 file are extracted. Input is xberg tests/fixtures/office/doc_subdocuments.doc (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "doc",
+    "ole2"
+  ],
+  "input": {
+    "file": "files/doc_subdocuments.doc",
+    "filename": "doc_subdocuments.doc"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "BODY PARAGRAPH ONE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "BODY PARAGRAPH TWO"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "FIRST FOOTNOTE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "SECOND FOOTNOTE PARAGRAPH ONE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "EVEN HEADER TEXT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ODD HEADER TEXT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "EVEN FOOTER TEXT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "FIRST PAGE HEADER TEXT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "FIRST COMMENT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "SECOND COMMENT"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "TEXT BOX TEXT"
+    }
+  ]
+}

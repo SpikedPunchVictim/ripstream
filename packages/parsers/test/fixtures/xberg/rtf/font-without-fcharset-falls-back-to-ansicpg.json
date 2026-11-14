@@ -1,0 +1,21 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: a font with no \\fcharset falls back to \\ansicpg1251.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg1251\\deff0{\\fonttbl{\\f0\\fnil Arial;}}\\f0 \\'cf\\'f0\\'e8\\'e2\\'e5\\'f2}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Привет"
+    }
+  ]
+}

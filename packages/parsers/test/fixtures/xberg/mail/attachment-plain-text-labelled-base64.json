@@ -1,0 +1,22 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extraction/email/base64_tests.rs: a text attachment labelled base64 that holds plain words.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822"
+  ],
+  "input": {
+    "base64": "RnJvbTogYWxpY2VAZXhhbXBsZS5jb20NClN1YmplY3Q6IEZpZ3VyZXMNCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IG11bHRpcGFydC9taXhlZDsgYm91bmRhcnk9IkJPVU5EQVJZIg0KDQotLUJPVU5EQVJZDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW4NCg0KU2VlIHRoZSBub3RlLg0KLS1CT1VOREFSWQ0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBuYW1lPSJub3RlLnR4dCINCkNvbnRlbnQtRGlzcG9zaXRpb246IGF0dGFjaG1lbnQ7IGZpbGVuYW1lPSJub3RlLnR4dCINCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IGJhc2U2NA0KDQpIZWxsbyBCb2IsIHRoZSBmaWd1cmVzIGFyZSBhdHRhY2hlZC4NCi0tQk9VTkRBUlktLQ0K",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "See the note."
+    }
+  ]
+}

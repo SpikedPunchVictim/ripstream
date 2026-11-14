@@ -1,0 +1,39 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_table_spans.rs: a colspan header keeps header and data text.",
+  "tags": [
+    "xberg",
+    "html",
+    "table"
+  ],
+  "input": {
+    "text": "<table><tr><th colspan=\"2\">Fuse</th><th>Circuit</th></tr><tr><td>101</td><td>40A</td><td>Blower</td></tr></table>",
+    "filename": "a.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Fuse"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Circuit"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "101"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "40A"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Blower"
+    }
+  ]
+}

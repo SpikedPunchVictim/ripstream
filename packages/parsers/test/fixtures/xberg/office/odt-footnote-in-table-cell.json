@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: a footnote inside a table cell is not dropped (issue 117).",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhUHMMUGlHAQAAugMAAAsAAABjb250ZW50LnhtbI1TzW6EIBC+9ykId6Wmly5R9tCkT9A+AIu4S4qMESzu2xd03UK2Tbyo8/0wwzexPs69Rt9ytApMg6vyGSNpBLTKnBv8+fFevOIje6qh65SQtAUx9dK4QoBx4Y2C21i6sg2eRkOBW2Wp4b201AkKgzSbi6ZquvRaESdnt9cdtZmXn/Tu1os4dbcj93vNURtiSe3WXfc3X8RZc9Hgi3MDJWSYRl3CeCatIFLL6LKkKiuyaWetzNdd7r0v/ctiqA6HA1nYTdrB3olmq4sOwjL7gTu1RcO2bfPJQR8IUSyjW1aTf5kbcYL2ei/iqli9Zr48s6IYweeAkFoHJC54YG+hQF65CzLg5IrGL3T/KoTm1ja4A3CxxqxOOOXCfGBYVZM/0ES5jpx23Q5EkbrZB5aes3p+AZaqHm5EHm5NslBIlhfJoiT//HnsB1BLAQIUAxQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAAAAAAAAAAACAAQAAAABtaW1ldHlwZVBLAQIUAxQAAAAIAAAAIVBzDFBpRwEAALoDAAALAAAAAAAAAAAAAACAAU0AAABjb250ZW50LnhtbFBLBQYAAAAAAgACAG8AAAC9AQAAAAA=",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cell with note"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cell footnote body"
+    }
+  ]
+}

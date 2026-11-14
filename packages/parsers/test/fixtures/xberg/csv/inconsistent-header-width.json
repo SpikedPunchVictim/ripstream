@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): rows wider than the header are not truncated. Input csv/files/csv-inconsistent-header.csv (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "csv",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/csv-inconsistent-header.csv",
+    "filename": "csv-inconsistent-header.csv"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "a,b,c,d"
+    }
+  ]
+}

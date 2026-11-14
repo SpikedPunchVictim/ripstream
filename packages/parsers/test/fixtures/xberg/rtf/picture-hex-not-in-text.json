@@ -1,0 +1,31 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: pict hex data does not leak into text; the surrounding words stay.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1 Before image {\\pict\\jpegblip\\picw100\\pich100 ffd8ffe0} After image}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Before image"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "After image"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "ffd8ffe0"
+    }
+  ]
+}

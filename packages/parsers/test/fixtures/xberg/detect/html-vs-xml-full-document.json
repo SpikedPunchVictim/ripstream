@@ -1,0 +1,20 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_235_html_detection_unreachable.rs input (full-document); expected type follows Tika's tika-mimetypes.xml magic and root-XML rules, not xberg's: text/html.",
+  "tags": [
+    "xberg",
+    "detect",
+    "html",
+    "xml"
+  ],
+  "operation": "detect",
+  "input": {
+    "base64": "PCFET0NUWVBFIGh0bWw+PGh0bWw+PGhlYWQ+PHRpdGxlPlQ8L3RpdGxlPjwvaGVhZD48Ym9keT48cD5IaTwvcD48L2JvZHk+PC9odG1sPg=="
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "mediaType",
+      "value": "text/html"
+    }
+  ]
+}

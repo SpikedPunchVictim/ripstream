@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): an unparseable Date header does not fail the message and sets no creation date. Input mail/files/test-invalid-date.eml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "eml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/test-invalid-date.eml",
+    "filename": "test-invalid-date.eml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This is a test-email with an invalid date format."
+    },
+    {
+      "type": "absent",
+      "field": "metadata.dcterms:created"
+    }
+  ]
+}

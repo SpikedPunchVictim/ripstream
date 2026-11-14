@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/doc_floating_picture.rs: text around a floating picture is kept. Input is xberg tests/fixtures/office/doc_floating_picture.doc (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "doc",
+    "ole2"
+  ],
+  "input": {
+    "file": "files/doc_floating_picture.doc",
+    "filename": "doc_floating_picture.doc"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "NATIVE TEXT BEFORE THE IMAGE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "NATIVE TEXT AFTER THE IMAGE"
+    }
+  ]
+}

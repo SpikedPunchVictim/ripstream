@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): var, code, kbd, samp and a pre block keep their text. Input html/files/html_code_snippets.html (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/html_code_snippets.html",
+    "filename": "html_code_snippets.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "pip install docling"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "converter = DocumentConverter()"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "## Docling Technical Report[...]"
+    }
+  ]
+}

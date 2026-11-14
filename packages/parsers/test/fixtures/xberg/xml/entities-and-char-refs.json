@@ -1,0 +1,18 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_1242_xml_entities.rs: &amp; &lt; &gt; and numeric references survive in text.",
+  "tags": [
+    "xberg",
+    "xml"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root><item>Cats &amp; Dogs &lt;tag&gt; 5&gt;3 em&#8212;dash hex&#x2014;dash</item></root>",
+    "filename": "a.xml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cats & Dogs <tag> 5>3 em—dash hex—dash"
+    }
+  ]
+}

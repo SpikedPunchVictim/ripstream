@@ -1,0 +1,21 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\ansicpg932 decodes \\'93\\'fa\\'96\\'7b to 日本.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg932 \\'93\\'fa\\'96\\'7b}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "日本"
+    }
+  ]
+}

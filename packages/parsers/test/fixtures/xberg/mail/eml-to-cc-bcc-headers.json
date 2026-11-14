@@ -1,0 +1,34 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): To, Cc and Bcc headers become message metadata. Input mail/files/mime-multi-to-cc-bcc.eml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "eml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/mime-multi-to-cc-bcc.eml",
+    "filename": "mime-multi-to-cc-bcc.eml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "metadata.message:to",
+      "value": "bob@example.com"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.message:cc",
+      "value": "tom@example.com"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.message:bcc",
+      "value": "john@example.com"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This is a plain-text message."
+    }
+  ]
+}

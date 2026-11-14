@@ -1,0 +1,26 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_lint_tests.rs: the visible text of a HYPERLINK field result is kept.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1 A {\\field{\\*\\fldinst HYPERLINK \"https://example.test\"}{\\fldrslt \\b \\u233?}} Z}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "é"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Z"
+    }
+  ]
+}

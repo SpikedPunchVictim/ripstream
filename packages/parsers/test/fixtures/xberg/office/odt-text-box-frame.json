@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: paragraphs inside a draw:frame text box are extracted (issue 100).",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhUETaHQE4AQAAOAMAAAsAAABjb250ZW50LnhtbI2STW6DMBCF9z2FxR6mqJvGArLrBZoewNgmsWo8lm0KuX2NE1KoFImVf+Z9es8zro5Tr8mPdF6hqbOyeM2INByFMuc6+zp95O/ZsXmpsOsUl1QgH3ppQs7RhLiSSBtPb9U6G5yhyLzy1LBeeho4RSvNQtG1miav202QU9hLz9oNy1q92zqJ17RwbNwLz9rYljXuw3W/eRJvzHmdXUKwFMAOThfoziA4SC1nykNZlLBoJ63M90M+jmMxviWgPBwOkKqLtMO9iSav8w7jMHvLglpa0yzTZkPAPhZ4nqL7poKnlXuhRXF9HOZRNdXcNtq5GOO+n6/zFqemSrO0zSkuxAd0UhAcgldCknCRxKDrmSaWOXZ2zF5Ip3EsKrhjC/4p428UJFmIP/VKCP98YZ0JNmlh8xB48u+bX1BLAQIUAxQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAAAAAAAAAAACAAQAAAABtaW1ldHlwZVBLAQIUAxQAAAAIAAAAIVBE2h0BOAEAADgDAAALAAAAAAAAAAAAAACAAU0AAABjb250ZW50LnhtbFBLBQYAAAAAAgACAG8AAACuAQAAAAA=",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Text stored outside the normal paragraph flow."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Second framed paragraph."
+    }
+  ]
+}

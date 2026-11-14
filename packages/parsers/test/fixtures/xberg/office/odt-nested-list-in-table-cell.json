@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: a list nested inside a table cell is not dropped (issue 117).",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhULC6TRIrAQAAggMAAAsAAABjb250ZW50LnhtbI2TwU6EMBCG7z4F4Q4j8SINdKMHE+/6AGwpa2PpEFos+/aWAhvqBsOF9p/5v8x0JhSnsZXRD++1QFXGWfoYR1wxrIW6lPHnx1vyHJ/oQ4FNIxgnNbKh5cokDJVxZ+RopcmcLeOhVwQrLTRRVcs1MYxgx9VKka2b+FpzxPDRHKUnb8BWZ3m4tDdv6bqv7FF48rqxbHFtrseLe3NQnJXxlzEdAeiGXqbYX6BmwCWfKA1ZmsHqHaVQ3ze7tTa1Tx7I8jwHn12tDR7taNQyadAts+0qI9bR0HXb1WCwdQmW+NY1LWA3syTOWF9vYloVLeaZ+28gkh5tGGBcSheZFiyFNptrIgxvF93RdyeilwIWuVz++na413842NSG+87grnsIHgfBuyEYCez8QfQXUEsBAhQDFAAAAAAAAAAhUF7GMgwnAAAAJwAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgAAAAhULC6TRIrAQAAggMAAAsAAAAAAAAAAAAAAIABTQAAAGNvbnRlbnQueG1sUEsFBgAAAAACAAIAbwAAAKEBAAAAAA==",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Item A"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Item B"
+    }
+  ]
+}

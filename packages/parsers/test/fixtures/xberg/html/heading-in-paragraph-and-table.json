@@ -1,0 +1,29 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): a heading nested in an unclosed paragraph and tables in divs keep their text. Input html/files/html_heading_in_p.html (see ../README.txt). Tika 4.2.0 (oracle, /tika/text) does not write the title into the body text (it is metadata dc:title), so that is what is asserted.",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/html_heading_in_p.html",
+    "filename": "html_heading_in_p.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Headings inside paragraphs in HTML"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "1st paragraph"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "2[\\s\\S]*3[\\s\\S]*4[\\s\\S]*5[\\s\\S]*6"
+    }
+  ]
+}

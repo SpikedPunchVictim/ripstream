@@ -1,0 +1,26 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_lint_tests.rs: \\u233? inside nested bold/italic groups gives the accented letter.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1 \\b A{\\i \\u233?}B\\b0}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Aé"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "?"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): pipe-delimited rows are kept. Input csv/files/csv-pipe.csv (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "csv",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/csv-pipe.csv",
+    "filename": "csv-pipe.csv"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Index|Customer Id|First Name"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "|Sheryl|Baxter|"
+    }
+  ]
+}

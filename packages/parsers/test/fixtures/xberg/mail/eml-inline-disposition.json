@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from unstructured (Apache-2.0) via the xberg test-document corpus (td/vendored/unstructured): inline content-disposition body part is kept. Input mail/files/email-inline-content-disposition.eml (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "eml",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/email-inline-content-disposition.eml",
+    "filename": "email-inline-content-disposition.eml"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This is a test of inline"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/text_formats_utf8_bom.rs (BOM family): UTF-16LE text with a BOM decodes.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding"
+  ],
+  "input": {
+    "base64": "//5IAGUAbABsAG8AIAB3APYAcgBsAGQALAAgAFUAVABGAC0AMQA2ACAAdABlAHgAdAAuAAoA",
+    "filename": "a.txt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello wörld, UTF-16 text."
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    }
+  ]
+}

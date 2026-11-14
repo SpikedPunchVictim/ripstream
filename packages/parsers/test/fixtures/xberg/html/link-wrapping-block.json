@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from docling (MIT) via the xberg test-document corpus (td/vendored/docling): a link wrapping a div keeps the text. Input html/files/hyperlink_04.html (see ../README.txt).",
+  "tags": [
+    "xberg",
+    "html",
+    "vendored"
+  ],
+  "input": {
+    "file": "files/hyperlink_04.html",
+    "filename": "hyperlink_04.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This is some text."
+    }
+  ]
+}

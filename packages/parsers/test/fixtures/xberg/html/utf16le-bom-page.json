@@ -1,0 +1,19 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a UTF-16LE page is read by its byte order mark.",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "//48AGgAdABtAGwAPgA8AGgAZQBhAGQAPgA8AC8AaABlAGEAZAA+ADwAYgBvAGQAeQA+ADwAcAA+AEMAYQBmAOkAIAATICAAaQB0ABkgcwAgAG4AYQDvAHYAZQA8AC8AcAA+ADwALwBiAG8AZAB5AD4APAAvAGgAdABtAGwAPgA=",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    }
+  ]
+}

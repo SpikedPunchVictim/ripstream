@@ -1,0 +1,23 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/tests/issue_164_csv_blank_rows.rs: a blank row between records does not drop later records.",
+  "tags": [
+    "xberg",
+    "csv"
+  ],
+  "input": {
+    "text": "Name,Age\nAlice,30\n\nBob,25",
+    "filename": "a.csv"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Alice,30"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Bob,25"
+    }
+  ]
+}

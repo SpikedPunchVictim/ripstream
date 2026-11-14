@@ -1,0 +1,31 @@
+{
+  "description": "Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: bookmark text and the link text pointing at it are both kept.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\n\\pard\n{\\*\\bkmkstart bookmark_1}Bookmark_1{\\*\\bkmkend bookmark_1}\n\\par\n\\pard\n{\\field{\\*\\fldinst { HYPERLINK  \\\\l \"bookmark_1\" }}{\\fldrslt{click me}}}\n\\par\n}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Bookmark_1"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "click me"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "HYPERLINK"
+    }
+  ]
+}
