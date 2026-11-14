@@ -1,19 +1,24 @@
 import {
+  CONTEXT_KEYS,
   MalformedDocumentError,
   MediaType,
+  Metadata,
+  ParsingEmbeddedDocumentExtractor,
+  RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
+  isFatalParseError,
   type ContentHandler,
-  type Metadata,
   type ParseContext,
   type Parser,
-  type RipstreamInputStream,
+  type EmbeddedDocumentExtractor,
 } from "@spikedpunch/ripstream-core";
 
 /*
  * Port of Tika 4.2.0's ExecutableParser (tika-parser-code-module), read from that source and not run against a Tika:
  * PE, ELF and Mach-O headers become the `machine:*` metadata and, for ELF and Mach-O, the media type; there is no text.
- * Not ported: PEIconExtractor (the icons of a PE file as embedded documents) and ExecutableParserConfig, which only
- * switches it. The 32-bit Mach-O width, the PE machine 0xaa64 (ARM64) and the ELF machine 183 (AArch64) are not set,
+ * PEIconExtractor is ported: the first icon group (or all, with `extractAllIcons`) becomes an embedded .ico document.
+ * The 32-bit Mach-O width, the PE machine 0xaa64 (ARM64) and the ELF machine 183 (AArch64) are not set,
  * because the Java's switches do not name them.
  */
 
@@ -83,9 +88,23 @@ const COFF_HEADER_BYTES = 24;
 const HEADER_BYTES = MAX_PE_OFFSET + COFF_HEADER_BYTES;
 
 /** PE/COFF, ELF and Mach-O header description (no disassembly). */
+export interface ExecutableParserOptions {
+  /** Extract PE icon groups as embedded .ico documents (Tika's ExecutableParserConfig.extractIcons, default true). */
+  readonly extractIcons?: boolean;
+  /** Extract every icon group, not only the first (Tika's extractAllIcons, default false). */
+  readonly extractAllIcons?: boolean;
+}
+
 export class ExecutableParser implements Parser {
   readonly name = "ExecutableParser";
   readonly capabilities = { metadataOnly: true } as const;
+  readonly #extractIcons: boolean;
+  readonly #extractAllIcons: boolean;
+
+  constructor(options: ExecutableParserOptions = {}) {
+    this.#extractIcons = options.extractIcons ?? true;
+    this.#extractAllIcons = options.extractAllIcons ?? false;
+  }
 
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(MEDIA_TYPES.map((type) => MediaType.parseOrThrow(type)));
@@ -95,12 +114,32 @@ export class ExecutableParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     // The document is started before the header is read, as in Tika, so what is read is written to the head at the end.
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    readHeader(new HeaderReader(await stream.peek(HEADER_BYTES)), metadata);
+    const prefix = await stream.peek(HEADER_BYTES);
+    readHeader(new HeaderReader(prefix), metadata);
+    if (this.#extractIcons && looksLikePe(prefix)) {
+      const data = await readAll(stream);
+      let ico: IconGroup[] = [];
+      try {
+        ico = peIcons(data, this.#extractAllIcons);
+      } catch (error) {
+        // A cut or broken resource section must not cost the caller the header metadata.
+        if (isFatalParseError(error, ctx)) throw error;
+        metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+      }
+      for (const [index, icon] of ico.entries()) {
+        const embedded = new Metadata();
+        embedded.set(TIKA_KEYS.RESOURCE_NAME, icon.name);
+        embedded.set("Content-Type", "image/vnd.microsoft.icon");
+        embedded.set(TIKA_KEYS.EMBEDDED_RESOURCE_TYPE, index === 0 ? "THUMBNAIL" : "ATTACHMENT");
+        embedded.set("tk:embedded-relationship-id", icon.relationship);
+        await emitEmbedded(xhtml, icon.bytes, embedded, metadata, ctx);
+      }
+    }
     await xhtml.endDocument();
   }
 }
@@ -360,4 +399,188 @@ function readMachO(reader: HeaderReader, metadata: Metadata, little: boolean): v
   reader.readInt(little); // the CPU subtype
 
   metadata.set(CONTENT_TYPE, MACHO_TYPES.get(reader.readInt(little)) ?? MACHO_GENERAL);
+}
+
+/** Whether the prefix carries a PE signature at the DOS header's e_lfanew. */
+function looksLikePe(prefix: Uint8Array): boolean {
+  if (prefix.length < 0x40 || prefix[0] !== 0x4d || prefix[1] !== 0x5a) return false;
+  const view = new DataView(prefix.buffer, prefix.byteOffset, prefix.byteLength);
+  const pe = view.getUint32(0x3c, true);
+  return pe + 4 <= prefix.length && view.getUint32(pe, true) === 0x0000_4550;
+}
+
+async function readAll(stream: RipstreamInputStream): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+    total += chunk.byteLength;
+  }
+  const data = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return data;
+}
+
+interface IconGroup {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+  readonly relationship: string;
+}
+
+const RT_ICON = 3;
+const RT_GROUP_ICON = 14;
+const MAX_RESOURCE_ENTRIES = 20_000;
+const MAX_ICONS_PER_GROUP = 256;
+
+/** Rebuilds .ico files from a PE's resource section: the first usable group, or all of them. */
+function peIcons(data: Uint8Array, allGroups: boolean): IconGroup[] {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const pe = view.getUint32(0x3c, true);
+  if (pe + 24 > data.length) return [];
+  const sections = view.getUint16(pe + 6, true);
+  const optionalSize = view.getUint16(pe + 20, true);
+  const optional = pe + 24;
+  if (optional + optionalSize > data.length) return [];
+  const magic = view.getUint16(optional, true);
+  const directoryBase = optional + (magic === 0x20b ? 112 : 96);
+  if (directoryBase + 16 > optional + optionalSize) return [];
+  const resourceRva = view.getUint32(directoryBase + 16, true);
+  if (resourceRva === 0) return [];
+  const headers = optional + optionalSize;
+  const sectionAt = (rva: number): number | null => {
+    for (let index = 0; index < sections; index++) {
+      const at = headers + index * 40;
+      if (at + 40 > data.length) return null;
+      const virtualSize = view.getUint32(at + 8, true);
+      const virtualAddress = view.getUint32(at + 12, true);
+      const rawSize = view.getUint32(at + 16, true);
+      const rawPointer = view.getUint32(at + 20, true);
+      if (rva >= virtualAddress && rva < virtualAddress + Math.max(virtualSize, rawSize)) {
+        return rawPointer + (rva - virtualAddress);
+      }
+    }
+    return null;
+  };
+  const root = sectionAt(resourceRva);
+  if (root === null) return [];
+  const groups: Array<{ name: string; language: number; data: Uint8Array }> = [];
+  const icons = new Map<number, Uint8Array>();
+  /** A resource name entry is a length-prefixed UTF-16 string at root + (id & 0x7fffffff); numeric ids print as is. */
+  const resourceName = (raw: number): string => {
+    if ((raw & 0x8000_0000) === 0) return String(raw);
+    const at = root + (raw & 0x7fff_ffff);
+    if (at + 2 > data.length) return String(raw & 0x7fff_ffff);
+    const length = view.getUint16(at, true);
+    const end = Math.min(data.length, at + 2 + length * 2);
+    return new TextDecoder("utf-16le").decode(data.subarray(at + 2, end));
+  };
+  let visited = 0;
+  const walk = (offset: number, level: number, type: number, name: number, language: number): void => {
+    if (visited++ > MAX_RESOURCE_ENTRIES) return;
+    if (root + offset + 16 > data.length) return;
+    const named = view.getUint16(root + offset + 12, true);
+    const ids = view.getUint16(root + offset + 14, true);
+    for (let index = 0; index < named + ids; index++) {
+      const entry = root + offset + 16 + index * 8;
+      if (entry + 8 > data.length) return;
+      const id = view.getUint32(entry, true);
+      const child = view.getUint32(entry + 4, true);
+      const childName = level === 1 ? id : name;
+      if ((child & 0x8000_0000) !== 0) {
+        if (level < 2) walk(child & 0x7fff_ffff, level + 1, level === 0 ? id : type, childName, id);
+      } else if (level === 2) {
+        const entryOffset = root + child;
+        if (entryOffset + 16 > data.length) return;
+        const dataRva = view.getUint32(entryOffset, true);
+        const size = view.getUint32(entryOffset + 4, true);
+        const start = sectionAt(dataRva);
+        if (start === null || start + size > data.length) return;
+        const bytes = data.subarray(start, start + size);
+        const displayName = resourceName(childName);
+        if (type === RT_GROUP_ICON) groups.push({ name: displayName, language: id & 0x7fff_ffff, data: bytes });
+        else if (type === RT_ICON) icons.set(childName & 0x7fff_ffff, bytes);
+      } else {
+        walk(child & 0x7fff_ffff, level + 1, level === 0 ? id : type, childName, id);
+      }
+    }
+  };
+  walk(0, 0, 0, 0, 0);
+  const languages = new Map<string, Set<number>>();
+  for (const group of groups) {
+    let values = languages.get(group.name);
+    if (values === undefined) languages.set(group.name, (values = new Set()));
+    values.add(group.language);
+  }
+  const result: IconGroup[] = [];
+  for (const [index, group] of groups.entries()) {
+    if (index > 0 && !allGroups) break;
+    const ico = buildIco(group.data, icons);
+    if (ico === null) continue;
+    const suffix = (languages.get(group.name)?.size ?? 0) > 1 ? `_${group.language}` : "";
+    result.push({ name: `icon_${group.name}${suffix}.ico`, bytes: ico, relationship: `14/${group.name}/${group.language}` });
+  }
+  return result;
+}
+
+/** A GRPICONDIR plus its RT_ICON images as an ICONDIR .ico file, largest image first. */
+function buildIco(group: Uint8Array, icons: ReadonlyMap<number, Uint8Array>): Uint8Array | null {
+  if (group.length < 6) return null;
+  const view = new DataView(group.buffer, group.byteOffset, group.byteLength);
+  const count = view.getUint16(4, true);
+  if (count === 0 || count > MAX_ICONS_PER_GROUP || 6 + count * 14 > group.length) return null;
+  const entries: Array<{ header: Uint8Array; image: Uint8Array }> = [];
+  for (let index = 0; index < count; index++) {
+    const at = 6 + index * 14;
+    const image = icons.get(view.getUint16(at + 12, true));
+    if (image === undefined) return null;
+    entries.push({ header: group.subarray(at, at + 12), image });
+  }
+  entries.sort((left, right) => right.image.length - left.image.length);
+  const size = 6 + entries.length * 16 + entries.reduce((total, entry) => total + entry.image.length, 0);
+  const ico = new Uint8Array(size);
+  const out = new DataView(ico.buffer);
+  out.setUint16(0, 0, true);
+  out.setUint16(2, 1, true);
+  out.setUint16(4, entries.length, true);
+  let offset = 6;
+  let imageOffset = 6 + entries.length * 16;
+  for (const entry of entries) {
+    ico.set(entry.header, offset);
+    out.setUint32(offset + 8, entry.image.length, true);
+    out.setUint32(offset + 12, imageOffset, true);
+    ico.set(entry.image, imageOffset);
+    offset += 16;
+    imageOffset += entry.image.length;
+  }
+  return ico;
+}
+
+async function emitEmbedded(
+  xhtml: XHTMLContentHandler,
+  bytes: Uint8Array,
+  embedded: Metadata,
+  parent: Metadata,
+  ctx: ParseContext,
+): Promise<void> {
+  const extractor = (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor | undefined)
+    ?? new ParsingEmbeddedDocumentExtractor();
+  if (!extractor.shouldParseEmbedded(embedded)) return;
+  const stream = await RipstreamInputStream.from(bytes, { context: ctx });
+  try {
+    await xhtml.startElement("div", "class", "package-entry");
+    await xhtml.element("h1", embedded.get(TIKA_KEYS.RESOURCE_NAME) ?? "");
+    try {
+      await extractor.parseEmbedded(stream, xhtml, embedded, ctx);
+    } catch (error) {
+      if (isFatalParseError(error, ctx)) throw error;
+      parent.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+    }
+    await xhtml.endElement("div");
+  } finally {
+    await stream.close();
+  }
 }

@@ -4,6 +4,7 @@ export { AudioParser, DEFAULT_MAX_AUDIO_BYTES, type AudioParserOptions } from ".
 export { DEFAULT_MAX_FLAC_METADATA_BYTES } from "./flac.ts";
 export { FlacParser, type FlacParserOptions, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser } from "./ogg.ts";
 export { WmfEmfParser } from "./wmf.ts";
+export { JxlParser } from "./jxl.ts";
 export { FlvParser } from "./flv.ts";
 export { AsfParser, AviParser, MatroskaParser } from "./av-container.ts";
 export { FontParser } from "./font.ts";

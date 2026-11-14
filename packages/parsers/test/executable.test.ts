@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  BodyContentHandler,
   CONTEXT_KEYS,
   MalformedDocumentError,
   MediaType,
@@ -467,4 +468,29 @@ test("a forced-type parse of each ELF variant reaches ExecutableParser exactly a
     assert.equal(metadata.get(KEY.machine), "ARM", forced);
     assert.equal(metadata.get(KEY.bits), "32", forced);
   }
+});
+
+test("PE icon groups become embedded .ico documents with Tika's names and relationship ids", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const bytes = new Uint8Array(await readFile(new URL("./fixtures/executable/testWindows-x86-32-icons.exe", import.meta.url)));
+  const recorded: Array<{ name: string | null; relationship: string | null; type: string | null }> = [];
+  const extractor = {
+    shouldParseEmbedded: () => true,
+    async parseEmbedded(_stream: unknown, _handler: unknown, metadata: Metadata): Promise<void> {
+      recorded.push({
+        name: metadata.get("tk:resource-name"),
+        relationship: metadata.get("tk:embedded-relationship-id"),
+        type: metadata.get("tk:embedded-resource-type"),
+      });
+    },
+  };
+  const input = await RipstreamInputStream.from(bytes);
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, extractor);
+  await new ExecutableParser({ extractAllIcons: true }).parse(input, new BodyContentHandler(), new Metadata(), context);
+  await input.close();
+  assert.deepEqual(recorded, [
+    { name: "icon_DOCICON.ico", relationship: "14/DOCICON/1033", type: "THUMBNAIL" },
+    { name: "icon_1.ico", relationship: "14/1/1033", type: "ATTACHMENT" },
+  ]);
 });

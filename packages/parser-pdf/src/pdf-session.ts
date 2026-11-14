@@ -1,3 +1,4 @@
+import { repairPdf } from "./pdf-repair.ts";
 import { createRequire } from "node:module";
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -279,14 +280,28 @@ export class PdfSession {
       return await this.#start(pdfjs, options);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
-      const recovered =
-        source !== undefined && isMissingCatalogError(message)
-          ? recoverDocument(source)
-          : null;
-      if (recovered === null) throw error;
-      await this.#loading?.destroy();
-      options.data = recovered;
-      return await this.#start(pdfjs, options);
+      // A file cut before its trailer can still hold every object: rewrite the xref and retry; the older
+      // append-a-trailer recovery is the second candidate.
+      const candidates: Uint8Array[] = [];
+      if (source !== undefined) {
+        if (isMissingCatalogError(message)) {
+          const recovered = recoverDocument(source);
+          if (recovered !== null) candidates.push(recovered);
+        }
+        const repaired = repairPdf(source);
+        if (repaired !== null) candidates.push(repaired);
+      }
+      let lastError: unknown = error;
+      for (const candidate of candidates) {
+        await this.#loading?.destroy();
+        options.data = candidate;
+        try {
+          return await this.#start(pdfjs, options);
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
+      throw lastError;
     }
   }
 

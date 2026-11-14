@@ -16,7 +16,7 @@ import { XmlParser } from "./xml.ts";
 import { CsvParser, type CsvParserOptions } from "./csv.ts";
 import { AppleSingleParser, ArchiveMetadataParser, ArParser, Bzip2Parser, BrotliParser, CpioParser, Deflate64Parser, GzipParser, Iso9660Parser, Lz4Parser, LzmaParser, PlistParser, SnappyParser, TarParser, UnixCompressParser, UnixDumpParser, XzParser, ZipParser, ZlibParser } from "@spikedpunch/ripstream-parser-archive";
 import { PdfParser } from "@spikedpunch/ripstream-parser-pdf";
-import { AsfParser, AudioParser, AviParser, FlacParser, FlvParser, FontParser, ImageParser, MatroskaParser, Mp4Parser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
+import { AsfParser, AudioParser, AviParser, FlacParser, FlvParser, FontParser, ImageParser, JxlParser, MatroskaParser, Mp4Parser, OggParser, OpusParser, SpeexParser, TheoraParser, VorbisParser, WmfEmfParser } from "@spikedpunch/ripstream-parser-media";
 import { ColumnarParser, GeoPkgParser, OpenPgpParser, SqliteParser } from "@spikedpunch/ripstream-parser-db";
 import { EpubParser, ExcelBinaryParser, GeoGebraParser, IDMLParser, IWork09Parser, IWork13Parser, IWork18Parser, LegacyFormatParser, LegacyOfficeParser, MsgParser, OldExcelParser, OleContainerParser, OoxmlParser, OpenDocumentParser, PowerPointBinaryParser, PstParser, WordBinaryParser, WordPerfectParser, XlsbParser } from "@spikedpunch/ripstream-parser-office";
 import { FeedParser } from "./feed.ts";
@@ -178,6 +178,7 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
         ...section?.find((entry) => entry.name === "pdf-parser")?.settings,
       }),
       new ImageParser(),
+      new JxlParser(),
       new Mp4Parser(),
       new AudioParser(),
       // OggParser first: it holds the bare audio/ogg that Opus and Speex also name by their codec-parameter forms.
