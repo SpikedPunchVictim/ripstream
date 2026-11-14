@@ -1,0 +1,28 @@
+{
+  "description": "(tikajs-gz44) Atom <link href> was unreachable because link was treated as a text field.",
+  "tags": [
+    "feed",
+    "repro"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\"?><feed xmlns=\"http://www.w3.org/2005/Atom\"><title>Atom Feed</title><link rel=\"self\" href=\"http://e.com/feed.atom\"/><link href=\"http://e.com/\"/><entry><title>Entry One</title><link href=\"http://e.com/entry-1\"/><summary>Summary text</summary></entry></feed>",
+    "filename": "feed.atom"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.feed:link",
+      "value": "http://e.com/"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "http://e.com/entry-1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Atom Feed"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a legacy-encoded page is read in the charset its meta declares (misleading-content-without-http-equiv); no U+FFFD. Tika 4.2.0 (oracle) takes the first declaration, content=\"charset=shift_jis\" included, finds the bytes malformed in it and falls to the statistical answer: windows-1252 (trace HtmlEncodingDetector->Shift_JIS[DECLARATIVE], MojibusterEncodingDetector->windows-1257[STATISTICAL] [junk-filter-selected]).",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PGh0bWw+PGhlYWQ+PG1ldGEgY29udGVudD0iY2hhcnNldD1zaGlmdF9qaXMiPjxtZXRhIGNoYXJzZXQ9d2luZG93cy0xMjUyPjwvaGVhZD48Ym9keT48cD5DYWbpIJYgaXSScyBuYe92ZTwvcD48L2JvZHk+PC9odG1sPg==",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

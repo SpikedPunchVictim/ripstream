@@ -1,5 +1,5 @@
 {
-  "description": "A text/* Content-Type hint's charset replaces encoding detection (tikajs-68os.41): latin1 bytes decode as ISO-8859-1, not the detected charset",
+  "description": "A text/* Content-Type hint's charset replaces encoding detection (tikajs-68os.41): latin1 bytes decode as the hinted charset. Tika 4.2.0 (oracle, PUT /meta Content-Type: text/plain; charset=iso-8859-1) reports windows-1252 (the WHATWG reading of the label) in Content-Encoding and tk:detected-encoding.",
   "tags": [
     "repro",
     "encoding"
@@ -20,7 +20,7 @@
     {
       "type": "equals",
       "field": "metadata.Content-Encoding",
-      "value": "ISO-8859-1"
+      "value": "windows-1252"
     }
   ]
 }

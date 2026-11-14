@@ -1,0 +1,23 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) base64_tests.rs, which keeps the words of a plain sentence in a part labelled Content-Transfer-Encoding: base64. Tika 4.2.0 (oracle, PUT /tika/text, same bytes, filename a.eml) does not: it base64-decodes the part whatever it holds and the words are gone (it answers CJK/replacement characters). ripstream does the same, and this pins that it does not grow a keep-the-words fallback Tika lacks.",
+  "tags": [
+    "xberg",
+    "mail",
+    "rfc822",
+    "repro"
+  ],
+  "input": {
+    "base64": "RnJvbTogYWxpY2VAZXhhbXBsZS5jb20NClN1YmplY3Q6IEZpZ3VyZXMNCk1JTUUtVmVyc2lvbjogMS4wDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IGJhc2U2NA0KDQpIZWxsbyBCb2IsIHRoZSBmaWd1cmVzIGFyZSBhdHRhY2hlZC4NCg==",
+    "filename": "a.eml"
+  },
+  "options": {
+    "contentType": "message/rfc822"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Hello Bob"
+    }
+  ]
+}

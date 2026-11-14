@@ -223,3 +223,31 @@ test("text in a skipped group and in \\info is not written to the body", async (
   const result = await record(String.raw`{\rtf1 {\fonttbl Arial;}{\*\generator Word;}{\info{\title T}Stray}shown}`);
   assert.deepEqual(result.paragraphs, ["shown"]);
 });
+
+// tikajs-gz44: control words that stand for a character were dropped, fusing words ("Dont") and table cells.
+test("RTF quote, dash and bullet control words and table cell ends keep their characters", async () => {
+  const result = await parse(String.raw`{\rtf1\ansi I don\rquote t know \ldblquote it\rdblquote  \lquote x\rquote  a\emdash b\endash c \bullet  end\par
+\trowd\intbl Name\cell Age\cell\row\intbl Bob\cell 42\cell\row done\par}`);
+  assert.match(result.text, /I don’t know “it” ‘x’ a—b–c • end/);
+  assert.match(result.text, /Name\tAge/);
+  assert.match(result.text, /Bob\t42/);
+  assert.doesNotMatch(result.text, /Age[A-Za-z]/);
+});
+
+// tikajs-2mo9: \info text was appended one character at a time (a 50 MB title took 20 s and over 1 GB).
+test("RTF info text is read in bounded time and memory", async () => {
+  const title = "x".repeat(20_000_000);
+  const started = performance.now();
+  const result = await parse(String.raw`{\rtf1\ansi {\info{\title ${title}}}body\par}`);
+  assert.ok(performance.now() - started < 5000);
+  assert.ok(result.metadata.get("dc:title")!.length <= 1_000_000);
+  assert.match(result.text, /body/);
+});
+
+// tikajs-gz44: an out-of-range \creatim part made toISOString throw, failing the whole document.
+test("RTF creation time with an out-of-range year is dropped, not fatal", async () => {
+  const result = await parse(String.raw`{\rtf1\ansi {\info{\title T}{\creatim\yr300000\mo1\dy1}}body\par}`);
+  assert.match(result.text, /body/);
+  assert.equal(result.metadata.get("dcterms:created"), null);
+  assert.equal(result.metadata.get("dc:title"), "T");
+});

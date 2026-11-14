@@ -30,6 +30,9 @@ const DC_NS = "http://purl.org/dc/elements/1.1/";
 const OLD_NS = "http://openoffice.org/2000/";
 const NEW_NS = "urn:oasis:names:tc:opendocument:xmlns:";
 
+/** ParseLimits.maxMetadataValueChars' default: a joined value this long takes no further appends. */
+const MAX_JOINED_VALUE_CHARS = 1_000_000;
+
 interface Handler {
   start(uri: string, local: string, attributes: readonly SaxesAttributeNS[], depth: number): void;
   text(text: string): void;
@@ -123,6 +126,8 @@ class MetaElementJoined implements Handler {
     if (value.length === 0) return;
     // MetadataHandler.addMetadata: a value after an earlier one is appended to it; the property is set, not added.
     const previous = this.metadata.get(this.key);
+    // Past the default per-value cap the joined text is cut anyway; appending would only copy it again per keyword.
+    if (previous !== null && previous.length >= MAX_JOINED_VALUE_CHARS) return;
     this.metadata.set(this.key, previous !== null && previous.length > 0 ? `${previous}, ${value}` : value);
   }
 }

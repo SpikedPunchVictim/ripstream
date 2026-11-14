@@ -435,6 +435,22 @@ test("a charset of iso-8859-1 or latin1 reads bytes above 0x7f as windows-1252",
   assert.equal(handler.toString(), "\u0192\u2122");
 });
 
+// Tika 4.2.0 (PUT /tika/text, filename a.eml, tikajs-w7xw): a text part's label is a hint the bytes must agree with. Valid
+// non-ASCII UTF-8 under a latin1 label is UTF-8; lone high bytes under a UTF-8 label fall back to the bytes' own charset.
+test("a text part's charset label gives way to what its bytes are", async () => {
+  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain; charset=iso-8859-1\r\n\r\ncafé")).text, "café");
+  const latin = Uint8Array.from([
+    ...new TextEncoder().encode("Subject: s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\ncaf"),
+    0xe9,
+    ...new TextEncoder().encode(" au lait et du pain"),
+  ]);
+  const stream = await RipstreamInputStream.from(latin);
+  const handler = new BodyContentHandler();
+  await new MailParser().parse(stream, handler, new Metadata(), new ParseContext());
+  await stream.close();
+  assert.match(handler.toString(), /caf\u00e9 au lait/);
+});
+
 test("the first Content-Type header is the entity's (port)", async () => {
   assert.equal((await parse("Subject: s\r\nContent-Type: text/plain\r\nContent-Type: text/html\r\n\r\n<b>x</b>")).text, "<b>x</b>");
 });
@@ -555,4 +571,53 @@ test("any error from an embedded part ends the parse once the parse is aborted",
   controller.abort();
   const failure = new TypeError("after abort");
   assert.equal((await parseWithThrowingExtractor(failure, new ParseContext({ signal: controller.signal }))).outcome, failure);
+});
+
+test("an outer boundary that is a prefix of a nested one does not shred the nested multipart (tikajs-gz44)", async () => {
+  const text = [
+    "From: Ada <ada@example.com>",
+    "Subject: nested",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/mixed; boundary="part"',
+    "",
+    "--part",
+    'Content-Type: multipart/alternative; boundary="part_alt"',
+    "",
+    "--part_alt",
+    "Content-Type: text/plain",
+    "",
+    "PLAIN BODY",
+    "--part_alt",
+    "Content-Type: text/html",
+    "",
+    "<p>HTML BODY</p>",
+    "--part_alt--",
+    "--part",
+    "Content-Type: text/plain",
+    "",
+    "SECOND PART",
+    "--part--",
+    "",
+  ].join("\r\n");
+  const result = await parse(text);
+  assert.doesNotMatch(result.text, /PLAIN BODY/, "only the best alternative is rendered");
+  assert.match(result.text, /HTML BODY/);
+  assert.match(result.text, /SECOND PART/);
+});
+
+test("a boundary string inside a text line is not a delimiter (tikajs-gz44)", async () => {
+  const text = [
+    "From: Ada <ada@example.com>",
+    "Subject: inline",
+    'Content-Type: multipart/mixed; boundary="b1"',
+    "",
+    "--b1",
+    "Content-Type: text/plain",
+    "",
+    "see the marker --b1 here, not a delimiter",
+    "--b1--",
+    "",
+  ].join("\r\n");
+  const result = await parse(text);
+  assert.match(result.text, /see the marker --b1 here, not a delimiter/);
 });

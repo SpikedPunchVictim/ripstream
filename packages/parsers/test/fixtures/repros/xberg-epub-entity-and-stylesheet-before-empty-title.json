@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-ibvq. Adapted from xberg (MIT) td/EPUB_EDGE_CASES.md + epub_hardening_tests.rs. Oracle Tika 4.2.0 /rmeta: an undeclared &nbsp; without a DOCTYPE ends that chapter at the entity (text 'First' kept, 'ENTITY-CHAPTER-ONE' after it is not read) as a TIKA-237 container exception; the next chapter is read. xberg expected both markers.",
+  "tags": [
+    "xberg",
+    "epub",
+    "edge"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVBvYassFgAAABQAAAAIAAAAbWltZXR5cGVLLCjIyUxOLMnMz9NPLShN0q7KLAAAUEsDBBQAAAAIAAAAIVAIbVJwqAAAAO8AAAAWAAAATUVUQS1JTkYvY29udGFpbmVyLnhtbF2OwQrCMBBE735F2au00ZuEpoKgVwX1A2K6rcFkNzSp6N8bPVTxNod5b6ZeP7wr7jhEy6RgWS2gQDLcWuoVnE+7cgXrZlYbpqQt4fDXzTRFBeNAknW0UZL2GGUykgNSy2b0SEl+anKSQFMPzKmzDuM3Ft3oXBl0uirYbzeHo3gDGa84dFB4bK0u0zOgAh2Cs0anfEQwXkLMmLnpHud5CURTix+/mHabF1BLAwQUAAAACAAAACFQCfdmZQgBAAADAgAAEQAAAE9FQlBTL2NvbnRlbnQub3BmlZHBcoQgDIbvfQqGa0ej9tCOo+6pD8JA1EwRWY11+/ZFdN3tsTfCn//LH6gut8GKb5xmGl0t8zSTAp0eDbmulgu3yYe8NC+VV/pLdShCt5tr2TP7EmBd15SMb9Nx6qDIsncYfSsfuLcNtzi6LpiQQcfUEk6BS0Y21YCsjGK1Q0ujT65fJhuZRgNaHIJzhjzNIbiMLh8oQeagLZMrGWcuP02HFfzpiiYmttic6l5uglWuW8JuDbqonHUF94Qhq3LUBnxTEeMQx+pcin7Cdjult54HK8WAhlTCPx5rqby3pBWHl4Aov4Y9JTwTipNQ/IsAjzizJ4c7M5AC9kh0H/R8WUTv4YDjS5tfUEsDBBQAAAAIAAAAIVDskzRZuwAAAOIAAAAOAAAAT0VCUFMvYzEueGh0bWw1zj9PwzAQBfCdT2HdwJYcURcCjitUpaJLQTQLY/5cYwvXtuwrab89SSumk55+7+nk+nKy4pdiMt5VUORPIMj1fjBurODMx+wZ1upBap7ZTF2qQDOHF8RpmvJplfs4YlGWJV4WA0pqagclrXE/IpKtIPHVUtJEDEJHOs5J3qcEqCQbtqQk/t97tfPDVcmgtiYmfnRdCq+hja2o982u+c4272+fTf2VfexriWGBB+q9G8SCbgneF3B5SP0BUEsDBBQAAAAIAAAAIVA+ZNh9oAAAALwAAAAOAAAAT0VCUFMvYzIueGh0bWwljUELgjAcxe99irG7TumSsk1ChLpUxCA6Wi430G3Mf02/fRNvD97v9x6t5nFAP+knbQ3DeZphJM3bdtr0DH/hkxxwxXdUQcQiaiaGFYArCQkhpGGfWt+TvCgKMq8M5lTJtuMUNAySi2Ap2SIlW/Gy3YImWAbJ8Nj6XpsSZVFzvFatA+kRBIuaiziLZ1KfjjfR3BPxuFLi4sZqr1Pxiv8BUEsBAhQDFAAAAAgAAAAhUG9hqywWAAAAFAAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgAAAAhUAhtUnCoAAAA7wAAABYAAAAAAAAAAAAAAIABPAAAAE1FVEEtSU5GL2NvbnRhaW5lci54bWxQSwECFAMUAAAACAAAACFQCfdmZQgBAAADAgAAEQAAAAAAAAAAAAAAgAEYAQAAT0VCUFMvY29udGVudC5vcGZQSwECFAMUAAAACAAAACFQ7JM0WbsAAADiAAAADgAAAAAAAAAAAAAAgAFPAgAAT0VCUFMvYzEueGh0bWxQSwECFAMUAAAACAAAACFQPmTYfaAAAAC8AAAADgAAAAAAAAAAAAAAgAE2AwAAT0VCUFMvYzIueGh0bWxQSwUGAAAAAAUABQAxAQAAAgQAAAAA",
+    "filename": "a.epub"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "First"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "ENTITY-CHAPTER-ONE"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ENTITY-CHAPTER-TWO"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "description": "tikajs-u03v. Adapted from xberg (MIT) docx_content_control_placeholders.rs. Oracle Tika 4.2.0 /tika: the prompt text of an empty content control (w:showingPlcHdr) is written, as are filled controls (xberg expected the prompts dropped).",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBF93yF5S2KHVgghJJ0wWMJLMoHjOxJYtUvedxS/p5JW7pAhaV9H2d0u9U+eLHDQi7FXt6oVgqMJlkXp15+rF+ae7karrr1V0YS7I3Uy7nW/KA1mRkDkEoZIytjKgEqP8ukM5gNTKhv2/ZOmxQrxtrUpUMO3ROOsPVVPO/5+8gt6EmKx6NxYfUScvbOQGVd76L9RWlOBMXJg4dml+maDVJfJCzK34BT7o2HKM6ieIdSXyGwS3+mYrVNZhs4qf6vuXBnGkdn8Jxf2nJJBol44eDVWQng4s/9+jD38A1QSwMEFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4J1TRN5pWgaEUJMuCKkrKgeIEjeNaB5Kwuv2ZGCgiIHR9u/Pcts97ExuGJPxjkFT1UDQSa+M0wzOw3G9g46v2hPOIpdImkxIpOy4xGDKOewpTXJCK1LlA7oyGX20IpcyahqEvAiNdFPXWxo/DeALk/SKQexVA2R4BvzH9uNoJB68vFp0+ceJr0SRRdSYGdx9VFS921VhgfKWLl7kL1BLAwQUAAAACAAAACFQ2TbQ4m8BAAAgBAAAEQAAAHdvcmQvZG9jdW1lbnQueG1sxVPLTgMxDLzzFVHuNAUkhFbtIlFAnFAlygeEjctG5CXH7Xb/Hu+DtyrggLg4m/V47Bkrs/Odd2ILmG0Mc3k0mUoBoYrGhse5vF9dH55JkUkHo10MMJctZHleHsyawsRq4yGQYIaQi2Yua6JUKJWrGrzOk5ggcG4d0WviKz6qJqJJGCvImRt4p46n01PltQ1ypMGf0MT12lZwOQ4wkCA4TSwi1zZlWfKAD9G03Zm6gF3oZy1y0hUrSQgZcAuyvNUeCjFTDCi72GOzofFY9ndrRFNstWOTpOppHdPU0Rno82zHUiO9gC5hrTeOlm+grkp9Kct1bNiKpatuDA6I15b8sYiBWOKrAhwyeEetg5de75qsYEdjoxFK5cLZ6klEFKSTqAFBUOQlE/Afhk8+CFcf26rRCDXa+K2XC0vt/3j5B85dADobfuPPfqUng9Kf7/ud1eVVvy0t8sZ7jW2/xS97S3un+0xm9tQOL0a9ve3yGVBLAQIUAxQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAAAAAAAAAAAAAIABEwEAAF9yZWxzLy5yZWxzUEsBAhQDFAAAAAgAAAAhUNk20OJvAQAAIAQAABEAAAAAAAAAAAAAAIAB4QEAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAADAAMAuQAAAH8DAAAAAA==",
+    "filename": "a.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Name: Click or tap here to enter text."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "City: Berlin"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Enter a summary here."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "End."
+    }
+  ]
+}

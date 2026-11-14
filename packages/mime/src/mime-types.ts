@@ -167,13 +167,25 @@ export class MimeTypes {
     return entry === undefined ? null : (MediaType.parse(entry.type) ?? normalized);
   }
 
-  getMimeType(name: string): MediaType | null {
-    return this.forName(name);
+  /**
+   * The type a resource name stands for. A name no pattern matches is looked up again in lower case, as Tika 4.2.0 does
+   * (measured: `DATA.CSV` is text/csv, `x.Cpp` is text/x-c++src, `a.DOCX` over a zip is the OOXML type), after the exact name:
+   * `x.C` is C++ and `x.c` is C because `*.C` is a glob of its own. `forName` itself stays an exact lookup. A `?` or `#` ends
+   * the name, as in a URL.
+   */
+  getMimeType(resourceName: string): MediaType | null {
+    // A query or fragment is not part of the name (measured: `data.csv?x=1` is text/csv, `file#1.csv` is not).
+    const cut = resourceName.search(/[?#]/);
+    const name = cut === -1 ? resourceName : resourceName.slice(0, cut);
+    const exact = this.forName(name);
+    if (exact !== null) return exact;
+    const lower = name.toLowerCase();
+    return lower === name ? null : this.forName(lower);
   }
 
   /** Upstream getMimeType falls back to octet-stream. */
   getMimeTypeOrOctetStream(name: string): MediaType {
-    return this.forName(name) ?? MediaType.OCTET_STREAM;
+    return this.getMimeType(name) ?? MediaType.OCTET_STREAM;
   }
 
   forName(name: string): MediaType | null {
@@ -195,13 +207,10 @@ export class MimeTypes {
   forRootXML(localName: string, namespaceURI?: string): MediaType | null {
     for (const { entry, root } of this.xmlRoots) {
       if (root.localName !== localName) continue;
-      if (
-        root.namespaceURI !== undefined &&
-        namespaceURI !== undefined &&
-        root.namespaceURI !== namespaceURI
-      ) {
-        continue;
-      }
+      // The namespace has to be the same, and no namespace is a namespace: an entry that names none (`rss`, `html`) is for
+      // a document that has none, and `<rss xmlns="urn:other">` is application/xml. Measured against Tika 4.2.0 for every
+      // root the registry knows, with the namespace it names, with none and with another.
+      if ((root.namespaceURI ?? "") !== (namespaceURI ?? "")) continue;
       return MediaType.parse(entry.type);
     }
     return null;

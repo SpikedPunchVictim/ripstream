@@ -375,3 +375,19 @@ test("rejects files without moov", async () => {
   );
   await stream.close();
 });
+
+test("trak boxes nested 20,000 deep do not exhaust the stack (tikajs-f2pv)", async () => {
+  const levels = 20_000;
+  const nested = new Uint8Array(levels * 8);
+  const view = new DataView(nested.buffer);
+  for (let level = 0; level < levels; level++) {
+    view.setUint32(level * 8, (levels - level) * 8);
+    nested.set([0x74, 0x72, 0x61, 0x6b], level * 8 + 4); // trak
+  }
+  const ftyp = box("ftyp", [...[..."isom"].map((c) => c.charCodeAt(0)), ...u32(0)]);
+  const moov = new Uint8Array(8 + nested.length);
+  new DataView(moov.buffer).setUint32(0, moov.length);
+  moov.set([0x6d, 0x6f, 0x6f, 0x76], 4);
+  moov.set(nested, 8);
+  await parseMp4(new Uint8Array([...ftyp, ...moov]));
+});

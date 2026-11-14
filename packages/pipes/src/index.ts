@@ -51,6 +51,8 @@ import {
 
 export { PIPE_MODES, assertValidPipesConfig, validatePipesConfig } from "./config.ts";
 export {
+  DEFAULT_HTTP_MAX_BYTES,
+  DEFAULT_HTTP_TIMEOUT_MS,
   FileSystemFetcher,
   FileSystemPipesIterator,
   HttpFetcher,
@@ -59,6 +61,7 @@ export {
   UrlListPipesIterator,
   type FileSystemFetcherOptions,
   type FileSystemPipesIteratorOptions,
+  type HttpFetcherOptions,
 } from "./components.ts";
 export {
   FileSystemEmitter,
@@ -600,6 +603,9 @@ export class PipesEngine {
       if (failure !== null) throw (failure as { readonly error: unknown }).error;
       if (slots.length !== 0) throw new Error("ordered buffer not drained");
     } finally {
+      // A run that stopped early (a failure, an abort) leaves the source part read: it is closed, which is what ends a
+      // directory walk or a database cursor. A read still pending settles on its own, so it is not waited for.
+      if (!fetchedDone) void Promise.resolve(iterator.return?.()).catch(() => undefined);
       try {
         await closeComponents([options.emitter, ...Object.values(emitters), ...Object.values(options.fetchers ?? {})]);
       } finally {

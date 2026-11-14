@@ -215,11 +215,42 @@ test("an XHTML chapter that uses an HTML entity under a DOCTYPE is read, the ent
   assert.match(run.xml, /<p>ab<\/p>/);
 });
 
-test("an undefined entity in a chapter without a DOCTYPE is still a malformed document", async () => {
-  await assert.rejects(
-    runEpub(opf("", C1, SPINE), { "OPS/c1.xhtml": "<html><body><p>a&nbsp;b</p></body></html>" }),
-    /undefined entity/,
-  );
+// Oracle (Tika 4.2.0 /rmeta, tikajs-ibvq): a chapter that is not well-formed, or that uses an undeclared entity without a DOCTYPE,
+// does not stop the book. EpubContentParser.parse throws (TIKA-237), EpubParser records it as tk:exception:container-exception,
+// the text read before the error stays and the next chapters are read. "First&nbsp;para" gives "First" and nothing after it.
+test("an undefined entity in a chapter without a DOCTYPE ends that chapter at the entity, is recorded, and the next chapter is read", async () => {
+  const run = await runEpub(opf("", `${C1}<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>`, `${SPINE}<itemref idref="c2"/>`), {
+    "OPS/c1.xhtml": "<html><body><p>First&nbsp;para LOST</p></body></html>",
+    "OPS/c2.xhtml": "<html><body><p>Chapter two</p></body></html>",
+  });
+  assert.match(run.xml, /<p>First<\/p>/);
+  assert.doesNotMatch(run.xml, /LOST/);
+  assert.match(run.xml, /Chapter two/);
+  assert.match(run.metadata.get("tk:exception:container-exception") ?? "", /undefined entity/);
+});
+
+test("a chapter that is not well-formed keeps its text up to the error and the other chapters are read", async () => {
+  const run = await runEpub(opf("", `${C1}<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>`, `${SPINE}<itemref idref="c2"/>`), {
+    "OPS/c1.xhtml": "<html><body><p><b>BROKEN text</p></b><p>LOST</p></body></html>",
+    "OPS/c2.xhtml": "<html><body><p>AFTER text</p></body></html>",
+  });
+  assert.match(run.xml, /BROKEN text/);
+  assert.doesNotMatch(run.xml, /LOST/);
+  assert.match(run.xml, /AFTER text/);
+  assert.match(run.metadata.get("tk:exception:container-exception") ?? "", /not well-formed/);
+});
+
+// Oracle (Tika 4.2.0, tikajs-u03v): 30000 nested spans between two paragraphs give "LEAD-PARAGRAPH" and a TIKA-237 container
+// exception; the paragraph after the nesting is not read.
+test("a chapter nested past the depth limit keeps its text before it, is recorded, and does not stop the book", async () => {
+  const run = await runEpub(opf("", `${C1}<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>`, `${SPINE}<itemref idref="c2"/>`), {
+    "OPS/c1.xhtml": `<html><body><p>LEAD</p><p>${"<span>".repeat(300)}x${"</span>".repeat(300)}</p><p>TAIL</p></body></html>`,
+    "OPS/c2.xhtml": "<html><body><p>AFTER text</p></body></html>",
+  });
+  assert.match(run.xml, /LEAD/);
+  assert.doesNotMatch(run.xml, /TAIL/);
+  assert.match(run.xml, /AFTER text/);
+  assert.match(run.metadata.get("tk:exception:container-exception") ?? "", /nesting/);
 });
 
 // ---- manifest, spine and cover details (mutation hardening) ----

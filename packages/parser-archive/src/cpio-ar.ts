@@ -37,9 +37,15 @@ export class CpioParser implements Parser {
       for (let count = 0; count < ctx.limits.maxZipEntries && position + 110 <= data.length; count++) {
         const header = new TextDecoder("latin1").decode(data.subarray(position, position + 110));
         if (!["070701", "070702"].includes(header.slice(0, 6))) break;
-        const field = (index: number): number => Number.parseInt(header.slice(6 + index * 8, 14 + index * 8), 16);
+        // A field is eight hex digits; parseInt would also accept "-0000074" (a size that walks back to this header, so the
+        // same entry is read until the entry limit) and "12zz" (read as 0x12).
+        const field = (index: number): number => {
+          const digits = header.slice(6 + index * 8, 14 + index * 8);
+          return /^[0-9a-fA-F]{8}$/.test(digits) ? Number.parseInt(digits, 16) : Number.NaN;
+        };
         const size = field(6);
         const nameSize = field(11);
+        if (Number.isNaN(size) || Number.isNaN(nameSize)) break;
         const nameStart = position + 110;
         const name = new TextDecoder("latin1")
           .decode(data.subarray(nameStart, nameStart + Math.max(0, nameSize - 1)))

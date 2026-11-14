@@ -1,4 +1,5 @@
 import {
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -129,6 +130,9 @@ function ensure(data: Uint8Array, offset: number, size: number, what: string): v
   }
 }
 
+/** Far above any real class's method names, and well under the longest string a runtime will build. */
+const MAX_MEMBER_NAME_CHARS = 4_000_000;
+
 function readMembers(
   data: Uint8Array,
   view: DataView,
@@ -141,6 +145,7 @@ function readMembers(
   const count = view.getUint16(offset);
   offset += 2;
   const names: string[] = [];
+  let nameChars = 0;
   for (let index = 0; index < count; index++) {
     ensure(data, offset, 8, "member");
     const nameIndex = view.getUint16(offset + 2);
@@ -154,7 +159,13 @@ function readMembers(
     }
     if (offset > data.byteLength) throw new MalformedDocumentError("Truncated class");
     if (collect) {
-      names.push(`${utf8[nameIndex] ?? "?"}${utf8[descriptorIndex] ?? ""}`);
+      // Every member may name the same long constant, so the names can outgrow the file many times over.
+      const name = `${utf8[nameIndex] ?? "?"}${utf8[descriptorIndex] ?? ""}`;
+      nameChars += name.length;
+      if (nameChars > MAX_MEMBER_NAME_CHARS) {
+        throw new LimitExceededError(`Class method names exceed ${MAX_MEMBER_NAME_CHARS} characters`);
+      }
+      names.push(name);
     }
   }
   return { offset, names };

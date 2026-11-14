@@ -102,22 +102,23 @@ export class TextContentHandler implements ContentHandler {
     if (name === "SCRIPT") this.scriptDepth--;
   }
 
-  async characters(ch: string, start: number, length: number): Promise<void> {
+  // Synchronous unless a sink is set: a promise per event is costly on large documents.
+  characters(ch: string, start: number, length: number): MaybePromise<void> {
     if (this.styleDepth + this.scriptDepth !== 0) return;
     const text = ch.slice(start, start + length);
     if (this.sink === null) {
       this.buffer += text;
-    } else {
-      await this.sink(text);
+      return;
     }
+    return this.sink(text);
   }
 
-  async ignorableWhitespace(
+  ignorableWhitespace(
     ch: string,
     start: number,
     length: number,
-  ): Promise<void> {
-    await this.characters(ch, start, length);
+  ): MaybePromise<void> {
+    return this.characters(ch, start, length);
   }
 
   toString(): string {
@@ -139,15 +140,15 @@ export class BodyContentHandler extends TextContentHandler {
     super.endElement(uri, localName, qName);
   }
 
-  async characters(ch: string, start: number, length: number): Promise<void> {
-    if (this.inBody) await super.characters(ch, start, length);
+  characters(ch: string, start: number, length: number): MaybePromise<void> {
+    if (this.inBody) return super.characters(ch, start, length);
   }
 
-  async ignorableWhitespace(
+  ignorableWhitespace(
     ch: string,
     start: number,
     length: number,
-  ): Promise<void> {
-    if (this.inBody) await super.ignorableWhitespace(ch, start, length);
+  ): MaybePromise<void> {
+    if (this.inBody) return super.ignorableWhitespace(ch, start, length);
   }
 }

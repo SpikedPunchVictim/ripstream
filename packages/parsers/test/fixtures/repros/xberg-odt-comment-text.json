@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-u03v. Adapted from xberg (MIT) issue_odt_odf_extraction_defects.rs (issue 100). Oracle Tika 4.2.0 /tika: an office:annotation body is written as a block of its own, 'Please review this figure.' then '&#32;This needs revision. ' (Tika's literal '&#32;').",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhUDEmpAs8AQAAPgMAAAsAAABjb250ZW50LnhtbI1SQW7DIBC89xWIu02tXhpkE/XScw/pAwheJ6iYtQDHzu+LSew6qiL5hNiZYYbdLfdja8gFnNdoK1rkr5SAVVhre6ro9+Eze6d78VJi02gFvEbVt2BDptCGeJKotp7f0Ir2znKUXntuZQueB8WxAzur+JrNk9etEmAMW9UT90Erj2azdSKv1bWTw1bxxI1tWct9uG43T+QHc1XRcwgdZ6zrncnRnVitGBiYVJ4VecFm7mi0/VnowzDkw1sSFLvdjiV0pja4NdHoTdZgHGbbyaDn1oh52rIP2EZAZSm6FyV7ityBI9bX5TKNSpRpYJ34MiA9EAcXDQMJZ+1Jo0+9g3yxsxZDfBQtuVem7BVVRYxUK64cyIBOfJiIlWxVmT0O06sWoPbJZ9rpvGR38C/84iP+g7fM7OE77Mn2i19QSwECFAMUAAAAAAAAACFQXsYyDCcAAAAnAAAACAAAAAAAAAAAAAAAgAEAAAAAbWltZXR5cGVQSwECFAMUAAAACAAAACFQMSakCzwBAAA+AwAACwAAAAAAAAAAAAAAgAFNAAAAY29udGVudC54bWxQSwUGAAAAAAIAAgBvAAAAsgEAAAAA",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Please review this figure."
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "This needs revision."
+    }
+  ]
+}

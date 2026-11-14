@@ -1,0 +1,28 @@
+{
+  "description": "(tikajs-gz44) CDATA titles/descriptions were dropped and <image><title> replaced the feed title.",
+  "tags": [
+    "feed",
+    "repro"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>My Feed</title><image><title>Logo</title><url>http://e.com/l.png</url></image><item><title><![CDATA[Cdata Post]]></title><description><![CDATA[<p>Cdata body</p>]]></description><link>http://e.com/1</link></item></channel></rss>",
+    "filename": "feed.rss"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "My Feed"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cdata Post"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Cdata body"
+    }
+  ]
+}

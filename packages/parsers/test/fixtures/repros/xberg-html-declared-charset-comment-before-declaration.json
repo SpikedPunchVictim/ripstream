@@ -1,0 +1,24 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a legacy-encoded page is read in the charset its meta declares (comment-before-declaration); no U+FFFD. Tika 4.2.0 (oracle) reads this as windows-1252: its HtmlEncodingDetector does not take a meta that sits in a comment while another declares anything (measured with /rmeta: HtmlEncodingDetector->windows-1252[DECLARATIVE]).",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PGh0bWw+PGhlYWQ+PCEtLSA8bWV0YSBjaGFyc2V0PXNoaWZ0X2ppcz4gLS0+PG1ldGEgY2hhcnNldD0id2luZG93cy0xMjUyIj48L2hlYWQ+PGJvZHk+PHA+Q2Fm6SCWIGl0knMgbmHvdmU8L3A+PC9ib2R5PjwvaHRtbD4=",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

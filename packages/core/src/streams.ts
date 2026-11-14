@@ -66,6 +66,7 @@ export async function* toAsyncIterable(
       void reader.cancel(options.signal?.reason);
     };
     options.signal?.addEventListener("abort", onAbort, { once: true });
+    let finished = false;
     try {
       for (;;) {
         checkAborted(options.signal);
@@ -73,22 +74,55 @@ export async function* toAsyncIterable(
         if (done) {
           // reader.cancel() on abort also surfaces as done:true; that is not EOF.
           checkAborted(options.signal);
+          finished = true;
           return;
         }
         if (value !== undefined) yield value;
       }
     } finally {
       options.signal?.removeEventListener("abort", onAbort);
+      // A stream left unfinished (the consumer stopped, or the parse failed) is cancelled: unlocking alone leaves the
+      // source open, and a `fetch` body keeps its connection.
+      if (!finished) void reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }
 
   if (isAsyncIterable(source)) {
-    for await (const chunk of source) {
-      checkAborted(options.signal);
-      yield chunk;
+    // A source that never yields again would hold the parse past its timer: an abort must end the wait itself.
+    const iterator = source[Symbol.asyncIterator]();
+    let onAbort = (): void => undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = (): void => {
+        try {
+          checkAborted(options.signal);
+        } catch (error) {
+          reject(error);
+        }
+        // A Node stream is stopped with the wait: its read would otherwise stay open.
+        if (typeof (source as { destroy?: unknown }).destroy === "function") {
+          (source as unknown as { destroy(error?: Error): void }).destroy();
+        }
+      };
+    });
+    aborted.catch(() => undefined);
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    let finished = false;
+    try {
+      for (;;) {
+        checkAborted(options.signal);
+        const step = await Promise.race([iterator.next(), aborted]);
+        if (step.done === true) {
+          finished = true;
+          return;
+        }
+        yield step.value;
+      }
+    } finally {
+      options.signal?.removeEventListener("abort", onAbort);
+      // Not awaited: a generator stuck in its own await would hold this return as well.
+      if (!finished) void Promise.resolve(iterator.return?.()).catch(() => undefined);
     }
-    return;
   }
 
   if (typeof source === "object" && source !== null && "path" in source) {

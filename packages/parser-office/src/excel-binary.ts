@@ -11,7 +11,14 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { CompoundFile, hasSignature, isEncryptedCompound } from "./cfb.ts";
-import { formatExcelDate, isDateFormat } from "./excel-format.ts";
+import {
+  BUILTIN_NUMBER_FORMATS,
+  formatExcelDate,
+  formatExcelDateCode,
+  formatGeneralNumber,
+  formatNumber,
+  isDateFormat,
+} from "./excel-format.ts";
 
 const XLS = "application/vnd.ms-excel";
 
@@ -85,8 +92,10 @@ export class ExcelBinaryParser implements Parser {
       throw new MalformedDocumentError("Missing Excel workbook stream");
     }
 
-    const workbook = compound.read(name);
-    const sheets = readWorkbook(workbook);
+    // HSSF's event stream fails only when it needs bytes the sector chain does not have, so a chain cut short after the last
+    // sheet's EOF is read as it is (Tika 4.2.0, an .xls whose Workbook size was declared 4096 past its chain: the whole text).
+    const { bytes: workbook, truncated } = compound.readUpTo(name);
+    const sheets = readWorkbook(workbook, truncated);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const sheet of sheets) {
@@ -116,7 +125,7 @@ interface Sheet {
   readonly rows: readonly (readonly Cell[])[];
 }
 
-function readWorkbook(workbook: Uint8Array): Sheet[] {
+function readWorkbook(workbook: Uint8Array, truncated: boolean): Sheet[] {
   const records = readRecords(workbook);
   const first = records[0];
   const biff8 =
@@ -125,7 +134,6 @@ function readWorkbook(workbook: Uint8Array): Sheet[] {
     readUInt16(first.data, 0) >= 0x0600;
 
   let codepage = 1252;
-  let date1904 = false;
   const boundSheets: BoundSheet[] = [];
   const formats = new Map<number, string>();
   const xfFormats: number[] = [];
@@ -134,9 +142,10 @@ function readWorkbook(workbook: Uint8Array): Sheet[] {
   for (let index = 0; index < records.length; index++) {
     const record = records[index]!;
     switch (record.type) {
-      case 0x0022:
-        date1904 = readUInt16(record.data, 0) === 1;
-        break;
+      case 0x002f:
+        // FILEPASS: the records after it are enciphered. Oracle (Tika 4.2.0 /rmeta, an .xls with an RC4 or an XOR FILEPASS):
+        // EncryptedDocumentException "Unable to process: document is encrypted", no text. The bytes are not read as cells.
+        throw new EncryptedDocumentError("Unable to process: document is encrypted");
       case 0x0042:
         codepage = readUInt16(record.data, 0);
         break;
@@ -175,6 +184,10 @@ function readWorkbook(workbook: Uint8Array): Sheet[] {
     }
   }
 
+  if (truncated && !lastSheetEnds(records, boundSheets)) {
+    throw new MalformedDocumentError("Excel Workbook stream ends before its last sheet does: its sector chain is truncated");
+  }
+
   const sheets: Sheet[] = [];
   // Records are offset-sorted, so binary search finds each sheet start in O(log N);
   // identical starts are memoized and each sheet is bounded by the next sheet's start.
@@ -198,12 +211,29 @@ function readWorkbook(workbook: Uint8Array): Sheet[] {
         xfFormats,
         sst,
       );
-      rows = toRows(cells, date1904, formats);
+      rows = toRows(cells, formats);
       rowsByStart.set(start, rows);
     }
     sheets.push({ name: bound.name, rows });
   }
   return sheets;
+}
+
+/** Whether the record stream holds the closing EOF of the sheet that starts last (a BOF and its EOF, charts nested inside counted). */
+function lastSheetEnds(records: RecordWithOffset[], boundSheets: readonly BoundSheet[]): boolean {
+  let start = boundSheets.length === 0 ? 0 : -1;
+  for (const bound of boundSheets) {
+    const at = firstRecordAt(records, bound.offset);
+    if (at === -1) return false;
+    start = Math.max(start, at);
+  }
+  let depth = 0;
+  for (let index = start; index < records.length; index++) {
+    const type = records[index]!.type;
+    if (type === 0x0809) depth++;
+    else if (type === 0x000a && --depth <= 0) return true;
+  }
+  return false;
 }
 
 interface RecordWithOffset extends BiffRecord {
@@ -424,7 +454,6 @@ export const MAX_BIFF_RECORDS = 2_000_000;
 
 function toRows(
   cells: Map<number, Map<number, Cell>>,
-  date1904: boolean,
   formats: Map<number, string>,
 ): Cell[][] {
   const rows: Cell[][] = [];
@@ -447,7 +476,7 @@ function toRows(
       row.push(
         cell === undefined
           ? { value: "", numFmtId: 0, numeric: false }
-          : { ...cell, value: formatCell(cell, date1904, formats) },
+          : { ...cell, value: formatCell(cell, formats) },
       );
     }
     rows.push(row);
@@ -457,14 +486,19 @@ function toRows(
 
 function formatCell(
   cell: Cell,
-  date1904: boolean,
   formats: Map<number, string>,
 ): string {
   if (!cell.numeric || cell.value.length === 0) return cell.value;
   const value = Number(cell.value);
   if (!Number.isFinite(value)) return cell.value;
-  if (!dateFmt(cell.numFmtId, formats)) return cell.value;
-  return formatExcelDate(value + (date1904 ? 1462 : 0));
+  const code = formats.get(cell.numFmtId) ?? BUILTIN_NUMBER_FORMATS[cell.numFmtId];
+  // Oracle (Tika 4.2.0 /tika, tikajs-ibvq follow-up): POI formats an xls cell with the format's code, as it does an xlsx one, and the
+  // workbook's date1904 flag is not applied. 1234.5678 under builtin 14 reads "5/18/03", under 3 "1,235"; serial 1462 of a 1904
+  // workbook reads "1/1/04", not "1/1/08".
+  if (code === undefined) {
+    return dateFmt(cell.numFmtId, formats) ? formatExcelDate(value) : formatGeneralNumber(value);
+  }
+  return dateFmt(cell.numFmtId, formats) ? formatExcelDateCode(code, value) : formatNumber(code, value);
 }
 
 const BUILTIN_DATE_FORMATS = new Set([

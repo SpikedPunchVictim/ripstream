@@ -85,10 +85,39 @@ test("falls back to UTF-8 for an unsupported charset label", async () => {
 
 test("createDecoder falls back to utf-8 for labels TextDecoder rejects", async () => {
   const { createDecoder } = await import("../src/charset.ts");
-  const fallback = createDecoder("utf-32");
+  const fallback = createDecoder("x-no-such-charset");
   assert.equal(fallback.charset, "utf-8");
   assert.equal(fallback.decoder.decode(encoder.encode("ok")), "ok");
   assert.equal(createDecoder("utf-16le").charset, "utf-16le");
+});
+
+test("createDecoder decodes UTF-32 across chunk boundaries, with or without a BOM (tikajs-r77m)", async () => {
+  const { createDecoder } = await import("../src/charset.ts");
+  const units = (le: boolean, bom: boolean, ...points: number[]): Uint8Array => {
+    const out = new Uint8Array((points.length + (bom ? 1 : 0)) * 4);
+    const view = new DataView(out.buffer);
+    [...(bom ? [0xfeff] : []), ...points].forEach((p, i) => view.setUint32(i * 4, p, le));
+    return out;
+  };
+  const be = units(false, true, 0x68, 0x1f600, 0xe9);
+  const { decoder, charset } = createDecoder("UTF-32BE");
+  assert.equal(charset, "UTF-32BE");
+  let text = "";
+  for (let at = 0; at < be.length; at += 3) text += decoder.decode(be.subarray(at, at + 3), { stream: true });
+  text += decoder.decode();
+  assert.equal(text, "h\u{1f600}\u00e9");
+  assert.equal(createDecoder("utf-32").decoder.decode(units(true, true, 0x41, 0x42)), "AB", "the BOM gives the order");
+  assert.equal(createDecoder("utf-32").decoder.decode(units(false, false, 0x41)), "A", "big-endian by default");
+  assert.equal(createDecoder("utf-32le").decoder.decode(units(true, false, 0x110000)), "\ufffd");
+});
+
+test("a UTF-32 text document is read, not decoded as UTF-8 (tikajs-r77m)", async () => {
+  const body = new Uint8Array(4 * 4);
+  const view = new DataView(body.buffer);
+  [0xfeff, 0x68, 0x69, 0x0a].forEach((p, i) => view.setUint32(i * 4, p, false));
+  const result = await ripstream.parse(body, { filename: "a.txt" });
+  assert.equal(result.text.trim(), "hi");
+  assert.equal(result.metadata.get("Content-Encoding"), "UTF-32BE");
 });
 
 test("unregistered text/* subtypes fall back to the text parser", async () => {
@@ -126,4 +155,12 @@ test("recordDetectedEncoding replaces a charset recorded before it", async () =>
   recordDetectedEncoding(metadata, "windows-1252");
   recordDetectedEncoding(metadata, "UTF-8");
   assert.deepEqual(metadata.getAll("tk:detected-encoding"), ["UTF-8"]);
+});
+
+test("html and markdown take the charset of an incoming Content-Type (tikajs-r77m)", async () => {
+  const cp1251 = (text: string): Uint8Array => Uint8Array.from([...encoder.encode(text), 0xcf, 0xf0]);
+  const html = await ripstream.parse(cp1251("<html><body><p>x"), { contentType: "text/html; charset=windows-1251" });
+  assert.match(html.text, /xПр/);
+  const markdown = await ripstream.parse(cp1251("# x"), { contentType: "text/markdown; charset=windows-1251" });
+  assert.match(markdown.text, /xПр/);
 });

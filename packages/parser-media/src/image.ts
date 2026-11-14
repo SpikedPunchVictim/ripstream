@@ -19,6 +19,7 @@ import { readJbig2 } from "./jbig2.ts";
 import { readPnm } from "./pnm.ts";
 import { readWbmp } from "./wbmp.ts";
 import { readGifImages } from "./gif.ts";
+import { stripTags, xmpElementBlock, xmpListItems } from "./xmp-elements.ts";
 import { setImageReaderMetadata, type HeaderReader } from "./imageio-metadata.ts";
 
 /**
@@ -167,11 +168,11 @@ async function xmpTitles(data: Uint8Array): Promise<string[]> {
   );
   if (packet === null) return [];
   const xml = new TextDecoder("utf-8", { fatal: false }).decode(packet);
-  const block = /<dc:title\b[^>]*>([\s\S]*?)<\/dc:title>/.exec(xml)?.[1];
+  const block = xmpElementBlock(xml, "dc:title");
   if (block === undefined) return [];
   const titles: string[] = [];
-  for (const match of block.matchAll(/<rdf:li\b[^>]*>([\s\S]*?)<\/rdf:li>/g)) {
-    const value = match[1]!.replace(/<[^>]+>/g, "").trim();
+  for (const item of xmpListItems(block)) {
+    const value = stripTags(item).trim();
     if (value.length > 0) titles.push(value);
   }
   return titles;
@@ -378,7 +379,16 @@ function exifValue(value: unknown): string | null {
   }
   if (typeof value === "object") return null;
   const text = String(value);
-  return text.length > 0 ? text : null;
+  return text.length > 0 ? exifDateText(text) : null;
+}
+
+/**
+ * An EXIF date "2010:05:04 06:43:54" as Tika writes it, "2010-05-04T06:43:54" (oracle Tika 4.2.0 /rmeta). The date has no
+ * zone, so none is added; exifr's own Date would have taken the process's time zone (tikajs-ibvq follow-up).
+ */
+function exifDateText(text: string): string {
+  const match = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}:\d{2}:\d{2})$/.exec(text);
+  return match === null ? text : `${match[1]}-${match[2]}-${match[3]}T${match[4]}`;
 }
 
 const EXIF_KEYS: Record<string, string> = {

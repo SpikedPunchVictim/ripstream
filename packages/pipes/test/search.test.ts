@@ -100,6 +100,15 @@ test("a key declared JSON (tk:chunks) is written as JSON when it is, and as a st
   });
 });
 
+test("a JSON key with a line break in it is still one line of the bulk body", async () => {
+  await withSearch(async (search) => {
+    await emitterFor(settings(search)).emit(metadataDocument("d", { "tk:chunks": '[\n  {"text": "a\\nb"},\r\n  2\n]' }));
+    const body = search.requests[0]?.body ?? "";
+    assert.equal(body.split("\n").length, 3, "an action line, a source line and the end of the body");
+    assert.deepEqual(search.lines()[0]?.[1], { "tk:chunks": [{ text: "a\nb" }, 2] });
+  });
+});
+
 test("a CONCATENATE document is one entry with its content as tk:content", async () => {
   await withSearch(async (search) => {
     await emitterFor(settings(search)).emit({ id: "doc", mode: "CONCATENATE", text: "the body", metadata: { "Content-Type": "text/plain" } });

@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-ekue) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\cpg on a font entry is ignored when \\fcharset is present.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil\\fcharset204\\cpg1252 Arial;}}\\f0 \\'cf\\'f0\\'e8\\'e2\\'e5\\'f2}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Привет"
+    }
+  ]
+}

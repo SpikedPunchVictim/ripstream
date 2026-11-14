@@ -120,3 +120,36 @@ test("readBody keeps the whole of a body, gzip or not", async () => {
   assert.deepEqual(await through((request) => readBody(request, 1_000_000), body), body);
   assert.deepEqual(await through((request) => readBody(request, 1_000_000), gzipSync(body), { "content-encoding": "gzip" }), body);
 });
+
+test("a body is not waited for from a request whose client is already gone", async () => {
+  let outcome: Uint8Array | Error | undefined;
+  let finished!: () => void;
+  const done = new Promise<void>((resolve) => (finished = resolve));
+  const server = http.createServer((request, response) => {
+    // Late, as a request is when it has waited for a slot: the connection has closed by the time the read begins.
+    request.on("close", () => {
+      setImmediate(() => {
+        readRawBody(request, 1_000_000).then(
+          (bytes) => (outcome = bytes),
+          (error: unknown) => (outcome = error instanceof Error ? error : new Error(String(error))),
+        ).finally(finished);
+      });
+    });
+    response.on("error", () => undefined);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  try {
+    const req = http.request({ host: "127.0.0.1", port, method: "PUT", headers: { "content-length": "100" }, agent: false });
+    req.on("error", () => undefined);
+    req.write("start");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    req.destroy();
+    await Promise.race([done, new Promise((_, reject) => setTimeout(() => reject(new Error("the read never settled")), 3000))]);
+  } finally {
+    server.close();
+    server.closeAllConnections();
+  }
+  assert.ok(outcome instanceof Error);
+  assert.match(outcome.message, /aborted/);
+});

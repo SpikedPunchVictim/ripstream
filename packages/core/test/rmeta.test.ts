@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  coerceMetadataValue,
   MediaType,
   Metadata,
   markParseTiming,
+  metadataJson,
   rmetaObject,
   rmetaObjects,
   serializeRmeta,
@@ -85,6 +87,36 @@ test("typed metadata collapses singletons using the schema", () => {
   assert.equal(value["meta:page-count"], 3);
   assert.equal(value["dc:title"], "A");
   assert.equal(value["custom:any"], "x");
+});
+
+test("a typed value is a number only when its text is one, and both coercions say the same", () => {
+  const texts = ["", " ", "0x10", "1e3", "12", "-4", "+7", "3.5", "9007199254740993"];
+  const entry = record("/doc", 0, { "meta:page-count": [""], "pdf:pdf-version": [""] }, "");
+  assert.equal(rmetaObject(entry, { typedMetadata: true })["meta:page-count"], "", "blank text is not 0");
+  for (const text of texts) {
+    const typed = rmetaObject(record("/doc", 0, { "meta:page-count": [text], "pdf:pdf-version": [text] }, ""), { typedMetadata: true });
+    assert.equal(typed["meta:page-count"], coerceMetadataValue("meta:page-count", text), `integer ${JSON.stringify(text)}`);
+    assert.equal(typed["pdf:pdf-version"], coerceMetadataValue("pdf:pdf-version", text), `real ${JSON.stringify(text)}`);
+  }
+  assert.equal(coerceMetadataValue("meta:page-count", "0x10"), "0x10");
+  assert.equal(coerceMetadataValue("meta:page-count", "1e3"), "1e3");
+  assert.equal(coerceMetadataValue("meta:page-count", " "), " ");
+  assert.equal(coerceMetadataValue("pdf:pdf-version", "1e3"), 1000);
+  assert.equal(coerceMetadataValue("meta:page-count", "+7"), 7);
+});
+
+test("a metadata key named __proto__ is a key in the JSON, not the object's prototype", () => {
+  const metadata = new Metadata();
+  metadata.set("__proto__", "x");
+  metadata.add("a", "1");
+  metadata.add("a", "2");
+  assert.equal(JSON.stringify(metadataJson(metadata)), '{"__proto__":"x","a":["1","2"]}');
+  assert.equal(JSON.stringify(metadata.toObject()), '{"__proto__":"x","a":["1","2"]}');
+  const many = new Metadata();
+  many.add("__proto__", "x");
+  many.add("__proto__", "y");
+  assert.equal(JSON.stringify(metadataJson(many)), '{"__proto__":["x","y"]}');
+  assert.equal(Object.getPrototypeOf(metadataJson(many)), Object.prototype);
 });
 
 test("document shape emits the first record and the container exception", () => {

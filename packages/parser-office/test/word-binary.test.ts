@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   BodyContentHandler,
   EncryptedDocumentError,
+  MalformedDocumentError,
   Metadata,
   ParseContext,
   RipstreamInputStream,
@@ -234,4 +235,65 @@ test("detects OLE encryption streams for Word", async () => {
     { name: "EncryptionInfo", data: new Uint8Array(4096) },
   ]);
   await assert.rejects(parse(data), EncryptedDocumentError);
+});
+
+/** A Word 97 file whose piece table lists `pieces` pieces of `length` characters. */
+function wordDocumentWithPieces(
+  pieces: ReadonlyArray<{ cpStart: number; cpEnd: number; offset: number }>,
+): Uint8Array {
+  const word = new Uint8Array(4096);
+  const wordView = new DataView(word.buffer);
+  wordView.setUint16(0, 0xa5ec, true);
+  wordView.setUint16(2, 0x00c1, true);
+  wordView.setUint16(10, 0x0200, true);
+  word.fill(0x41, 0x800);
+
+  const plcSize = (pieces.length + 1) * 4 + pieces.length * 8;
+  const table = new Uint8Array(Math.max(4096, 5 + plcSize));
+  const tableView = new DataView(table.buffer);
+  tableView.setUint8(0, 0x02);
+  tableView.setUint32(1, plcSize, true);
+  const plc = 5;
+  pieces.forEach((piece, index) => {
+    tableView.setUint32(plc + index * 4, piece.cpStart, true);
+    tableView.setUint32(plc + (index + 1) * 4, piece.cpEnd, true);
+    tableView.setUint32(
+      plc + (pieces.length + 1) * 4 + index * 8 + 2,
+      0x40000000 | (piece.offset * 2),
+      true,
+    );
+  });
+  wordView.setUint32(0x01a2, 0, true);
+  wordView.setUint32(0x01a6, 5 + plcSize, true);
+  return buildCompound([
+    { name: "WordDocument", data: word },
+    { name: "1Table", data: table },
+  ]);
+}
+
+test("rejects a piece table whose pieces overlap to expand far past the stream", async () => {
+  // 600 pieces, each reading the same 2,000 bytes: 1.2M characters from a 4 KB stream.
+  const pieces = Array.from({ length: 600 }, (_, index) => ({
+    cpStart: index * 2000,
+    cpEnd: (index + 1) * 2000,
+    offset: 0x800,
+  }));
+  await assert.rejects(parse(wordDocumentWithPieces(pieces)), MalformedDocumentError);
+});
+
+test("rejects a piece table whose character positions run backwards", async () => {
+  await assert.rejects(
+    parse(wordDocumentWithPieces([{ cpStart: 10, cpEnd: 4, offset: 0x800 }])),
+    MalformedDocumentError,
+  );
+});
+
+test("keeps a well-formed multi-piece table", async () => {
+  const result = await parse(
+    wordDocumentWithPieces([
+      { cpStart: 0, cpEnd: 3, offset: 0x800 },
+      { cpStart: 3, cpEnd: 8, offset: 0x900 },
+    ]),
+  );
+  assert.equal(result.text.trim(), "AAAAAAAA");
 });

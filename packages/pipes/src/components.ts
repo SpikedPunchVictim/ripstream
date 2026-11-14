@@ -1,6 +1,7 @@
 import { lstat, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type SafeFetchOptions, safeFetch } from "@spikedpunch/ripstream-core";
+import { LimitExceededError, type SafeFetchOptions, safeFetch } from "@spikedpunch/ripstream-core";
+import { DEFAULT_MAX_BODY_BYTES, readBounded } from "./bounded-body.ts";
 import type { FetchContext, FetchEmitTuple, Fetcher, PipesIterator } from "./tuple.ts";
 
 /*
@@ -102,19 +103,64 @@ export class HttpStatusError extends Error {
   }
 }
 
-/** Tika's http-fetcher: reads a URL through the SSRF-safe fetch, so a URL that resolves to a private address is refused. */
+/** What `HttpFetcher` reads of one URL at most, when it is not told: more than any document is meant to be, and bounded. */
+export const DEFAULT_HTTP_MAX_BYTES = DEFAULT_MAX_BODY_BYTES;
+/** How long `HttpFetcher` gives one URL, from the request to the last byte of the body, when it is not told. */
+export const DEFAULT_HTTP_TIMEOUT_MS = 5 * 60_000;
+
+export interface HttpFetcherOptions extends Pick<SafeFetchOptions, "fetchImpl" | "lookupImpl"> {
+  /**
+   * The most bytes one URL may send, declared or not: a body past it fails the fetch with a `LimitExceededError` and is
+   * not read on. Default `DEFAULT_HTTP_MAX_BYTES` (256 MiB). `Infinity` sets no cap.
+   */
+  readonly maxBytes?: number;
+  /**
+   * The time one URL has, from the request to the end of its body, in milliseconds; past it the fetch fails with a
+   * timeout, which `isTransientError` retries. Default `DEFAULT_HTTP_TIMEOUT_MS` (5 minutes). `Infinity` sets none.
+   */
+  readonly timeoutMs?: number;
+}
+
+/**
+ * Tika's http-fetcher: reads a URL through the SSRF-safe fetch, so a URL that resolves to a private address is refused.
+ * One URL costs at most `maxBytes` and `timeoutMs`, and an answer that is not read is released.
+ */
 export class HttpFetcher implements Fetcher {
   readonly #transport: Pick<SafeFetchOptions, "fetchImpl" | "lookupImpl">;
+  readonly #maxBytes: number;
+  readonly #timeoutMs: number;
 
   /** `fetchImpl` and `lookupImpl` replace the network and the name lookup, as `safeFetch`'s do; every address is still checked. */
-  constructor(transport: Pick<SafeFetchOptions, "fetchImpl" | "lookupImpl"> = {}) {
+  constructor(options: HttpFetcherOptions = {}) {
+    const { maxBytes = DEFAULT_HTTP_MAX_BYTES, timeoutMs = DEFAULT_HTTP_TIMEOUT_MS, ...transport } = options;
+    if (!(maxBytes >= 0)) throw new RangeError(`HttpFetcher maxBytes must be a number of at least 0, got ${String(maxBytes)}`);
+    if (!(timeoutMs > 0)) throw new RangeError(`HttpFetcher timeoutMs must be a number above 0, got ${String(timeoutMs)}`);
     this.#transport = transport;
+    this.#maxBytes = maxBytes;
+    this.#timeoutMs = timeoutMs;
   }
 
   async fetch(url: string, context: FetchContext): Promise<Uint8Array> {
-    const response = await safeFetch(url, { signal: context.signal }, this.#transport);
-    if (!response.ok) throw new HttpStatusError(response.status, url);
-    return new Uint8Array(await response.arrayBuffer());
+    const timeout = Number.isFinite(this.#timeoutMs) ? AbortSignal.timeout(this.#timeoutMs) : undefined;
+    const signal = timeout === undefined ? context.signal : AbortSignal.any([context.signal, timeout]);
+    try {
+      return await this.#read(url, signal);
+    } catch (error) {
+      // The run's own stop keeps its reason; only the fetcher's deadline is reported as one.
+      if (timeout?.aborted === true && !context.signal.aborted) {
+        throw new Error(`Fetch timed out after ${this.#timeoutMs} ms: ${url}`, { cause: error });
+      }
+      throw error;
+    }
+  }
+
+  async #read(url: string, signal: AbortSignal): Promise<Uint8Array> {
+    const response = await safeFetch(url, { signal }, this.#transport);
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new HttpStatusError(response.status, url);
+    }
+    return readBounded(response, this.#maxBytes, () => new LimitExceededError(`Fetched body exceeds ${this.#maxBytes} bytes: ${url}`), signal);
   }
 }
 
@@ -146,11 +192,15 @@ export class FileSystemPipesIterator implements PipesIterator {
   async *[Symbol.asyncIterator](): AsyncIterator<FetchEmitTuple> {
     const { basePath, fetcherId, emitterId } = this.#options;
     const symlinks = this.#options.symlinks ?? "fetch";
+    // A key is a relative path. Only where the separator is a backslash is a backslash one: elsewhere it is part of a name.
+    const slash = sep === "\\" ? (name: string): string => name.replace(/\\/g, "/") : (name: string): string => name;
     const tuple = (path: string): FetchEmitTuple => {
-      const key = relative(basePath, path).replace(/\\/g, "/");
+      const key = slash(relative(basePath, path));
       return { id: key, fetcher: fetcherId, fetchKey: key, ...(emitterId === undefined ? {} : { emitter: emitterId }) };
     };
-    const walk = async function* (directory: string): AsyncGenerator<FetchEmitTuple> {
+    // The directories above the one being walked, by device and inode: a link back to one of them is a cycle, which is
+    // Tika's FOLLOW_LINKS rule. A directory reached by two links that are not nested is listed under both.
+    const walk = async function* (directory: string, ancestors: ReadonlySet<string>): AsyncGenerator<FetchEmitTuple> {
       let names: string[];
       try {
         names = (await readdir(directory)).sort();
@@ -172,11 +222,21 @@ export class FileSystemPipesIterator implements PipesIterator {
           yield tuple(path);
           continue;
         }
-        if (info.isDirectory()) yield* walk(path);
-        else yield tuple(path);
+        if (!info.isDirectory()) {
+          yield tuple(path);
+          continue;
+        }
+        const identity = `${info.dev}:${info.ino}`;
+        if (ancestors.has(identity)) {
+          // A cycle: the link is one more thing to fetch (and fail on), not a tree to walk again.
+          yield tuple(path);
+          continue;
+        }
+        yield* walk(path, new Set(ancestors).add(identity));
       }
     };
-    yield* walk(basePath);
+    const root = await stat(basePath).then((info) => `${info.dev}:${info.ino}`, () => "");
+    yield* walk(basePath, new Set(root === "" ? [] : [root]));
   }
 }
 

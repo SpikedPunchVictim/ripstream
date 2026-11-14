@@ -8,7 +8,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
+import { createDecoder, recordDetectedEncoding, withCharset, type StreamDecoder } from "./charset.ts";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 
 /** The types Tika's SourceCodeParser takes; it records `Content-Encoding` and leaves `Content-Type` bare. */
@@ -63,11 +63,10 @@ export class TextParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     const prefix = await stream.peek(64 * 1024);
-    // An incoming text/* charset replaces detection, as Tika's text parsers use the hint's parameter.
+    // An incoming text/* charset is tried before the bytes' own evidence, as Tika's text parsers do with the hint's parameter
+    // (it gives way to bytes that are valid UTF-8 or malformed in it; see detectEncoding).
     const hinted = ctx.get(CONTEXT_KEYS.CHARSET_HINT);
-    const encoding = hinted === undefined ? detectEncoding(prefix) : { charset: hinted };
-
-    const { decoder, charset } = createDecoder(encoding.charset);
+    const { decoder, charset } = createDecoder(detectEncoding(prefix, hinted).charset);
     metadata.set("Content-Encoding", charset);
     recordDetectedEncoding(metadata, charset);
     // Tika's TXTParser writes `<incoming type>; charset=<detected>`; its SourceCodeParser leaves the type bare.
@@ -88,7 +87,7 @@ export async function writeText(
   stream: RipstreamInputStream,
   handler: ContentHandler,
   metadata: Metadata,
-  decoder: TextDecoder,
+  decoder: StreamDecoder,
 ): Promise<void> {
   const xhtml = new XHTMLContentHandler(handler, metadata);
   await xhtml.startDocument();

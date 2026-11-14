@@ -12,10 +12,16 @@ pool can hold a child for it, so a flood of hostile documents queues or gets a 5
 | Entry point | Default | Why |
 | --- | --- | --- |
 | `ripstream serve` (the server product) | **strict** | A long-lived service that takes documents from strangers. |
-| `ripstream <file>` / `metadata` (one-shot CLI) | off; opt in with `--isolation` | One user parsing their own file; the process exits afterwards. |
+| `ripstream <file>` / `metadata` / `pipes` (CLI) | off; opt in with `--isolation` | One user parsing their own file, or a batch the user chose; the process exits afterwards. See the note below. |
 | `createRipstreamServer()` (library) | **no default engine**: it throws without `ripstream` | The server never builds an in-process engine behind your back. Pass `createRipstream()` to accept the risk, or an isolated engine. |
 | `PipesClient` (library) | in-process unless given a `ripstream` | Same as `createRipstream()`; pass an isolated engine to contain a run. |
 | `createRipstream()` (library) | in-process | A library call is yours to contain. This includes PDFs: the PDF parser runs pdf.js on the calling thread and has no containment of its own. |
+
+With isolation off, the CLI parses inside its own process: a parser crash, an out-of-memory or a runaway document ends the
+whole process, and in a `pipes` run that is every input not yet done. Run `ripstream --isolation strict` (or set
+`RIPSTREAM_ISOLATION=strict`, or `isolation.mode` in the config file) for input you do not trust and for batch jobs: each
+document is parsed in its own child process under the bounds below, and one that crashes or exceeds them fails that document
+alone. `ripstream --help` says the same.
 
 `strict` refuses to start when isolation cannot be provided. `lenient` logs a WARN and parses everything in the
 server process. `off` parses in-process and says so at startup and, when `/status` is served, on `/status`.

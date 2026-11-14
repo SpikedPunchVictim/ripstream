@@ -1,4 +1,3 @@
-import { once } from "node:events";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { gzip } from "node:zlib";
@@ -415,16 +414,26 @@ function negotiate(accept: string | undefined, offers: readonly string[]): strin
       const specificity = range === "*/*" ? 0 : range.endsWith("/*") ? 1 : 2;
       return { range, weight, specificity, order };
     })
-    .filter((entry) => entry.range !== "")
-    .sort((a, b) => b.weight - a.weight || b.specificity - a.specificity || a.order - b.order);
-  for (const entry of ranges) {
-    if (entry.weight <= 0) continue;
-    const match = offers.find((offer) =>
-      entry.range === "*/*" || entry.range === offer || (entry.range.endsWith("/*") && offer.startsWith(entry.range.slice(0, -1))),
-    );
-    if (match !== undefined) return match;
+    .filter((entry) => entry.range !== "");
+  const covers = (range: string, offer: string): boolean =>
+    range === "*/*" || range === offer || (range.endsWith("/*") && offer.startsWith(range.slice(0, -1)));
+  // The most specific range that names an offer decides its weight, so `text/plain;q=0, */*` refuses text/plain.
+  let best: { offer: string; weight: number; specificity: number; order: number } | null = null;
+  for (const offer of offers) {
+    const decider = ranges
+      .filter((entry) => covers(entry.range, offer))
+      .sort((a, b) => b.specificity - a.specificity || a.order - b.order)[0];
+    if (decider === undefined || decider.weight <= 0) continue;
+    if (
+      best === null ||
+      decider.weight > best.weight ||
+      (decider.weight === best.weight &&
+        (decider.specificity > best.specificity || (decider.specificity === best.specificity && decider.order < best.order)))
+    ) {
+      best = { offer, weight: decider.weight, specificity: decider.specificity, order: decider.order };
+    }
   }
-  return null;
+  return best === null ? null : best.offer;
 }
 
 /** Metadata as Tika's CSV writer does (`CSVFormat.EXCEL`): a row per key, the key then its values, CRLF-ended. */
@@ -512,16 +521,18 @@ function errorResponse(error: unknown): {
 
 /**
  * Tika's server authentication hook, built from one bearer token: a request is authorized when its `Authorization`
- * header is `Bearer <token>`. The comparison is constant-time and length-aware. The CLI builds this from
- * `server.authToken`; an embedder can pass any authenticate function instead.
+ * header is `Bearer <token>`. The scheme name is matched without regard to case (RFC 9110 section 11.1, formerly RFC 7235:
+ * "the authentication scheme is case-insensitive"); the token itself is compared exactly, in constant time and length-aware.
+ * The CLI builds this from `server.authToken`; an embedder can pass any authenticate function instead.
  */
 export function bearerTokenAuthenticator(token: string): (request: IncomingMessage) => boolean {
   if (token.length === 0 || /[\u0000-\u001f]/.test(token)) throw new RangeError("authToken must be a non-empty string without control characters");
   const expected = Buffer.from(token, "utf8");
   return (request) => {
     const header = request.headers.authorization;
-    if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
-    const given = Buffer.from(header.slice("Bearer ".length), "utf8");
+    const scheme = typeof header === "string" ? /^bearer +/i.exec(header) : null;
+    if (typeof header !== "string" || scheme === null) return false;
+    const given = Buffer.from(header.slice(scheme[0].length), "utf8");
     return given.length === expected.length && timingSafeEqual(given, expected);
   };
 }
@@ -634,12 +645,17 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     }
   };
 
-  const acquire = (): Promise<() => void> => {
+  /**
+   * A place at the gate. A request whose client goes away (`gone`) while it waits leaves the queue at once, and one whose
+   * client is gone already never takes a slot: a slot taken for a request nobody awaits is held until its read fails.
+   */
+  const acquire = (gone: AbortSignal): Promise<() => void> => {
     const release = (): void => {
       const next = waiters.shift();
       if (next !== undefined) next();
       else active--;
     };
+    if (gone.aborted) return Promise.reject(gone.reason);
     if (active < maxConcurrent) {
       active++;
       return Promise.resolve(release);
@@ -648,26 +664,43 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       return Promise.reject(new HttpError(503, "Server queue is full", { "Retry-After": RETRY_AFTER_FULL }));
     }
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const leave = (): void => {
+        clearTimeout(timer);
+        gone.removeEventListener("abort", onGone);
         const index = waiters.indexOf(start);
         if (index !== -1) waiters.splice(index, 1);
+      };
+      const timer = setTimeout(() => {
+        leave();
         reject(new HttpError(408, "Request timed out waiting for a worker"));
       }, requestTimeoutMs);
+      const onGone = (): void => {
+        leave();
+        reject(gone.reason);
+      };
       const start = (): void => {
         clearTimeout(timer);
+        gone.removeEventListener("abort", onGone);
         resolve(release);
       };
+      gone.addEventListener("abort", onGone, { once: true });
       waiters.push(start);
     });
   };
 
   /** The request a connection is serving, for the idle timeout. */
-  const inFlight = new WeakMap<object, { request: IncomingMessage; response: ServerResponse }>();
+  const inFlight = new WeakMap<object, { request: IncomingMessage; response: ServerResponse; queued: boolean }>();
 
   const handler = (request: IncomingMessage, response: ServerResponse): void => {
     void (async () => {
       if (options.requestLogLevel !== undefined) log(options.requestLogLevel, `${request.method} ${request.url}`);
-      inFlight.set(request.socket, { request, response });
+      // Aborted when the connection closes before the answer is out: the queue, the body read and the parse stop for it.
+      const gone = new AbortController();
+      response.once("close", () => {
+        if (!response.writableFinished) gone.abort(new DOMException("The client disconnected", "AbortError"));
+      });
+      const entry = { request, response, queued: false };
+      inFlight.set(request.socket, entry);
       if (corsOrigin !== undefined) {
         if (typeof corsOrigin === "string") {
           response.setHeader("Access-Control-Allow-Origin", corsOrigin);
@@ -679,7 +712,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
             response.setHeader("Access-Control-Allow-Origin", requestOrigin);
           }
         }
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization");
         response.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, OPTIONS");
       }
       if (request.method === "OPTIONS") {
@@ -707,7 +740,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       if ((request.method === "GET" || request.method === "HEAD") && (probePath === "/health" || probePath === "/version" || probePath === "/status")) {
         // Liveness/version endpoints must not be gated by the concurrency semaphore.
         try {
-          await route(request, response, () => () => undefined);
+          await route(request, response, gone.signal, () => () => undefined);
         } catch {
           if (!response.headersSent) send(response, 500, "text/plain", "Internal error");
         }
@@ -716,16 +749,21 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       let release: (() => void) | null = null;
       let releaseBody: (() => void) | null = null;
       try {
-        release = await acquire();
+        entry.queued = true;
+        try {
+          release = await acquire(gone.signal);
+        } finally {
+          entry.queued = false;
+        }
         releaseBody = reserveBody(request);
-        await route(request, response, () => {
+        await route(request, response, gone.signal, () => {
           const held = release;
           release = null;
           return held ?? (() => undefined);
         });
       } catch (error) {
         const { status, headers, code, message } = errorResponse(error);
-        if (!response.headersSent && !response.writableEnded) {
+        if (!response.headersSent && !response.writableEnded && !response.destroyed) {
           for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
           // A body refused unread leaves the rest of it on the wire, so the connection cannot carry another request.
           if (status === 413 && !request.complete) response.setHeader("Connection", "close");
@@ -757,6 +795,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   async function route(
     request: IncomingMessage,
     response: ServerResponse,
+    gone: AbortSignal,
     detachSlot: () => () => void,
   ): Promise<void> {
     const url = parseTarget(request.url);
@@ -948,7 +987,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       const requested = clientLimit(url.searchParams.get(key), key);
       const ceiling = options.maxLimits?.[key];
       const value = requested ?? limits[key] ?? options.defaultLimits?.[key];
-      if (ceiling !== undefined) limits[key] = Math.min(value ?? ceiling, ceiling);
+      if (ceiling !== undefined) limits[key] = capLimit(value, ceiling);
       else if (value !== undefined) limits[key] = value;
     }
     const requestedHandler = url.searchParams.get("handler")?.toLowerCase() ?? null;
@@ -966,16 +1005,20 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       send(response, 405, "text/plain", "Method not allowed");
       return;
     }
-    // A handler that names a content format. `meta` and `json` are answers of /tika alone; /rmeta ignores them.
-    const formatOf = (name: string | null | undefined, fallback: HandlerType): HandlerType => {
+    // A handler that names a content format. `?handler=meta` and `?handler=json` are answers of ripstream's /tika alone,
+    // which /rmeta ignores; they are not content formats.
+    const formatOf = (name: string | null | undefined, fallback: HandlerType, inPath = false): HandlerType => {
       try {
-        return parseHandlerType(name === "meta" || name === "json" ? null : name, fallback);
+        // In a path every name has to be one of Tika's: `/rmeta/json`, `/rmeta/meta`, `/tika/json/json` and
+        // `/tika/json/meta` are a 400 `Unrecognized handler type 'json'. Valid types: text, txt, html, xml, body,
+        // markdown, md, ignore` on Tika 4.2.0, not text.
+        return parseHandlerType(!inPath && (name === "meta" || name === "json") ? null : name, fallback);
       } catch (error) {
         throw new HttpError(400, error instanceof Error ? error.message : String(error));
       }
     };
     // A bad handler in the path is the caller's mistake, found before the document is read, as Tika's is.
-    const pathType = target.handler === null ? null : formatOf(target.handler, "text");
+    const pathType = target.handler === null ? null : formatOf(target.handler, "text", true);
     // Tika picks the resource by Accept before it reads the request: what the route writes is all it offers.
     const offered = ((): readonly string[] => {
       switch (target.endpoint) {
@@ -1003,12 +1046,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     let body = await readBody(request, maxBodyBytes);
     let multipartName: string | undefined;
     const disposition = request.headers["content-disposition"];
-    const dispositionName =
-      typeof disposition === "string"
-        ? /filename="?([^";]+)"?/.exec(disposition)?.[1]
-        : undefined;
+    const dispositionName = typeof disposition === "string" ? dispositionFilename(utf8Header(disposition)) : undefined;
     const contentType = request.headers["content-type"] ?? undefined;
-    if (contentType !== undefined && contentType.startsWith("multipart/")) {
+    if (contentType !== undefined && contentType.toLowerCase().startsWith("multipart/")) {
       const parsed = extractMultipart(body, contentType);
       if (parsed === null) {
         send(response, 400, "text/plain", "Invalid multipart request");
@@ -1020,7 +1060,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       throw new HttpError(415, "A form route takes a multipart/form-data request");
     }
     const name = multipartName ?? url.searchParams.get("filename") ?? dispositionName;
-    const signal = AbortSignal.timeout(requestTimeoutMs);
+    // The parse ends at the deadline, or when the client that wants its answer is gone.
+    const signal = AbortSignal.any([AbortSignal.timeout(requestTimeoutMs), gone]);
     const parseOptions =
       name === undefined ? { signal } : { filename: name, signal };
 
@@ -1198,8 +1239,10 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     server.setTimeout(idleMillis);
     server.on("timeout", (socket) => {
       const current = inFlight.get(socket);
-      // Body in, response not begun: the server is parsing and the client is rightly silent. Look again later.
-      if (current !== undefined && current.request.complete && !current.response.headersSent && !current.response.writableEnded) {
+      // Body in, response not begun: the server is parsing and the client is rightly silent. Look again later. So is a
+      // client whose request waits for a slot with its body unread: it cannot send what the server does not read, and the
+      // wait is bounded by `requestTimeoutMs`.
+      if (current !== undefined && (current.queued || current.request.complete) && !current.response.headersSent && !current.response.writableEnded) {
         socket.setTimeout(idleMillis);
         return;
       }
@@ -1230,6 +1273,11 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   };
 }
 
+/** A limit under its ceiling: one that is not set, or is -1 ("no limit"), is the ceiling itself. */
+function capLimit(value: number | undefined, ceiling: number): number {
+  return value === undefined || value < 0 ? ceiling : Math.min(value, ceiling);
+}
+
 /** The engine with the server's ceilings as the limits of any parse that does not name its own (or names more). */
 function withCeilings(
   engine: ServerRipstream,
@@ -1242,7 +1290,7 @@ function withCeilings(
   const bound = (parseOptions?: ParseOptions): ParseOptions => {
     const limits: Record<string, number> = { ...parseOptions?.limits };
     for (const [key, value] of fallbacks) limits[key] ??= value as number;
-    for (const [key, ceiling] of entries) limits[key] = Math.min(limits[key] ?? ceiling, ceiling);
+    for (const [key, ceiling] of entries) limits[key] = capLimit(limits[key], ceiling);
     return { ...parseOptions, limits };
   };
   return {
@@ -1498,6 +1546,68 @@ async function buildPipesConfig(
   }
 }
 
+/**
+ * A header value Node read as Latin-1 (one char per byte), read as UTF-8 instead when its bytes are UTF-8, as a browser
+ * writes a file name; any other is left as it was read.
+ */
+function utf8Header(value: string): string {
+  if (!/[\u0080-\u00ff]/.test(value)) return value;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(value, "latin1"));
+  } catch {
+    return value;
+  }
+}
+
+/** The parameters of a header such as Content-Disposition, by lower-cased name: quoted strings unescaped, `;` allowed in them. */
+function headerParams(header: string): Map<string, string> {
+  const params = new Map<string, string>();
+  for (const match of header.matchAll(/;\s*([^\s=;]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]*))/g)) {
+    const name = (match[1] ?? "").toLowerCase();
+    if (params.has(name)) continue;
+    params.set(name, match[2] !== undefined ? match[2].replace(/\\(.)/g, "$1") : (match[3] ?? "").trim());
+  }
+  return params;
+}
+
+/** The file name a Content-Disposition value gives (RFC 6266): `filename*` when it decodes, else `filename`. */
+function dispositionFilename(header: string): string | undefined {
+  const params = headerParams(header);
+  const extended = /^([^']*)'[^']*'(.*)$/.exec(params.get("filename*") ?? "");
+  if (extended !== null) {
+    try {
+      const bytes = percentBytes(extended[2] ?? "");
+      const charset = (extended[1] ?? "").toLowerCase();
+      // Buffer's "latin1" is ISO-8859-1; TextDecoder("latin1") is windows-1252.
+      const name =
+        charset === "utf-8"
+          ? new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+          : charset === "iso-8859-1"
+            ? Buffer.from(bytes).toString("latin1")
+            : "";
+      if (name !== "") return name;
+    } catch {
+      /* not decodable: the plain filename is the name, if there is one */
+    }
+  }
+  const plain = params.get("filename");
+  return plain === undefined || plain === "" ? undefined : plain;
+}
+
+/** The bytes a percent-encoded string stands for. */
+function percentBytes(text: string): Uint8Array {
+  const bytes: number[] = [];
+  for (let at = 0; at < text.length; at++) {
+    if (text[at] === "%" && /^[0-9a-f]{2}$/i.test(text.slice(at + 1, at + 3))) {
+      bytes.push(Number.parseInt(text.slice(at + 1, at + 3), 16));
+      at += 2;
+    } else {
+      bytes.push(...Buffer.from(text[at] ?? "", "utf8"));
+    }
+  }
+  return Uint8Array.from(bytes);
+}
+
 function extractMultipart(
   body: Uint8Array,
   contentType: string,
@@ -1506,15 +1616,29 @@ function extractMultipart(
   if (boundary === undefined) return null;
   // Buffer's "latin1" is ISO-8859-1 and round-trips all 256 byte values; TextDecoder("latin1") is windows-1252.
   const text = Buffer.from(body.buffer, body.byteOffset, body.byteLength).toString("latin1");
-  // The first piece is the preamble and a piece starting "--" is the closing delimiter.
-  const parts = text.split(`--${boundary}`).slice(1);
+  // A delimiter is a line of its own: the boundary after a line break (or at the start), then `--` for the last one.
+  // The same text inside a line, or at the start of a line that goes on (`--XXtra`), is part of the content.
+  const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const delimiter = new RegExp(`(?:^|\\r\\n)--${escaped}(--)?[ \\t]*(?=\\r\\n|$)`, "g");
+  const parts: string[] = [];
+  let from = -1; // the first piece is the preamble
+  for (const match of text.matchAll(delimiter)) {
+    if (from >= 0) parts.push(text.slice(from, match.index));
+    from = match.index + match[0].length;
+    if (match[1] !== undefined) {
+      from = -1;
+      break;
+    }
+  }
+  // A body that ends without its closing delimiter: the last part runs to the end.
+  if (from >= 0) parts.push(text.slice(from));
   let file: { bytes: Uint8Array; filename: string } | null = null;
   for (const part of parts) {
-    if (part.startsWith("--")) continue;
     const separator = part.indexOf("\r\n\r\n");
     if (separator === -1) continue;
-    const headers = part.slice(0, separator);
-    const filename = /filename="([^"]+)"/i.exec(headers)?.[1];
+    const headers = utf8Header(part.slice(0, separator));
+    const disposition = /^content-disposition:(.*)$/im.exec(headers)?.[1];
+    const filename = disposition === undefined ? undefined : dispositionFilename(disposition);
     if (filename === undefined) {
       // Tika reads a per-request parse context from a part like this; ignoring it would parse under other settings.
       const name = /[;\s]name="([^"]*)"/i.exec(headers)?.[1] ?? "";
@@ -1522,8 +1646,7 @@ function extractMultipart(
     }
     if (file !== null) throw new HttpError(400, "multipart request has more than one file part: only one file part is supported");
     const content = part.slice(separator + 4);
-    const end = content.endsWith("\r\n") ? content.length - 2 : content.length;
-    file = { filename, bytes: Uint8Array.from(Buffer.from(content.slice(0, end), "latin1")) };
+    file = { filename, bytes: Uint8Array.from(Buffer.from(content, "latin1")) };
   }
   return file;
 }
@@ -1600,16 +1723,34 @@ async function sendZip(response: ServerResponse, pkg: UnpackPackage): Promise<vo
     const first = await chunks.next();
     if (first.done === true) throw new Error("A package has at least its manifest");
     response.writeHead(200, { "Content-Type": "application/zip" });
-    if (!response.write(first.value)) await once(response, "drain");
+    if (!response.write(first.value) && !(await drained(response))) return;
     for await (const chunk of chunks) {
       if (response.destroyed) return;
-      if (!response.write(chunk)) await once(response, "drain");
+      if (!response.write(chunk) && !(await drained(response))) return;
     }
     response.end();
   } catch (error) {
     if (!response.headersSent) throw error;
     response.destroy(error instanceof Error ? error : undefined);
+  } finally {
+    await chunks.return(undefined);
   }
+}
+
+/** Waits for the response to take what was written: true when it can take more, false when the client is gone. */
+function drained(response: ServerResponse): Promise<boolean> {
+  if (response.destroyed) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const settle = (more: boolean) => (): void => {
+      response.off("drain", onDrain);
+      response.off("close", onClose);
+      resolve(more);
+    };
+    const onDrain = settle(true);
+    const onClose = settle(false);
+    response.on("drain", onDrain);
+    response.on("close", onClose);
+  });
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {

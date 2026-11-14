@@ -174,3 +174,64 @@ test("RecursiveParserWrapper applies maxMetadataTotalChars to the metadata it is
     LimitExceededError,
   );
 });
+
+/** A root with one embedded document that holds `leaves` of its own, each `size` bytes, and writes `text` for each. */
+function nestedParser(leaves: number, size = 1, text = "x"): Parser {
+  return {
+    name: "Nested",
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse(stream: RipstreamInputStream, handler: ContentHandler, _m: Metadata, ctx: ParseContext): Promise<void> {
+      const depth = ctx.get(CONTEXT_KEYS.EMBEDDED_DEPTH) ?? 0;
+      for await (const _chunk of stream) { /* consume */ }
+      await handler.startElement?.("", "body", "body", new AttributesImpl([]));
+      await handler.characters?.(text, 0, text.length);
+      await handler.endElement?.("", "body", "body");
+      if (depth > 1) return;
+      const extractor = ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor;
+      const count = depth === 0 ? 1 : leaves;
+      for (let i = 0; i < count; i++) {
+        const metadata = new Metadata();
+        metadata.set("tk:resource-name", depth === 0 ? "mid" : `leaf${i}`);
+        await extractor.parseEmbedded(await RipstreamInputStream.from(new Uint8Array(depth === 0 ? 1 : size)), handler, metadata, ctx);
+      }
+    },
+  };
+}
+
+test("a whole-parse budget that runs out in a grandchild fails the parse, as it does in a child", async () => {
+  const ripstream = new Ripstream({ detector, parser: nestedParser(10, 5) });
+  await assert.rejects(ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxEmbeddedResources: 4 } }), LimitExceededError);
+  await assert.rejects(ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxTotalEmbeddedBytes: 30 } }), LimitExceededError);
+  const direct = new Ripstream({ detector, parser: embeddingParser(10, 0) });
+  await assert.rejects(direct.parseRecursive(new Uint8Array([1]), { limits: { maxEmbeddedResources: 4 } }), LimitExceededError);
+});
+
+test("a whole-parse budget that runs out while a grandchild is read as it comes fails the parse", async () => {
+  const unsized: Parser = {
+    name: "Unsized",
+    getSupportedTypes: () => new Set([MediaType.TEXT_PLAIN]),
+    async parse(stream, _handler, _m, ctx): Promise<void> {
+      const depth = ctx.get(CONTEXT_KEYS.EMBEDDED_DEPTH) ?? 0;
+      for await (const _chunk of stream) { /* consume */ }
+      if (depth > 1) return;
+      const extractor = ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor;
+      const metadata = new Metadata();
+      metadata.set("tk:resource-name", "inner");
+      const body = (async function* () {
+        for (let i = 0; i < 20; i++) yield new Uint8Array(10);
+      })();
+      await extractor.parseEmbedded(await RipstreamInputStream.from(depth === 0 ? new Uint8Array(1) : body), _handler, metadata, ctx);
+    },
+  };
+  const ripstream = new Ripstream({ detector, parser: unsized });
+  await assert.rejects(ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxTotalEmbeddedBytes: 50 } }), LimitExceededError);
+});
+
+test("a limit that belongs to one document is still recorded on that document, below the first level, and the parse goes on", async () => {
+  const ripstream = new Ripstream({ detector, parser: nestedParser(2, 100) });
+  const records = await ripstream.parseRecursive(new Uint8Array([1]), { limits: { maxEmbeddedResourceBytes: 50 } });
+  assert.equal(records.length, 4);
+  assert.ok(records[2]?.exception instanceof LimitExceededError);
+  assert.ok(records[3]?.exception instanceof LimitExceededError);
+  assert.equal(records[1]?.exception, null);
+});

@@ -1,0 +1,19 @@
+{
+  "description": "(tikajs-v517) Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: text of a span nested inside a span is kept (issue 93).",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhUFdGAu1VAQAAfAMAAAsAAABjb250ZW50LnhtbI2TwXKDIBCG730KhrtSp5eGUTKTQ5+gfQCCmDBFlgGs5u0LGBM9ZMaLsrv/x/6yWB+nXqM/6bwC0+CqfMdIGgGtMpcG/3x/FZ/4yN5q6DolJG1BDL00oRBgQnyjSBtP52qDB2cocK88NbyXngZBwUqzUHStprnXnAlyCnvppN2w/Kx3t87iNd06Pu6FkzYeyxr34ba/eRZvmosGX0OwlBA7OF2Cu5BWEKllojypyoos2kkr8/uQj+NYjh8ZqA6HA8nVRdrBXkeT10UHcZi95UEtR8OWafMhQB8LosjWPavnT8hPNK/T9g0+gW4rfE91vFf61uA0KbwwKSisiyZcUNKjDqLPeJFGqS7XOPxz3AETVpNVixi9dHIvnKG9PYLUg9X5glh2kh04iebQW27QvEp8sXbNYAjSrYRMGSNdTZ4JFLjSmwTvwkNinz5nB2Rjjrz4d9g/UEsBAhQDFAAAAAAAAAAhUF7GMgwnAAAAJwAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgAAAAhUFdGAu1VAQAAfAMAAAsAAAAAAAAAAAAAAIABTQAAAGNvbnRlbnQueG1sUEsFBgAAAAACAAIAbwAAAMsBAAAAAA==",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Before outer inner tail after"
+    }
+  ]
+}

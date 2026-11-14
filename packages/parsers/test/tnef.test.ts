@@ -89,3 +89,15 @@ test("reads subject and HTML body from MAPI properties in attMsgProps", async ()
 test("rejects data without the TNEF signature", async () => {
   await assert.rejects(parse(new Uint8Array(16)));
 });
+
+// tikajs-2mo9: a named property whose name length is near 2^32 made align4 negative, so the cursor rewound and the
+// attribute count (up to 2^32) re-read the same record: a multi-second synchronous loop, or a raw RangeError.
+test("a named MAPI property with an absurd name length ends the property walk without looping", async () => {
+  const guid = new Array<number>(16).fill(0);
+  const named = [...u16(0x001f), ...u16(0x8000), ...guid, ...u32(1), ...u32(0xfffffffd)];
+  const props = [...u32(0xffffffff), ...named, ...new Array<number>(64).fill(0)];
+  const started = performance.now();
+  const { metadata } = await parse(tnef(attr(ATT_SUBJECT, str("Kept subject")), attr(ATT_MSG_PROPS, props)));
+  assert.equal(metadata.get("dc:title"), "Kept subject");
+  assert.ok(performance.now() - started < 2000);
+});

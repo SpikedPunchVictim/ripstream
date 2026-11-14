@@ -1,0 +1,26 @@
+{
+  "description": "(tikajs-k49h) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/parser/text_extract_tests.rs: text-box text nested in an ignorable {\\*\\shp...} ancestor survives.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\n{\\*\\shp{\\*\\shpinst{\\sp{\\sn shapeType}{\\sv202}}{\\shptxt Text box content}}}\nBody text after the shape.\\par\n}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Text box content"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text after the shape."
+    }
+  ]
+}

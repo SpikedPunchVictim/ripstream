@@ -1,3 +1,5 @@
+import { DEFAULT_MAX_BODY_BYTES, readBounded } from "../bounded-body.ts";
+import { rejectDotSegments } from "../object-key.ts";
 import type { CredentialProvider } from "./credentials.ts";
 import { EMPTY_PAYLOAD_SHA256, sha256Hex, signV4, uriEncode } from "./sigv4.ts";
 
@@ -101,18 +103,24 @@ export class S3Client {
     throw new S3Error(response.status, code, `S3 ${method} ${response.status}${code === undefined ? "" : ` ${code}`}${message === undefined ? "" : `: ${xmlText(message)}`}`);
   }
 
-  /** The object's bytes. With `maxLength`, an object that says it is longer is refused before its body is read. */
+  /** The object's bytes. An object longer than `maxLength` (default 256 MiB, -1 for none) is refused: before its body is read when it says so, else as it arrives. */
   async get(key: string, options: { signal?: AbortSignal; maxLength?: number } = {}): Promise<Uint8Array> {
+    rejectDotSegments("S3", key);
     const response = await this.#send("GET", `/${uriEncode(key, true)}`, options.signal === undefined ? {} : { signal: options.signal });
-    const declared = Number(response.headers.get("content-length"));
-    if (options.maxLength !== undefined && options.maxLength > -1 && Number.isFinite(declared) && declared > options.maxLength) {
-      await response.body?.cancel();
-      throw new Error(`S3 object ${JSON.stringify(key)} is ${declared} bytes, over the maxLength of ${options.maxLength}`);
-    }
-    return new Uint8Array(await response.arrayBuffer());
+    // -1 is no cap, as Tika's; an object with no maxLength still has the default one, which a body cannot be allowed to outrun.
+    if (options.maxLength === -1) return new Uint8Array(await response.arrayBuffer());
+    const cap = options.maxLength ?? DEFAULT_MAX_BODY_BYTES;
+    return readBounded(
+      response,
+      cap,
+      (declared) =>
+        new Error(`S3 object ${JSON.stringify(key)} ${declared === null ? "is longer than" : `is ${declared} bytes, over`} the maxLength of ${cap}`),
+      options.signal,
+    );
   }
 
   async put(key: string, bytes: Uint8Array, options: { signal?: AbortSignal } = {}): Promise<void> {
+    rejectDotSegments("S3", key);
     const response = await this.#send("PUT", `/${uriEncode(key, true)}`, { body: bytes, ...(options.signal === undefined ? {} : { signal: options.signal }) });
     await response.body?.cancel();
   }

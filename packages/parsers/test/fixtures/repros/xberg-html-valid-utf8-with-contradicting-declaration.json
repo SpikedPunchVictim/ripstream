@@ -1,0 +1,24 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a valid UTF-8 page that declares windows-1252 keeps reading as UTF-8. Tika 4.2.0 (oracle) reads valid UTF-8 as UTF-8 whatever single-byte charset the page declares (trace HtmlEncodingDetector->windows-1252[DECLARATIVE], MojibusterEncodingDetector->UTF-8[STRUCTURAL] [junk-filter-selected]).",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "text": "<html><head><meta charset=\"windows-1252\"></head><body><p>Café – it’s naïve</p></body></html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

@@ -27,7 +27,14 @@ import {
   parseXmlTree,
   type XmlNode,
 } from "./xml-tree.ts";
-import { formatExcelDate, formatExcelDateCode, isDateFormat } from "./excel-format.ts";
+import {
+  BUILTIN_NUMBER_FORMATS,
+  formatExcelDate,
+  formatExcelDateCode,
+  formatGeneralNumber,
+  formatNumber,
+  isDateFormat,
+} from "./excel-format.ts";
 
 const DOCX =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -115,9 +122,10 @@ async function collectParts(
   packageFile: OpcPackage,
 ): Promise<Record<string, Uint8Array>> {
   const files: Record<string, Uint8Array> = {};
-  for (const name of packageFile.names) {
+  for (const entry of packageFile.names) {
+    const name = canonicalPartName(entry);
     if (!neededPart(name)) continue;
-    const bytes = await packageFile.read(name);
+    const bytes = await packageFile.read(entry);
     // A DTD entity declaration is refused before any XML parser sees it: expansion is the billion-laughs vector, and
     // ripstream never expands DTD entities. Tika's limit trips on the expansion; this names the same limit up front.
     if ((name.endsWith(".xml") || name.endsWith(".rels")) && containsAscii(bytes, "<!ENTITY")) {
@@ -144,6 +152,28 @@ function containsAscii(bytes: Uint8Array, needle: string): boolean {
     if (matched) return true;
   }
   return false;
+}
+
+/**
+ * Part names are compared without regard to case (POI lower-cases them), so a workbook stored as `XL/Workbook.XML` or a shared
+ * string table as `xl/SharedStrings.xml` is read: oracle Tika 4.2.0 reads all of them. The parts looked up by a fixed name are
+ * returned under that name; every other part keeps its own name under a lower-case top directory.
+ */
+const FIXED_PART_NAMES = new Map(
+  [
+    "docProps/core.xml", "docProps/app.xml", "docProps/custom.xml",
+    "word/document.xml", "word/comments.xml", "word/footnotes.xml", "word/endnotes.xml", "word/glossary/document.xml",
+    "word/_rels/document.xml.rels",
+    "xl/workbook.xml", "xl/sharedStrings.xml", "xl/styles.xml", "xl/_rels/workbook.xml.rels",
+    "ppt/presentation.xml", "ppt/_rels/presentation.xml.rels",
+    "visio/document.xml",
+  ].map((name) => [name.toLowerCase(), name] as const),
+);
+function canonicalPartName(name: string): string {
+  const fixed = FIXED_PART_NAMES.get(name.toLowerCase());
+  if (fixed !== undefined) return fixed;
+  const directory = /^(word|xl|ppt|visio|docProps)\//i.exec(name)?.[0];
+  return directory === undefined ? name : directory.toLowerCase() + name.slice(directory.length);
 }
 
 const SHARED_PARTS = /^docProps\/(core|app|custom)\.xml$/;
@@ -287,7 +317,8 @@ async function renderWordBlocks(
     else if (name === "tbl") await renderWordTable(child, xhtml);
     else if (name === "sdt" || name === "sdtContent" || name === "customXml") {
       await renderWordBlocks(child, xhtml);
-    } else if (name === "ins" || name === "del" || name === "moveTo" || name === "moveFrom") {
+    } else if (name === "ins" || name === "del" || name === "moveTo") {
+      // A block moved away (moveFrom) is not written, its new place is (moveTo); see wordParagraphText.
       await renderWordBlocks(child, xhtml);
     } else if (name === "body" || name === "hdr" || name === "ftr") {
       await renderWordBlocks(child, xhtml);
@@ -305,9 +336,33 @@ async function renderWordParagraph(
     await xhtml.characters(text);
     await xhtml.endElement("p");
   }
-  for (const box of descendantsNamed(paragraph, "txbxContent")) {
+  for (const box of textBoxes(paragraph)) {
     await renderWordBlocks(box, xhtml);
   }
+}
+
+/**
+ * The outermost text boxes in a paragraph. A box's own blocks render the boxes nested in it, so a nested box is not
+ * collected again here; and where Word wrote both an mc:Choice and an mc:Fallback copy of a box, only the Choice
+ * is read (the Fallback holds the same text for readers that do not know the Choice's namespace).
+ */
+function textBoxes(paragraph: XmlNode): XmlNode[] {
+  const boxes: XmlNode[] = [];
+  const visit = (node: XmlNode): void => {
+    for (const child of node.children) {
+      const name = localName(child.name);
+      if (name === "txbxContent") {
+        boxes.push(child);
+      } else if (name === "AlternateContent") {
+        const choices = childrenNamed(child, "Choice");
+        for (const branch of choices.length > 0 ? choices : child.children) visit(branch);
+      } else {
+        visit(child);
+      }
+    }
+  };
+  visit(paragraph);
+  return boxes;
 }
 
 function wordParagraphText(node: XmlNode): string {
@@ -315,8 +370,10 @@ function wordParagraphText(node: XmlNode): string {
   const visit = (current: XmlNode): void => {
     for (const child of current.children) {
       const name = localName(child.name);
-      if (name === "txbxContent" || name === "instrText") continue;
-      if (name === "t" || name === "delText") text += child.text;
+      // Oracle (Tika 4.2.0, tikajs-u03v): tracked-deleted text (w:delText) and the source of a tracked move (w:moveFrom, though it
+      // is written with w:t) are not written, the text of the move's new place (w:moveTo) is, and so is a w:t inside a w:del.
+      if (name === "txbxContent" || name === "instrText" || name === "delText" || name === "moveFrom") continue;
+      if (name === "t") text += child.text;
       else if (name === "tab") text += "\t";
       else if (name === "br" || name === "cr") text += "\n";
       else if (name === "noBreakHyphen") text += "-";
@@ -325,7 +382,7 @@ function wordParagraphText(node: XmlNode): string {
         const code = attribute(child, "char");
         if (code !== undefined) {
           const value = Number.parseInt(code, 16);
-          if (Number.isFinite(value)) text += String.fromCodePoint(value);
+          if (Number.isInteger(value) && value >= 0 && value <= 0x10ffff) text += String.fromCodePoint(value);
         }
       } else visit(child);
     }
@@ -387,13 +444,6 @@ interface Styles {
   readonly codes: (string | null)[];
 }
 
-/** Builtin number formats (ECMA-376 18.8.30), the subset whose display differs from the raw value. */
-const BUILTIN_FORMATS: Readonly<Record<number, string>> = {
-  1: "0", 2: "0.00", 3: "#,##0", 4: "#,##0.00",
-  9: "0%", 10: "0.00%", 11: "0.00E+00", 37: "#,##0 ;(#,##0)", 38: "#,##0 ;[Red](#,##0)",
-  39: "#,##0.00;(#,##0.00)", 40: "#,##0.00;[Red](#,##0.00)", 48: "##0.0E+0", 49: "@",
-};
-
 function parseStyles(xml: string | undefined): Styles {
   const dateStyles: boolean[] = [];
   const percentStyles: boolean[] = [];
@@ -418,7 +468,7 @@ function parseStyles(xml: string | undefined): Styles {
     dateStyles.push(code === undefined ? builtinDate : isDateFormat(code));
     percentStyles.push(id === 9 || id === 10);
     decimals.push(id === 10 ? 2 : 0);
-    codes.push(code ?? BUILTIN_FORMATS[id] ?? null);
+    codes.push(code ?? BUILTIN_NUMBER_FORMATS[id] ?? null);
   }
   return { dateStyles, percentStyles, decimals, codes };
 }
@@ -486,7 +536,9 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
     // of a merged region) writes nothing; the empty cells in front of the next value cell are padding.
     if (!hasValue) return;
 
-    totalCells += column + 1 - nextColumn;
+    // A cell reference that goes backwards pads nothing but still adds a cell; a negative step would walk the
+    // counter down and let a sheet of XFD1/A1 pairs past the cap.
+    totalCells += Math.max(1, column + 1 - nextColumn);
     if (totalCells > MAX_SHEET_CELLS) {
       throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_CELLS} cells`);
     }
@@ -519,6 +571,7 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
       attributes: { ...(tag.attributes as Record<string, string>) },
       children: [],
       text: "",
+      content: [],
     };
     if (cellStack.length > 0) {
       cellStack[cellStack.length - 1]!.children.push(node);
@@ -531,10 +584,12 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
       cellStack.push(node);
     }
   });
-  parser.on("text", (text) => {
+  const onText = (text: string): void => {
     if (captureDepth !== 0) captured += text;
     if (cellStack.length > 0) cellStack[cellStack.length - 1]!.text += text;
-  });
+  };
+  parser.on("text", onText);
+  parser.on("cdata", onText);
   parser.on("closetag", () => {
     if (captureDepth !== 0 && captureDepth === depth) {
       headerFooter.push(captured);
@@ -581,6 +636,10 @@ function formatCell(cell: SheetCell, styles: Styles): string {
     return cell.value;
   }
   if (cell.value.length === 0) return "";
+  // Oracle (Tika 4.2.0 /tika): an error cell is written as "ERROR:" and the error, "ERROR:#DIV/0!".
+  if (cell.type === "e") return `ERROR:${cell.value}`;
+  // POI's sheet handler writes a boolean cell as TRUE/FALSE, not as the 1/0 stored in the file.
+  if (cell.type === "b") return cell.value.trim() === "0" ? "FALSE" : "TRUE";
   const number = Number(cell.value);
   if (!Number.isFinite(number)) return cell.value;
 
@@ -590,62 +649,12 @@ function formatCell(cell: SheetCell, styles: Styles): string {
   }
   const code = styles.codes[cell.styleIndex];
   if (styles.dateStyles[cell.styleIndex] === true) {
+    // Oracle (Tika 4.2.0 /tika, tikajs-ibvq follow-up): the workbook's date1904 flag is not applied. POI's SAX sheet handler formats
+    // with the 1900 system whatever the flag says, so serial 0 of a 1904 workbook reads "12/31/99", not "1/1/04".
     return code === null || code === undefined ? formatExcelDate(number) : formatExcelDateCode(code, number);
   }
   // POI's General format writes the numeric cell value, not the text stored in the file.
-  return code === null || code === undefined ? String(number) : formatNumber(code, number);
-}
-
-/**
- * A display value for a cell's number format code, as POI's DataFormatter writes it. Covers the common case: a
- * positive/negative/zero section, thousands separators, fixed decimals, a percent sign, and quoted or currency
- * literals around the digits; anything else falls back to the raw value.
- */
-function formatNumber(code: string, value: number): string {
-  const sections = code.split(";");
-  const section = sections[value < 0 ? 1 : value === 0 ? 2 : 0] ?? sections[0]!;
-  const percent = section.includes("%");
-  const decimals = /\.(0+)/.exec(section)?.[1]?.length ?? 0;
-  const grouping = /[#0],[#0]/.test(section);
-  const magnitude = Math.abs(value) * (percent ? 100 : 1);
-  let digits = magnitude.toFixed(decimals);
-  if (grouping) {
-    const [whole = "", fraction] = digits.split(".");
-    digits = `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${fraction === undefined ? "" : `.${fraction}`}`;
-  }
-  const [prefix, suffix] = numberAffixes(section);
-  const negative = value < 0 && sections.length < 2 ? "-" : "";
-  return `${negative}${prefix}${digits}${percent ? "%" : ""}${suffix}`;
-}
-
-/** Literal text before and after the digit placeholders: quoted text, escaped characters and currency symbols. */
-function numberAffixes(section: string): [string, string] {
-  const literal = (part: string): string => {
-    let text = "";
-    for (let index = 0; index < part.length; index++) {
-      const char = part[index]!;
-      if (char === '"') {
-        const end = part.indexOf('"', index + 1);
-        if (end < 0) break;
-        text += part.slice(index + 1, end);
-        index = end;
-      } else if (char === "\\" && index + 1 < part.length) {
-        text += part[++index]!;
-      } else if (char === "_" || char === "*") {
-        index++;
-      } else if (char === "[") {
-        const end = part.indexOf("]", index + 1);
-        index = end < 0 ? part.length : end;
-      } else if (!"#0.,%?/Ee+".includes(char)) {
-        text += char;
-      }
-    }
-    return text;
-  };
-  const first = section.search(/[#0]/);
-  const last = section.search(/[#0](?!.*[#0])/);
-  if (first < 0) return ["", ""];
-  return [literal(section.slice(0, first)), literal(section.slice(last + 1))];
+  return code === null || code === undefined ? formatGeneralNumber(number) : formatNumber(code, number);
 }
 
 async function renderWorkbook(
@@ -660,21 +669,17 @@ async function renderWorkbook(
   );
 
   const workbook = parsePart(files, "xl/workbook.xml");
-  const names = workbook === undefined ? [] : sheetNames(workbook);
+  const sheets = orderedSheets(files, workbook);
 
-  const sheetFiles = Object.keys(files)
-    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
-    .sort((a, b) => sheetNumber(a) - sheetNumber(b));
-
-  for (let index = 0; index < sheetFiles.length; index++) {
-    const name = names[index];
+  for (const sheet of sheets) {
+    const name = sheet.name;
     await xhtml.startElement("div", "class", "sheet");
     if (name !== undefined) {
       await xhtml.startElement("h1");
       await xhtml.characters(name);
       await xhtml.endElement("h1");
     }
-    const { rows, headerFooter } = parseSheet(decode(files[sheetFiles[index]!]!), shared);
+    const { rows, headerFooter } = parseSheet(decode(files[sheet.file]!), shared);
     await xhtml.startElement("table");
     for (const row of rows) {
       await xhtml.startElement("tr");
@@ -694,17 +699,90 @@ async function renderWorkbook(
 
 function sharedStrings(root: XmlNode | undefined): string[] {
   if (root === undefined) return [];
-  return descendantsNamed(root, "si").map((item) =>
-    descendantsNamed(item, "t")
-      .map((text) => text.text)
-      .join(""),
-  );
+  // Oracle (Tika 4.2.0 /tika): the phonetic runs (rPh) are written, each after a space: "Only" with runs "A" and "B" reads "Only A B".
+  // An inline string's phonetic text has no such space.
+  const parts = (item: XmlNode): string[] =>
+    item.children.flatMap((child) => {
+      const name = localName(child.name);
+      if (name === "t") return [child.text];
+      if (name === "rPh") return descendantsNamed(child, "t").map((text) => ` ${text.text}`);
+      if (name === "r") return descendantsNamed(child, "t").map((text) => text.text);
+      return [];
+    });
+  return descendantsNamed(root, "si").map((item) => parts(item).join(""));
 }
 
 function sheetNames(root: XmlNode): string[] {
   return descendantsNamed(root, "sheet")
     .map((sheet) => attribute(sheet, "name"))
     .filter((name): name is string => name !== undefined);
+}
+
+interface WorkbookSheet {
+  readonly name: string | undefined;
+  /** The key of the worksheet part in `files`. */
+  readonly file: string;
+}
+
+/**
+ * The worksheets in workbook order, each with its own name. A `sheet` element names its part through the workbook's
+ * relationships (as xlsb.ts does), and the numbering of the part files says nothing about order or name. Worksheets
+ * the workbook does not reach (and every sheet when it has no usable relationships) follow in file-number order,
+ * named by position as before.
+ */
+function orderedSheets(files: Record<string, Uint8Array>, workbook: XmlNode | undefined): WorkbookSheet[] {
+  const worksheetFiles = Object.keys(files)
+    .filter((name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name))
+    .sort((a, b) => sheetNumber(a) - sheetNumber(b));
+  const byLowerName = new Map(worksheetFiles.map((name) => [name.toLowerCase(), name]));
+  const targets = relationshipTargets(files, "xl/_rels/workbook.xml.rels", "xl");
+  const result: WorkbookSheet[] = [];
+  const used = new Set<string>();
+  const elements = workbook === undefined ? [] : descendantsNamed(workbook, "sheet");
+  if (targets !== undefined) {
+    for (const element of elements) {
+      const id = relationshipId(element);
+      const target = id === undefined ? undefined : targets.get(id)?.target;
+      const file = target === undefined ? undefined : byLowerName.get(target.toLowerCase());
+      if (file === undefined || used.has(file)) continue;
+      used.add(file);
+      result.push({ name: attribute(element, "name"), file });
+    }
+  }
+  const names = workbook === undefined ? [] : sheetNames(workbook);
+  const unreached = worksheetFiles.filter((file) => !used.has(file));
+  // Without any resolved sheet, fall back to the old pairing: file order, names by position.
+  for (let index = 0; index < unreached.length; index++) {
+    result.push({ name: used.size === 0 ? names[index] : undefined, file: unreached[index]! });
+  }
+  return result;
+}
+
+/** The `r:id` of an element: the prefixed attribute, not the unprefixed `id` that sldId carries beside it. */
+function relationshipId(node: XmlNode): string | undefined {
+  for (const [key, value] of Object.entries(node.attributes)) {
+    if (key.includes(":") && localName(key) === "id") return value;
+  }
+  return undefined;
+}
+
+/** The relationships of one part, by Id, with each internal target resolved to a part name; undefined when absent. */
+function relationshipTargets(
+  files: Record<string, Uint8Array>,
+  relsPart: string,
+  sourceFolder: string,
+): Map<string, { readonly target: string; readonly type: string }> | undefined {
+  const root = parsePart(files, relsPart);
+  if (root === undefined) return undefined;
+  const targets = new Map<string, { readonly target: string; readonly type: string }>();
+  for (const relationship of descendantsNamed(root, "Relationship")) {
+    const id = attribute(relationship, "Id");
+    const target = attribute(relationship, "Target");
+    if (id === undefined || target === undefined) continue;
+    if (attribute(relationship, "TargetMode") === "External") continue;
+    targets.set(id, { target: resolveTarget(sourceFolder, target), type: attribute(relationship, "Type") ?? "" });
+  }
+  return targets;
 }
 
 function sheetNumber(name: string): number {
@@ -720,9 +798,7 @@ async function renderPresentation(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
 ): Promise<void> {
-  const slides = Object.keys(files)
-    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
-    .sort((a, b) => slideNumber(a) - slideNumber(b));
+  const slides = orderedSlides(files);
 
   for (const slide of slides) {
     const root = parsePart(files, slide);
@@ -740,12 +816,44 @@ async function renderPresentation(
   }
 }
 
+/**
+ * The slides in presentation order: presentation.xml's sldIdLst, resolved through its relationships. Slides it does
+ * not reach (and every slide when it has no usable list) follow in file-number order.
+ */
+function orderedSlides(files: Record<string, Uint8Array>): string[] {
+  const slideFiles = Object.keys(files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .sort((a, b) => slideNumber(a) - slideNumber(b));
+  const presentation = parsePart(files, "ppt/presentation.xml");
+  const targets = relationshipTargets(files, "ppt/_rels/presentation.xml.rels", "ppt");
+  const ordered: string[] = [];
+  if (presentation !== undefined && targets !== undefined) {
+    for (const entry of descendantsNamed(presentation, "sldId")) {
+      const id = relationshipId(entry);
+      const target = id === undefined ? undefined : targets.get(id)?.target;
+      if (target !== undefined && files[target] !== undefined && !ordered.includes(target)) ordered.push(target);
+    }
+  }
+  const listed = new Set(ordered);
+  return ordered.concat(slideFiles.filter((name) => !listed.has(name)));
+}
+
+/**
+ * The notes slide of a slide: the one its relationships name. A slide with no relationships part at all is paired
+ * with the notes slide of the same number, as before.
+ */
 function notesPart(
   files: Record<string, Uint8Array>,
   slide: string,
 ): XmlNode | undefined {
-  const number = slideNumber(slide);
-  return parsePart(files, `ppt/notesSlides/notesSlide${number}.xml`);
+  const folder = slide.slice(0, slide.lastIndexOf("/"));
+  const base = slide.slice(slide.lastIndexOf("/") + 1);
+  const targets = relationshipTargets(files, `${folder}/_rels/${base}.rels`, folder);
+  if (targets === undefined) return parsePart(files, `ppt/notesSlides/notesSlide${slideNumber(slide)}.xml`);
+  for (const { target, type } of targets.values()) {
+    if (type.endsWith("/notesSlide")) return parsePart(files, target);
+  }
+  return undefined;
 }
 
 function slideNumber(name: string): number {

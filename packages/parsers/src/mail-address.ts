@@ -141,8 +141,35 @@ function unquote(text: string): string {
   return out;
 }
 
-// MailUtil.EMAIL: an address is a run with an @ in it, without a `<`, an `@` or a space.
-const EMAIL = /([^<@ \t\n\v\f\r]+@[^@> ]+)/g;
+// MailUtil.EMAIL, /([^<@ \t\n\v\f\r]+@[^@> ]+)/g: an address is a run with an @ in it, without a `<`, an `@` or a space.
+// It is found by scanning out from each `@`: the regex retried every start of a long run with no `@` after it, which is
+// quadratic in the run (a 99k-character From header took seconds).
+const LOCAL_EXCLUDED = new Set(["<", "@", " ", "\t", "\n", "\v", "\f", "\r"]);
+const DOMAIN_EXCLUDED = new Set(["@", ">", " "]);
+
+function takeAddresses(display: string): { readonly rest: string; readonly email: string } {
+  let rest = "";
+  let email = "";
+  let taken = 0;
+  let from = 0;
+  for (;;) {
+    const at = display.indexOf("@", from);
+    if (at === -1) break;
+    let start = at;
+    while (start > taken && !LOCAL_EXCLUDED.has(display[start - 1]!)) start--;
+    let end = at + 1;
+    while (end < display.length && !DOMAIN_EXCLUDED.has(display[end]!)) end++;
+    if (start === at || end === at + 1) {
+      from = at + 1;
+      continue;
+    }
+    email = display.slice(start, end);
+    rest += display.slice(taken, start);
+    taken = end;
+    from = end;
+  }
+  return { rest: rest + display.slice(taken), email };
+}
 
 /**
  * MailUtil.setPersonAndEmail: the person is what is left of the display string after its addresses are taken out (with `<`,
@@ -150,10 +177,6 @@ const EMAIL = /([^<@ \t\n\v\f\r]+@[^@> ]+)/g;
  * "" stands for none. It does not decode encoded words: decode first.
  */
 export function splitPersonAndEmail(display: string): { readonly person: string; readonly email: string } {
-  let email = "";
-  const rest = display.replace(EMAIL, (_match, found: string) => {
-    email = found;
-    return "";
-  });
+  const { rest, email } = takeAddresses(display);
   return { person: javaTrim(rest.replace(/[<>"]/g, " ")), email };
 }

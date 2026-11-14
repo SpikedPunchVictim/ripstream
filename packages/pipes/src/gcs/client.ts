@@ -1,3 +1,5 @@
+import { DEFAULT_MAX_BODY_BYTES, overCap, readBounded } from "../bounded-body.ts";
+import { rejectDotSegments } from "../object-key.ts";
 import type { TokenProvider } from "./credentials.ts";
 
 /*
@@ -83,13 +85,17 @@ export class GcsClient {
     return `${this.#base}/storage/v1/b/${encodeURIComponent(this.#options.bucket)}/o`;
   }
 
-  /** The object's bytes. */
-  async get(name: string, options: { signal?: AbortSignal } = {}): Promise<Uint8Array> {
+  /** The object's bytes. An object longer than `maxLength` (default 256 MiB, -1 for none) is refused, before its body is read when it says so. */
+  async get(name: string, options: { signal?: AbortSignal; maxLength?: number } = {}): Promise<Uint8Array> {
+    rejectDotSegments("GCS", name);
     const response = await this.#send("GET", `${this.#objects}/${encodeURIComponent(name)}?alt=media`, options.signal === undefined ? {} : { signal: options.signal });
-    return new Uint8Array(await response.arrayBuffer());
+    if (options.maxLength === -1) return new Uint8Array(await response.arrayBuffer());
+    const cap = options.maxLength ?? DEFAULT_MAX_BODY_BYTES;
+    return readBounded(response, cap, overCap(`GCS object ${JSON.stringify(name)}`, cap), options.signal);
   }
 
   async put(name: string, bytes: Uint8Array, options: { signal?: AbortSignal } = {}): Promise<void> {
+    rejectDotSegments("GCS", name);
     const url = `${this.#base}/upload/storage/v1/b/${encodeURIComponent(this.#options.bucket)}/o?uploadType=media&name=${encodeURIComponent(name)}`;
     const response = await this.#send("POST", url, { headers: { "content-type": "application/octet-stream" }, body: bytes, ...(options.signal === undefined ? {} : { signal: options.signal }) });
     await response.body?.cancel();

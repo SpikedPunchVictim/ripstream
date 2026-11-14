@@ -1,4 +1,5 @@
 import { metadataKeyDefinition } from "./generated/metadata-schema.ts";
+import { coerceTyped } from "./metadata-utils.ts";
 import { Metadata } from "./metadata.ts";
 import type { MetadataFilter } from "./metadata-filter.ts";
 import { ParseContext } from "./parse-context.ts";
@@ -70,13 +71,14 @@ export function metadataJson(
   metadata: Metadata,
   options: Pick<RmetaOptions, "typedMetadata"> = {},
 ): Record<string, RmetaValue> {
-  const result: Record<string, RmetaValue> = {};
+  // `Object.fromEntries` defines each key as an own property: assigning `result["__proto__"]` would set the prototype.
+  const entries: Array<[string, RmetaValue]> = [];
   for (const name of metadata.names()) {
     const values = metadata.getAll(name);
     if (values.length === 0) continue;
-    result[name] = options.typedMetadata === true ? typedValue(name, values) : values.length === 1 ? values[0]! : [...values];
+    entries.push([name, options.typedMetadata === true ? typedValue(name, values) : values.length === 1 ? values[0]! : [...values]]);
   }
-  return result;
+  return Object.fromEntries(entries);
 }
 
 /**
@@ -164,27 +166,8 @@ function typedValue(
   if (definition === undefined) {
     return values.length === 1 ? values[0]! : [...values];
   }
-  const converted = values.map((value) => coerce(definition.valueType, value));
+  const converted = values.map((value) => coerceTyped(definition.valueType, value));
   return converted.length === 1 ? converted[0]! : converted;
-}
-
-function coerce(
-  type: string,
-  value: string,
-): string | number | boolean {
-  if (type === "INTEGER") {
-    const number = Number(value);
-    return Number.isInteger(number) ? number : value;
-  }
-  if (type === "REAL" || type === "RATIONAL") {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : value;
-  }
-  if (type === "BOOLEAN") {
-    if (value === "true") return true;
-    if (value === "false") return false;
-  }
-  return value;
 }
 
 /** Adds standard timing fields to a record's metadata. */

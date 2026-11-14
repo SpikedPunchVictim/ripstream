@@ -746,6 +746,8 @@ function usage(): string {
     "  -p, --password <pw>  Document password (not available with --isolation; serve: -p is the port)",
     "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
     "                          (serve: strict unless set; other commands: off unless set)",
+    "                          Off parses inside this process, so a parser crash or out-of-memory ends the process:",
+    "                          use --isolation strict for untrusted input and for batch jobs (parse, pipes)",
     "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
     "      --maxEmbeddedDepth <n>  parse, metadata: fail (exit 3) when an embedded document is nested deeper than n",
     "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",

@@ -9,6 +9,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { scanXmpPacket } from "./xmp-packet-scanner.ts";
+import { stripTags, xmpElementBlock, xmpListItems } from "./xmp-elements.ts";
 
 /**
  * Tika's JXLParser: JPEG XL is scanned for an `<?xpacket?>`-wrapped XMP packet and the packet is mapped to metadata.
@@ -51,18 +52,17 @@ function applyXmp(xml: string, metadata: Metadata): void {
     ["dc:description", "dc:description"],
     ["dc:subject", "dc:subject"],
   ] as const) {
-    const block = new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)</${name}>`).exec(xml)?.[1];
+    const block = xmpElementBlock(xml, name);
     if (block === undefined) continue;
-    for (const match of block.matchAll(/<rdf:li\b[^>]*>([\s\S]*?)<\/rdf:li>/g)) {
-      const value = decode(match[1]!);
+    for (const item of xmpListItems(block)) {
+      const value = decode(item);
       if (value.length > 0) metadata.add(property, value);
     }
   }
 }
 
 function decode(value: string): string {
-  return value
-    .replace(/<[^>]+>/g, "")
+  return stripTags(value)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')

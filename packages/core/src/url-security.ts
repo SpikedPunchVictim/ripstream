@@ -117,11 +117,13 @@ export async function safeFetch(
             ...(options.signal === undefined ? {} : { signal: options.signal }),
           });
     if (!REDIRECT_STATUSES.includes(response.status)) return response;
-    if (redirects >= maxRedirects) {
+    const location = response.headers.get("location");
+    if (location === null && redirects < maxRedirects) return response;
+    // This hop's body is never read: release its connection now, not when the server gives up on it.
+    await response.body?.cancel().catch(() => undefined);
+    if (location === null || redirects >= maxRedirects) {
       throw new UrlSecurityError(`Too many redirects (max ${maxRedirects})`);
     }
-    const location = response.headers.get("location");
-    if (location === null) return response;
     const next = await resolveAllowedUrl(new URL(location, url), options);
     hopInit = nextHopInit(hopInit, response.status, url, next.url);
     url = next.url;

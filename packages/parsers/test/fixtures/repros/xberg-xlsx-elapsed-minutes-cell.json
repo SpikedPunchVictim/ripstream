@@ -1,0 +1,19 @@
+{
+  "description": "(tikajs-y2cl) Adapted from xberg (MIT) crates/xberg/tests/xlsx_date_time_cells.rs: a [mm]:ss duration of 0.0625 days reads 90:00 (expectation follows POI DataFormatter elapsed-time formats; not verified against a Tika run). Input is xberg tests/fixtures/office/date_time_cells.xlsx (see ../xberg/README.txt).",
+  "tags": [
+    "xberg",
+    "xlsx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "../xberg/office/files/date_time_cells.xlsx",
+    "filename": "date_time_cells.xlsx"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "duration minutes\\t90:00\\n"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts";
 import {
   AttributesImpl,
+  CONTEXT_KEYS,
   LimitExceededError,
   MediaType,
   XHTMLContentHandler,
@@ -25,6 +26,14 @@ type Event =
  * never nest this deep.
  */
 export const DEFAULT_MAX_HTML_DEPTH = 2000;
+
+/**
+ * The elements go to the XHTML handler in the XHTML namespace, as Tika's JSoup parser writes them: the handler writes a
+ * line break after block elements and a tab before a cell or list item only for elements in that namespace.
+ */
+const HEAD_ELEMENTS: ReadonlySet<string> = new Set(["html", "head", "title", "meta", "link", "base"]);
+
+const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 export interface HtmlParserOptions {
   /**
@@ -72,7 +81,7 @@ export class HtmlDocumentParser implements Parser {
     const maxDepth = this.#maxDepth;
     const tick = signalCheckpoint(ctx);
     const prefix = await stream.peek(64 * 1024);
-    const { decoder, charset } = createDecoder(detectEncoding(prefix).charset);
+    const { decoder, charset } = createDecoder(detectEncoding(prefix, ctx.get(CONTEXT_KEYS.CHARSET_HINT)).charset);
     metadata.set("Content-Encoding", charset);
     recordDetectedEncoding(metadata, charset);
     // Tika's JSoupParser builds the type from a constant by the incoming type's prefix, and leaves any other type alone
@@ -92,6 +101,13 @@ export class HtmlDocumentParser implements Parser {
     let suppressed = 0;
     let depth = 0;
     let inTitle = false;
+    // The title of the page's head is document metadata, not text: Tika's XHTML writes it from the metadata into the head.
+    // A title that comes once the body has begun (text, or an element other than the head's) is an element of the body, and
+    // its text is read like any other. A head title's own events are not replayed.
+    let inHeadTitle = false;
+    let bodyStarted = false;
+    let titleDone = false;
+    let svgDepth = 0;
     let title = "";
 
     const parser = new HtmlParser(
@@ -108,7 +124,14 @@ export class HtmlDocumentParser implements Parser {
               `HTML nesting exceeds ${maxDepth} open elements`,
             );
           }
-          if (name === "title") inTitle = true;
+          if (name === "svg") svgDepth++;
+          // The document title is the first <title>; an inline SVG's <title> is its accessible name, not the page's.
+          if (name === "title" && !titleDone && svgDepth === 0) inTitle = true;
+          if (name === "title" && !bodyStarted && svgDepth === 0) {
+            inHeadTitle = true;
+            return;
+          }
+          if (!HEAD_ELEMENTS.has(name)) bodyStarted = true;
 
           const atts = new AttributesImpl();
           for (const [key, value] of Object.entries(attributes)) {
@@ -122,6 +145,13 @@ export class HtmlDocumentParser implements Parser {
           tick();
           if (suppressed > 0) return;
           if (inTitle) title += text;
+          if (inHeadTitle) return;
+          // Whitespace between the head's elements is the head's, not body text (the first character would open the body).
+          if (text.trim().length === 0) {
+            if (!bodyStarted) return;
+          } else {
+            bodyStarted = true;
+          }
           events.push({ type: "text", text });
         },
         onclosetag(name) {
@@ -131,13 +161,19 @@ export class HtmlDocumentParser implements Parser {
           }
           if (suppressed > 0) return;
           depth = Math.max(0, depth - 1);
-          if (name === "title") {
+          if (name === "svg") svgDepth = Math.max(0, svgDepth - 1);
+          if (name === "title" && inTitle) {
             inTitle = false;
+            titleDone = true;
             const value = title.trim();
             if (value.length > 0) {
               metadata.set("dc:title", value);
               metadata.set("title", value);
             }
+          }
+          if (name === "title" && inHeadTitle) {
+            inHeadTitle = false;
+            return;
           }
           events.push({ type: "close", name });
         },
@@ -147,6 +183,7 @@ export class HtmlDocumentParser implements Parser {
         lowerCaseTags: true,
         lowerCaseAttributeNames: true,
         recognizeSelfClosing: true,
+        recognizeCDATA: true,
       },
     );
 
@@ -170,18 +207,18 @@ async function drain(
   tick: () => void,
 ): Promise<void> {
   // Index cursor: Array.shift() on a large queue is O(n), making this quadratic.
+  // A handler that answers synchronously is not awaited: a promise per event is costly on large documents.
   for (const event of events) {
     tick();
+    let result;
     if (event.type === "open") {
-      await handler.startElement("", event.name, event.name, event.attributes);
+      result = handler.startElement(XHTML_NAMESPACE, event.name, event.name, event.attributes);
     } else if (event.type === "close") {
-      // Cells and rows are separate values in the text handler, which sees characters only.
-      if (event.name === "td" || event.name === "th") await handler.characters("\t");
-      else if (event.name === "tr") await handler.characters("\n");
-      await handler.endElement("", event.name, event.name);
+      result = handler.endElement(XHTML_NAMESPACE, event.name, event.name);
     } else {
-      await handler.characters(event.text);
+      result = handler.characters(event.text);
     }
+    if (result !== undefined) await result;
   }
   events.length = 0;
 }

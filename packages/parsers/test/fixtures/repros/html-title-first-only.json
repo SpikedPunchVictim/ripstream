@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-gz44) Every <title>, including an inline SVG's, was appended to dc:title.",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><head><title>Quarterly Report</title></head><body><svg><title>Close dialog</title><path d=\"M0 0\"/></svg><p>Body</p></body></html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Quarterly Report"
+    }
+  ]
+}

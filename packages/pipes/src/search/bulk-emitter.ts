@@ -41,7 +41,8 @@ function metadataFields(entry: Readonly<Record<string, RmetaValue>>): Fields {
     const values = (Array.isArray(value) ? value : [value]).map(String);
     if (values.length === 1) {
       const only = values[0] ?? "";
-      fields.push([name, isJsonField(name) && isValidJson(only) ? only : JSON.stringify(only)]);
+      // A JSON value is written again compactly: a line break inside it would end the line of the bulk body.
+      fields.push([name, isJsonField(name) && isValidJson(only) ? JSON.stringify(JSON.parse(only)) : JSON.stringify(only)]);
     } else {
       fields.push([name, `[${values.map((item) => JSON.stringify(item)).join(",")}]`]);
     }

@@ -290,7 +290,11 @@ function numberText(value: number): string {
   let text = javaDoubleText(value);
   if (text.length > 13) {
     const before = Math.ceil(Math.log10(Math.abs(value)));
-    text = javaDoubleText(Number(value.toFixed(15 - before)));
+    // toFixed takes 0 to 100 digits; a value outside that (1E19, 1E-100) is rounded to the same fifteen significant digits.
+    const digits = 15 - before;
+    const rounded = Number(digits >= 0 && digits <= 100 ? value.toFixed(digits) : value.toPrecision(15));
+    // Rounding the largest doubles up passes Double.MAX_VALUE; their own text stands then.
+    if (Number.isFinite(rounded)) text = javaDoubleText(rounded);
   }
   return trimZeros(text);
 }

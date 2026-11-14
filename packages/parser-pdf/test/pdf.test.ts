@@ -19,7 +19,7 @@ import { PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { PdfParser } from "../src/index.ts";
 import { pdfDate } from "../src/pdf.ts";
 import { recoverDocument } from "../src/pdf-recover.ts";
-import { encryptedPdf, helloPdf, rawPdf, samplePdf } from "./fixtures.ts";
+import { encryptedPdf, helloPdf, infoXmpPdf, rawPdf, samplePdf } from "./fixtures.ts";
 
 test("extracts PDF text and metadata", async () => {
   const bytes = await samplePdf();
@@ -35,13 +35,13 @@ test("extracts PDF text and metadata", async () => {
   // Tika's PDFParser writes PagedText.N_PAGES ("xmpTPg:NPages") and no pdf:PageCount. Read from Tika source, not run against a Tika.
   assert.equal(metadata.get("xmpTPg:NPages"), "1");
   assert.equal(metadata.get("pdf:PageCount"), null);
-  assert.match(metadata.get("pdf:charsPerPage") ?? "", /^\d+$/);
+  assert.match(metadata.get("pdf:chars-per-page") ?? "", /^\d+$/);
   assert.match(metadata.get("dcterms:created") ?? "", /^2024-01-01/);
 });
 
 test("converts PDF date strings", () => {
-  assert.equal(pdfDate("D:20240101123045Z"), "2024-01-01T12:30:45.000Z");
-  assert.equal(pdfDate("D:20240101123045+02'00'"), "2024-01-01T10:30:45.000Z");
+  assert.equal(pdfDate("D:20240101123045Z"), "2024-01-01T12:30:45Z");
+  assert.equal(pdfDate("D:20240101123045+02'00'"), "2024-01-01T10:30:45Z");
   assert.equal(pdfDate("not a date"), undefined);
 });
 
@@ -467,3 +467,40 @@ for (const fixture of corpusFixtures) {
     assert.match(await parseWith(bytes!, new PdfParser()), fixture.text);
   });
 }
+
+// Oracle (Tika 4.2.0 /tika): a text-less PDF cut off at 20-60% of its length, or with 3 KB of padding after %%EOF, answers
+// 200 with empty text and no exception. ripstream used to fail the first as "truncated" and the second as well (bughunt B32).
+test("a text-less PDF with its trailer cut off, or padding after %%EOF, is an empty document, not an error", async () => {
+  const whole = infoXmpPdf({ text: "" }).toString("latin1");
+  const cut = Buffer.from(whole.slice(0, whole.indexOf("xref\n")), "latin1");
+  const padded = Buffer.from(whole + " ".repeat(3000), "latin1");
+  for (const bytes of [cut, padded]) {
+    assert.equal((await parseWith(bytes, new PdfParser())).trim(), "");
+  }
+});
+
+// Oracle (Tika 4.2.0 /rmeta on a PDF with a Link and a Text annotation): pdf:annotation-types is the single value "null"
+// (the annotations carry no /NM), pdf:annotation-subtypes is ["Link", "Text"]; ripstream wrote pdf.js object ids ("7R").
+test("pdf:annotation-types is Tika's \"null\" for unnamed annotations, never an object id", async () => {
+  const content = "BT /F1 12 Tf 72 700 Td (Annot page) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> /Annots [6 0 R 7 0 R] >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Annot /Subtype /Link /Rect [72 700 200 720] /A << /S /URI /URI (http://example.com/) >> >>",
+    "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (A note) /T (Author) >>",
+  ];
+  const body = objects.map((object, index) => `${index + 1} 0 obj\n${object}\nendobj\n`);
+  const bytes = Buffer.from(`%PDF-1.4\n${body.join("")}trailer\n<< /Root 1 0 R >>\n%%EOF\n`, "latin1");
+  const metadata = new Metadata();
+  const stream = await RipstreamInputStream.from(bytes);
+  try {
+    await new PdfParser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(metadata.getAll("pdf:annotation-types"), ["null"]);
+  assert.deepEqual(metadata.getAll("pdf:annotation-subtypes"), ["Link", "Text"]);
+});

@@ -434,6 +434,8 @@ interface IconGroup {
 const RT_ICON = 3;
 const RT_GROUP_ICON = 14;
 const MAX_RESOURCE_ENTRIES = 20_000;
+/** More icon groups than any real executable carries; a crafted directory can repeat one group thousands of times. */
+const MAX_ICON_GROUPS = 256;
 const MAX_ICONS_PER_GROUP = 256;
 
 /** Rebuilds .ico files from a PE's resource section: the first usable group, or all of them. */
@@ -480,11 +482,13 @@ function peIcons(data: Uint8Array, allGroups: boolean): IconGroup[] {
   };
   let visited = 0;
   const walk = (offset: number, level: number, type: number, name: number, language: number): void => {
-    if (visited++ > MAX_RESOURCE_ENTRIES) return;
+    if (visited > MAX_RESOURCE_ENTRIES) return;
     if (root + offset + 16 > data.length) return;
     const named = view.getUint16(root + offset + 12, true);
     const ids = view.getUint16(root + offset + 14, true);
     for (let index = 0; index < named + ids; index++) {
+      // Directory entries may all point at one shared subdirectory, so entries (not directories) are what is counted.
+      if (visited++ > MAX_RESOURCE_ENTRIES) return;
       const entry = root + offset + 16 + index * 8;
       if (entry + 8 > data.length) return;
       const id = view.getUint32(entry, true);
@@ -501,8 +505,9 @@ function peIcons(data: Uint8Array, allGroups: boolean): IconGroup[] {
         if (start === null || start + size > data.length) return;
         const bytes = data.subarray(start, start + size);
         const displayName = resourceName(childName);
-        if (type === RT_GROUP_ICON) groups.push({ name: displayName, language: id & 0x7fff_ffff, data: bytes });
-        else if (type === RT_ICON) icons.set(childName & 0x7fff_ffff, bytes);
+        if (type === RT_GROUP_ICON) {
+          if (groups.length < MAX_ICON_GROUPS) groups.push({ name: displayName, language: id & 0x7fff_ffff, data: bytes });
+        } else if (type === RT_ICON) icons.set(childName & 0x7fff_ffff, bytes);
       } else {
         walk(child & 0x7fff_ffff, level + 1, level === 0 ? id : type, childName, id);
       }

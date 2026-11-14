@@ -494,3 +494,55 @@ test("PE icon groups become embedded .ico documents with Tika's names and relati
     { name: "icon_1.ico", relationship: "14/1/1033", type: "ATTACHMENT" },
   ]);
 });
+
+/** A PE whose icon-group resource directory has `level1` entries that all point at one `level2` directory of `level2` entries. */
+function peWithSharedResourceDirectory(level1: number, level2: number): Uint8Array {
+  const peOffset = 0x40;
+  const optionalSize = 96 + 16 * 8;
+  const sectionOffset = peOffset + 24 + optionalSize;
+  const root = sectionOffset + 40;
+  const l1 = root + 16 + 8;
+  const l2 = l1 + 16 + 8 * level1;
+  const dataEntry = l2 + 16 + 8 * level2;
+  const end = dataEntry + 32;
+  const bytes = new Uint8Array(end);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 0x4d;
+  bytes[1] = 0x5a;
+  view.setUint32(0x3c, peOffset, true);
+  bytes.set([0x50, 0x45, 0, 0], peOffset);
+  view.setUint16(peOffset + 4, 0x14c, true);
+  view.setUint16(peOffset + 6, 1, true);
+  view.setUint16(peOffset + 20, optionalSize, true);
+  view.setUint16(peOffset + 24, 0x10b, true);
+  view.setUint32(peOffset + 24 + 96 + 16, root, true);
+  view.setUint32(sectionOffset + 8, end, true);
+  view.setUint32(sectionOffset + 16, end, true);
+  view.setUint16(root + 14, 1, true);
+  view.setUint32(root + 16, 14, true); // RT_GROUP_ICON
+  view.setUint32(root + 20, 0x80000000 | (l1 - root), true);
+  view.setUint16(l1 + 14, level1, true);
+  for (let index = 0; index < level1; index++) {
+    view.setUint32(l1 + 16 + index * 8, index + 1, true);
+    view.setUint32(l1 + 20 + index * 8, 0x80000000 | (l2 - root), true);
+  }
+  view.setUint16(l2 + 14, level2, true);
+  for (let index = 0; index < level2; index++) {
+    view.setUint32(l2 + 16 + index * 8, 1033, true);
+    view.setUint32(l2 + 20 + index * 8, dataEntry - root, true);
+  }
+  view.setUint32(dataEntry, dataEntry, true);
+  return bytes;
+}
+
+// tikajs-2mo9: every entry pointing at one shared subdirectory made the icon walk quadratic in memory.
+test("a PE resource directory that shares one subdirectory among thousands of entries is walked in bounded work", async () => {
+  const bytes = peWithSharedResourceDirectory(4000, 4000);
+  const before = process.memoryUsage().heapUsed;
+  const started = performance.now();
+  const input = await RipstreamInputStream.from(bytes);
+  await new ExecutableParser({ extractAllIcons: true }).parse(input, new BodyContentHandler(), new Metadata(), new ParseContext());
+  await input.close();
+  assert.ok(performance.now() - started < 5000, "resource walk is not bounded");
+  assert.ok(process.memoryUsage().heapUsed - before < 200_000_000, "resource walk allocated without bound");
+});

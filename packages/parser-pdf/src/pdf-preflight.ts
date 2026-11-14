@@ -53,18 +53,26 @@ function rejectHugeObjectNumbers(text: string): void {
  */
 function rejectFormXObjectCycles(text: string): void {
   const edges = new Map<number, number[]>();
-  for (const match of text.matchAll(/(?<![0-9])(\d+)\s+\d+\s+obj\b/g)) {
+  const objects = [...text.matchAll(/(?<![0-9])(\d+)\s+\d+\s+obj\b/g)];
+  const nextEndobj = nextOccurrence(text, "endobj");
+  const nextStream = nextOccurrence(text, "stream");
+  const nextEndstream = nextOccurrence(text, "endstream");
+  for (const [index, match] of objects.entries()) {
     const start = match.index + match[0].length;
-    const end = endOfObject(text, start);
+    // An object that is never closed ends where the next one begins, not at the end of the file: each search below is
+    // bounded by it, so a file of thousands of unterminated objects is not read once per object.
+    const limit = objects[index + 1]?.index ?? text.length;
+    const end = endOfObject(start, limit, nextEndobj, nextStream);
     const dictionary = text.slice(start, end);
     if (!/\/Subtype\s*\/Form\b/.test(dictionary)) continue;
-    const xobjects = /\/XObject\s*<<([^>]*)>>/.exec(dictionary);
+    const xobjects = xobjectResources(dictionary);
     if (xobjects === null) continue;
-    const body = plainStreamBody(text, end);
+    const body = plainStreamBody(text, end, nextEndstream);
+    const painted = body === null ? null : paintedNames(body);
     const targets: number[] = [];
-    for (const ref of xobjects[1]!.matchAll(/\/([^\s/<>[\]()]+)\s+(\d+)\s+\d+\s+R\b/g)) {
+    for (const ref of xobjects.matchAll(/\/([^\s/<>[\]()]+)\s+(\d+)\s+\d+\s+R\b/g)) {
       // A resource entry only matters if the (readable) content paints it.
-      if (body === null || paints(body, ref[1]!)) targets.push(Number(ref[2]));
+      if (painted === null || painted.has(ref[1]!)) targets.push(Number(ref[2]));
     }
     edges.set(Number(match[1]), targets);
   }
@@ -94,25 +102,62 @@ function rejectFormXObjectCycles(text: string): void {
   }
 }
 
-/** End of an object's dictionary: its stream keyword or endobj. */
-function endOfObject(text: string, start: number): number {
-  const endobj = text.indexOf("endobj", start);
-  const limit = endobj === -1 ? text.length : endobj;
-  const stream = text.indexOf("stream", start);
-  return stream !== -1 && stream < limit ? stream : limit;
+/**
+ * A finder for the first `needle` at or after a position. Positions are asked for in rising order, so one answer serves
+ * every later question up to it, and "none" serves them all: the whole text is scanned once, however many ask.
+ */
+export function nextOccurrence(text: string, needle: string): (from: number) => number {
+  let searchedFrom = -1;
+  let found = -2;
+  return (from) => {
+    if (found !== -2 && from >= searchedFrom && (found === -1 || from <= found)) return found;
+    searchedFrom = from;
+    found = text.indexOf(needle, from);
+    return found;
+  };
+}
+
+/** The text of `/XObject << ... >>` in a dictionary, up to the first `>` (which a well-formed one follows with another). */
+function xobjectResources(dictionary: string): string | null {
+  for (let at = dictionary.indexOf("/XObject"); at !== -1; at = dictionary.indexOf("/XObject", at + 1)) {
+    let open = at + "/XObject".length;
+    while (/\s/.test(dictionary[open] ?? "")) open++;
+    if (dictionary.startsWith("<<", open)) {
+      const close = dictionary.indexOf(">", open + 2);
+      // With no `>` after this opener there is none after a later one either.
+      if (close === -1) return null;
+      if (dictionary[close + 1] === ">") return dictionary.slice(open + 2, close);
+    }
+  }
+  return null;
+}
+
+/** End of an object's dictionary: its stream keyword or endobj, no further than `limit`. */
+function endOfObject(
+  start: number,
+  limit: number,
+  nextEndobj: (from: number) => number,
+  nextStream: (from: number) => number,
+): number {
+  const endobj = nextEndobj(start);
+  const bound = endobj === -1 || endobj > limit ? limit : endobj;
+  const stream = nextStream(start);
+  return stream !== -1 && stream < bound ? stream : bound;
 }
 
 /** Stream data of the object whose dictionary ends at `end`, or null if filtered or absent. */
-function plainStreamBody(text: string, end: number): string | null {
+function plainStreamBody(text: string, end: number, nextEndstream: (from: number) => number): string | null {
   if (!text.startsWith("stream", end)) return null;
-  const stop = text.indexOf("endstream", end);
+  const stop = nextEndstream(end);
   if (stop === -1) return null;
   const body = text.slice(end, stop);
   const dictionaryStart = text.lastIndexOf("obj", end);
   return /\/Filter\b/.test(text.slice(dictionaryStart, end)) ? null : body;
 }
 
-function paints(body: string, name: string): boolean {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`/${escaped}\\s+Do\\b`).test(body);
+/** The resource names the content paints with `Do`. */
+function paintedNames(body: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of body.matchAll(/\/([^\s/<>[\]()]+)\s+Do\b/g)) names.add(match[1]!);
+  return names;
 }

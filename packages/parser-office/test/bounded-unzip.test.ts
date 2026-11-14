@@ -44,3 +44,34 @@ test("enforces maxZipEntries while indexing", () => {
     LimitExceededError,
   );
 });
+
+// tikajs-w7n3: a lying deflate stream must be stopped by zlib's output cap, not after a whole expansion.
+test("a deflate bomb is refused by the central-directory path with a bounded allocation", () => {
+  const bomb = zipSync({ "bomb.bin": new Uint8Array(50_000_000) });
+  const zip = boundedUnzip(bomb, { ...defaults, maxDecompressionRatio: 1_000_000, maxEmbeddedResourceBytes: 1_000_000 });
+  assert.throws(() => zip.get("bomb.bin"), LimitExceededError);
+});
+
+test("thousands of entries index and read without exhausting the stack", () => {
+  const files: Record<string, Uint8Array> = {};
+  for (let i = 0; i < 9000; i++) files[`f${i}`] = strToU8("x");
+  const zip = boundedUnzip(zipSync(files), defaults);
+  assert.equal(zip.names.length, 9000);
+  assert.equal(new TextDecoder().decode(zip.get("f8999")!), "x");
+});
+
+test("a truncated archive with no central directory is still indexed by its local headers", () => {
+  const whole = zipSync({ "a.txt": strToU8("alpha"), "b.txt": strToU8("beta") }, { level: 0 });
+  const cut = whole.subarray(0, whole.byteLength - 60);
+  const zip = boundedUnzip(cut, defaults);
+  assert.ok(zip.has("a.txt"));
+  assert.equal(new TextDecoder().decode(zip.get("a.txt")!), "alpha");
+});
+
+test("the local-header walk also stops a bomb before expanding it fully", () => {
+  const bomb = zipSync({ "bomb.bin": new Uint8Array(50_000_000) });
+  const directoryOffset = new DataView(bomb.buffer, bomb.byteOffset).getUint32(bomb.byteLength - 22 + 16, true);
+  const cut = bomb.subarray(0, directoryOffset); // local entries only: no usable central directory
+  const zip = boundedUnzip(cut, { ...defaults, maxDecompressionRatio: 1_000_000, maxEmbeddedResourceBytes: 1_000_000 });
+  assert.throws(() => zip.get("bomb.bin"), LimitExceededError);
+});

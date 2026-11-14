@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-u03v, Fixer D) \\ansicpg437 and \\ansicpg850 are read as those OEM code pages (TextDecoder has neither). Tika 4.2.0 (oracle, PUT /tika/text) answers 'Çü' for \\'80\\'81 under both.",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg437 \\pard \\'80\\'81}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Çü"
+    }
+  ]
+}

@@ -89,6 +89,10 @@ function xmlPlistLines(xml: string): string[] {
   let current = "";
   const parser = new SaxesParser({ xmlns: false });
 
+  // Without a handler saxes throws a raw Error on malformed XML, which would surface as a 500 rather than a 422.
+  parser.on("error", (error) => {
+    throw new MalformedDocumentError(`Malformed XML plist: ${error.message}`, { cause: error });
+  });
   parser.on("opentag", (tag) => {
     const name = tag.name.toLowerCase();
     if (VALUE_TAGS.has(name)) {
@@ -98,9 +102,11 @@ function xmlPlistLines(xml: string): string[] {
       lines.push(`${name}`);
     }
   });
-  parser.on("text", (text) => {
+  const onText = (text: string): void => {
     if (collecting) current += text;
-  });
+  };
+  parser.on("text", onText);
+  parser.on("cdata", onText);
   parser.on("closetag", (tag) => {
     const name = tag.name.toLowerCase();
     if (VALUE_TAGS.has(name) && collecting) {

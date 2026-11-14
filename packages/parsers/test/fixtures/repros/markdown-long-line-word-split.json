@@ -1,0 +1,23 @@
+{
+  "description": "(tikajs-gz44) A markdown line over 256 chars was cut in fixed windows joined by a space, splitting 'internationalization' mid-word.",
+  "tags": [
+    "markdown",
+    "repro"
+  ],
+  "input": {
+    "text": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word internationalization and more words follow here",
+    "filename": "long.md"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "internationalization and more words"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "i nternationalization"
+    }
+  ]
+}

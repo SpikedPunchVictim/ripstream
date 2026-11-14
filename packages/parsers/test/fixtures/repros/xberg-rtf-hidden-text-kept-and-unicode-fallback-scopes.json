@@ -1,0 +1,42 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) text_extract_lint_tests.rs, which drops \\v hidden text. Tika 4.2.0 (oracle, PUT /tika/text) does not: it writes hidden text (\\v, \\v0 and {\\v ...} all answer 'AHiddenB'), so ripstream does too. \\uc2 skips two fallback characters and \\uc scopes with the group, as in xberg and Tika ('АB'). The input has \\pard because Tika writes no text before the first paragraph-starting control word.",
+  "tags": [
+    "xberg",
+    "rtf",
+    "repro"
+  ],
+  "input": {
+    "text": "{\\rtf1\\uc1\\pard A{\\v Hidden}{\\uc2\\u1040??}B\\par}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "A"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "А"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "B"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "?"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "AHidden"
+    }
+  ]
+}

@@ -266,3 +266,48 @@ test("FlatFileEmitter keeps the shorthand layout: one flat file per id, distinct
     assert.ok(names.some((name) => /^a_b-[0-9a-f]{8}\.txt$/.test(name)));
   });
 });
+
+test("FlatFileEmitter never names a file after a Windows device (CON, NUL, COM1, ...), with or without an extension part", async () => {
+  await scratch(async (directory) => {
+    const emitter = new FlatFileEmitter(directory);
+    const ids = ["con", "NUL", "aux", "prn", "com1", "LPT9", "com1.backup", "nul.tar", "console", "com10"];
+    for (const id of ids) await emitter.emit({ id, text: id });
+    const names = await readdir(directory);
+    assert.equal(names.length, ids.length);
+    for (const name of names) {
+      assert.doesNotMatch(name.split(".")[0]!, /^(con|prn|aux|nul|com\d|lpt\d)$/i, `${name} is a device name on Windows`);
+    }
+    // The ordinary names around them keep their plain form.
+    assert.ok(names.includes("console.txt"));
+    assert.ok(names.includes("com10.txt"));
+  });
+});
+
+test("confineSymlinks refuses an emit key that goes out of basePath through a link", async () => {
+  await scratch(async (directory) => {
+    const base = join(directory, "out");
+    const elsewhere = join(directory, "elsewhere");
+    await mkdir(base);
+    await mkdir(elsewhere);
+    await symlink(elsewhere, join(base, "link"));
+    const confined = new FileSystemEmitter({ basePath: base, confineSymlinks: true });
+    await assert.rejects(confined.emit(concatenated("link/doc", "x")), /outside basePath/);
+    assert.deepEqual(await readdir(elsewhere), []);
+    // A plain nested directory is still fine.
+    await confined.emit(concatenated("nested/doc", "y"));
+    assert.ok((await stat(join(base, "nested", "doc"))).isFile());
+  });
+});
+
+test("confineSymlinks also refuses a file that is itself a link out, for an in-place write", async () => {
+  await scratch(async (directory) => {
+    const base = join(directory, "out");
+    const target = join(directory, "target.txt");
+    await mkdir(base);
+    await writeFile(target, "original");
+    await symlink(target, join(base, "doc"));
+    const confined = new FileSystemEmitter({ basePath: base, confineSymlinks: true, atomicWrites: false, onExists: "REPLACE" });
+    await assert.rejects(confined.emit(concatenated("doc", "x")), /outside basePath/);
+    assert.equal(await readFile(target, "utf8"), "original");
+  });
+});

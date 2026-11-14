@@ -32,6 +32,9 @@ export const EXIFR_OPTIONS = {
   // payloads.
   xmp: false,
   icc: false,
+  // exifr's revived dates are `new Date(y, m, d, ...)` in the process's time zone, and EXIF dates have none: the text is read
+  // as it is (see `exifDateText` in image.ts), so the output does not move with TZ.
+  reviveValues: false,
 } as const;
 
 /**

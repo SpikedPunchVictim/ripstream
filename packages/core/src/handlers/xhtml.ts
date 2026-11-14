@@ -212,32 +212,33 @@ export class XHTMLContentHandler implements ContentHandler {
     }
     if (AUTO.has(qName)) return;
 
-    return this.run(async () => {
-      if (HEAD.has(qName)) {
-        await this.lazyStartHead();
-      } else {
-        await this.lazyEndHead(false);
-      }
+    const head = HEAD.has(qName) ? this.lazyStartHead() : this.lazyEndHead(false);
+    return after(head, () => this.openElement(uri, localName, qName, attributes));
+  }
 
-      if (TRIMMED_INLINE.has(qName)) {
-        this.pendingStarts.push({
-          uri,
-          localName,
-          qName,
-          attributes: new AttributesImpl(attributes),
-        });
-        return;
-      }
-
-      await this.flushHeld();
-      if (uri === XHTML && INDENT.has(qName)) {
-        await this.delegate.ignorableWhitespace?.("\t", 0, 1);
-      }
-      await this.delegate.startElement?.(
+  private openElement(
+    uri: string,
+    localName: string,
+    qName: string,
+    attributes: Attributes,
+  ): MaybePromise<void> {
+    if (TRIMMED_INLINE.has(qName)) {
+      this.pendingStarts.push({
         uri,
         localName,
         qName,
-        filterAttributes(attributes),
+        attributes: new AttributesImpl(attributes),
+      });
+      return;
+    }
+
+    return after(this.flushHeld(), () => {
+      const indent =
+        uri === XHTML && INDENT.has(qName)
+          ? this.delegate.ignorableWhitespace?.("\t", 0, 1)
+          : undefined;
+      return after(indent, () =>
+        this.delegate.startElement?.(uri, localName, qName, filterAttributes(attributes)),
       );
     });
   }
@@ -255,30 +256,26 @@ export class XHTMLContentHandler implements ContentHandler {
 
     if (AUTO.has(name)) return;
 
-    return this.run(async () => {
-      if (TRIMMED_INLINE.has(name)) {
-        const last = this.pendingStarts.at(-1);
-        if (last !== undefined && last.qName === name) {
-          this.pendingStarts.pop();
-          return;
-        }
-        if (this.pendingStarts.length === 0) {
-          await this.delegate.endElement?.(uri, local, name);
+    const trimmed = TRIMMED_INLINE.has(name);
+    if (trimmed) {
+      const last = this.pendingStarts.at(-1);
+      if (last !== undefined && last.qName === name) {
+        this.pendingStarts.pop();
+        return;
+      }
+      if (this.pendingStarts.length === 0) {
+        return after(this.delegate.endElement?.(uri, local, name), () => {
           this.openTrimmed = Math.max(0, this.openTrimmed - 1);
-          return;
-        }
+        });
       }
+    }
 
-      await this.flushHeld();
-      await this.delegate.endElement?.(uri, local, name);
-
-      if (TRIMMED_INLINE.has(name)) {
-        this.openTrimmed = Math.max(0, this.openTrimmed - 1);
-      }
-      if (uri === XHTML && ENDLINE.has(name)) {
-        await this.newline();
-      }
-    });
+    return after(this.flushHeld(), () =>
+      after(this.delegate.endElement?.(uri, local, name), () => {
+        if (trimmed) this.openTrimmed = Math.max(0, this.openTrimmed - 1);
+        if (uri === XHTML && ENDLINE.has(name)) return this.newline();
+      }),
+    );
   }
 
   characters(ch: string, start?: number, length?: number): MaybePromise<void> {
@@ -288,69 +285,62 @@ export class XHTMLContentHandler implements ContentHandler {
       length = ch.length;
     }
 
-    return this.run(async () => {
-      await this.lazyEndHead(this.useFrameset);
+    const begin = start;
+    const count = length;
+    return after(this.lazyEndHead(this.useFrameset), () =>
+      this.writeCharacters(ch.slice(begin, begin + count)),
+    );
+  }
 
-      const raw = ch.slice(start, start + length);
-      if (
-        this.pendingStarts.length === 0 &&
-        this.openTrimmed === 0 &&
-        this.heldWhitespace.length === 0
-      ) {
-        const filtered = filterText(raw);
-        await this.delegate.characters?.(filtered, 0, filtered.length);
-        return;
-      }
+  private writeCharacters(raw: string): MaybePromise<void> {
+    if (
+      this.pendingStarts.length === 0 &&
+      this.openTrimmed === 0 &&
+      this.heldWhitespace.length === 0
+    ) {
+      const filtered = filterText(raw);
+      return this.delegate.characters?.(filtered, 0, filtered.length);
+    }
 
-      const firstNonWhitespace = findFirstNonWhitespace(raw);
-      if (firstNonWhitespace === -1) {
-        if (this.pendingStarts.length === 0 && this.openTrimmed === 0) {
-          await this.flushHeld();
+    const firstNonWhitespace = findFirstNonWhitespace(raw);
+    if (firstNonWhitespace === -1) {
+      if (this.pendingStarts.length === 0 && this.openTrimmed === 0) {
+        return after(this.flushHeld(), () => {
           const filtered = filterText(raw);
-          await this.delegate.characters?.(filtered, 0, filtered.length);
-        } else {
-          this.heldWhitespace += raw;
-        }
-        return;
+          return this.delegate.characters?.(filtered, 0, filtered.length);
+        });
       }
+      this.heldWhitespace += raw;
+      return;
+    }
 
-      this.heldWhitespace += raw.slice(0, firstNonWhitespace);
-      await this.flushHeld();
-
-      const middleStart = firstNonWhitespace;
+    this.heldWhitespace += raw.slice(0, firstNonWhitespace);
+    return after(this.flushHeld(), () => {
       let middleEnd = raw.length;
       if (this.openTrimmed > 0) {
         middleEnd = findLastNonWhitespace(raw) + 1;
       }
 
-      const middle = raw.slice(middleStart, middleEnd);
-      if (middle.length > 0) {
-        const filtered = filterText(middle);
-        await this.delegate.characters?.(filtered, 0, filtered.length);
-      }
-      this.heldWhitespace += raw.slice(middleEnd);
+      const middle = raw.slice(firstNonWhitespace, middleEnd);
+      const filtered = middle.length > 0 ? filterText(middle) : "";
+      const written =
+        middle.length > 0 ? this.delegate.characters?.(filtered, 0, filtered.length) : undefined;
+      return after(written, () => {
+        this.heldWhitespace += raw.slice(middleEnd);
+      });
     });
   }
 
   ignorableWhitespace(ch: string, start: number, length: number): MaybePromise<void> {
-    return this.run(async () => {
-      await this.flushHeld();
-      await this.delegate.ignorableWhitespace?.(ch, start, length);
-    });
+    return after(this.flushHeld(), () => this.delegate.ignorableWhitespace?.(ch, start, length));
   }
 
   processingInstruction(target: string, data: string): MaybePromise<void> {
-    return this.run(async () => {
-      await this.flushHeld();
-      await this.delegate.processingInstruction?.(target, data);
-    });
+    return after(this.flushHeld(), () => this.delegate.processingInstruction?.(target, data));
   }
 
   skippedEntity(name: string): MaybePromise<void> {
-    return this.run(async () => {
-      await this.flushHeld();
-      await this.delegate.skippedEntity?.(name);
-    });
+    return after(this.flushHeld(), () => this.delegate.skippedEntity?.(name));
   }
 
   endDocument(): MaybePromise<void> {
@@ -371,29 +361,39 @@ export class XHTMLContentHandler implements ContentHandler {
 
   element(name: string, value: string | null | undefined): MaybePromise<void> {
     if (value == null || value.length === 0) return;
-    return this.run(async () => {
-      await this.startElement(name);
-      await this.characters(value);
-      await this.endElement(name);
-    });
+    return after(this.startElement(name), () =>
+      after(this.characters(value), () => this.endElement(name)),
+    );
   }
 
-  private async flushHeld(): Promise<void> {
+  /** Writes held whitespace and pending inline starts; synchronous when the delegate is. */
+  private flushHeld(): MaybePromise<void> {
     if (this.heldWhitespace.length > 0) {
       const held = this.heldWhitespace;
       this.heldWhitespace = "";
       const filtered = filterText(held);
-      await this.delegate.characters?.(filtered, 0, filtered.length);
+      return after(this.delegate.characters?.(filtered, 0, filtered.length), () =>
+        this.flushPendingStarts(),
+      );
     }
+    return this.flushPendingStarts();
+  }
 
+  private flushPendingStarts(): MaybePromise<void> {
     while (this.pendingStarts.length > 0) {
       const pending = this.pendingStarts.shift()!;
-      await this.delegate.startElement?.(
+      const started = this.delegate.startElement?.(
         pending.uri,
         pending.localName,
         pending.qName,
         filterAttributes(pending.attributes),
       );
+      if (isThenable(started)) {
+        return Promise.resolve(started).then(() => {
+          this.openTrimmed++;
+          return this.flushPendingStarts();
+        });
+      }
       this.openTrimmed++;
     }
   }
@@ -407,6 +407,21 @@ export class XHTMLContentHandler implements ContentHandler {
   ): Promise<void> {
     for (const action of actions) await action();
   }
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === "object" && value !== null && typeof (value as PromiseLike<unknown>).then === "function"
+  );
+}
+
+/**
+ * Runs next once result has settled. A delegate that returns synchronously (the usual case) costs no promise; every
+ * promise is expensive under the node:test harness, which tracks each one with async hooks.
+ */
+function after(result: MaybePromise<void> | undefined, next: () => MaybePromise<void>): MaybePromise<void> {
+  if (isThenable(result)) return Promise.resolve(result).then(next);
+  return next();
 }
 
 function isWhitespace(char: string): boolean {

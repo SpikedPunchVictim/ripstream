@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-ekue) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\deff0 alone selects font 0's charset with no explicit \\f0.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fnil\\fcharset204 Arial;}}\\'cf\\'f0\\'e8\\'e2\\'e5\\'f2}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Привет"
+    }
+  ]
+}

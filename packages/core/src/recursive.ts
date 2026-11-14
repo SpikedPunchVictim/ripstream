@@ -2,6 +2,7 @@ import type { ContentHandler, MaybePromise } from "./content-handler.ts";
 import {
   chargeEmbeddedBytes,
   chargeEmbeddedResource,
+  isWholeParseLimit,
   meterEmbeddedStream,
   ParsingEmbeddedDocumentExtractor,
   type EmbeddedDocumentExtractor,
@@ -94,7 +95,8 @@ export class RecursiveParserWrapper implements Parser {
   ): Promise<void> {
     this.records.length = 0;
     const name = metadata.get(TIKA_KEYS.RESOURCE_NAME) ?? "document";
-    const path = `/${name}`;
+    // Slashes collapsed, as an embedded document's path is: a root named by a URL must still be the start of its children's.
+    const path = `/${name}`.replace(/\/+/g, "/");
     const record: ParseRecord = {
       metadata,
       content: "",
@@ -256,6 +258,9 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
         truncated = true;
         throw error;
       }
+      // A whole-parse limit is not this document's failure: recorded here, the parse would go on past a limit that only
+      // stopped it when it ran out in the container's own children.
+      if (isWholeParseLimit(error)) throw error;
       record.exception = error instanceof Error ? error : new Error(String(error));
       recordFailure(metadata, TIKA_KEYS.EMBEDDED_EXCEPTION, record.exception);
       if (ctx.signal.aborted) throw error; // propagate aborts; don't swallow a timeout as success

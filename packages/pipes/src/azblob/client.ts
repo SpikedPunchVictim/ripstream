@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_BODY_BYTES, overCap, readBounded } from "../bounded-body.ts";
 import { firstTag, xmlText } from "../s3/client.ts";
 import type { AzBlobConnectionSettings } from "@spikedpunch/ripstream-core";
 
@@ -117,10 +118,12 @@ export class AzBlobClient {
     throw new AzBlobError(response.status, code, `Azure Blob ${method} ${response.status}${code === undefined ? "" : ` ${code}`}${message === "" ? "" : `: ${message}`}`);
   }
 
-  /** The blob's bytes. */
-  async get(name: string, options: { signal?: AbortSignal } = {}): Promise<Uint8Array> {
+  /** The blob's bytes. A blob longer than `maxLength` (default 256 MiB, -1 for none) is refused, before its body is read when it says so. */
+  async get(name: string, options: { signal?: AbortSignal; maxLength?: number } = {}): Promise<Uint8Array> {
     const response = await this.#send("GET", `${this.#containerUrl}/${blobPath(name)}?${this.#sas}`, options.signal === undefined ? {} : { signal: options.signal });
-    return new Uint8Array(await response.arrayBuffer());
+    if (options.maxLength === -1) return new Uint8Array(await response.arrayBuffer());
+    const cap = options.maxLength ?? DEFAULT_MAX_BODY_BYTES;
+    return readBounded(response, cap, overCap(`Azure blob ${JSON.stringify(name)}`, cap), options.signal);
   }
 
   /**

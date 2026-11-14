@@ -14,6 +14,8 @@ interface Frame {
   destination: string;
   unicodeFallback: number;
   uc: number;
+  /** The font selected by \fN in this group or an enclosing one (and, in the font table, the entry being defined); null before any. */
+  font: number | null;
 }
 
 interface InfoValues {
@@ -90,7 +92,10 @@ export class RtfParser implements Parser {
     // after maxEmbeddedResourceBytes + 1 bytes, not after being buffered whole (tikajs-kpkn).
     const data = await stream.readFully(ctx.limits.maxEmbeddedResourceBytes);
 
-    const source = new TextDecoder("latin1").decode(data);
+    // A UTF-8 byte-order mark in front of the opening brace is not part of the document (tikajs-12kd). The bytes are
+    // read as latin1 below, so it shows as these three characters.
+    const decoded = new TextDecoder("latin1").decode(data);
+    const source = decoded.startsWith("\u00ef\u00bb\u00bf") ? decoded.slice(3) : decoded;
     if (!source.trimStart().startsWith("{\\rtf")) {
       throw new MalformedDocumentError("Not an RTF document");
     }
@@ -138,6 +143,24 @@ function isAsciiDigit(code: number): boolean {
   return code >= 48 && code <= 57;
 }
 const OUTPUT_PIECE = 8192;
+/** An \info value is metadata; one longer than the default metadata value cap is cut there anyway. */
+const MAX_INFO_VALUE_CHARS = 1_000_000;
+
+/** Control words that stand for one character in the text. */
+const SYMBOL_WORDS: ReadonlyMap<string, string> = new Map([
+  ["lquote", "\u2018"],
+  ["rquote", "\u2019"],
+  ["ldblquote", "\u201c"],
+  ["rdblquote", "\u201d"],
+  ["emdash", "\u2014"],
+  ["endash", "\u2013"],
+  ["bullet", "\u2022"],
+  // A table cell and row end separate the text of the cells; without them neighbouring cells run together.
+  ["cell", "\t"],
+  ["nestcell", "\t"],
+  ["row", "\n"],
+  ["nestrow", "\n"],
+]);
 
 /** The \info values of the document, read without collecting its text. Stops at the nesting limit, where the text pass fails. */
 function scanInfo(rtf: string): InfoValues {
@@ -152,12 +175,15 @@ function scanInfo(rtf: string): InfoValues {
  */
 function* tokenize(rtf: string, collectText = true): Generator<string, InfoValues, undefined> {
   const stack: Frame[] = [
-    { skip: false, destination: "body", unicodeFallback: 0, uc: 1 },
+    { skip: false, destination: "body", unicodeFallback: 0, uc: 1, font: null },
   ];
   // The text is collected 8192 values at a time, each piece joined to a flat string. `output += char` for each of
   // 20M characters builds a rope of 20M nodes (975 MB for a 20 MB document, tikajs-kpkn) that is flattened only at the end.
   let pending: string[] = [];
   let codepage = 1252;
+  // The code page of each font the font table gives an \fcharset (tikajs-ekue), and the font text is in before any \fN.
+  const fontCodepages = new Map<number, number>();
+  let defaultFont: number | null = null;
   let infoField = "";
   let infoDate: string | null = null;
   const info: InfoValues = {};
@@ -165,6 +191,11 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
   let position = 0;
 
   const top = (): Frame => stack[stack.length - 1]!;
+  /** The code page of the active font's charset when it has one, else the document's \ansicpg. */
+  const activeCodepage = (): number => {
+    const font = top().font ?? defaultFont;
+    return (font === null ? undefined : fontCodepages.get(font)) ?? codepage;
+  };
   const append = (value: string): void => {
     const frame = top();
     if (frame.unicodeFallback > 0) {
@@ -173,10 +204,9 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
     }
     if (frame.skip) return;
     if (frame.destination === "info") {
-      if (infoDate !== null) {
-        if (infoField.length > 0) info[infoField] = (info[infoField] ?? "") + value;
-      } else if (infoField.length > 0) {
-        info[infoField] = (info[infoField] ?? "") + value;
+      if (infoField.length > 0) {
+        const previous = info[infoField] ?? "";
+        info[infoField] = previous + value.slice(0, Math.max(0, MAX_INFO_VALUE_CHARS - previous.length));
       }
       return;
     }
@@ -216,11 +246,12 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
     }
     if (char !== "\\") {
       const frame = top();
-      if (frame.unicodeFallback === 0 && frame.destination !== "info") {
+      if (frame.unicodeFallback === 0) {
         // A run of plain characters is appended whole, or dropped in a skipped group, as `append` would for each one.
         DELIMITER.lastIndex = position;
         const end = DELIMITER.test(rtf) ? DELIMITER.lastIndex - 1 : rtf.length;
-        if (collectText && !frame.skip) pending.push(rtf.slice(position, end));
+        if (frame.destination === "info") append(rtf.slice(position, end));
+        else if (collectText && !frame.skip) pending.push(rtf.slice(position, end));
         position = end;
         continue;
       }
@@ -247,7 +278,11 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
       while (HEX_ESCAPE.test(rtf.slice(cursor + 1, cursor + 3))) {
         run.push(Number.parseInt(rtf.slice(cursor + 1, cursor + 3), 16));
         end = cursor + 3;
-        if (rtf[end] === "\\" && rtf[end + 1] === "'") cursor = end + 1;
+        // A line break between two escapes is not text (RTF ignores CR and LF), so a double-byte character that a writer
+        // wrapped across lines is still one run (tikajs-ig3h).
+        let next = end;
+        while (rtf[next] === "\r" || rtf[next] === "\n") next++;
+        if (rtf[next] === "\\" && rtf[next + 1] === "'") cursor = next + 1;
         else break;
       }
       position = end;
@@ -257,7 +292,7 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
       const dropped = Math.min(frame.unicodeFallback, run.length);
       frame.unicodeFallback -= dropped;
       const kept = run.slice(dropped);
-      if (kept.length > 0) append(decodeAnsi(new Uint8Array(kept), codepage));
+      if (kept.length > 0) append(decodeAnsi(new Uint8Array(kept), activeCodepage()));
       continue;
     }
     if (next === "\\" || next === "{" || next === "}") {
@@ -310,9 +345,32 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
       continue;
     }
 
+    const symbol = SYMBOL_WORDS.get(word);
+    if (symbol !== undefined) {
+      append(symbol);
+      continue;
+    }
+
     switch (word) {
       case "ansicpg":
         if (parameter !== null) codepage = parameter;
+        break;
+      case "deff":
+        if (parameter !== null) defaultFont = parameter;
+        break;
+      case "f":
+        // In the font table this names the entry being defined, in the text the font that follows.
+        if (parameter !== null) top().font = parameter;
+        break;
+      case "fcharset": {
+        const font = top().font;
+        const charsetCodepage = parameter === null ? undefined : FCHARSET_CODEPAGES.get(parameter);
+        if (font !== null && charsetCodepage !== undefined) fontCodepages.set(font, charsetCodepage);
+        break;
+      }
+      case "shptxt":
+        // Text-box text sits inside {\*\shpinst ...}, an ignorable destination that would otherwise drop it (tikajs-k49h).
+        top().skip = false;
         break;
       case "uc":
         if (parameter !== null) top().uc = Math.max(0, parameter);
@@ -388,13 +446,33 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
     if (year === undefined || month === undefined || day === undefined) return;
     const hour = dateParts[`${infoDate}:hr`] ?? 0;
     const minute = dateParts[`${infoDate}:min`] ?? 0;
-    info[infoDate] = new Date(
-      Date.UTC(year, month - 1, day, hour, minute),
-    ).toISOString();
+    const date = new Date(Date.UTC(year, month - 1, day, hour, minute));
+    // A part far out of range (\yr300000) makes an invalid date, and toISOString would throw on it.
+    if (Number.isNaN(date.getTime())) return;
+    info[infoDate] = date.toISOString();
   }
 }
 
+/**
+ * The code page of an \fcharset value (the RTF specification's table, as Tika 4.2.0 reads it; measured with a document whose
+ * \ansicpg is 1251). 0 (ANSI) is windows-1252 for a font that says so, whatever the document's \ansicpg; 1 (default) and 2
+ * (symbol) leave the document's. 78 is read as Shift-JIS, 254 as code page 437 and 255 (OEM) as 850. 130 (Johab, code page
+ * 1361) is not decoded here: Tika reads it, TextDecoder cannot.
+ */
+const FCHARSET_CODEPAGES: ReadonlyMap<number, number> = new Map([
+  [0, 1252], [77, 10000], [78, 932], [254, 437], [255, 850], [128, 932], [129, 949], [130, 1361], [134, 936], [136, 950], [161, 1253], [162, 1254], [163, 1258],
+  [177, 1255], [178, 1256], [186, 1257], [204, 1251], [222, 874], [238, 1250],
+]);
+
+/** The characters of bytes 0x80 to 0xff in the two OEM code pages Tika reads and TextDecoder does not know. */
+const OEM_CODEPAGES: ReadonlyMap<number, string> = new Map([
+  [437, "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ "],
+  [850, "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ "],
+]);
+
 function decodeAnsi(bytes: Uint8Array, codepage: number): string {
+  const oem = OEM_CODEPAGES.get(codepage);
+  if (oem !== undefined) return Array.from(bytes, (byte) => (byte < 0x80 ? String.fromCharCode(byte) : oem[byte - 0x80]!)).join("");
   try {
     return new TextDecoder(encodingFor(codepage)).decode(bytes);
   } catch {
@@ -408,6 +486,12 @@ function encodingFor(codepage: number): string {
   if (codepage === 936) return "gbk";
   if (codepage === 949) return "euc-kr";
   if (codepage === 950) return "big5";
+  if (codepage === 874) return "windows-874";
+  if (codepage === 866) return "ibm866";
+  if (codepage === 20866) return "koi8-r";
+  if (codepage === 21866) return "koi8-u";
+  if (codepage === 10000) return "macintosh";
+  if (codepage === 54936) return "gb18030";
   return codepage >= 1250 && codepage <= 1258
     ? `windows-${codepage}`
     : "windows-1252";

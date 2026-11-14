@@ -68,6 +68,9 @@ export function defaultOfficePasswords(): string[] {
   return [DEFAULT_PASSWORD];
 }
 
+/** MS-OFFCRYPTO 2.3.4.11: the largest spinCount a document may declare. */
+const MAX_SPIN_COUNT = 10_000_000;
+
 function agileParameters(info: Uint8Array): AgileParameters | null {
   // 2 version shorts + flags + reserved, then the XML descriptor.
   const xml = new TextDecoder("utf-8", { fatal: false }).decode(info.subarray(8));
@@ -85,6 +88,13 @@ function agileParameters(info: Uint8Array): AgileParameters | null {
   const input = base64(encryptedKey.encryptedVerifierHashInput);
   const hash = base64(encryptedKey.encryptedVerifierHashValue);
   if (keySalt === null || salt === null || key === null || input === null || hash === null) return null;
+  const spinCount = Number(encryptedKey.spinCount ?? keyData.spinCount ?? "100000");
+  // Values come from the file. spinCount drives a synchronous hash loop that runs before any password is checked, and
+  // the others size buffers and pick the cipher: refuse what MS-OFFCRYPTO does not allow (spinCount at most 10,000,000).
+  if (!Number.isInteger(spinCount) || spinCount < 0 || spinCount > MAX_SPIN_COUNT) return null;
+  if (keyBits !== 128 && keyBits !== 192 && keyBits !== 256) return null;
+  if (!Number.isInteger(blockSize) || blockSize < 2 || blockSize > 64) return null;
+  if (!Number.isInteger(hashSize) || hashSize < 1 || hashSize > 64) return null;
   const integrity = attributes(xml, "dataIntegrity");
   return {
     hashName,
@@ -92,7 +102,7 @@ function agileParameters(info: Uint8Array): AgileParameters | null {
     cipher: keyBits === 256 ? "aes-256-cbc" : keyBits === 192 ? "aes-192-cbc" : "aes-128-cbc",
     keyBytes: keyBits / 8,
     blockSize,
-    spinCount: Number(encryptedKey.spinCount ?? keyData.spinCount ?? "100000"),
+    spinCount,
     salt,
     keySalt,
     encryptedVerifierInput: input,
@@ -210,7 +220,8 @@ function decryptStandard(parameters: StandardParameters, password: string, encry
   const x1 = hash("sha1", xorFill(finalHash, 0x36));
   const x2 = hash("sha1", xorFill(finalHash, 0x5c));
   const key = Buffer.concat([x1, x2]).subarray(0, parameters.keyBytes);
-  const cipher = parameters.keyBytes === 256 ? "aes-256-ecb" : parameters.keyBytes === 192 ? "aes-192-ecb" : "aes-128-ecb";
+  // keyBytes is the key size in bytes: 32 is AES-256 and 24 is AES-192 (it was compared with 256 and 192, the sizes in bits).
+  const cipher = parameters.keyBytes === 32 ? "aes-256-ecb" : parameters.keyBytes === 24 ? "aes-192-ecb" : "aes-128-ecb";
 
   const verifier = decryptEcb(cipher, key, parameters.encryptedVerifier);
   const verifierHash = hash("sha1", verifier);

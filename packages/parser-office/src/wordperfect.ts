@@ -99,7 +99,8 @@ class Cursor {
   }
 
   skip(count: number): void {
-    this.position = Math.min(this.#data.byteLength, this.position + count);
+    // A negative count (a function size below its own header, or -1 read at EOF) must never rewind the cursor.
+    this.position = Math.min(this.#data.byteLength, this.position + Math.max(0, count));
   }
 
   skipUntil(target: number): void {

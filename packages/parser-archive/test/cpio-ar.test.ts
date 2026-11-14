@@ -60,3 +60,19 @@ test("parses ar archives", async () => {
   assert.match(text, /b\.txt/);
   assert.match(text, /ar hello/);
 });
+
+test("a CPIO size field with a minus sign cannot walk back to the same header (tikajs-2mo9)", async () => {
+  const name = new TextEncoder().encode("a.txt\0");
+  const fields = ["00000001", "000081a4", "0", "0", "00000001", "0", "-0000074", "0", "0", "0", "0", "00000006", "0"];
+  const header = "070701" + fields.map((field) => field.padStart(8, "0").replace(/^0+-/, "-")).join("");
+  // -0x74 is minus the 116 bytes from the header to the data, so the next entry would start at offset 0 again.
+  assert.equal(header.length, 110);
+  const bytes = new Uint8Array([...new TextEncoder().encode(header), ...name, 0, 0, ...new TextEncoder().encode("x".repeat(200))]);
+  const stream = await RipstreamInputStream.from(bytes);
+  const handler = new BodyContentHandler();
+  const ctx = new ParseContext({ limits: { maxZipEntries: 50 } });
+  ctx.set(CONTEXT_KEYS.PARSER, plainText);
+  await new CpioParser().parse(stream, handler, new Metadata(), ctx);
+  await stream.close();
+  assert.equal(handler.toString().split("a.txt").length - 1, 0);
+});

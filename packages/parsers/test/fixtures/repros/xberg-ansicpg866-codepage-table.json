@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-2ec1) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\ansicpg866 decodes \\'80\\'81 to АБ.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg866 \\'80\\'81}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "АБ"
+    }
+  ]
+}

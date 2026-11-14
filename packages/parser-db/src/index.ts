@@ -2,10 +2,12 @@ export { SqliteParser } from "./sqlite.ts";
 export { OpenPgpParser } from "./openpgp.ts";
 export {
   ColumnarParser,
+  DEFAULT_MAX_PARQUET_FOOTER_BYTES,
   DEFAULT_MAX_PARQUET_PAGE_VALUES,
   DEFAULT_MAX_PARQUET_ROW_GROUPS,
   DEFAULT_MAX_PARQUET_SCHEMA_DEPTH,
   DEFAULT_MAX_PARQUET_SCHEMA_ELEMENTS,
+  DEFAULT_MAX_PARQUET_TOTAL_VALUES,
   type ColumnarParserOptions,
 } from "./columnar.ts";
 export {

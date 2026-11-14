@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-2ec1) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\ansicpg874 decodes \\'a1 to ก.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg874 \\'a1}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ก"
+    }
+  ]
+}

@@ -153,7 +153,10 @@ function readMapiProperties(data: Uint8Array, props: Map<number, string>): void 
       } else {
         if (offset + 4 > data.length) return;
         const nameLength = view.getUint32(offset, true);
-        offset += 4 + align4(nameLength);
+        offset += 4;
+        // The length is file input: unchecked, align4 of a value near 2^32 is negative and the offset rewinds.
+        if (nameLength > data.length - offset) return;
+        offset += align4(nameLength);
       }
       if (offset > data.length) return;
     }
@@ -195,7 +198,7 @@ function readMapiProperties(data: Uint8Array, props: Map<number, string>): void 
 }
 
 function align4(value: number): number {
-  return (value + 3) & ~3;
+  return Math.ceil(value / 4) * 4;
 }
 
 function stripHtml(value: string): string {

@@ -114,6 +114,24 @@ test("a handler Tika does not know is a 400 with Tika's message, before the docu
   });
 });
 
+// Tika 4.2.0, PUT of an HTML file: /rmeta/json, /rmeta/meta, /tika/json/json and /tika/json/meta are each a 400 with the
+// message below ("json" and "meta" are not handler types), not an answer in the text shape (tikajs-w7xw).
+test("json and meta are not handler types in a path", async () => {
+  await withServer(async (base) => {
+    for (const name of ["json", "meta"]) {
+      for (const path of [`/rmeta/${name}`, `/tika/json/${name}`, `/rmeta/form/${name}`]) {
+        const response = await put(base, path, { method: "POST" });
+        assert.equal(response.status, 400, path);
+        assert.equal(
+          await response.text(),
+          `Unrecognized handler type '${name}'. Valid types: text, txt, html, xml, body, markdown, md, ignore`,
+          path,
+        );
+      }
+    }
+  });
+});
+
 test("/rmeta/{handler}: each document's content in that shape, the handler named in each record", async () => {
   await withServer(async (base) => {
     const records = async (path: string): Promise<Array<Record<string, unknown>>> =>

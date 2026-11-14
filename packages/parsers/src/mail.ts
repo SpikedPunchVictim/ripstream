@@ -16,6 +16,8 @@ import {
   type ParseContext,
   type Parser,
 } from "@spikedpunch/ripstream-core";
+import { detectEncoding } from "@spikedpunch/ripstream-mime";
+import { createDecoder } from "./charset.ts";
 import { HtmlDocumentParser } from "./html.ts";
 import { applyMailMetadata, type HeaderField } from "./mail-metadata.ts";
 import { parseStructured } from "./mail-structured.ts";
@@ -190,9 +192,8 @@ async function renderEntity(entity: Entity, output: Output, depth: number, conta
   }
 
   const decoded = decodeTransfer(entity.body, entity.headers);
-  const charset = contentType.parameters.get("charset") ?? "utf-8";
   if (type === "text/plain" || type === "") {
-    const text = decodeCharset(decoded, charset);
+    const text = decodeBodyText(decoded, contentType.parameters.get("charset"));
     if (text.length > 0) await xhtml.characters(text);
     return;
   }
@@ -428,16 +429,37 @@ function splitPart(data: Uint8Array, maxHeaderBytes: number): Entity {
   return splitEntity(data, maxHeaderBytes);
 }
 
+/**
+ * The next delimiter line at or after `from`: `--boundary` at the start of a line and followed by `--` (the closing
+ * delimiter) or by optional spaces and the line end, so a boundary that is the prefix of a nested one (`part` and
+ * `part_alt`) or that merely occurs inside text is not taken for one (RFC 2046 section 5.1.1).
+ */
+function findDelimiter(body: Uint8Array, marker: readonly number[], from: number): number {
+  let at = indexOf(body, marker, from);
+  while (at !== -1) {
+    if (at === 0 || body[at - 1] === 0x0a) {
+      let after = at + marker.length;
+      if (body[after] === 0x2d && body[after + 1] === 0x2d) return at;
+      while (body[after] === 0x20 || body[after] === 0x09) after++;
+      if (after >= body.length || body[after] === 0x0a || body[after] === 0x0d) return at;
+    }
+    at = indexOf(body, marker, at + 1);
+  }
+  return -1;
+}
+
 function splitMultipart(body: Uint8Array, boundary: string, maxHeaderBytes: number): Entity[] {
   const marker = Array.from(encodeLatin1(`--${boundary}`));
   const parts: Entity[] = [];
-  let start = indexOf(body, marker, 0);
+  let start = findDelimiter(body, marker, 0);
   while (start !== -1) {
     let segmentStart = start + marker.length;
     // Closing delimiter ("--boundary--") ends the multipart body.
     if (body[segmentStart] === 0x2d && body[segmentStart + 1] === 0x2d) break;
-    const next = indexOf(body, marker, segmentStart);
+    const next = findDelimiter(body, marker, segmentStart);
     const segmentEnd = next === -1 ? body.length : next;
+    // Spaces after the delimiter are transport padding, not part of the part.
+    while (body[segmentStart] === 0x20 || body[segmentStart] === 0x09) segmentStart++;
     if (body[segmentStart] === 0x0d && body[segmentStart + 1] === 0x0a) {
       segmentStart += 2;
     } else if (body[segmentStart] === 0x0a) {
@@ -528,13 +550,20 @@ function hexValue(value: number | undefined): number {
   return -1;
 }
 
+/**
+ * The text of a mail body part. Tika 4.2.0 decodes it with its usual detection, to which the part's charset is the
+ * declaration: it is used when the bytes can be in it, and not when they cannot (a part labelled utf-8 or us-ascii that
+ * holds windows-1252 bytes), where the statistical answer is taken; bytes that are valid UTF-8 are UTF-8 whatever the label
+ * (measured: a windows-1252 part with UTF-8 bytes reads as UTF-8). A part without a charset is detected the same way.
+ */
+function decodeBodyText(data: Uint8Array, label: string | undefined): string {
+  const charset = detectEncoding(data.subarray(0, 64 * 1024), label).charset;
+  return createDecoder(charset).decoder.decode(data);
+}
+
 function decodeCharset(data: Uint8Array, charset: string): string {
-  const encoding = normalizeCharset(charset);
-  try {
-    return new TextDecoder(encoding).decode(data);
-  } catch {
-    return new TextDecoder("utf-8", { fatal: false }).decode(data);
-  }
+  // createDecoder reads UTF-32, and falls back to UTF-8 for a label it does not know.
+  return createDecoder(normalizeCharset(charset)).decoder.decode(data);
 }
 
 function normalizeCharset(charset: string): string {

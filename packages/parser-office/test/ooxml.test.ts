@@ -202,7 +202,8 @@ test("extracts pptx slide text", async () => {
   assert.match(result.text, /Slide One/);
 });
 
-test("renders docx tables, headers, footnotes and deleted runs", async () => {
+// Oracle (Tika 4.2.0, tikajs-u03v): w:delText is not written (a deleted run's text is not content); it used to be asserted as kept.
+test("renders docx tables, headers and footnotes, and leaves out deleted runs", async () => {
   const result = await parse({
     "[Content_Types].xml": "<Types/>",
     "word/document.xml": `<w:document ${W}><w:body><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Cell B</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:del><w:r><w:delText>Removed</w:delText></w:r></w:del><w:r><w:tab/><w:t>Kept</w:t></w:r></w:p></w:body></w:document>`,
@@ -211,7 +212,7 @@ test("renders docx tables, headers, footnotes and deleted runs", async () => {
   });
   assert.match(result.text, /Cell A/);
   assert.match(result.text, /Cell B/);
-  assert.match(result.text, /Removed/);
+  assert.doesNotMatch(result.text, /Removed/);
   assert.match(result.text, /Kept/);
   assert.match(result.text, /Header Text/);
   assert.match(result.text, /Footnote Text/);

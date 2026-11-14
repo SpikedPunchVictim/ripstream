@@ -353,7 +353,7 @@ function statusList(value: unknown, where: string, issues: string[]): PipesResul
   }
   const names: PipesResultStatus[] = [];
   value.forEach((item: unknown, index) => {
-    if (typeof item === "string" && item in PIPES_RESULT_STATUSES) names.push(item as PipesResultStatus);
+    if (typeof item === "string" && Object.hasOwn(PIPES_RESULT_STATUSES, item)) names.push(item as PipesResultStatus);
     else issues.push(`${where}[${index}] ${JSON.stringify(item)} is not a result status (Tika's are ${Object.keys(PIPES_RESULT_STATUSES).join(", ")})`);
   });
   return names;
@@ -452,9 +452,9 @@ function pipesKeys(raw: unknown, issues: string[], notices: string[]): Pick<Pipe
     } else if (key === "queueSize") {
       if (whole(value, 1, 2 ** 31 - 1)) out.maxQueue = value;
       else issues.push(`${at} must be a positive whole number`);
-    } else if (key in PROCESS_KNOBS) {
+    } else if (Object.hasOwn(PROCESS_KNOBS, key)) {
       notices.push(`${at} ${PROCESS_KNOBS[key]}, so it changes nothing`);
-    } else if (key in EMIT_KNOBS) {
+    } else if (Object.hasOwn(EMIT_KNOBS, key)) {
       if (whole(value, -1, 2 ** 53 - 1)) notices.push(`${at} ${EMIT_KNOBS[key]}, so it changes nothing`);
       else issues.push(`${at} must be a whole number`);
     } else if (key === "emitStrategy") {

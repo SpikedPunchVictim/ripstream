@@ -134,3 +134,50 @@ export function encryptedPdf(userPassword: string): Buffer {
   );
   return Buffer.concat(chunks);
 }
+
+/**
+ * A one-page PDF with an optional Info dictionary body (`<< /Title (x) >>`) and XMP packet, written with a correct xref
+ * table so every reader (pdf.js, PDFBox) takes it as is. The text is "Hello" unless `text` says otherwise ("" for a page with none).
+ */
+export function infoXmpPdf(parts: { readonly info?: string; readonly xmp?: string; readonly text?: string }): Buffer {
+  const content = parts.text === "" ? "" : `BT /F1 24 Tf 72 700 Td (${parts.text ?? "Hello"}) Tj ET`;
+  const objects: string[] = [
+    "",
+    "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let metadataRef = "";
+  if (parts.xmp !== undefined) {
+    objects.push(`<< /Type /Metadata /Subtype /XML /Length ${Buffer.byteLength(parts.xmp)} >>\nstream\n${parts.xmp}\nendstream`);
+    metadataRef = ` /Metadata ${objects.length} 0 R`;
+  }
+  let infoRef = "";
+  if (parts.info !== undefined) {
+    objects.push(parts.info);
+    infoRef = ` /Info ${objects.length} 0 R`;
+  }
+  objects[0] = `<< /Type /Catalog /Pages 2 0 R${metadataRef} >>`;
+  let out = "%PDF-1.7\n";
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(out, "latin1"));
+    out += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(out, "latin1");
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R${infoRef} >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
+/** An XMP packet around `body`, with the usual namespaces declared and `x1` a namespace Tika has no mapping for. */
+export function xmpPacket(body: string, attributes = ""): string {
+  return (
+    `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">` +
+    `<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" ` +
+    `xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:pdfaid="http://www.aiim.org/pdfa/ns/id/" ` +
+    `xmlns:stEvt="http://ns.adobe.com/xap/1.0/sType/ResourceEvent#" xmlns:x1="http://example.com/ns/" ${attributes}>${body}</rdf:Description>` +
+    `</rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>`
+  );
+}

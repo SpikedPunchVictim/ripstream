@@ -89,6 +89,8 @@ const TRANSIENT_STATUSES: ReadonlySet<number> = new Set([408, 425, 429, 500, 502
 export function isTransientError(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current instanceof Error; depth++) {
+    // A deadline, whoever set it (`AbortSignal.timeout` reports it as a `TimeoutError`, whether or not the caller wrapped it).
+    if (current.name === "TimeoutError") return true;
     const { code, status } = current as { code?: unknown; status?: unknown };
     if (typeof code === "string" && TRANSIENT_CODES.has(code)) return true;
     if (typeof status === "number" && TRANSIENT_STATUSES.has(status)) return true;

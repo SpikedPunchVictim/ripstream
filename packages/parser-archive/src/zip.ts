@@ -8,8 +8,10 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { inflateSync, unzipSync } from "fflate";
-import { OutputBudget, type InflateLimits } from "@spikedpunch/ripstream-core";
+import { unzipSync } from "fflate";
+import { inflateBounded, OutputBudget, type InflateLimits } from "@spikedpunch/ripstream-core";
+import bzip from "seek-bzip";
+import { BudgetedSink } from "./compressor.ts";
 import { decodeDeflate64 } from "./deflate64.ts";
 import { parseEntry, readAll, safeEntryName, withXhtml } from "./util.ts";
 
@@ -42,14 +44,16 @@ export class ZipParser implements Parser {
     const data = await readAll(stream);
     let entries = 0;
     let originalTotal = 0;
-    let files: Record<string, Uint8Array>;
+    let files: ZipFile[];
     const central = readCentralDirectory(data);
-    if (central !== null && central.some((entry) => entry.method === 9)) {
-      // fflate does not decode method 9 (Deflate64), so an archive that carries it is read entry by entry.
+    if (central !== null && (central.some((entry) => !FFLATE_METHODS.has(entry.method) || isEncrypted(entry)) || hasAmbiguousNames(central))) {
+      // fflate does not decode method 9 (Deflate64) or the others (bzip2 is read here, the rest are refused one entry at a
+      // time), and it ignores the encryption flag, so an archive that carries any is read entry by entry. So is one with a
+      // repeated name or an entry named __proto__, which fflate's plain result object would drop.
       files = decodeEntries(data, central, ctx.limits);
       entries = central.length;
     } else try {
-      files = unzipSync(data, {
+      const record = unzipSync(data, {
         filter: (file) => {
           entries++;
           if (entries > ctx.limits.maxZipEntries) {
@@ -80,21 +84,21 @@ export class ZipParser implements Parser {
           return true;
         },
       });
+      files = Object.keys(record).map((name) => ({ name, bytes: record[name]! }));
     } catch (error) {
       if (error instanceof LimitExceededError) throw error;
       throw new MalformedDocumentError("Invalid ZIP archive", { cause: error });
     }
 
-    const names = Object.keys(files);
-    if (names.length > ctx.limits.maxZipEntries) {
+    if (files.length > ctx.limits.maxZipEntries) {
       throw new LimitExceededError(
-        `ZIP entries ${names.length} exceed ${ctx.limits.maxZipEntries}`,
+        `ZIP entries ${files.length} exceed ${ctx.limits.maxZipEntries}`,
       );
     }
 
     let total = 0;
     await withXhtml(handler, metadata, async (xhtml) => {
-      for (const name of names) {
+      for (const { name, bytes, failure } of files) {
         if (name.endsWith("/")) continue;
         if (safeEntryName(name) === null) {
           metadata.add(
@@ -103,7 +107,13 @@ export class ZipParser implements Parser {
           );
           continue;
         }
-        const bytes = files[name]!;
+        if (failure !== undefined) {
+          // Oracle (Tika 4.2.0 /rmeta): an entry that cannot be read (an encrypted one, or a method commons-compress does not
+          // know: 14, 99) is recorded on the archive as embedded-stream-exception and listed by name; the others are read.
+          metadata.add("tk:exception:embedded-stream-exception", failure);
+          await xhtml.element("p", name);
+          continue;
+        }
         total += bytes.byteLength;
         if (bytes.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
           throw new LimitExceededError(`Entry ${name} expanded size exceeds the per-entry limit`);
@@ -121,8 +131,33 @@ export class ZipParser implements Parser {
   }
 }
 
+interface ZipFile {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+  /** Why the entry could not be read, when it could not; `bytes` is then empty. */
+  readonly failure?: string;
+}
+
+/** The methods fflate decodes: stored and deflated. */
+const FFLATE_METHODS: ReadonlySet<number> = new Set([0, 8]);
+
+function isEncrypted(entry: CentralEntry): boolean {
+  return (entry.flags & 1) !== 0;
+}
+
+/** A name fflate's result object cannot keep: a repeat of an earlier one, or `__proto__`, which would set the prototype. */
+function hasAmbiguousNames(entries: readonly CentralEntry[]): boolean {
+  const seen = new Set<string>();
+  for (const { name } of entries) {
+    if (name === "__proto__" || seen.has(name)) return true;
+    seen.add(name);
+  }
+  return false;
+}
+
 interface CentralEntry {
   readonly name: string;
+  readonly flags: number;
   readonly method: number;
   readonly compressedSize: number;
   readonly uncompressedSize: number;
@@ -181,7 +216,7 @@ function readCentralDirectory(data: Uint8Array): CentralEntry[] | null {
       extra += 4 + size;
     }
     const name = new TextDecoder(flags & 0x0800 ? "utf-8" : "utf-8", { fatal: false }).decode(data.subarray(nameStart, nameEnd));
-    entries.push({ name, method, compressedSize, uncompressedSize, localOffset });
+    entries.push({ name, flags, method, compressedSize, uncompressedSize, localOffset });
     offset = extraEnd + commentLength;
   }
   return entries;
@@ -191,11 +226,13 @@ function decodeEntries(
   data: Uint8Array,
   entries: readonly CentralEntry[],
   limits: { readonly maxZipEntries: number; readonly maxEmbeddedResourceBytes: number; readonly maxTotalEmbeddedBytes: number; readonly maxDecompressionRatio: number },
-): Record<string, Uint8Array> {
+): ZipFile[] {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const files: Record<string, Uint8Array> = {};
+  const files: ZipFile[] = [];
   if (entries.length > limits.maxZipEntries) throw new LimitExceededError(`ZIP entries ${entries.length} exceed ${limits.maxZipEntries}`);
+  // Declared sizes only reject early; what an entry really inflates to is bounded by what is left of the total.
   let total = 0;
+  let produced = 0;
   for (const entry of entries) {
     if (entry.uncompressedSize > limits.maxEmbeddedResourceBytes) {
       throw new LimitExceededError(`ZIP entry ${entry.name} expanded size exceeds the per-entry limit`);
@@ -215,19 +252,46 @@ function decodeEntries(
     const end = start + entry.compressedSize;
     if (end > data.byteLength) throw new MalformedDocumentError("Truncated ZIP entry");
     const compressed = data.subarray(start, end);
-    let bytes: Uint8Array;
-    if (entry.method === 0) bytes = compressed;
-    else if (entry.method === 8) bytes = inflateSync(compressed);
-    else if (entry.method === 9) {
-      const budget = new OutputBudget(compressed.byteLength, {
-        maxOutputBytes: Math.min(limits.maxEmbeddedResourceBytes, limits.maxTotalEmbeddedBytes),
-        maxRatio: limits.maxDecompressionRatio,
-      } satisfies InflateLimits, `ZIP entry ${entry.name}`);
-      bytes = decodeDeflate64(compressed, budget);
-    } else {
-      throw new MalformedDocumentError(`Unsupported ZIP compression method ${entry.method}`);
+    if (isEncrypted(entry)) {
+      files.push({ name: entry.name, bytes: new Uint8Array(0), failure: `EncryptedDocumentException: stream (${entry.name}) is encrypted` });
+      continue;
     }
-    files[entry.name] = bytes;
+    const entryLimits = {
+      maxOutputBytes: Math.min(limits.maxEmbeddedResourceBytes, limits.maxTotalEmbeddedBytes - produced),
+      maxRatio: limits.maxDecompressionRatio,
+      minRatioBytes: RATIO_CHECK_THRESHOLD_BYTES,
+    } satisfies InflateLimits;
+    let bytes: Uint8Array;
+    if (entry.method === 0) {
+      if (compressed.byteLength > entryLimits.maxOutputBytes) {
+        throw new LimitExceededError(`ZIP entry ${entry.name} exceeds ${entryLimits.maxOutputBytes} bytes`);
+      }
+      bytes = compressed;
+    } else if (entry.method === 8) {
+      try {
+        bytes = inflateBounded(compressed, "deflate-raw", entryLimits);
+      } catch (error) {
+        if (error instanceof LimitExceededError) throw error;
+        throw new MalformedDocumentError(`Invalid ZIP entry ${entry.name}`, { cause: error });
+      }
+    } else if (entry.method === 9) {
+      const budget = new OutputBudget(compressed.byteLength, entryLimits, `ZIP entry ${entry.name}`);
+      bytes = decodeDeflate64(compressed, budget);
+    } else if (entry.method === 12) {
+      const sink = new BudgetedSink(new OutputBudget(compressed.byteLength, entryLimits, `ZIP entry ${entry.name}`));
+      try {
+        (bzip.decode as (input: Uint8Array, output: BudgetedSink) => unknown)(compressed, sink);
+      } catch (error) {
+        if (error instanceof LimitExceededError) throw error;
+        throw new MalformedDocumentError(`Invalid ZIP entry ${entry.name}`, { cause: error });
+      }
+      bytes = sink.result();
+    } else {
+      files.push({ name: entry.name, bytes: new Uint8Array(0), failure: `TikaException: Can't read archive stream (${entry.name})` });
+      continue;
+    }
+    produced += bytes.byteLength;
+    files.push({ name: entry.name, bytes });
   }
   return files;
 }

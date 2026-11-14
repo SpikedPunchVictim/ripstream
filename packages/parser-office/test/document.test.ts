@@ -178,6 +178,29 @@ test("extracts EPUB spine text and OPF metadata", async () => {
   assert.equal(result.metadata.get("dc:creator"), "Grace");
 });
 
+test("names the package file when an EPUB package document is not well-formed (tikajs-ibvq)", async () => {
+  await assert.rejects(
+    run(new EpubParser(), {
+      "META-INF/container.xml": '<container><rootfiles><rootfile full-path="c.opf"/></rootfiles></container>',
+      "c.opf": "<package><metadata></package>",
+    }),
+    (error: unknown) =>
+      error instanceof MalformedDocumentError && /EPUB package document is not well-formed/.test(error.message),
+  );
+});
+
+// Oracle (Tika 4.2.0 /rmeta, tikajs-ibvq): the chapter's failure is a TIKA-237 container exception, not a failed parse; the text before
+// the error is written. The record names the chapter instead of surfacing the raw saxes error.
+test("names the chapter in the recorded failure when an EPUB chapter is not well-formed (tikajs-ibvq)", async () => {
+  const result = await run(new EpubParser(), {
+    "META-INF/container.xml": '<container><rootfiles><rootfile full-path="c.opf"/></rootfiles></container>',
+    "c.opf": '<package><manifest><item id="a" href="a.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="a"/></spine></package>',
+    "a.xhtml": "<html><body><p><b>x</p></b></body></html>",
+  });
+  assert.match(result.metadata.get("tk:exception:container-exception") ?? "", /EPUB chapter a\.xhtml is not well-formed/);
+  assert.match(result.text, /x/);
+});
+
 test("extracts EPUB3 nav, cover and multiple creators", async () => {
   const result = await run(new EpubParser(), {
     "META-INF/container.xml":
@@ -598,4 +621,87 @@ test("EPUB without any OPF writes the HTML entries and reports the missing packa
     }),
     (error: unknown) => error instanceof MalformedDocumentError && /recovered 3 HTML entries/.test(error.message),
   );
+});
+
+// tikajs-ybtt: every keyword re-flattened a value that was already at the cap, so thousands of keywords cost seconds.
+test("ODF meta with tens of thousands of keywords is read in bounded time", () => {
+  const keywords = "<meta:keyword>kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk</meta:keyword>".repeat(80_000);
+  const metadata = new Metadata();
+  metadata.setMaxValueChars(1_000_000);
+  const started = performance.now();
+  applyOdfMetadata(metadata, `<office:document-meta ${NS}><office:meta>${keywords}</office:meta></office:document-meta>`);
+  assert.ok(performance.now() - started < 3000, "keyword joining is not bounded");
+  assert.ok(metadata.get("meta:keyword")!.length <= 1_000_000);
+});
+
+// tikajs-r77m: content.xml lists automatic styles (number:text) before office:body, and they used to be taken as the body.
+test("ODF body is found under office:body, not in a number:text style element", async () => {
+  const result = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.text",
+    "content.xml":
+      '<office:document-content xmlns:office="o" xmlns:text="t" xmlns:number="n"><office:automatic-styles><number:date-style><number:text>-</number:text></number:date-style></office:automatic-styles>' +
+      "<office:body><office:text><text:p>Real body</text:p></office:text></office:body></office:document-content>",
+  });
+  assert.match(result.text, /Real body/);
+});
+
+// tikajs-v517: text after an inline element belongs after that element's text.
+test("ODF mixed content keeps document order", async () => {
+  const result = await run(new OpenDocumentParser(), {
+    mimetype: "application/vnd.oasis.opendocument.text",
+    "content.xml":
+      '<office:document-content xmlns:office="o" xmlns:text="t"><office:body><office:text><text:p>Alpha <text:span>bold</text:span> omega</text:p></office:text></office:body></office:document-content>',
+  });
+  assert.match(result.text, /Alpha bold omega/);
+});
+
+test("EPUB mixed content keeps document order and CDATA text is kept", async () => {
+  const result = await run(new EpubParser(), {
+    "META-INF/container.xml": '<container><rootfiles><rootfile full-path="c.opf"/></rootfiles></container>',
+    "c.opf":
+      '<package><manifest><item id="c1" href="chap1.xhtml"/></manifest><spine><itemref idref="c1"/></spine></package>',
+    "chap1.xhtml":
+      "<html><body><p>The <b>quick</b> brown <i>fox</i> jumps</p><p><![CDATA[Cdata <kept>]]></p></body></html>",
+  });
+  assert.match(result.text, /The quick brown fox jumps/);
+  assert.match(result.text, /Cdata <kept>/);
+});
+
+// tikajs-r77m: many spine items re-read the archive per item; each lookup must stay cheap and the walk must be abortable.
+test("EPUB with thousands of spine items is read without rescanning the archive per item", async () => {
+  const count = 3000;
+  const files: Record<string, string> = {
+    "META-INF/container.xml": '<container><rootfiles><rootfile full-path="c.opf"/></rootfiles></container>',
+    "c.opf": `<package><manifest>${Array.from({ length: count }, (_, i) => `<item id="i${i}" href="c${i}.xhtml"/>`).join("")}</manifest><spine>${Array.from({ length: count }, (_, i) => `<itemref idref="i${i}"/>`).join("")}</spine></package>`,
+  };
+  for (let i = 0; i < count; i++) files[`c${i}.xhtml`] = `<html><body><p>chapter ${i}</p></body></html>`;
+  const started = performance.now();
+  const result = await run(new EpubParser(), files);
+  assert.match(result.text, /chapter 2999/);
+  assert.ok(performance.now() - started < 5000, "spine walk is not linear");
+});
+
+// Oracle (Tika 4.2.0 /tika, tikajs-u03v): an office:annotation is written as a block of its own. Its paragraphs end in a space and one
+// that follows another starts with one; the first block starts with the literal "&#32;" (Tika's quirk). The creator, the date and
+// text directly in it are not written, and the text after it in the host paragraph is a paragraph again.
+const ODF_ANNOTATION_NS = 'xmlns:office="o" xmlns:text="t" xmlns:dc="d"';
+async function odtBody(body: string): Promise<string> {
+  return (
+    await run(new OpenDocumentParser(), {
+      mimetype: "application/vnd.oasis.opendocument.text",
+      "content.xml": `<office:document-content ${ODF_ANNOTATION_NS}><office:body><office:text>${body}</office:text></office:body></office:document-content>`,
+    })
+  ).text;
+}
+
+test("an ODT comment is written between the text before it and the text after it", async () => {
+  const text = await odtBody(
+    "<text:p>Before<office:annotation><dc:creator>Al</dc:creator><text:p>First.</text:p><text:p>Second.</text:p></office:annotation>After</text:p>",
+  );
+  assert.equal(text.replace(/\n+/g, "\n"), "Before\n&#32;First.  Second. \nAfter\n");
+});
+
+test("text directly in an ODT comment is not written", async () => {
+  const text = await odtBody("<text:p>X<office:annotation>Direct</office:annotation>Y</text:p>");
+  assert.equal(text.replace(/\n+/g, "\n"), "X\nY\n");
 });

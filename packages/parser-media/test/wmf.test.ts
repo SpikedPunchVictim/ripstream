@@ -44,3 +44,44 @@ test("rejects arbitrary bytes as WMF/EMF", async () => {
   );
   await stream.close();
 });
+
+async function parseBytes(data: Uint8Array): Promise<void> {
+  const stream = await RipstreamInputStream.from(data);
+  try {
+    await new WmfEmfParser().parse(stream, new BodyContentHandler(), new Metadata(), new ParseContext());
+  } finally {
+    await stream.close();
+  }
+}
+
+test("an EMF text record shorter than its fixed part ends the walk instead of reading past the data (tikajs-f2pv)", async () => {
+  const data = new Uint8Array(96);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, 1, true);
+  view.setUint32(4, 88, true);
+  data[40] = 0x20;
+  data.set([0x45, 0x4d, 0x46], 41);
+  // EMR_EXTTEXTOUTW of 8 bytes, at the very end of the data.
+  view.setUint32(88, 84, true);
+  view.setUint32(92, 8, true);
+  await parseBytes(data);
+});
+
+test("a WMF ExtTextOut record cut short does not read past the data (tikajs-f2pv)", async () => {
+  const data = new Uint8Array(48);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, 0x9ac6cdd7, true);
+  // Record: size in words (4 = 8 bytes), then META_EXTTEXTOUT, at the very end of the data.
+  view.setUint32(40, 4, true);
+  view.setUint16(44, 0x0a32, true);
+  await parseBytes(data);
+});
+
+test("a WMF TextOut record cut short does not read past the data (tikajs-f2pv)", async () => {
+  const data = new Uint8Array(46);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, 0x9ac6cdd7, true);
+  view.setUint32(40, 3, true); // 6 bytes: no room for the count
+  view.setUint16(44, 0x0521, true);
+  await parseBytes(data);
+});

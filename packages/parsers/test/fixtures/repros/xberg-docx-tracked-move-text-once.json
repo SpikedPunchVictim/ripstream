@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-u03v. Adapted from xberg (MIT) docx_moved_text.rs. Oracle Tika 4.2.0 /tika: the source of a tracked move (w:moveFrom, written with w:t) and deleted text (w:delText) are not written; the new place (w:moveTo) is, so the moved text appears once.",
+  "tags": [
+    "xberg",
+    "docx",
+    "ooxml"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2Qy07DMBBF93yF5S2KHVgghJJ0wWMJLMoHjOxJYtUvedxS/p5JW7pAhaV9H2d0u9U+eLHDQi7FXt6oVgqMJlkXp15+rF+ae7karrr1V0YS7I3Uy7nW/KA1mRkDkEoZIytjKgEqP8ukM5gNTKhv2/ZOmxQrxtrUpUMO3ROOsPVVPO/5+8gt6EmKx6NxYfUScvbOQGVd76L9RWlOBMXJg4dml+maDVJfJCzK34BT7o2HKM6ieIdSXyGwS3+mYrVNZhs4qf6vuXBnGkdn8Jxf2nJJBol44eDVWQng4s/9+jD38A1QSwMEFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4J1TRN5pWgaEUJMuCKkrKgeIEjeNaB5Kwuv2ZGCgiIHR9u/Pcts97ExuGJPxjkFT1UDQSa+M0wzOw3G9g46v2hPOIpdImkxIpOy4xGDKOewpTXJCK1LlA7oyGX20IpcyahqEvAiNdFPXWxo/DeALk/SKQexVA2R4BvzH9uNoJB68vFp0+ceJr0SRRdSYGdx9VFS921VhgfKWLl7kL1BLAwQUAAAACAAAACFQKkNBC1oBAABtAwAAEQAAAHdvcmQvZG9jdW1lbnQueG1spVNNT8IwGL77K5repXyoMQsbBxmehESn97q+sCVt36YtDP69LQ6nEJTEy7u1e/Z8bR1PtkqSDVhXo07poNenBHSJotarlL4Ws+t7SpznWnCJGlK6A0cn2dW4SQSWawXak8CgXdKktPLeJIy5sgLFXQ8N6PBsiVZxH5Z2xRq0wlgswbkgoCQb9vt3TPFa05bGXkKDy2VdwrQ18EliQXIfQriqNo5mweA7il28mjhsHHuviTO8DEmMBQd2AzRbSEGMDJsJGbOAyuLcv6BwAzOL6pnrFbx4bj1pklqEomi40VwFnogZUPYd3oKGEcTXvsKQitPORva0eMun5CWfF/n8If8hyjqaEwe5Fl/67K9U8bPtXO+Y3FxUyRyaXyop8KSQ0dlCCmwhN/+oo8Aj7a6KUZS6ONgUJHgQJ7EEyJbv9ozNgChg67PHxXxv8bDujIadgxN2+P1Yd1CyD1BLAQIUAxQAAAAIAAAAIVDwt9YL4gAAAJ0BAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgAAAAhUEa3FdmlAAAAGQEAAAsAAAAAAAAAAAAAAIABEwEAAF9yZWxzLy5yZWxzUEsBAhQDFAAAAAgAAAAhUCpDQQtaAQAAbQMAABEAAAAAAAAAAAAAAIAB4QEAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAADAAMAuQAAAGoDAAAAAA==",
+    "filename": "a.docx"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "New place: MOVED SENTENCE"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "GONE"
+    },
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "^(?:(?!MOVED SENTENCE)[\\s\\S])*MOVED SENTENCE(?:(?!MOVED SENTENCE)[\\s\\S])*$"
+    }
+  ]
+}

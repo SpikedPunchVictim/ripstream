@@ -103,6 +103,49 @@ test("reads streams from a compound file", () => {
   assert.equal(stream[4607], 4607 % 251);
 });
 
+test("clamps a header mini-stream cutoff above 4096 (the spec fixes it there)", () => {
+  // A hostile cutoff of 0xFFFFFFFF would route this 4608-byte stream through the mini FAT, where it reads as zeros
+  // (and a multi-GB declared size would allocate that much up front). The cutoff is clamped to 4096.
+  const data = buildCompoundFile();
+  writeUInt32(new DataView(data.buffer), 56, 0xffffffff);
+  const stream = CompoundFile.parse(data).read("WordDocument");
+  assert.equal(stream.byteLength, 4608);
+  assert.equal(stream[252], 1);
+  assert.equal(stream[4607], 4607 % 251);
+});
+
+// Oracle (Tika 4.2.0 /rmeta, a .doc, .ppt and .xls whose main stream's chain was cut by an end-of-chain, a free sector, a sector past the
+// file, or a cut file): POI's DocumentInputStream fails past the chain ("Can't read past the end of the stream", "Block N not found")
+// and Tika records a container-exception with no text. The reader used to give the bytes it had, and the parsers an empty document.
+for (const [name, cut] of [
+  ["an end-of-chain", (data: Uint8Array) => writeUInt32(new DataView(data.buffer), SECTOR + 5 * 4, 0xfffffffe)],
+  ["a free sector", (data: Uint8Array) => writeUInt32(new DataView(data.buffer), SECTOR + 5 * 4, 0xffffffff)],
+  ["a sector past the file", (data: Uint8Array) => writeUInt32(new DataView(data.buffer), SECTOR + 5 * 4, 5000)],
+] as const) {
+  test(`a stream whose chain ends in ${name} before its declared size is truncated, and read says so`, () => {
+    const data = buildCompoundFile();
+    cut(data);
+    const file = CompoundFile.parse(data);
+    assert.throws(() => file.read("WordDocument"), (error: unknown) => error instanceof MalformedDocumentError && /truncated/.test(error.message));
+    const partial = file.readUpTo("WordDocument");
+    assert.equal(partial.truncated, true);
+    assert.equal(partial.bytes.byteLength, 4 * SECTOR);
+  });
+}
+
+test("a file cut inside its stream is truncated, and a stream declared past its chain end is", () => {
+  const data = buildCompoundFile();
+  const cutFile = CompoundFile.parse(data.slice(0, 6 * SECTOR));
+  assert.throws(() => cutFile.read("WordDocument"), MalformedDocumentError);
+  const declared = buildCompoundFile();
+  writeUInt32(new DataView(declared.buffer), 2 * SECTOR + 128 + 120, 4608 + 4096);
+  assert.equal(CompoundFile.parse(declared).readUpTo("WordDocument").truncated, true);
+});
+
+test("a whole stream is not truncated", () => {
+  assert.equal(CompoundFile.parse(buildCompoundFile()).readUpTo("WordDocument").truncated, false);
+});
+
 test("rejects non-compound data and missing streams", () => {
   assert.throws(
     () => CompoundFile.parse(new Uint8Array(64)),

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BodyContentHandler,
+  EncryptedDocumentError,
   LimitExceededError,
   MalformedDocumentError,
   Metadata,
@@ -33,7 +34,13 @@ function biff8String(value: string): number[] {
   return [...u16(value.length), 0, ...new TextEncoder().encode(value)];
 }
 
-function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): Uint8Array {
+function buildWorkbook(
+  extraColumn?: number,
+  extraRows = 1,
+  codepage?: number,
+  filepass?: number[],
+  options: { formatId?: number; date1904?: boolean; value?: number } = {},
+): Uint8Array {
   const sstStrings = ["Alpha", "Beta", "Gamma"];
   const sst = [
     ...u32(sstStrings.length),
@@ -43,9 +50,11 @@ function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): 
 
   const format = record(0x041e, [...u16(164), ...biff8String("yyyy-mm-dd")]);
   const xf0 = record(0x00e0, [...u16(0), ...u16(0), ...new Array(18).fill(0)]);
-  const xf1 = record(0x00e0, [...u16(0), ...u16(164), ...new Array(18).fill(0)]);
+  const xf1 = record(0x00e0, [...u16(0), ...u16(options.formatId ?? 164), ...new Array(18).fill(0)]);
+  const datemode = options.date1904 === true ? record(0x0022, u16(1)) : [];
   const bof = record(0x0809, [...u16(0x0600), ...u16(0x0005), ...new Array(12).fill(0)]);
   const cp = codepage === undefined ? [] : record(0x0042, u16(codepage));
+  const encryption = filepass === undefined ? [] : record(0x002f, filepass);
   const sstRecord = record(0x00fc, sst);
 
   const sheetName = new TextEncoder().encode("Sheet1");
@@ -61,7 +70,7 @@ function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): 
   void boundsheetLength;
 
   const globalLength =
-    bof.length + cp.length + format.length + xf0.length + xf1.length + sstRecord.length + boundsheetPlaceholder.length;
+    bof.length + encryption.length + datemode.length + cp.length + format.length + xf0.length + xf1.length + sstRecord.length + boundsheetPlaceholder.length;
   const boundsheet = record(0x0085, [
     ...u32(globalLength),
     0,
@@ -74,7 +83,7 @@ function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): 
   const sheet = [
     ...bof,
     ...record(0x00fd, [...u16(0), ...u16(0), ...u16(0), ...u32(0)]),
-    ...record(0x0203, [...u16(0), ...u16(1), ...u16(1), ...new Uint8Array(new Float64Array([45292]).buffer)]),
+    ...record(0x0203, [...u16(0), ...u16(1), ...u16(1), ...new Uint8Array(new Float64Array([options.value ?? 45292]).buffer)]),
     ...record(0x0204, [...u16(1), ...u16(0), ...u16(0), ...u16(4), 0, ...new TextEncoder().encode("Text")]),
     ...(extraColumn === undefined
       ? []
@@ -86,6 +95,8 @@ function buildWorkbook(extraColumn?: number, extraRows = 1, codepage?: number): 
 
   const workbook = new Uint8Array([
     ...bof,
+    ...encryption,
+    ...datemode,
     ...cp,
     ...format,
     ...xf0,
@@ -160,6 +171,50 @@ test("extracts BIFF8 shared strings, dates and labels", async () => {
   assert.match(text, /Text/);
 });
 
+// Oracle (Tika 4.2.0 /tika, tikajs-ibvq follow-up, an .xls with one NUMBER cell per builtin number format id): POI writes an xls cell
+// with the format's code, as it does an xlsx one. 1234.5678 reads "5/18/03" under id 14, "13:37" under 20, "1,235" under 3 and
+// "123457%" under 9, and General stays "1234.5678". The CELL values were compared; Tika's table markup is not part of the result.
+for (const [formatId, value, expected] of [
+  [14, 1234.5678, "5/18/03"],
+  [15, 45292.75, "1-Jan-24"],
+  [20, 1234.5678, "13:37"],
+  [22, 1234.5678, "5/18/03 13:37"],
+  [47, 1234.5678, "37:37.9"],
+  [3, 1234.5678, "1,235"],
+  [9, 1234.5678, "123457%"],
+  [0, 1234.5678, "1234.5678"],
+] as const) {
+  test(`an xls cell of number format ${formatId} is written as POI writes it: ${expected}`, async () => {
+    const text = await parse(buildWorkbook(undefined, 1, undefined, undefined, { formatId, value }));
+    assert.ok(text.split("\t").includes(expected) || text.includes(`\t${expected}\t`) || text.includes(`\t${expected}\n`), text);
+  });
+}
+
+// Oracle (Tika 4.2.0 /tika, an .xls with the DATEMODE record set to 1904): serials 0, 1 and 1462 under m/d/yy read "12/31/99",
+// "1/1/00" and "1/1/04", the 1900 system. The flag is not applied (the xlsx path reads it the same way).
+test("an xls date of a 1904-based workbook is read in the 1900 system, as Tika does", async () => {
+  const text = await parse(buildWorkbook(undefined, 1, undefined, undefined, { formatId: 14, value: 1462, date1904: true }));
+  assert.match(text, /1\/1\/04/);
+});
+
+// Oracle (Tika 4.2.0 /rmeta, an .xls of 150 rows whose Workbook chain was ended early, by an end-of-chain, a free sector, a sector past
+// the file or a cut file): HSSF fails reading the sector it does not have, a container-exception with no text. With the declared size
+// 4096 past the chain but every sheet whole, the whole text. The check is on the last sheet's EOF, not on the stream size.
+const WORKBOOK_FAT_ENTRY = 512 + 2 * 4;
+
+test("an xls whose Workbook chain ends inside its last sheet is truncated, as Tika's read fails", async () => {
+  const data = buildWorkbook(1, 100);
+  new DataView(data.buffer).setUint32(WORKBOOK_FAT_ENTRY, 0xfffffffe, true);
+  await assert.rejects(parse(data), (error: unknown) => error instanceof MalformedDocumentError && /truncated/.test(error.message));
+});
+
+test("an xls whose Workbook size is declared past its chain, with every sheet whole, is read", async () => {
+  const data = buildWorkbook();
+  const view = new DataView(data.buffer);
+  view.setUint32(2 * SECTOR + 128 + 120, view.getUint32(2 * SECTOR + 128 + 120, true) + 4096, true);
+  assert.match(await parse(data), /Alpha/);
+});
+
 test("reads 8-bit strings when the CODEPAGE record says UTF-16 (every Excel 97+ file)", async () => {
   const text = await parse(buildWorkbook(undefined, 1, 1200));
   assert.match(text, /Sheet1/);
@@ -181,3 +236,16 @@ test("rejects cells beyond the column limit", async () => {
 test("rejects sparse sheets whose padded cell total is too large", async () => {
   await assert.rejects(parse(buildWorkbook(16_383, 100)), LimitExceededError);
 });
+
+// Oracle (Tika 4.2.0 /rmeta, a workbook with a FILEPASS record, RC4 or XOR): EncryptedDocumentException "Unable to process: document is
+// encrypted" and no text. The enciphered records used to be read as cells.
+for (const [kind, filepass] of [["RC4", [...u16(1), ...u16(1), ...u16(1), ...new Array(48).fill(7)]], ["XOR", [...u16(0), ...u16(0x1234), ...u16(0x5678)]]] as const) {
+  test(`an .xls with a ${kind} FILEPASS record is an encrypted document`, async () => {
+    const stream = await RipstreamInputStream.from(buildWorkbook(undefined, 1, undefined, [...filepass]));
+    await assert.rejects(
+      new ExcelBinaryParser().parse(stream, new BodyContentHandler(), new Metadata(), new ParseContext()),
+      (error) => error instanceof EncryptedDocumentError && /document is encrypted/.test(error.message),
+    );
+    await stream.close();
+  });
+}

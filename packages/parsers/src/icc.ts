@@ -76,13 +76,16 @@ function findDescription(data: Uint8Array, view: DataView): string | null {
       return stripTrailingNuls(ascii(data, offset + 12, Math.min(length, size - 12))).trim();
     }
     if (type === "mluc") {
+      if (offset + 28 > data.length) return null;
       const records = view.getUint32(offset + 8, false);
       if (records === 0) return null;
       const length = view.getUint32(offset + 20, false);
       const position = view.getUint32(offset + 24, false);
+      // The string lies inside the tag, and so inside the profile: a declared length is not trusted.
+      const end = Math.min(offset + position + length, offset + size, data.length);
       let result = "";
-      for (let i = 0; i + 1 < length; i += 2) {
-        result += String.fromCharCode(view.getUint16(offset + position + i, false));
+      for (let at = offset + position; at + 1 < end; at += 2) {
+        result += String.fromCharCode(view.getUint16(at, false));
       }
       return result.trim();
     }

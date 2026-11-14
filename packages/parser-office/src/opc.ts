@@ -22,6 +22,8 @@ const ZIP64_LOCATOR = 0x07064b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
 
+const INFLATE_SLICE_BYTES = 16 * 1024;
+
 /** Central-directory OPC reader; decompresses only requested parts. */
 export class OpcPackage {
   readonly #handle: FileHandle;
@@ -123,7 +125,12 @@ export class OpcPackage {
         chunks.push(chunk);
         produced += chunk.byteLength;
       });
-      inflate.push(compressed, true);
+      // Fed in slices: a pushed chunk is expanded in full before its callback can run, so the slice bounds how far the
+      // output overshoots a budget (deflate expands at most about 1032x).
+      for (let offset = 0; offset < compressed.byteLength || offset === 0; offset += INFLATE_SLICE_BYTES) {
+        const end = Math.min(compressed.byteLength, offset + INFLATE_SLICE_BYTES);
+        inflate.push(compressed.subarray(offset, end), end === compressed.byteLength);
+      }
     } catch (error) {
       if (error instanceof LimitExceededError) throw error;
       throw new MalformedDocumentError(`Corrupt ZIP member ${name}: invalid deflate data`, { cause: error });

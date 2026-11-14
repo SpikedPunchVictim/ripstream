@@ -138,7 +138,7 @@ export function wants(filter: StatusFilter, result: PipesResult): boolean {
 export function assertValidFilter(filter: StatusFilter): void {
   for (const [name, list] of [["includes", filter.includes], ["excludes", filter.excludes]] as const) {
     for (const status of list ?? []) {
-      if (!(status in PIPES_RESULT_STATUSES)) throw new RangeError(`${name} names no result status: ${String(status)}`);
+      if (!Object.hasOwn(PIPES_RESULT_STATUSES, status)) throw new RangeError(`${name} names no result status: ${String(status)}`);
     }
   }
   if ((filter.includes?.length ?? 0) > 0 && (filter.excludes?.length ?? 0) > 0) {

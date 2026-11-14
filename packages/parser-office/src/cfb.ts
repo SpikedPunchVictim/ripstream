@@ -10,6 +10,8 @@ const TYPE_STREAM = 2;
 const TYPE_ROOT = 5;
 const MAX_ENTRIES = 100_000;
 const MAX_TREE_DEPTH = 4096;
+/** Streams smaller than this live in the mini stream. The spec fixes it at 4096; a header value above that is clamped to it. */
+const MINI_STREAM_CUTOFF = 4096;
 
 export interface CompoundEntry {
   readonly path: string;
@@ -50,7 +52,8 @@ export class CompoundFile {
     }
     this.#sectorSize = 1 << sectorShift;
     this.#miniSectorSize = 1 << miniSectorShift;
-    this.#miniCutoff = readUInt32(data, 56);
+    // A larger cutoff would send big streams through the mini FAT and size their buffer from the directory's claim.
+    this.#miniCutoff = Math.min(readUInt32(data, 56), MINI_STREAM_CUTOFF);
 
     const numFatSectors = readUInt32(data, 44);
     const firstDirectorySector = readUInt32(data, 48);
@@ -70,7 +73,7 @@ export class CompoundFile {
       firstDirectorySector,
       this.#fat,
       Infinity,
-    );
+    ).bytes;
     const directoryEntries = this.#parseDirectory(directory);
 
     const root = directoryEntries.find((entry) => entry.type === TYPE_ROOT);
@@ -84,7 +87,7 @@ export class CompoundFile {
         firstMiniFatSector,
         this.#fat,
         numMiniFatSectors * this.#sectorSize,
-      );
+      ).bytes;
       this.#miniFat = new Uint32Array(Math.floor(bytes.byteLength / 4));
       for (let index = 0; index < this.#miniFat.length; index++) {
         this.#miniFat[index] = readUInt32(bytes, index * 4);
@@ -156,18 +159,41 @@ export class CompoundFile {
     return this.#byPath.get(path);
   }
 
-  /** Reads a stream by path. Throws when the stream does not exist. */
+  /**
+   * Reads a stream by path. Throws when the stream does not exist, and when its sector chain ends before the size the directory
+   * declares. Oracle (Tika 4.2.0 /rmeta, a .doc, .ppt and .xls whose WordDocument, PowerPoint Document and Workbook chains were cut
+   * short by an end-of-chain, a free sector or a sector past the file, or whose file was cut): POI's DocumentInputStream reads the
+   * declared size and fails past the chain (NoSuchElementException "Can't read past the end of the stream", or "Block N not
+   * found"), and OfficeParser records a container-exception with no text. Before, the short bytes were parsed and gave an empty
+   * document with no failure (tikajs-ibvq follow-up).
+   */
   read(path: string): Uint8Array {
+    const { bytes, truncated } = this.readUpTo(path);
+    if (truncated) {
+      const size = this.#byPath.get(path)!.size;
+      throw new MalformedDocumentError(
+        `Compound stream ${path} is truncated: its sector chain holds ${bytes.byteLength} of the ${size} bytes its directory entry gives it`,
+      );
+    }
+    return bytes;
+  }
+
+  /**
+   * The bytes of a stream as far as its chain goes, and whether they are fewer than it declares. For a reader that, like POI's
+   * HSSF event stream, fails only when it needs the bytes that are missing.
+   */
+  readUpTo(path: string): { readonly bytes: Uint8Array; readonly truncated: boolean } {
     const entry = this.#byPath.get(path);
     if (entry === undefined) {
       throw new MalformedDocumentError(`Missing compound stream: ${path}`);
     }
-    if (entry.size === 0) return new Uint8Array(0);
+    if (entry.size === 0) return { bytes: new Uint8Array(0), truncated: false };
     if (entry.size < this.#miniCutoff) {
       return this.#readMiniStream(entry.startSector, entry.size);
     }
-    const data = this.#readChain(entry.startSector, this.#fat, entry.size);
-    return data.subarray(0, entry.size);
+    const { bytes, ended } = this.#readChain(entry.startSector, this.#fat, entry.size);
+    // `ended` is the chain running out; reaching the size, or the read cap, is not.
+    return { bytes: bytes.subarray(0, entry.size), truncated: ended && bytes.byteLength < entry.size };
   }
 
   #difatSectors(
@@ -221,8 +247,8 @@ export class CompoundFile {
     return fat;
   }
 
-  #readChain(start: number, fat: Uint32Array, length: number): Uint8Array {
-    if (start > MAX_REGULAR_SECTOR) return new Uint8Array(0);
+  #readChain(start: number, fat: Uint32Array, length: number): { bytes: Uint8Array; ended: boolean } {
+    if (start > MAX_REGULAR_SECTOR) return { bytes: new Uint8Array(0), ended: true };
     const limit = Math.min(
       Number.isFinite(length) ? length : Infinity,
       MAX_ENTRIES * this.#sectorSize,
@@ -253,17 +279,17 @@ export class CompoundFile {
       result.set(piece, position);
       position += piece.byteLength;
     }
-    return result;
+    return { bytes: result, ended: total < limit };
   }
 
   #miniContainer: Uint8Array | undefined;
 
-  #readMiniStream(start: number, size: number): Uint8Array {
+  #readMiniStream(start: number, size: number): { bytes: Uint8Array; truncated: boolean } {
     this.#miniContainer ??= this.#readChain(
       this.#rootStart,
       this.#fat,
       this.#rootSize,
-    );
+    ).bytes;
     const root = this.#miniContainer;
     const result = new Uint8Array(size);
     let written = 0;
@@ -283,7 +309,7 @@ export class CompoundFile {
       if (sector >= this.#miniFat.length) break;
       sector = this.#miniFat[sector]!;
     }
-    return result;
+    return { bytes: result.subarray(0, written), truncated: written < size };
   }
 
   #offset(sector: number): number {

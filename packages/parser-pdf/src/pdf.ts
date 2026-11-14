@@ -1,4 +1,4 @@
-import { open, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import {
   AbortError,
   EncryptedDocumentError,
@@ -10,6 +10,7 @@ import {
   MissingDependencyError,
   ParseTimeoutError,
   TIKA_KEYS,
+  tikaDateMetadataString,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
@@ -17,6 +18,7 @@ import {
   RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { InlineChannel } from "./pdf-channel.ts";
+import { extractXmp } from "./xmp.ts";
 import {
   PdfSession,
   type PdfAnnotation,
@@ -124,8 +126,9 @@ export class PdfParser implements Parser {
         throw new MalformedDocumentError("PDF session returned no document");
       }
 
-      applyInfo(metadata, ready.info);
+      // Tika reads the XMP packet first, then the Info dictionary, which fills what the packet left empty.
       applyXmp(metadata, ready.xmp);
+      applyInfo(metadata, ready.info);
       metadata.set("xmpTPg:NPages", ready.numPages);
 
       const xhtml = new XHTMLContentHandler(handler, metadata);
@@ -141,7 +144,6 @@ export class PdfParser implements Parser {
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
       const pages = Math.min(ready.numPages, MAX_PAGES);
-      let totalText = 0;
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
         channel.post({ type: "page", index });
@@ -164,8 +166,7 @@ export class PdfParser implements Parser {
           if (line.length > 0) await xhtml.characters(line);
           await xhtml.endElement("p");
         }
-        totalText += characters;
-        metadata.add("pdf:charsPerPage", String(characters));
+        metadata.add("pdf:chars-per-page", String(characters));
         if (this.#extractAnnotationText) {
           let fieldIndex = 0;
           for (const annotation of message.annotations) {
@@ -180,11 +181,8 @@ export class PdfParser implements Parser {
         }
       }
 
-      // A PDF cut off before its %%EOF that yields no usable text is truncated, not an empty document: Tika's
-      // PDFBox reports the damage, and a clean empty result would hide it.
-      if (totalText === 0 && !(await hasEofMarker(path))) {
-        throw new MalformedDocumentError("PDF is truncated: missing %%EOF");
-      }
+      // A PDF cut off before its %%EOF, or with padding after it, that yields no text is an empty document, as in Tika 4.2.0:
+      // PDFBox answers 200 with empty text for such files (oracle: a text-less PDF cut at 20-60% of its length, or padded with 3 KB after %%EOF; bughunt B32).
 
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
 
@@ -295,8 +293,9 @@ function recordAnnotation(
   types: Set<string>,
   subtypes: Set<string>,
 ): void {
-  if (types.size < 100) types.add(annotation.name ?? "");
-  if (subtypes.size < 100) subtypes.add(annotation.subtype ?? "");
+  // Tika writes the annotation's /NM, and "null" when it has none, which is nearly always (oracle, Tika 4.2.0).
+  if (types.size < 100) types.add(annotation.name ?? "null");
+  if (subtypes.size < 100 && annotation.subtype !== undefined && annotation.subtype !== "") subtypes.add(annotation.subtype);
 }
 
 async function renderAnnotation(
@@ -350,104 +349,109 @@ async function renderAnnotation(
   }
 }
 
-/** Whether the last 1 KiB of the file carries the %%EOF trailer every complete PDF ends with. */
-async function hasEofMarker(path: string): Promise<boolean> {
-  const handle = await open(path, "r");
-  try {
-    const { size } = await handle.stat();
-    const length = Math.min(1024, size);
-    const buffer = new Uint8Array(length);
-    await handle.read(buffer, 0, length, size - length);
-    return new TextDecoder("latin1").decode(buffer).includes("%%EOF");
-  } finally {
-    await handle.close();
-  }
-}
-
+/**
+ * The Info dictionary as Tika 4.2.0's PDMetadataExtractor writes it (checked against a running server): every entry under
+ * `pdf:docinfo:*`, and the canonical keys from it only where the XMP packet has not already set them. The dates are the
+ * exception, the Info dictionary's replacing the packet's. Keywords and subject are added to dc:subject, which has no
+ * description.
+ */
 function applyInfo(metadata: Metadata, info: unknown): void {
   if (typeof info !== "object" || info === null) return;
   const values = info as Record<string, unknown>;
-  assign(metadata, "dc:title", values.Title);
-  assign(metadata, "dc:creator", values.Author);
-  assign(metadata, "dc:description", values.Subject);
-  assign(metadata, "pdf:Keywords", values.Keywords);
-  assign(metadata, "xmp:CreatorTool", values.Creator);
-  assign(metadata, "pdf:Producer", values.Producer);
-  assignDate(metadata, "dcterms:created", values.CreationDate);
-  assignDate(metadata, "dcterms:modified", values.ModDate);
-  assign(metadata, "pdf:PDFVersion", values.PDFFormatVersion);
-  assign(metadata, "pdf:Trapped", values.Trapped);
-  if (values.Encrypted === true) metadata.set("pdf:encrypted", "true");
-}
+  const text = (value: unknown): string | undefined => {
+    const raw = typeof value === "object" && value !== null && "name" in value ? (value as { name: unknown }).name : value;
+    return typeof raw === "string" && raw.trim().length > 0 ? raw : undefined;
+  };
+  const title = text(values.Title);
+  const author = text(values.Author);
+  const keywords = text(values.Keywords);
+  const subject = text(values.Subject);
+  const creator = text(values.Creator);
+  const producer = text(values.Producer);
+  const trapped = text(values.Trapped);
+  // A date that is not one is dropped, from the canonical key and from pdf:docinfo alike.
+  const created = text(values.CreationDate) === undefined ? undefined : pdfDate(text(values.CreationDate)!);
+  const modified = text(values.ModDate) === undefined ? undefined : pdfDate(text(values.ModDate)!);
 
-function applyXmp(metadata: Metadata, xmp: Record<string, unknown>): void {
-  if (xmp === null || typeof xmp !== "object") return;
-  for (const [rawKey, rawValue] of Object.entries(xmp)) {
-    const key = rawKey.trim();
-    if (key.length === 0) continue;
-    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
-    for (const value of values) {
-      if (typeof value !== "string" || value.length === 0) continue;
-      const mapped = XMP_KEYS[key];
-      if (mapped === undefined) {
-        metadata.add(key, value);
-      } else if (mapped.endsWith("Date")) {
-        metadata.set(mapped, pdfDate(value) ?? value);
-      } else {
-        metadata.add(mapped, value);
-      }
+  const ifAbsent = (key: string, value: string | undefined): void => {
+    if (value !== undefined && metadata.get(key) === null) metadata.set(key, value);
+  };
+  ifAbsent("dc:title", title);
+  ifAbsent("dc:creator", author);
+  ifAbsent("xmp:CreatorTool", creator);
+  ifAbsent("pdf:producer", producer);
+  ifAbsent("pdf:trapped", trapped);
+  if (keywords !== undefined) metadata.add("dc:subject", keywords);
+  if (subject !== undefined) metadata.add("dc:subject", subject);
+  if (created !== undefined) metadata.set("dcterms:created", created);
+  if (modified !== undefined) metadata.set("dcterms:modified", modified);
+
+  const docinfo = (name: string, value: string | undefined): void => {
+    if (value !== undefined) metadata.set(`pdf:docinfo:${name}`, value);
+  };
+  docinfo("title", title);
+  docinfo("creator", author);
+  docinfo("keywords", keywords);
+  docinfo("subject", subject);
+  docinfo("creator-tool", creator);
+  docinfo("producer", producer);
+  docinfo("trapped", trapped);
+  docinfo("created", created);
+  docinfo("modified", modified);
+  const custom = values.Custom;
+  if (typeof custom === "object" && custom !== null) {
+    for (const [name, value] of Object.entries(custom as Record<string, unknown>)) {
+      const entry = text(value);
+      if (entry !== undefined) metadata.set(`pdf:docinfo:custom:${name}`, entry);
     }
   }
-}
 
-const XMP_KEYS: Record<string, string> = {
-  "dc:title": "dc:title",
-  "dc:creator": "dc:creator",
-  "dc:description": "dc:description",
-  "dc:language": "dc:language",
-  "dc:subject": "dc:subject",
-  "pdf:Keywords": "pdf:Keywords",
-  "pdf:Producer": "pdf:Producer",
-  "xmp:CreatorTool": "xmp:CreatorTool",
-  "xmp:CreateDate": "dcterms:created",
-  "xmp:ModifyDate": "dcterms:modified",
-  "xmp:MetadataDate": "xmp:MetadataDate",
-  "xmp:Label": "xmp:Label",
-};
-
-function assignDate(metadata: Metadata, key: string, value: unknown): void {
-  if (typeof value === "string" && value.length > 0) {
-    metadata.set(key, pdfDate(value) ?? value);
+  const version = text(values.PDFFormatVersion);
+  if (version !== undefined) {
+    metadata.set("pdf:pdf-version", version);
+    metadata.set("dc:format", `application/pdf; version=${version}`);
   }
+  metadata.set("pdf:encrypted", values.Encrypted === true ? "true" : "false");
+  metadata.set("pdf:has-xfa", values.IsXFAPresent === true ? "true" : "false");
+  metadata.set("pdf:has-collection", values.IsCollectionPresent === true ? "true" : "false");
 }
 
-/** Converts a PDF date string (D:YYYYMMDDHHmmSSOHH'mm') to ISO 8601. */
+/** The XMP packet, when there is one. A packet that is not well-formed XML is noted and contributes nothing, as in Tika. */
+function applyXmp(metadata: Metadata, xmp: string): void {
+  if (xmp.length === 0) {
+    metadata.set("pdf:has-xmp", "false");
+    return;
+  }
+  metadata.set("pdf:has-xmp", "true");
+  const failure = extractXmp(xmp, metadata);
+  if (failure !== undefined) metadata.add("tk:exception:warn", `${MalformedDocumentError.name}: ${failure.message}`);
+}
+
+const PDF_DATE =
+  /^\s*(?:D:)?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:\.\d+)?\s*(?:[Zz]|([+-])(\d{2})(?:'?(\d{2})'?)?)?\s*$/;
+
+/**
+ * Converts a PDF date string (D:YYYYMMDDHHmmSSOHH'mm') to ISO 8601 in UTC with whole seconds, which is what Tika writes.
+ * Checked against Tika 4.2.0: the D: prefix is optional, an ISO 8601 string is taken too, a date that does not exist
+ * (February 30th, hour 24, month 13, year 0) or has text after it is no date at all, and then Tika writes no key.
+ */
 export function pdfDate(value: string): string | undefined {
-  const match =
-    /^\s*D?:?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?\s*(?:([Zz+\-])(\d{2})'?(\d{2})?)?/.exec(
-      value,
-    );
-  if (match === null) return undefined;
-  const [, year, month, day, hour, minute, second, sign, offsetHours, offsetMinutes] =
-    match;
-  const utc = Date.UTC(
-    Number(year),
-    Number(month ?? "1") - 1,
-    Number(day ?? "1"),
-    Number(hour ?? "0"),
-    Number(minute ?? "0"),
-    Number(second ?? "0"),
-  );
-  if (!Number.isFinite(utc)) return undefined;
-  if (sign === "+" || sign === "-") {
-    const offset =
-      (Number(offsetHours ?? "0") * 60 + Number(offsetMinutes ?? "0")) * 60_000;
-    return new Date(utc + (sign === "+" ? -offset : offset)).toISOString();
+  const match = PDF_DATE.exec(value);
+  if (match === null) return tikaDateMetadataString(value) ?? undefined;
+  const [, year, month, day, hour, minute, second, sign, offsetHours, offsetMinutes] = match;
+  const parts = [Number(year), Number(month ?? "1"), Number(day ?? "1"), Number(hour ?? "0"), Number(minute ?? "0"), Number(second ?? "0")] as const;
+  const [y, mo, d, h, mi, s] = parts;
+  // Date.UTC reads the years 0-99 as 1900-1999, so the year is set apart.
+  const date = new Date(0);
+  date.setUTCFullYear(y, mo - 1, d);
+  date.setUTCHours(h, mi, s, 0);
+  if (y < 1 || mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59 || s > 59 || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) {
+    return undefined;
   }
-  if (sign === "Z" || sign === "z") return new Date(utc).toISOString();
-  return new Date(utc).toISOString();
-}
-
-function assign(metadata: Metadata, key: string, value: unknown): void {
-  if (typeof value === "string" && value.length > 0) metadata.set(key, value);
+  let time = date.getTime();
+  if (sign === "+" || sign === "-") {
+    const offset = (Number(offsetHours ?? "0") * 60 + Number(offsetMinutes ?? "0")) * 60_000;
+    time += sign === "+" ? -offset : offset;
+  }
+  return new Date(time).toISOString().replace(".000Z", "Z");
 }

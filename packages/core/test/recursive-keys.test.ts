@@ -103,3 +103,13 @@ test("an embedded document that fails notes it on its own record and the parse g
   assert.equal(records[0]?.metadata.get("tk:exception:container-exception"), null);
   assert.ok(records.some((record) => record.metadata.get("tk:resource-name") === "c1"), "the sibling is still parsed");
 });
+
+test("an embedded path is below the container whatever slashes the container's name holds, a URL's for one", async () => {
+  const records = await new Ripstream({ detector, parser: containerParser() }).parseRecursive(new Uint8Array([9, 9]), {
+    filename: "https://host/dir/box.bin",
+  });
+  assert.deepEqual(
+    records.slice(1).map((record) => record.metadata.get("tk:embedded-resource-path")),
+    ["/c0", "/c0/inner.txt", "/c1"],
+  );
+});

@@ -1,4 +1,5 @@
 import { inflateSync } from "node:zlib";
+import { nextOccurrence } from "./pdf-preflight.ts";
 
 /**
  * Last-resort recovery for PDFs whose trailer or xref stream is missing or
@@ -59,11 +60,15 @@ function inlineObjectStreams(text: string): string {
   for (const match of text.matchAll(OBJECT)) defined.add(match[1]!);
 
   let budget = MAX_RECOVERED_BYTES;
+  let emitted = 0;
   let out = "";
+  const nextStream = nextOccurrence(text, "stream");
+  const nextEndobj = nextOccurrence(text, "endobj");
+  const nextEndstream = nextOccurrence(text, "endstream");
   for (const match of text.matchAll(OBJECT)) {
     const start = match.index + match[0].length;
-    const streamAt = text.indexOf("stream", start);
-    const endobj = text.indexOf("endobj", start);
+    const streamAt = nextStream(start);
+    const endobj = nextEndobj(start);
     if (streamAt === -1 || (endobj !== -1 && endobj < streamAt)) continue;
     const dictionary = text.slice(start, streamAt);
     if (!/\/Type\s*\/ObjStm\b/.test(dictionary) || !/\/FlateDecode\b/.test(dictionary)) continue;
@@ -75,7 +80,7 @@ function inlineObjectStreams(text: string): string {
     let dataStart = streamAt + "stream".length;
     if (text[dataStart] === "\r") dataStart++;
     if (text[dataStart] === "\n") dataStart++;
-    const dataEnd = text.indexOf("endstream", dataStart);
+    const dataEnd = nextEndstream(dataStart);
     if (dataEnd === -1) continue;
 
     let decoded: string;
@@ -96,7 +101,14 @@ function inlineObjectStreams(text: string): string {
       if (!Number.isInteger(num) || !Number.isInteger(offset) || defined.has(String(num))) continue;
       const next = 2 * i + 3 < header.length ? header[2 * i + 3]! : decoded.length - first;
       defined.add(String(num));
-      out += `\n${num} 0 obj\n${decoded.slice(first + offset, first + next)}\nendobj\n`;
+      const member = decoded.slice(first + offset, first + next);
+      // Members may overlap (each can be the whole stream), so what is written is charged too, not just what inflated.
+      emitted += member.length;
+      if (emitted > MAX_RECOVERED_BYTES) {
+        budget = 0;
+        break;
+      }
+      out += `\n${num} 0 obj\n${member}\nendobj\n`;
     }
     if (budget <= 0) break;
   }

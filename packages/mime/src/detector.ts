@@ -192,7 +192,7 @@ export class DefaultDetector implements Detector {
     _ctx: ParseContext,
   ): Promise<MediaType> {
     const name = resourceName(metadata);
-    const byName = name === null ? null : this.mimeTypes.forName(name);
+    const byName = name === null ? null : this.mimeTypes.getMimeType(name);
 
     if (this.trustContentTypeHeader) {
       const header = metadata.get("Content-Type");
@@ -239,8 +239,7 @@ export class DefaultDetector implements Detector {
 
     // No magic: Tika sniffs for text, and the name hint can only specialise that (a `.csv` of text is CSV, a `.docx`
     // of text is plain text; anything specialises octet-stream, so a name settles binary content).
-    const sniffed =
-      prefix.length === 0 || detectEncoding(prefix).binary ? MediaType.OCTET_STREAM : MediaType.TEXT_PLAIN;
+    const sniffed = prefix.length === 0 || isBinaryPrefix(prefix) ? MediaType.OCTET_STREAM : MediaType.TEXT_PLAIN;
     return applyHint(registry, [sniffed], byName)[0] ?? sniffed;
   }
 
@@ -256,6 +255,16 @@ export class DefaultDetector implements Detector {
     if (!matched.equals(MediaType.APPLICATION_XML)) return matched;
     return this.magic.matches(prefix, MediaType.TEXT_HTML) ? MediaType.TEXT_HTML : MediaType.TEXT_PLAIN;
   }
+}
+
+/**
+ * Tika's text sniff knows the UTF-8 and UTF-16 byte order marks only. A UTF-32LE mark (FF FE 00 00) passes as UTF-16LE,
+ * but a UTF-32BE mark (00 00 FE FF) starts with NUL bytes and the data is binary: a UTF-32BE text with no name is
+ * application/octet-stream (measured against Tika 4.2.0; a `.txt` name still makes it text/plain and it is decoded).
+ */
+function isBinaryPrefix(prefix: Uint8Array): boolean {
+  if (prefix.length >= 4 && prefix[0] === 0 && prefix[1] === 0 && prefix[2] === 0xfe && prefix[3] === 0xff) return true;
+  return detectEncoding(prefix).binary;
 }
 
 /**
@@ -282,16 +291,17 @@ function applyHint(
 }
 
 function resourceName(metadata: Metadata): string | null {
-  const explicit =
-    metadata.get("tk:resource-name") ??
-    metadata.get("Content-Disposition");
-  if (explicit === null) return null;
+  const name = metadata.get("tk:resource-name");
+  // A caller may have put a whole Content-Disposition value here: it has a `filename=` parameter. A name that only has the
+  // letters "filename" in it (`filenames.csv`) is a name.
+  if (name !== null) return /(^|;)\s*filename\*?\s*=/i.test(name) ? fromDisposition(name) : basename(name);
+  const disposition = metadata.get("Content-Disposition");
+  return disposition === null ? null : fromDisposition(disposition);
+}
 
-  if (explicit.toLowerCase().includes("filename")) {
-    const filename = filenameFromContentDisposition(explicit);
-    return filename === null ? null : basename(filename);
-  }
-  return basename(explicit);
+function fromDisposition(header: string): string | null {
+  const filename = filenameFromContentDisposition(header);
+  return filename === null ? null : basename(filename);
 }
 
 function basename(name: string): string {

@@ -57,34 +57,55 @@ export class FeedParser implements Parser {
         cause: error,
       });
     });
+    // The feed's own title is the title directly under channel/feed, once: an <image><title> follows it and is not it.
+    const open: string[] = [];
+    let channelTitle: string | null = null;
+    let channelTitleSet = false;
     parser.on("opentag", (tag) => {
       const name = local(tag.name);
+      open.push(name);
+      const attributes = tag.attributes as Record<string, string>;
       if (name === "item" || name === "entry") {
         entryDepth++;
         current = emptyEntry();
+      } else if (name === "link" && attributes.href !== undefined) {
+        // Atom: the address is an attribute. Only the page itself counts, not rel="self" or rel="enclosure".
+        const rel = attributes.rel;
+        if (rel === undefined || rel === "alternate") {
+          if (entryDepth > 0) {
+            if (current.link.length === 0) current.link = attributes.href;
+          } else if (metadata.get("feed:link") === null) {
+            metadata.set("feed:link", attributes.href);
+          }
+        }
       } else if (FIELD_NAMES.has(name)) {
         field = name;
-      } else if (name === "link") {
-        const href = (tag.attributes as Record<string, string>).href;
-        if (href !== undefined) {
-          if (entryDepth > 0) current.link = href;
-          else metadata.set("feed:link", href);
+        if (name === "title" && entryDepth === 0 && !channelTitleSet && FEED_PARENTS.has(open[open.length - 2] ?? "")) {
+          channelTitle = "";
         }
       }
     });
-    parser.on("text", (text) => {
+    const onText = (text: string): void => {
       if (field === null) return;
       if (entryDepth > 0) {
         if (field === "title") current.title += text;
         else if (field === "link") current.link += text;
         else current.body += text;
-      } else if (field === "title") {
-        metadata.set("dc:title", text.trim());
+      } else if (field === "title" && channelTitle !== null) {
+        channelTitle += text;
       }
-    });
+    };
+    parser.on("text", onText);
+    parser.on("cdata", onText);
     parser.on("closetag", (tag) => {
       const name = local(tag.name);
+      open.pop();
       if (FIELD_NAMES.has(name)) field = null;
+      if (name === "title" && channelTitle !== null) {
+        metadata.set("dc:title", channelTitle.trim());
+        channelTitle = null;
+        channelTitleSet = true;
+      }
       if ((name === "item" || name === "entry") && entryDepth > 0) {
         entryDepth--;
         entries.push(current);
@@ -105,6 +126,7 @@ interface FeedEntry {
   body: string;
 }
 
+const FEED_PARENTS = new Set(["channel", "feed"]);
 const FIELD_NAMES = new Set(["title", "link", "description", "content", "summary"]);
 
 function emptyEntry(): FeedEntry {

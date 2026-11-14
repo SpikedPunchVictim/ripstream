@@ -641,7 +641,11 @@ test("the bearer-token authenticator accepts only the exact token", () => {
   const request = (authorization?: string): IncomingMessage => ({ headers: authorization === undefined ? {} : { authorization } }) as IncomingMessage;
   assert.equal(authenticate(request("Bearer s3cret")), true);
   assert.equal(authenticate(request("Bearer wrong")), false);
-  assert.equal(authenticate(request("bearer s3cret")), false);
+  // The auth scheme is case-insensitive (RFC 9110 section 11.1, formerly RFC 7235 section 2.1); the token is not.
+  assert.equal(authenticate(request("bearer s3cret")), true);
+  assert.equal(authenticate(request("BEARER s3cret")), true);
+  assert.equal(authenticate(request("Bearer S3CRET")), false);
+  assert.equal(authenticate(request("Bearer")), false);
   assert.equal(authenticate(request("s3cret")), false);
   assert.equal(authenticate(request()), false);
   assert.throws(() => bearerTokenAuthenticator(""), RangeError);

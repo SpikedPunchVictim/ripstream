@@ -1,0 +1,19 @@
+{
+  "description": "(tikajs-y2cl) Adapted from xberg (MIT) crates/xberg/tests/xlsx_date_time_cells.rs: a [h]:mm duration of 1.5 days reads 36:00, not a time of day (expectation follows POI DataFormatter elapsed-time formats; not verified against a Tika run). Input is xberg tests/fixtures/office/date_time_cells.xlsx (see ../xberg/README.txt).",
+  "tags": [
+    "xberg",
+    "xlsx",
+    "ooxml"
+  ],
+  "input": {
+    "file": "../xberg/office/files/date_time_cells.xlsx",
+    "filename": "date_time_cells.xlsx"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "duration hours\\t36:00\\n"
+    }
+  ]
+}

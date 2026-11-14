@@ -83,3 +83,60 @@ test("aborting a pending web stream read rejects instead of ending cleanly", asy
   setTimeout(() => controller.abort(new Error("stop")), 10);
   await assert.rejects(pending, /stop/);
 });
+
+test("aborting while a Node Readable has nothing to give rejects, and destroys the stream", async () => {
+  const controller = new AbortController();
+  const stream = new Readable({ read() {} });
+  stream.push(Buffer.from("first"));
+  const pending = collect(stream, { signal: controller.signal });
+  setTimeout(() => controller.abort(new Error("stop")), 20);
+  await assert.rejects(
+    Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error("still waiting")), 2000))]),
+    /stop/,
+  );
+  assert.equal(stream.destroyed, true);
+});
+
+test("aborting while an async iterable never yields rejects, and returns the iterator", async () => {
+  const controller = new AbortController();
+  let returned = false;
+  const stalled: AsyncIterable<Uint8Array> = {
+    [Symbol.asyncIterator]: () => ({
+      next: (() => {
+        let calls = 0;
+        return (): Promise<IteratorResult<Uint8Array>> =>
+          ++calls === 1 ? Promise.resolve({ done: false, value: new Uint8Array([1]) }) : new Promise(() => undefined);
+      })(),
+      return: (): Promise<IteratorResult<Uint8Array>> => {
+        returned = true;
+        return Promise.resolve({ done: true, value: undefined });
+      },
+    }),
+  };
+  const pending = collect(stalled, { signal: controller.signal });
+  setTimeout(() => controller.abort(new Error("stop")), 20);
+  await assert.rejects(
+    Promise.race([pending, new Promise((_, reject) => setTimeout(() => reject(new Error("still waiting")), 2000))]),
+    /stop/,
+  );
+  assert.equal(returned, true);
+});
+
+test("an async iterable that finishes is not returned early, and its chunks arrive in order", async () => {
+  assert.deepEqual(await collect(chunks(), { signal: new AbortController().signal }), new Uint8Array([1, 2, 3]));
+});
+
+test("a web stream the consumer stops reading is cancelled, not just unlocked", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      c.enqueue(new Uint8Array([1]));
+      c.enqueue(new Uint8Array([2]));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  for await (const _chunk of toAsyncIterable(stream)) break;
+  assert.equal(cancelled, true);
+});

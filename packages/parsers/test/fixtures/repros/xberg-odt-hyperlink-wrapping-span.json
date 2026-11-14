@@ -1,0 +1,19 @@
+{
+  "description": "(tikajs-v517) Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: text:a wrapping a styled span keeps the link text (issue 94).",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhUJglypJpAQAAkwMAAAsAAABjb250ZW50LnhtbI1TwW6EIBC99ysId6Wmly5RNumhX9D2ziLukiJDAKv+fRF06x6aeFGGeW/eYwbq89Rr9COdV2AaXJXPGEkjoFXm2uDPj/fiFZ/ZUw1dp4SkLYihlyYUAkyIfxTZxtOcbfDgDAXulaeG99LTIChYaTYW3aNp0so7QU7hKHvBPnD5RR+WTuA9u3V8PEpesLEte7oP83HxBH4QFw2+hWApIXZwugR3Ja0gUsuF5UlVVmTDTlqZ7zt8HMdyfEmE6nQ6kZTdoB0cdTR5XXQQh9lbHtTWGrZNmw8B+pgQRbLuWZ2PkL4or5fyDX4D3VZ43ep4r/Tc4GVSeOMsQWFdNOGCkh51EH3GizRKdb3F4V9iBUxYTXYSMfrXyZq4QDvfg0WD1emCWPalvAooRxylBtGbk13uoY9NlBPvrZZlPD6x/CrxyvWWG5RXi1ixPyKDwaFYWNbkjmXrmjMUoOXzGto/+9kYefBM/nlS7BdQSwECFAMUAAAAAAAAACFQXsYyDCcAAAAnAAAACAAAAAAAAAAAAAAAgAEAAAAAbWltZXR5cGVQSwECFAMUAAAACAAAACFQmCXKkmkBAACTAwAACwAAAAAAAAAAAAAAgAFNAAAAY29udGVudC54bWxQSwUGAAAAAAIAAgBvAAAA3wEAAAAA",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Visit our site today"
+    }
+  ]
+}

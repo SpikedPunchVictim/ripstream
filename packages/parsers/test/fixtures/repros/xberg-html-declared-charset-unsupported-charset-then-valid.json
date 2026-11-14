@@ -1,0 +1,24 @@
+{
+  "description": "(tikajs-u03v, Fixer D) Adapted from xberg (MIT) crates/xberg/tests/html_declared_charset.rs: a legacy-encoded page is read in the charset its meta declares (unsupported-charset-then-valid); no U+FFFD. Tika 4.2.0 (oracle) skips a declared charset it does not know and takes the next (HtmlEncodingDetector->windows-1252[DECLARATIVE]).",
+  "tags": [
+    "xberg",
+    "html",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0ieC1uby1zdWNoLWNoYXJzZXQiPjxtZXRhIGNoYXJzZXQ9IndpbmRvd3MtMTI1MiI+PC9oZWFkPjxib2R5PjxwPkNhZukgliBpdJJzIG5h73ZlPC9wPjwvYm9keT48L2h0bWw+",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Café – it’s naïve"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

@@ -222,3 +222,15 @@ test("a section that is not an object is refused", () => {
   }
   assert.match(issuesOf({ "pipes-iterator": "x" }).join("\n"), /pipes-iterator must be an object/);
 });
+
+test("a result status or a pipes setting is one of the names Tika has, not a name every object has", () => {
+  const withReporter = (includes: unknown): string[] =>
+    issuesOf({ "pipes-reporters": { "file-system-jsonl-reporter": { path: "/r.jsonl", includes } } });
+  assert.match(withReporter(["constructor"]).join("\n"), /"constructor" is not a result status/);
+  assert.match(withReporter(["toString"]).join("\n"), /"toString" is not a result status/);
+  const toStringKnob = issuesOf({ ...fsPipeline, pipes: { ...fsPipeline.pipes, toString: 1 } });
+  assert.ok(toStringKnob.length > 0, "an unknown pipes key is an issue, not a notice about a JVM setting");
+  assert.deepEqual(loadConfigNotices({ ...fsPipeline, pipes: { ...fsPipeline.pipes, forkedJvmArgs: "-Xmx1g" } }).length, 1);
+});
+
+const loadConfigNotices = (config: unknown): readonly string[] => loadConfig(config).notices;

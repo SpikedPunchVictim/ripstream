@@ -117,9 +117,18 @@ function extractText(
   }
 
   const pieces = readPieceTable(table.subarray(fcClx, fcClx + lcbClx));
+  // Pieces of a real file read disjoint text from the WordDocument stream and a character takes at least one byte, so
+  // the decoded total cannot exceed the stream's length. Overlapping pieces (a few KB of table re-reading one block)
+  // would otherwise expand a small file into megabytes before any output limit sees it.
+  let budget = wordDocument.byteLength;
   let text = "";
   for (const piece of pieces) {
-    text += readPiece(wordDocument, piece);
+    const decoded = readPiece(wordDocument, piece);
+    budget -= decoded.length;
+    if (budget < 0) {
+      throw new MalformedDocumentError("Word piece table pieces overlap");
+    }
+    text += decoded;
   }
   return cleanWordText(text);
 }
@@ -168,6 +177,9 @@ function readPieceTable(clx: Uint8Array): Piece[] {
   for (let index = 0; index < count; index++) {
     const cpStart = readUInt32(plc, index * 4);
     const cpEnd = readUInt32(plc, (index + 1) * 4);
+    if (cpEnd < cpStart) {
+      throw new MalformedDocumentError("Word piece table character positions are not ascending");
+    }
     const pcd = cps + index * 8;
     if (pcd + 8 > plc.byteLength) break;
     let fc = readUInt32(plc, pcd + 2);

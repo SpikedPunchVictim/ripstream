@@ -18,8 +18,12 @@ const BOMS: Array<{ bytes: number[]; charset: string; skip: number }> = [
 /**
  * Port of Ripstream's text/encoding heuristics: BOM, HTML/XML declarations,
  * UTF-8 validation, control-byte binary check, then statistical detection.
+ *
+ * `declared` is a charset the caller was told of (the charset parameter of an incoming Content-Type, or of a mail part).
+ * It is tried before the document's own declaration, and, like it, only when the bytes can be in that charset (see
+ * `chooseDeclared`). Measured against Tika 4.2.0, whose chain does the same for every text parser.
  */
-export function detectEncoding(data: Uint8Array): EncodingDetection {
+export function detectEncoding(data: Uint8Array, declared?: string): EncodingDetection {
   const bom = detectBom(data);
   if (bom !== null) {
     return { charset: bom.charset, confidence: 1, bom: true, binary: false };
@@ -30,18 +34,21 @@ export function detectEncoding(data: Uint8Array): EncodingDetection {
     return { charset: utf16, confidence: 0.8, bom: false, binary: false };
   }
 
-  const declared = declaredCharset(data);
-  if (declared !== null) {
-    return { charset: declared, confidence: 0.9, bom: false, binary: false };
+  // Whether this is text comes first and is decided by the bytes alone: a declaration or an escape sequence is no proof of
+  // text, since binary data can hold the bytes of either. Which charset the text is in comes after.
+  if (!looksLikeText(data)) {
+    // A caller's charset is kept for binary-looking bytes, as before: it never decided whether they are text.
+    return { charset: declared === undefined ? "ISO-8859-1" : canonicalLabel(declared), confidence: 0.1, bom: false, binary: true };
+  }
+
+  const chosen = chooseDeclared(data, declared);
+  if (chosen !== null) {
+    return { charset: chosen, confidence: 0.9, bom: false, binary: false };
   }
 
   const iso2022 = detectIso2022(data);
   if (iso2022 !== null) {
     return { charset: iso2022, confidence: 0.9, bom: false, binary: false };
-  }
-
-  if (isBinary(data)) {
-    return { charset: "ISO-8859-1", confidence: 0.1, bom: false, binary: true };
   }
 
   // Tika 4.2.0's MojibusterEncodingDetector answers windows-1252 (the WHATWG default for unlabeled Western text) for a
@@ -58,7 +65,7 @@ export function detectEncoding(data: Uint8Array): EncodingDetection {
   const best = matches[0];
   if (best !== undefined) {
     return {
-      charset: normalizeCharset(best.name),
+      charset: canonicalLabel(normalizeCharset(best.name)),
       confidence: best.confidence / 100,
       bom: false,
       binary: false,
@@ -68,12 +75,58 @@ export function detectEncoding(data: Uint8Array): EncodingDetection {
   return { charset: "windows-1252", confidence: 0.2, bom: false, binary: false };
 }
 
+/**
+ * Whether the bytes are text, as far as the bytes can say: no NUL, and not more than 2% control bytes other than tab, line
+ * feed, form feed, carriage return and ESC. ESC is safe because ISO-2022 text and the colours of a terminal's log are
+ * made with it. The caller gives a prefix, as the detector does.
+ */
+export function looksLikeText(data: Uint8Array): boolean {
+  return !isBinary(data);
+}
+
 export function decodeText(data: Uint8Array, charset: string): string {
+  const normalized = normalizeCharset(charset);
+  if (/^UTF-32(LE|BE)?$/i.test(normalized)) return decodeUtf32(data, normalized);
   try {
     return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(data);
   } catch {
     return new TextDecoder("utf-8", { fatal: false }).decode(data);
   }
+}
+
+/**
+ * UTF-32, which TextDecoder does not have: four bytes to a code point, a leading BOM left out, and one U+FFFD for each
+ * unit that is not a Unicode scalar value and for a last unit that is cut off. Without a byte order in the name the BOM
+ * says it, and big-endian is the default, as the standard has it.
+ */
+function decodeUtf32(data: Uint8Array, charset: string): string {
+  const named = /(LE|BE)$/i.exec(charset)?.[1]?.toUpperCase();
+  let little = named === "LE";
+  let start = 0;
+  if (data.length >= 4) {
+    const leBom = data[0] === 0xff && data[1] === 0xfe && data[2] === 0 && data[3] === 0;
+    const beBom = data[0] === 0 && data[1] === 0 && data[2] === 0xfe && data[3] === 0xff;
+    if (leBom || beBom) {
+      start = 4;
+      if (named === undefined) little = leBom;
+    }
+  }
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const parts: string[] = [];
+  let batch: number[] = [];
+  const flush = (): void => {
+    if (batch.length > 0) parts.push(String.fromCodePoint(...batch));
+    batch = [];
+  };
+  let at = start;
+  for (; at + 4 <= data.length; at += 4) {
+    const unit = view.getUint32(at, little);
+    batch.push(unit > 0x10ffff || (unit >= 0xd800 && unit <= 0xdfff) ? 0xfffd : unit);
+    if (batch.length >= 4096) flush();
+  }
+  if (at < data.length) batch.push(0xfffd);
+  flush();
+  return parts.join("");
 }
 
 /**
@@ -136,20 +189,73 @@ function detectUtf16WithoutBom(data: Uint8Array): string | null {
   return null;
 }
 
-function declaredCharset(data: Uint8Array): string | null {
-  const head = latin1(data.subarray(0, 4096));
+/** Tika's HtmlEncodingDetector reads this many bytes: a declaration whose tag ends after them is not seen (measured: a meta ending at 8192 is read, one ending at 8200 is not). */
+const DECLARATION_SCAN_BYTES = 8192;
 
-  const html =
-    /<meta[^>]+charset\s*=\s*["']?\s*([^"'\s/>;]+)/i.exec(head) ??
-    /<meta[^>]+http-equiv\s*=\s*["']?content-type["']?[^>]*content\s*=\s*["'][^"']*charset\s*=\s*([^"'\s;]+)/i.exec(
-      head,
-    );
-  if (html !== null) return normalizeCharset(html[1]!);
+/**
+ * The label Tika reports for a charset the WHATWG standard reads as windows-1252 (its detectors answer windows-1252 for
+ * iso-8859-1, latin1 and us-ascii, text parsers and HTML alike). Other labels are returned as they were written.
+ */
+export function canonicalLabel(label: string): string {
+  return /^(iso[-_ ]?8859[-_]?1|latin-?1|l1|cp1252|x-cp1252|windows-1252|us-ascii|ascii|ansi_x3\.4-1968|iso-ir-100|ibm819|cp819|x-user-defined)$/i.test(
+    label.trim(),
+  )
+    ? "windows-1252"
+    : label;
+}
 
-  const xml = /<\?xml[^>]+encoding\s*=\s*["']([^"']+)["']/i.exec(head);
-  if (xml !== null) return normalizeCharset(xml[1]!);
-
+/**
+ * The first charset among `declared` and the document's own declarations that the bytes can be in. Tika 4.2.0 keeps the
+ * declared charset (an incoming Content-Type's, then the page's) only when it is supported and the bytes decode in it
+ * without a malformed sequence; otherwise it uses the statistical answer. And bytes that are valid UTF-8 and not ASCII are
+ * UTF-8 whatever single-byte charset is declared ("structural" in its detection trace).
+ */
+function chooseDeclared(data: Uint8Array, declared: string | undefined): string | null {
+  const candidates: string[] = [];
+  if (declared !== undefined && declared.trim() !== "") candidates.push(normalizeCharset(declared));
+  candidates.push(...declaredCharsets(data));
+  for (const candidate of candidates) {
+    if (!decodesCleanly(data, candidate)) continue;
+    if (!/^utf-?8$/i.test(candidate) && !isPureAscii(data) && isValidUtf8(data)) return "UTF-8";
+    return canonicalLabel(candidate);
+  }
   return null;
+}
+
+/** Whether `charset` is one TextDecoder knows and `data` holds no malformed sequence in it. */
+function decodesCleanly(data: Uint8Array, charset: string): boolean {
+  try {
+    // `stream` lets the sample end in the middle of a character.
+    new TextDecoder(charset, { fatal: true }).decode(data, { stream: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The charsets the page declares, in the order Tika's HtmlEncodingDetector tries them: a meta tag outside a comment first
+ * (a meta in a comment only when no other one declares anything), then an XML declaration. Any meta tag counts that has a
+ * charset attribute or a content attribute with charset= in it, as in Tika (a `content="charset=..."` without
+ * http-equiv, a refresh, a script's string). A declaration of UTF-16 or UTF-32 is read as UTF-8: a page whose own 8-bit
+ * bytes say it is not in either, as the HTML standard has it.
+ */
+function declaredCharsets(data: Uint8Array): string[] {
+  const head = latin1(data.subarray(0, DECLARATION_SCAN_BYTES));
+  const outside = declaredNames(head.replace(/<!--[\s\S]*?-->/g, " "));
+  const names = outside.length > 0 ? outside : declaredNames(head);
+  return names.map((name) => (/^UTF-?(16|32)(LE|BE)?$/i.test(name) ? "UTF-8" : name));
+}
+
+function declaredNames(head: string): string[] {
+  const found: Array<{ at: number; name: string }> = [];
+  const add = (pattern: RegExp): void => {
+    for (const match of head.matchAll(pattern)) found.push({ at: match.index ?? 0, name: normalizeCharset(match[1]!) });
+  };
+  add(/<meta[^>]+charset\s*=\s*["']?\s*([^"'\s/>;]+)/gi);
+  const meta = found.sort((a, b) => a.at - b.at).map((entry) => entry.name);
+  const xml = /<\?xml[^>]+encoding\s*=\s*["']([^"']+)["']/i.exec(head);
+  return xml === null ? meta : [...meta, normalizeCharset(xml[1]!)];
 }
 
 function isBinary(data: Uint8Array): boolean {
@@ -159,7 +265,7 @@ function isBinary(data: Uint8Array): boolean {
   let nul = 0;
   for (const byte of data) {
     if (byte === 0) nul++;
-    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) control++;
+    if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0c && byte !== 0x0d && byte !== 0x1b) control++;
   }
   if (nul > 0) return true;
   return control / data.length > 0.02;
@@ -174,7 +280,8 @@ function isPureAscii(data: Uint8Array): boolean {
 
 function isValidUtf8(data: Uint8Array): boolean {
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(data);
+    // `stream` lets the data end in the middle of a character: a sample cut from a longer file ends anywhere.
+    new TextDecoder("utf-8", { fatal: true }).decode(data, { stream: true });
     return true;
   } catch {
     return false;

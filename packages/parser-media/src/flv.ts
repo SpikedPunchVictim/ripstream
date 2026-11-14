@@ -115,6 +115,8 @@ interface AmfRead {
 
 function readValue(data: Uint8Array, view: DataView, position: number, depth: number): AmfRead {
   if (depth > MAX_AMF_DEPTH) throw new Error("AMF nesting too deep");
+  // Past the end there is no marker to read: without this a declared count of 100000 reads 100000 phantom values.
+  if (position >= data.length) throw new Error("Truncated AMF value");
   const type = data[position]!;
   return readValueOfType(data, view, position + 1, type, depth);
 }
@@ -126,6 +128,8 @@ function readValueOfType(
   type: number,
   depth: number,
 ): AmfRead {
+  // Objects and ECMA arrays come through here, not readValue, so the nesting bound is enforced here too.
+  if (depth > MAX_AMF_DEPTH) throw new Error("AMF nesting too deep");
   switch (type) {
     case 0:
       return { position: position + 8, value: view.getFloat64(position, false) };
@@ -165,6 +169,7 @@ function readObject(data: Uint8Array, view: DataView, position: number, depth: n
     }
     if (count >= MAX_AMF_ELEMENTS) throw new Error("Too many AMF object entries");
     const key = readString(data, view, position);
+    if (key.position >= data.length) throw new Error("Truncated AMF object");
     const type = data[key.position]!;
     const value = readValueOfType(data, view, key.position + 1, type, depth + 1);
     entries.set(key.value as string, value.value);
@@ -175,11 +180,12 @@ function readObject(data: Uint8Array, view: DataView, position: number, depth: n
 function readEcmaArray(data: Uint8Array, view: DataView, position: number, depth: number): AmfRead {
   if (position + 4 > data.length) throw new Error("Truncated AMF array");
   const count = view.getUint32(position);
-  if (count > MAX_AMF_ELEMENTS) throw new Error("Too many AMF array entries");
+  if (count > MAX_AMF_ELEMENTS || count * 3 > data.length - position - 4) throw new Error("Too many AMF array entries");
   position += 4;
   const entries = new Map<string, AmfValue>();
   for (let i = 0; i < count; i++) {
     const key = readString(data, view, position);
+    if (key.position >= data.length) throw new Error("Truncated AMF array");
     const type = data[key.position]!;
     const value = readValueOfType(data, view, key.position + 1, type, depth + 1);
     entries.set(key.value as string, value.value);
@@ -191,7 +197,7 @@ function readEcmaArray(data: Uint8Array, view: DataView, position: number, depth
 function readStrictArray(data: Uint8Array, view: DataView, position: number, depth: number): AmfRead {
   if (position + 4 > data.length) throw new Error("Truncated AMF array");
   const count = view.getUint32(position);
-  if (count > MAX_AMF_ELEMENTS) throw new Error("Too many AMF array entries");
+  if (count > MAX_AMF_ELEMENTS || count > data.length - position - 4) throw new Error("Too many AMF array entries");
   position += 4;
   const values: AmfValue[] = [];
   for (let i = 0; i < count; i++) {

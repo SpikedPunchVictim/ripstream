@@ -1,0 +1,19 @@
+{
+  "description": "(tikajs-v517) Adapted from xberg (MIT) crates/xberg/tests/issue_odt_odf_extraction_defects.rs: plain styled span between text keeps document order.",
+  "tags": [
+    "xberg",
+    "odt",
+    "odf"
+  ],
+  "input": {
+    "base64": "UEsDBBQAAAAAAAAAIVBexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhULIh78xLAQAAWAMAAAsAAABjb250ZW50LnhtbI1TwXKDIBC99ysY7kqdXhpGyaSHfkH7AQTRMAWWEazm7wsYU3PIjBdkd9/b92CxPs5Go185eAW2wVX5ipG0Alpl+wZ/f30W7/jIXmroOiUkbUGMRtpQCLAhflFkW0+XaoPHwVLgXnlquZGeBkHBSbuy6BZNs9aSCXIOe9kJ+8DlZ71bOoO37Hbg015ywsZr2dJ9uO4Xz+AHcdHgSwiOEuLGQZcw9KQVRGqZWJ5UZUVW7KyV/bnDp2kqp7dMqA6HA8nVFdrBXkez10UHcZjG8aDWq2HrtPkYwMSCKLJ1z+rlCHlFyz61b/AH6LbCt1THjdLXBqdJ4ZWTgsIN0cQQlPSog+gzPqRJqv4Sh3+OHTBhNdlIxOipk1vhDO31HiQNVucH4thJuwtHS+Qdt2jZJXqxNc2Sck3uOIbAyJ7fMu7fw9KdPAiTJ/8F+wNQSwECFAMUAAAAAAAAACFQXsYyDCcAAAAnAAAACAAAAAAAAAAAAAAAgAEAAAAAbWltZXR5cGVQSwECFAMUAAAACAAAACFQsiHvzEsBAABYAwAACwAAAAAAAAAAAAAAgAFNAAAAY29udGVudC54bWxQSwUGAAAAAAIAAgBvAAAAwQEAAAAA",
+    "filename": "a.odt"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Alpha bold omega"
+    }
+  ]
+}

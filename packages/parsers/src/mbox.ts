@@ -1,16 +1,22 @@
 import {
   BodyContentHandler,
+  AbortError,
   LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
+  ParseTimeoutError,
   RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
   type Parser,
 } from "@spikedpunch/ripstream-core";
 import { MailParser } from "./mail.ts";
+
+/** A header field line (RFC 5322 field name, then a colon). */
+const HEADER_LINE = /^[\x21-\x39\x3b-\x7e]+:/;
 
 /** mbox/Maildir message-bundle parser built on the RFC822 parser. */
 export class MboxParser implements Parser {
@@ -46,27 +52,70 @@ export class MboxParser implements Parser {
         started = true;
         await xhtml.startDocument();
       }
-      await this.#writeMessage(message, xhtml, ctx);
-      count++;
+      try {
+        await this.#writeMessage(message, xhtml, ctx);
+        count++;
+      } catch (error) {
+        // One unreadable message must not cost the mailbox its others; limits, timeouts and aborts still end the parse.
+        if (
+          error instanceof LimitExceededError ||
+          error instanceof ParseTimeoutError ||
+          error instanceof AbortError ||
+          ctx.signal.aborted
+        ) {
+          throw error;
+        }
+        metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+      }
     };
 
-    // The lines of the message being read. A line that starts with "From " ends it and is itself dropped.
+    // The lines of the message being read. A line that starts with "From " ends it and is itself dropped, but only once the
+    // next line shows it is a separator: a message's header block follows one, whereas a body line that happens to begin
+    // "From " (mboxo writers do not escape them) is followed by more body (tikajs-gz44).
     let lines: string[] = [];
     let messageBytes = 0;
-    /** Returns the finished message when `line` closes a non-blank one. `bytes` is the line with its line end. */
-    const takeLine = (line: string, bytes: number): string | undefined => {
-      if (/^From .+/.test(line)) {
-        const message = lines.join("\n");
-        lines = [];
-        messageBytes = 0;
-        return message.trim().length > 0 ? message : undefined;
-      }
+    let pendingFrom: string | undefined;
+    // True when the pending "From " line opens the input: nothing precedes it, so a blank line after it can only be the
+    // end of an (empty) header block.
+    let pendingFromOpensInput = false;
+    const addLine = (line: string, bytes: number): void => {
       messageBytes += bytes;
       if (messageBytes > maxMessageBytes) {
         throw new LimitExceededError(`mbox message exceeds ${maxMessageBytes} bytes`);
       }
       lines.push(line);
-      return undefined;
+    };
+    const closeMessage = (): string | undefined => {
+      const message = lines.join("\n");
+      lines = [];
+      messageBytes = 0;
+      return message.trim().length > 0 ? message : undefined;
+    };
+    /** Returns the finished message when `line` closes a non-blank one. `bytes` is the line with its line end. */
+    const takeLine = (line: string, bytes: number): string | undefined => {
+      let finished: string | undefined;
+      if (pendingFrom !== undefined) {
+        const from = pendingFrom;
+        pendingFrom = undefined;
+        // A blank line right after a "From " line only ends a header block when the line opens the input. Anywhere else
+        // it is a paragraph break after a body line ("From the desk of ..."), and no real separator is followed by an
+        // empty header block.
+        const blankEndsHeaders = line.trim().length === 0 && pendingFromOpensInput;
+        if (blankEndsHeaders || HEADER_LINE.test(line)) finished = closeMessage();
+        else addLine(from, from.length + 1);
+      }
+      if (/^From .+/.test(line)) {
+        pendingFrom = line;
+        pendingFromOpensInput = lines.length === 0 && finished === undefined;
+        return finished;
+      }
+      addLine(line, bytes);
+      return finished;
+    };
+    /** What is left when the input ends: a "From " line with nothing after it is a separator. */
+    const finish = (): string => {
+      pendingFrom = undefined;
+      return lines.join("\n");
     };
 
     // The text after the last line end is held until more input arrives, because a line (or a CRLF) can span chunks.
@@ -99,7 +148,7 @@ export class MboxParser implements Parser {
       const message = takeLine(partial, partial.length);
       if (message !== undefined) await writeMessage(message);
     }
-    const last = lines.join("\n");
+    const last = finish();
     if (last.trim().length > 0) await writeMessage(last);
 
     if (!started) throw new MalformedDocumentError("Not an mbox bundle");

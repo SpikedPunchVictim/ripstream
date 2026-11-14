@@ -6,17 +6,28 @@ export function coerceMetadataValue(
   key: string,
   value: string,
 ): string | number | boolean {
-  const type = metadataKeyDefinition(key)?.valueType;
+  return coerceTyped(metadataKeyDefinition(key)?.valueType, value);
+}
+
+const INTEGER_TEXT = /^[+-]?\d+$/;
+const DECIMAL_TEXT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+/**
+ * A value as the type its key has, or as it was when it does not read as that type: the text of an integer is digits
+ * and no more (not "", " ", "0x10" or "1e3"), a real is a decimal number. The one coercion every serializer shares.
+ */
+export function coerceTyped(type: string | undefined, value: string): string | number | boolean {
   if (type === "INTEGER") {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? value : parsed;
+    const parsed = Number(value);
+    return INTEGER_TEXT.test(value) && Number.isSafeInteger(parsed) ? parsed : value;
   }
   if (type === "REAL" || type === "RATIONAL") {
     const parsed = Number(value);
-    return Number.isNaN(parsed) ? value : parsed;
+    return DECIMAL_TEXT.test(value) && Number.isFinite(parsed) ? parsed : value;
   }
-  if (type === "BOOLEAN" && (value === "true" || value === "false")) {
-    return value === "true";
+  if (type === "BOOLEAN") {
+    if (value === "true") return true;
+    if (value === "false") return false;
   }
   return value;
 }

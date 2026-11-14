@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-u03v, Fixer D) A font with \\fcharset0 (ANSI) reads \\'xx as windows-1252 even when the document's \\ansicpg is 1251. Tika 4.2.0 (oracle, PUT /tika/text) answers 'Ïðè' for this input; \\fcharset1 and 2 leave the document's code page.",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg1251{\\fonttbl{\\f0\\fcharset0 A;}}\\pard \\f0 \\'cf\\'f0\\'e8}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Ïðè"
+    }
+  ]
+}

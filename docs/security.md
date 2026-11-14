@@ -14,7 +14,9 @@
 - **Parse isolation.** `ripstream serve` parses each document in a short-lived child process with
   heap, RSS, address-space (Linux), CPU, wall-clock and temporary-disk bounds, and refuses to start when it cannot
   (see [isolation.md](isolation.md)). A plain `createRipstream()` parses in the calling process, and
-  so does the PDF parser: pdf.js runs on the calling thread with no containment of its own.
+  so does the PDF parser: pdf.js runs on the calling thread with no containment of its own. The CLI's `parse`, `metadata` and
+  `pipes` commands also parse in-process unless given `--isolation strict`; use it for untrusted input and batch jobs, since
+  a parser crash or out-of-memory otherwise ends the process.
 - **Secrets.** `redactMetadata` replaces credential-like keys before logging/serialization.
 - **Regex.** `compileSafeRegex`/`safeRegexTest` reject oversized and catastrophic-backtracking
   patterns and cap input length.

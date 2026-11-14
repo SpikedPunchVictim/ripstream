@@ -78,6 +78,18 @@ test("zone-less timestamps are read as UTC", () => {
   assert.equal(metadata.getDate("date")?.toISOString(), "2024-02-03T04:05:06.000Z");
 });
 
+test("a date that is not on the calendar is not a date, as parseTikaDate has it", () => {
+  const metadata = new Metadata();
+  for (const value of ["2020-02-31", "2021-02-29", "2020-04-31", "2020-13-01", "2020-02-31T10:00:00", "2020-00-10T10:00:00Z"]) {
+    metadata.set("date", value);
+    assert.equal(metadata.getDate("date"), null, value);
+  }
+  metadata.set("date", "2020-02-29");
+  assert.equal(metadata.getDate("date")?.toISOString(), "2020-02-29T12:00:00.000Z");
+  metadata.set("date", "2020-02-29T10:00:00Z");
+  assert.equal(metadata.getDate("date")?.toISOString(), "2020-02-29T10:00:00.000Z");
+});
+
 test("iterates every value in key order", () => {
   const metadata = new Metadata();
   metadata.add("a", "1");

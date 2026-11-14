@@ -10,6 +10,10 @@ export interface ParquetLimits {
   readonly maxSchemaDepth: number;
   readonly maxRowGroups: number;
   readonly maxPageValues: number;
+  /** Most bytes the thrift footer may take; it is decoded whole, into about 200 times its size. */
+  readonly maxFooterBytes: number;
+  /** Most values all the page headers of the row groups that are read may claim between them. */
+  readonly maxTotalValues: number;
 }
 
 /** The rows the parser asks hyparquet for: row 0 up to, not including, this one. */
@@ -17,6 +21,22 @@ export const PARQUET_ROW_END = 100;
 
 /** hyparquet skips a column chunk larger than this and reads nothing of it. */
 const MAX_COLUMN_CHUNK_BYTES = 1 << 30;
+
+/**
+ * Checks the trailer (footer length, then "PAR1") before hyparquet decodes the footer: that decode allocates about
+ * 200 times the footer's bytes (4 MB gave 883 MB, 48 MB ran out of heap), whatever the file's other limits say.
+ * Throws LimitExceededError or MalformedDocumentError.
+ */
+export function checkParquetTrailer(file: Uint8Array, limits: ParquetLimits): void {
+  const length = file.byteLength;
+  const magic = String.fromCharCode(...file.subarray(Math.max(0, length - 4)));
+  if (length < 12 || magic !== "PAR1") throw new MalformedDocumentError("Parquet file has no footer");
+  const footerLength = new DataView(file.buffer, file.byteOffset, length).getUint32(length - 8, true);
+  if (footerLength + 12 > length) throw new MalformedDocumentError("Parquet footer is longer than the file");
+  if (footerLength > limits.maxFooterBytes) {
+    throw new LimitExceededError(`Parquet footer is ${footerLength} bytes, more than the limit of ${limits.maxFooterBytes}`);
+  }
+}
 
 /**
  * Checks of the footer that are cheap and need nothing decoded: how many schema elements and row groups it lists, how
@@ -69,17 +89,30 @@ function schemaDepth(schema: readonly SchemaElement[]): number {
  * will decode, and refuses a page that claims more values than the limit or than its chunk. Each header is a few bytes,
  * so this costs a fraction of the read it guards. Throws LimitExceededError or MalformedDocumentError.
  */
-export function checkParquetPages(file: ArrayBuffer, footer: FileMetaData, limits: ParquetLimits): void {
+export function checkParquetPages(
+  file: ArrayBuffer,
+  footer: FileMetaData,
+  limits: ParquetLimits,
+  checkpoint: () => void = () => {},
+): void {
+  const claimed = { values: 0 };
   let groupStart = 0;
   for (const group of footer.row_groups) {
     if (groupStart >= PARQUET_ROW_END) break;
-    checkRowGroup(file, group, limits);
+    checkRowGroup(file, group, limits, claimed, checkpoint);
     groupStart += Number(group.num_rows);
   }
 }
 
-function checkRowGroup(file: ArrayBuffer, group: RowGroup, limits: ParquetLimits): void {
+function checkRowGroup(
+  file: ArrayBuffer,
+  group: RowGroup,
+  limits: ParquetLimits,
+  claimed: { values: number },
+  checkpoint: () => void,
+): void {
   for (const chunk of group.columns) {
+    checkpoint();
     const meta = chunk.meta_data;
     if (meta === undefined) continue; // hyparquet reports the missing metadata itself
     const offset = meta.dictionary_page_offset || meta.data_page_offset;
@@ -89,11 +122,18 @@ function checkRowGroup(file: ArrayBuffer, group: RowGroup, limits: ParquetLimits
       throw new MalformedDocumentError(`Parquet column ${meta.path_in_schema.join(".")} has an invalid byte range`);
     }
     if (end - start > MAX_COLUMN_CHUNK_BYTES) continue;
-    checkChunkPages(file, chunk, start, end, limits);
+    checkChunkPages(file, chunk, start, end, limits, claimed);
   }
 }
 
-function checkChunkPages(file: ArrayBuffer, chunk: ColumnChunk, start: number, end: number, limits: ParquetLimits): void {
+function checkChunkPages(
+  file: ArrayBuffer,
+  chunk: ColumnChunk,
+  start: number,
+  end: number,
+  limits: ParquetLimits,
+  claimed: { values: number },
+): void {
   const name = chunk.meta_data!.path_in_schema.join(".");
   const chunkValues = Number(chunk.meta_data!.num_values);
   // The window hyparquet slices for the chunk: it ends at the end of the file if the footer says it ends later.
@@ -104,6 +144,11 @@ function checkChunkPages(file: ArrayBuffer, chunk: ColumnChunk, start: number, e
   while (reader.offset < view.byteLength - 1) {
     const header = readPageHeader(reader, name);
     checkPage(header, chunkValues, name, limits);
+    // Each page is within the limit, but thousands of them are not: the reader fills every value a header claims.
+    claimed.values += header.values ?? 0;
+    if (claimed.values > limits.maxTotalValues) {
+      throw new LimitExceededError(`Parquet page headers claim more than the limit of ${limits.maxTotalValues} values between them`);
+    }
     if (reader.offset + header.compressedSize > view.byteLength) {
       throw new MalformedDocumentError(`Parquet page in column ${name} extends past its column chunk`);
     }

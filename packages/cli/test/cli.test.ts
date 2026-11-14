@@ -212,6 +212,14 @@ test("help documents the isolation flags and environment variables", async () =>
   assert.match(text, /RIPSTREAM_ISOLATION/);
 });
 
+test("help recommends --isolation strict for untrusted input and says what the in-process default risks", async () => {
+  const sink = io();
+  assert.equal(await main(["--help"], sink), 0);
+  const text = sink.out.join("");
+  assert.match(text, /untrusted input and for batch jobs/);
+  assert.match(text, /crash or out-of-memory ends the process/);
+});
+
 /** A stand-in for createStandardIsolation that records what the CLI asked of it. */
 function fakeIsolation(overrides: { parse?: () => Promise<{ text: string; metadata: Metadata }> } = {}) {
   const log: { created: unknown[]; disposed: number; parsed: number; detected: number } = {
@@ -514,11 +522,12 @@ function withConfig(config: unknown, run: (file: string) => Promise<void>): Prom
 
 const WITHOUT_PDF = { parsers: [{ "default-parser": { exclude: ["pdf-parser"] } }], isolation: { mode: "off" } };
 
-test("a parsers section in --config is applied: an excluded parser's type is refused, the rest still parse", async () => {
+test("a parsers section in --config is applied: an excluded parser's type parses to nothing, the rest still parse", async () => {
   await withConfig(WITHOUT_PDF, async (file) => {
+    // Tika 4.2.0 answers a type no parser claims with EmptyParser: an empty success, not a refusal (core commit fd27c2b).
     const pdf = io("%PDF-1.4\n%%EOF\n");
-    assert.equal(await main(["--config", file, "-"], pdf, { env: {} }), 3);
-    assert.match(pdf.err.join(""), /application\/pdf/);
+    assert.equal(await main(["--config", file, "-"], pdf, { env: {} }), 0);
+    assert.equal(pdf.out.join(""), "");
     const text = io("Hello parsers");
     assert.equal(await main(["--config", file, "-"], text, { env: {} }), 0);
     assert.match(text.out.join(""), /Hello parsers/);
@@ -595,10 +604,11 @@ test("a detectors section in --config is applied to detect and to what a parse i
     const detected = io("plain");
     assert.equal(await main(["detect", "--config", file, "-"], detected, { env: {} }), 0);
     assert.equal(detected.out.join("").trim(), "application/octet-stream");
-    // The parser is offered what the configured detector says, so text with no detector is a type nothing parses.
-    const refused = io("plain");
-    assert.equal(await main(["metadata", "--config", file, "-"], refused, { env: {} }), 3);
-    assert.match(refused.err.join(""), /application\/octet-stream/);
+    // The parser is offered what the configured detector says, so text with no detector is a type nothing parses:
+    // Tika 4.2.0 answers that with EmptyParser, an empty success, not a refusal (core commit fd27c2b).
+    const empty = io("plain");
+    assert.equal(await main(["metadata", "--config", file, "-"], empty, { env: {} }), 0);
+    assert.match(empty.out.join(""), /EmptyParser/);
     assert.equal(await main(["metadata", "-"], io("plain"), { env: {} }), 0);
   });
   const plain = io("plain");

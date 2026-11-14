@@ -209,7 +209,8 @@ export class CompositeParser implements Parser {
     const start = stream.position;
     for (const [index, { parser }] of candidates.entries()) {
       if (index > 0) await stream.seek(start);
-      const parsedBy = metadata.getAll(TIKA_KEYS.PARSED_BY);
+      // A copy: `getAll` may hand back the array the metadata holds, which the attempt then adds to.
+      const parsedBy = [...metadata.getAll(TIKA_KEYS.PARSED_BY)];
       try {
         // Tika records the parser that handled the document once, however many wrap it.
         if (!parsedBy.includes(parser.name)) metadata.add(TIKA_KEYS.PARSED_BY, parser.name);

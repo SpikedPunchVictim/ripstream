@@ -241,11 +241,8 @@ export class Metadata implements Iterable<[string, string]> {
   }
 
   toObject(): Record<string, string | string[]> {
-    const result: Record<string, string | string[]> = {};
-    for (const [name, values] of this.values) {
-      result[name] = values.length === 1 ? values[0]! : [...values];
-    }
-    return result;
+    // Own properties by `fromEntries`: a key named `__proto__` must not become the prototype.
+    return Object.fromEntries([...this.values].map(([name, values]) => [name, values.length === 1 ? values[0]! : [...values]]));
   }
 
   *[Symbol.iterator](): Iterator<[string, string]> {
@@ -278,11 +275,20 @@ function encode(value: MetadataValue): string {
   return String(value);
 }
 
+function isCalendarDay(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false;
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 /**
  * Upstream TikaDates rules: zone-less values are UTC; a date-only value is
  * midday UTC. Partial/invalid dates return null.
  */
 function parseTikaDate(value: string): Date | null {
+  // The calendar day must exist: `Date` takes 2020-02-31 for March 2.
+  const day = /^(\d{4})-(\d{2})-(\d{2})(?=T|\s|$)/.exec(value);
+  if (day !== null && !isCalendarDay(Number(day[1]), Number(day[2]), Number(day[3]))) return null;
+
   const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (dateOnly !== null) {
     const [, year, month, day] = dateOnly;

@@ -3,6 +3,7 @@ import {
   MalformedDocumentError,
   MediaType,
   Metadata,
+  RipstreamError,
   UnsupportedFormatError,
   XHTMLContentHandler,
   type ContentHandler,
@@ -11,6 +12,8 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { boundedUnzip, type BoundedZip } from "./bounded-unzip.ts";
+import { decodeChapter } from "./epub-chapter.ts";
+import { describeFailure } from "./failures.ts";
 import { emitEmbeddedItems, isChapter, readPackageDocument, type ManifestItem } from "./epub-package.ts";
 import { applyOdfMetadata } from "./odf-meta.ts";
 import { SaxesParser } from "saxes";
@@ -20,6 +23,7 @@ import {
   descendantsNamed,
   localName,
   parseXmlTree,
+  parseXmlTreeUntilError,
   type XmlNode,
 } from "./xml-tree.ts";
 
@@ -105,18 +109,18 @@ export class OpenDocumentParser implements Parser {
   }
 }
 
+const ODF_BODY_KINDS = ["text", "spreadsheet", "presentation", "drawing", "body"];
+
 function findBody(root: XmlNode): XmlNode | undefined {
-  for (const name of [
-    "text",
-    "spreadsheet",
-    "presentation",
-    "drawing",
-    "body",
-  ]) {
-    const found = descendantsNamed(root, name)[0];
+  // The kind of document is a child of office:body. Searching the whole tree would match number:text and similar
+  // elements in the automatic styles, which come first in content.xml, and render nothing.
+  const officeBody = descendantsNamed(root, "body")[0];
+  const scope = officeBody ?? root;
+  for (const name of ODF_BODY_KINDS) {
+    const found = (officeBody === undefined ? descendantsNamed(scope, name) : childrenNamed(scope, name))[0];
     if (found !== undefined && localName(found.name) === name) return found;
   }
-  return undefined;
+  return officeBody;
 }
 
 async function renderStyleRegion(
@@ -182,21 +186,75 @@ async function renderOdfParagraph(
   paragraph: XmlNode,
   xhtml: XHTMLContentHandler,
 ): Promise<void> {
-  const text = odfText(paragraph);
-  if (text.length === 0) return;
   const heading = localName(paragraph.name) === "h";
-  const element = heading ? "h1" : "p";
-  await xhtml.startElement(element);
-  await xhtml.characters(text);
-  await xhtml.endElement(element);
+  // An office:annotation (a comment) inside a paragraph ends the text before it and is a block of its own; the text after it
+  // is a paragraph again (Tika 4.2.0, tikajs-u03v).
+  let run: (XmlNode | string)[] = [];
+  const flush = async (): Promise<void> => {
+    const text = odfText({ ...paragraph, content: run });
+    run = [];
+    if (text.length === 0) return;
+    const element = heading ? "h1" : "p";
+    await xhtml.startElement(element);
+    await xhtml.characters(text);
+    await xhtml.endElement(element);
+  };
+  for (const part of paragraph.content) {
+    if (typeof part !== "string" && localName(part.name) === "annotation") {
+      await flush();
+      await renderOdfAnnotation(part, xhtml);
+    } else {
+      run.push(part);
+    }
+  }
+  await flush();
+}
+
+/**
+ * The body of an office:annotation. Oracle (Tika 4.2.0): each run of paragraphs directly in it is one block in which a
+ * paragraph ends in a space and one that follows another starts with one, so "P1" and "P2" read "P1  P2 "; the first
+ * block, when it is such a run, starts with the literal text "&#32;" (a quirk of Tika's handler, kept so the text agrees).
+ * Lists and tables in it are blocks as elsewhere; direct text, the creator and the date are not written.
+ */
+async function renderOdfAnnotation(annotation: XmlNode, xhtml: XHTMLContentHandler): Promise<void> {
+  let run = "";
+  let inRun = false;
+  let first = true;
+  const flush = async (): Promise<void> => {
+    if (!inRun) return;
+    await xhtml.startElement("p");
+    await xhtml.characters(run);
+    await xhtml.endElement("p");
+    run = "";
+    inRun = false;
+  };
+  for (const child of annotation.children) {
+    if (localName(child.name) === "p") {
+      if (!inRun) run = first ? "&#32;" : "";
+      else run += " ";
+      run += `${odfText(child)} `;
+      inRun = true;
+    } else {
+      await flush();
+      await renderOdfBlocks({ ...annotation, children: [child] }, xhtml);
+    }
+    // The creator and the date before the first block do not make it later.
+    if (/^(p|h|list|table)$/.test(localName(child.name))) first = false;
+  }
+  await flush();
 }
 
 const MAX_ODF_SPACES = 10_000;
 
 function odfText(node: XmlNode): string {
-  let text = node.text;
+  let text = "";
   const visit = (current: XmlNode): void => {
-    for (const child of current.children) {
+    for (const part of current.content) {
+      if (typeof part === "string") {
+        text += part;
+        continue;
+      }
+      const child = part;
       const name = localName(child.name);
       if (name === "s") {
         const count = Number(attribute(child, "c") ?? "1");
@@ -306,7 +364,7 @@ export class EpubParser implements Parser {
       throw new EncryptedDocumentError("EPUB contains encrypted items");
     }
     const container = files.get("META-INF/container.xml");
-    const declaredRoot = container === undefined ? null : rootfilePath(decode(container));
+    const declaredRoot = container === undefined ? null : wellFormed("container.xml", () => rootfilePath(decode(container)));
     // Tika's getRoot falls back to the first .opf entry when container.xml is absent or names nothing there.
     const opfPath =
       declaredRoot !== null && files.has(declaredRoot)
@@ -325,7 +383,7 @@ export class EpubParser implements Parser {
         const entry = files.get(name);
         if (entry === undefined) continue;
         await xhtml.startElement("div", "class", "chapter");
-        for (const block of htmlBlocks(decode(entry))) {
+        for (const block of wellFormed(`chapter ${name}`, () => htmlBlocks(decodeChapter(entry)))) {
           await xhtml.startElement("p");
           if (block.length > 0) await xhtml.characters(block);
           await xhtml.endElement("p");
@@ -338,24 +396,33 @@ export class EpubParser implements Parser {
     }
 
     const opfXml = decode(files.get(opfPath)!);
-    applyOpfMetadata(metadata, opfXml);
+    wellFormed("package document", () => applyOpfMetadata(metadata, opfXml));
     const base = opfPath.includes("/")
       ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1)
       : "";
 
-    const document = readPackageDocument(opfXml, base);
+    const document = wellFormed("package document", () => readPackageDocument(opfXml, base));
     applyEpubNavigation(metadata, files, document.manifest);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     const chapterIds = new Set<string>();
     for (const id of document.spine) {
+      ctx.throwIfAborted();
       const item = document.manifest.get(id);
       const chapter = item !== undefined && isChapter(item) ? files.get(item.href) : undefined;
       if (chapter === undefined) continue;
       chapterIds.add(id);
       await xhtml.startElement("div", "class", "chapter");
-      for (const block of htmlBlocks(decode(chapter))) {
+      // Tika's EpubContentParser throws on a chapter that is not well-formed; the throw is recorded on the container
+      // (TIKA-237) and the next chapter is read, the text of this one up to the error kept.
+      const blocks = htmlBlocks(decodeChapter(chapter), (failure) => {
+        metadata.add(
+          "tk:exception:container-exception",
+          describeFailure(new MalformedDocumentError(`EPUB chapter ${item?.href ?? id} is not well-formed: ${failure.message}`, { cause: failure })),
+        );
+      });
+      for (const block of blocks) {
         await xhtml.startElement("p");
         if (block.length > 0) await xhtml.characters(block);
         await xhtml.endElement("p");
@@ -364,6 +431,16 @@ export class EpubParser implements Parser {
     }
     await emitEmbeddedItems(document, chapterIds, files, xhtml, metadata, ctx);
     await xhtml.endDocument();
+  }
+}
+
+/** Runs a read of one package file, naming the file when its XML is not well-formed instead of surfacing the raw saxes error. */
+function wellFormed<T>(what: string, read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    if (error instanceof RipstreamError || !(error instanceof Error)) throw error;
+    throw new MalformedDocumentError(`EPUB ${what} is not well-formed: ${error.message}`, { cause: error });
   }
 }
 
@@ -489,9 +566,13 @@ function addDistinct(metadata: Metadata, key: string, value: string): void {
   if (!metadata.getAll(key).includes(value)) metadata.add(key, value);
 }
 
-function htmlBlocks(xml: string): string[] {
+function htmlBlocks(xml: string, onFailure?: (failure: Error) => void): string[] {
   const blocks: string[] = [];
-  const root = parseXmlTree(xml, { skipEntitiesOfExternalDtd: true });
+  const { root, failure } = parseXmlTreeUntilError(xml, { skipEntitiesOfExternalDtd: true });
+  if (failure !== undefined) {
+    if (onFailure === undefined) throw failure;
+    onFailure(failure);
+  }
   const body =
     root.children
       .flatMap((child) => descendantsNamed(child, "body"))
@@ -516,8 +597,13 @@ function htmlBlocks(xml: string): string[] {
 }
 
 function htmlText(node: XmlNode): string {
-  let text = node.text;
-  for (const child of node.children) {
+  let text = "";
+  for (const part of node.content) {
+    if (typeof part === "string") {
+      text += part;
+      continue;
+    }
+    const child = part;
     const name = localName(child.name).toLowerCase();
     if (name === "script" || name === "style") continue;
     if (name === "br") {

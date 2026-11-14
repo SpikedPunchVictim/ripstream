@@ -1,0 +1,30 @@
+{
+  "description": "(tikajs-12kd) Adapted from xberg (MIT) crates/xberg/tests/text_formats_utf8_bom.rs: a UTF-8 BOM in front of rtf does not leak into the text.",
+  "tags": [
+    "xberg",
+    "text",
+    "encoding",
+    "bom"
+  ],
+  "input": {
+    "base64": "77u/e1xydGYxXGFuc2kgVGl0bGUgQm9keSB0ZXh0Ln0=",
+    "filename": "a.rtf"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "﻿"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Title"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Body text."
+    }
+  ]
+}

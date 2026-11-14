@@ -38,6 +38,13 @@ export interface FileSystemEmitterOptions {
   readonly compression?: Compression;
   /** Write JSON the way Jackson's default pretty printer does. Default false. */
   readonly prettyPrint?: boolean;
+  /**
+   * Refuse to write through a symbolic link that leaves `basePath`: the real path of the output's directory (and of the file,
+   * when it is already a link) must stay under the real path of `basePath`. Default false, as Tika's: a link inside the output
+   * directory is followed wherever it points. Ripstream's own option (not a key of the pipes config). It needs `basePath`, and
+   * the check is made just before the write, so a link swapped in between the two is not caught.
+   */
+  readonly confineSymlinks?: boolean;
 }
 
 /** Tika's message for onExists EXCEPTION (TIKA-4736): the path, and what to do about it. */
@@ -85,6 +92,7 @@ export class FileSystemEmitter implements Emitter {
   readonly #atomicWrites: boolean;
   readonly #gzip: boolean;
   readonly #prettyPrint: boolean;
+  readonly #confineSymlinks: boolean;
 
   constructor(options: FileSystemEmitterOptions) {
     const basePath = options.basePath === undefined || options.basePath.trim() === "" ? undefined : options.basePath;
@@ -103,6 +111,10 @@ export class FileSystemEmitter implements Emitter {
     this.#atomicWrites = options.atomicWrites ?? true;
     this.#gzip = compression === "GZIP";
     this.#prettyPrint = options.prettyPrint ?? false;
+    if (options.confineSymlinks === true && basePath === undefined) {
+      throw new RangeError("'confineSymlinks' needs a 'basePath': without one there is no directory to confine the output to");
+    }
+    this.#confineSymlinks = options.confineSymlinks ?? false;
   }
 
   async emit(document: EmittedDocument): Promise<void> {
@@ -130,6 +142,7 @@ export class FileSystemEmitter implements Emitter {
     }
     const output = this.#locate(key);
     await fsp.mkdir(dirname(output), { recursive: true });
+    if (this.#confineSymlinks) await this.#checkConfined(output);
     if (!this.#atomicWrites) {
       await this.#writeInPlace(output, data);
       return;
@@ -154,6 +167,26 @@ export class FileSystemEmitter implements Emitter {
     const rel = relative(base, output);
     if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) throw new Error(`path traversal?! ${output}`);
     return output;
+  }
+
+  /** The real path of the output's directory must be under the real path of basePath, and the output may not be a link. */
+  async #checkConfined(output: string): Promise<void> {
+    const realBase = await fsp.realpath(resolve(this.#basePath!));
+    const realDirectory = await fsp.realpath(dirname(output));
+    const inside = (path: string): boolean => {
+      const rel = relative(realBase, path);
+      return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+    };
+    if (!inside(realDirectory)) throw new Error(`output is outside basePath through a symbolic link: ${output}`);
+    // An atomic write replaces a link with the new file, but an in-place one writes through it.
+    const entry = await fsp.lstat(output).catch((error: unknown) => {
+      if (codeOf(error) === "ENOENT") return undefined;
+      throw error;
+    });
+    if (entry?.isSymbolicLink() === true) {
+      const target = await fsp.realpath(output).catch(() => undefined);
+      if (target === undefined || !inside(target)) throw new Error(`output is outside basePath through a symbolic link: ${output}`);
+    }
   }
 
   async #writeInPlace(output: string, data: Uint8Array): Promise<void> {
@@ -209,10 +242,14 @@ export function jacksonPretty(value: unknown, level = 0): string {
   return JSON.stringify(value);
 }
 
+/** Windows reserves CON, PRN, AUX, NUL, COM0-9 and LPT0-9, with any extension: "nul.txt" is the device, not a file. */
+const isWindowsDeviceName = (name: string): boolean => /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(name.split(".")[0]!);
+
 /**
  * The shorthand config's `sink`: one flat file per document in a directory, `.bin` for bytes and `.txt` for text, a
  * second write to a name overwrites it. Ids are not paths here (CSV rows, URLs), so an id that has characters a file
- * name should not is sanitized and given a short hash of the raw id, so distinct ids never share a file.
+ * name should not is sanitized and given a short hash of the raw id, so distinct ids never share a file. A name that is a
+ * Windows device name (CON, NUL, COM1, ...) gets the hash too, so the files can be written on Windows.
  */
 export class FlatFileEmitter implements Emitter {
   readonly #directory: string;
@@ -224,10 +261,14 @@ export class FlatFileEmitter implements Emitter {
   async emit(document: EmittedDocument): Promise<void> {
     await fsp.mkdir(this.#directory, { recursive: true });
     const safe = document.id.replace(/[^A-Za-z0-9._-]+/g, "_");
+    // An id that is its own safe name, in lower case, is the name. Any other id (changed by the safe set, empty, a Windows
+    // device name, or with a capital that a case-insensitive disk would merge with its lower-case twin) is told apart by a
+    // hash of the id. A device name loses its dots too: "com1.backup" would still be COM1 to Windows.
+    const stem = isWindowsDeviceName(safe) ? safe.replace(/\./g, "_") : safe || "document";
     const name =
-      safe === document.id
-        ? safe || "document"
-        : `${safe || "document"}-${createHash("sha1").update(document.id).digest("hex").slice(0, 8)}`;
+      safe === document.id && safe !== "" && safe === safe.toLowerCase() && !isWindowsDeviceName(safe)
+        ? safe
+        : `${stem.toLowerCase()}-${createHash("sha1").update(document.id).digest("hex").slice(0, 8)}`;
     if (document.bytes !== undefined) {
       await fsp.writeFile(join(this.#directory, `${name}.bin`), document.bytes);
     } else if (document.text !== undefined) {

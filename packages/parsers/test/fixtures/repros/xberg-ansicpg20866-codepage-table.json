@@ -1,0 +1,21 @@
+{
+  "description": "(tikajs-2ec1) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: \\ansicpg20866 decodes \\'e1\\'e2 to АБ.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg20866 \\'e1\\'e2}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "АБ"
+    }
+  ]
+}

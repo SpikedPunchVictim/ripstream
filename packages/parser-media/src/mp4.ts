@@ -105,6 +105,8 @@ export class Mp4Parser implements Parser {
   }
 }
 
+const MAX_METADATA_SCAN_DEPTH = 16;
+
 /** Walks the containers that hold QuickTime metadata boxes (`udta`/`meta`, nested in the movie and its tracks). */
 function scanQuickTimeMetadata(
   data: Uint8Array,
@@ -112,12 +114,16 @@ function scanQuickTimeMetadata(
   start: number,
   end: number,
   metadata: Metadata,
+  depth = 0,
 ): void {
+  // The containers nest four deep (moov > trak > mdia > minf > stbl); a file that nests them deeper is not scanned
+  // further, rather than recursing once per 8-byte box until the stack gives out.
+  if (depth > MAX_METADATA_SCAN_DEPTH) return;
   for (const box of boxes(data, view, start, end)) {
     if (box.type === "udta" || box.type === "meta") {
       processQuickTimeMeta(data, view, box, metadata);
     } else if (box.type === "trak" || box.type === "mdia" || box.type === "minf" || box.type === "stbl") {
-      scanQuickTimeMetadata(data, view, box.start, box.start + box.size, metadata);
+      scanQuickTimeMetadata(data, view, box.start, box.start + box.size, metadata, depth + 1);
     }
   }
 }

@@ -9,7 +9,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { parquetMetadata, parquetReadObjects, parquetSchema } from "hyparquet";
-import { checkParquetFooter, checkParquetPages, PARQUET_ROW_END, type ParquetLimits } from "./parquet-limits.ts";
+import { checkParquetFooter, checkParquetPages, checkParquetTrailer, PARQUET_ROW_END, type ParquetLimits } from "./parquet-limits.ts";
 
 /** hyparquet's column read is quadratic in the schema (1,000 columns 69 ms, 5,000 about 1 s, 10,000 about 4.3 s, measured). */
 export const DEFAULT_MAX_PARQUET_SCHEMA_ELEMENTS = 5_000;
@@ -19,6 +19,10 @@ export const DEFAULT_MAX_PARQUET_SCHEMA_DEPTH = 100;
 export const DEFAULT_MAX_PARQUET_ROW_GROUPS = 10_000;
 /** hyparquet allocates and fills what a page's header claims, however few bytes the page has (2^26 values: 5.7 s and 484 MiB from a 123-byte file, measured). */
 export const DEFAULT_MAX_PARQUET_PAGE_VALUES = 4_194_304;
+/** hyparquet decodes the whole thrift footer into about 200 times its size (4 MB gave 883 MB, 48 MB ran out of heap, measured). */
+export const DEFAULT_MAX_PARQUET_FOOTER_BYTES = 4 * 1024 * 1024;
+/** Values all the page headers read may claim between them: sixteen maximal pages (2^26), about the 5.7 s a single page of that many took to fill. */
+export const DEFAULT_MAX_PARQUET_TOTAL_VALUES = 16 * DEFAULT_MAX_PARQUET_PAGE_VALUES;
 
 export interface ColumnarParserOptions {
   /** Maximum schema elements (columns and groups, and the root) a Parquet footer may list (default {@link DEFAULT_MAX_PARQUET_SCHEMA_ELEMENTS}). */
@@ -29,6 +33,10 @@ export interface ColumnarParserOptions {
   readonly maxRowGroups?: number;
   /** Maximum values one Parquet page header may claim (default {@link DEFAULT_MAX_PARQUET_PAGE_VALUES}). */
   readonly maxPageValues?: number;
+  /** Maximum bytes of a Parquet footer (default {@link DEFAULT_MAX_PARQUET_FOOTER_BYTES}). */
+  readonly maxFooterBytes?: number;
+  /** Maximum values the page headers of the row groups that are read may claim in all (default {@link DEFAULT_MAX_PARQUET_TOTAL_VALUES}). */
+  readonly maxTotalValues?: number;
 }
 
 function positiveInteger(name: string, value: number): number {
@@ -48,6 +56,8 @@ export class ColumnarParser implements Parser {
       maxSchemaDepth: positiveInteger("maxSchemaDepth", options.maxSchemaDepth ?? DEFAULT_MAX_PARQUET_SCHEMA_DEPTH),
       maxRowGroups: positiveInteger("maxRowGroups", options.maxRowGroups ?? DEFAULT_MAX_PARQUET_ROW_GROUPS),
       maxPageValues: positiveInteger("maxPageValues", options.maxPageValues ?? DEFAULT_MAX_PARQUET_PAGE_VALUES),
+      maxFooterBytes: positiveInteger("maxFooterBytes", options.maxFooterBytes ?? DEFAULT_MAX_PARQUET_FOOTER_BYTES),
+      maxTotalValues: positiveInteger("maxTotalValues", options.maxTotalValues ?? DEFAULT_MAX_PARQUET_TOTAL_VALUES),
     };
   }
 
@@ -67,7 +77,7 @@ export class ColumnarParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     const chunks: Uint8Array[] = [];
     for await (const chunk of stream) chunks.push(chunk);
@@ -84,10 +94,16 @@ export class ColumnarParser implements Parser {
 
     if (ascii(data, 0, 4) === "PAR1") {
       const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-      const footer = parquetMetadata(buffer);
       // hyparquet has no limits of its own: nothing below runs on a footer or page header that claims too much.
+      checkParquetTrailer(data, this.#limits);
+      let footer: ReturnType<typeof parquetMetadata>;
+      try {
+        footer = parquetMetadata(buffer);
+      } catch (error) {
+        throw new MalformedDocumentError("Invalid Parquet footer", { cause: error });
+      }
       checkParquetFooter(footer, this.#limits);
-      checkParquetPages(buffer, footer, this.#limits);
+      checkParquetPages(buffer, footer, this.#limits, () => ctx.throwIfAborted());
       const schema = parquetSchema(footer);
       const columns = schema.children.map((child) => child.element.name);
       metadata.set("parquet:row-count", String(footer.num_rows));

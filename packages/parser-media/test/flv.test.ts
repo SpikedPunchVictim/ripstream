@@ -98,3 +98,37 @@ test("a malformed metadata tag stops the scan, as Tika aborts the document", asy
   assert.equal(metadata.get("flv:duration"), null);
   assert.equal(metadata.get("flv:hasVideo"), "true");
 });
+
+test("an AMF array that declares more entries than the tag holds ends the scan instead of reading phantom values (tikajs-2mo9)", async () => {
+  const header = [0x46, 0x4c, 0x56, 1, 5, 0, 0, 0, 9];
+  const tag = (script: number[]): number[] => {
+    const previous = script.length + 11;
+    return [
+      18, (script.length >> 16) & 0xff, (script.length >> 8) & 0xff, script.length & 0xff, 0, 0, 0, 0, 0, 0, 0,
+      ...script,
+      (previous >>> 24) & 0xff, (previous >>> 16) & 0xff, (previous >>> 8) & 0xff, previous & 0xff,
+    ];
+  };
+  // A strict array declaring 100,000 elements with none in the tag.
+  const hollow = [...amfString("onMetaData"), 10, 0, 1, 0x86, 0xa0];
+  const good = [...amfString("onMetaData"), ...amfObject({ duration: 1 })];
+  const metadata = await parse(new Uint8Array([...header, 0, 0, 0, 0, ...tag(hollow), ...tag(good)]));
+  assert.equal(metadata.get("flv:duration"), null);
+});
+
+test("ECMA arrays nested past the depth bound end the scan (tikajs-2mo9)", async () => {
+  const header = [0x46, 0x4c, 0x56, 1, 5, 0, 0, 0, 9];
+  const nesting = 5000;
+  const level = [0, 0, 8, 0, 0, 0, 1];
+  const script = [...amfString("onMetaData"), 8, 0, 0, 0, 1, ...Array.from({ length: nesting }, () => level).flat()];
+  const previous = script.length + 11;
+  const tagBytes = [
+    18, (script.length >> 16) & 0xff, (script.length >> 8) & 0xff, script.length & 0xff, 0, 0, 0, 0, 0, 0, 0,
+    ...script,
+    (previous >>> 24) & 0xff, (previous >>> 16) & 0xff, (previous >>> 8) & 0xff, previous & 0xff,
+  ];
+  const good = [...amfString("onMetaData"), ...amfObject({ duration: 1 })];
+  const goodTag = [18, 0, 0, good.length, 0, 0, 0, 0, 0, 0, 0, ...good, 0, 0, 0, good.length + 11];
+  const metadata = await parse(new Uint8Array([...header, 0, 0, 0, 0, ...tagBytes, ...goodTag]));
+  assert.equal(metadata.get("flv:duration"), null);
+});

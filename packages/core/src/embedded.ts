@@ -16,6 +16,23 @@ export interface EmbeddedDocumentExtractor {
   ): Promise<void>;
 }
 
+/**
+ * Limits of the whole parse (the count of embedded resources, their total bytes, the output): the parse is out of
+ * room, whichever document it was in. A limit of one document (its size, its depth, its metadata) is not on this list.
+ */
+const WHOLE_PARSE_LIMITS = new WeakSet<Error>();
+
+/** A LimitExceededError for a limit of the whole parse, which no document's failure record may absorb. */
+export function wholeParseLimit(message: string): LimitExceededError {
+  const error = new LimitExceededError(message);
+  WHOLE_PARSE_LIMITS.add(error);
+  return error;
+}
+
+export function isWholeParseLimit(error: unknown): boolean {
+  return error instanceof Error && WHOLE_PARSE_LIMITS.has(error);
+}
+
 function budgetFor(ctx: ParseContext): { count: number; bytes: number } {
   let budget = ctx.get(CONTEXT_KEYS.EMBEDDED_BUDGET);
   if (budget === undefined) {
@@ -33,7 +50,7 @@ export function chargeEmbeddedResource(ctx: ParseContext): number {
   const budget = budgetFor(ctx);
   budget.count += 1;
   if (budget.count > ctx.limits.maxEmbeddedResources) {
-    throw new LimitExceededError(
+    throw wholeParseLimit(
       `Embedded count ${budget.count} exceeds ${ctx.limits.maxEmbeddedResources}`,
     );
   }
@@ -56,7 +73,7 @@ export function chargeEmbeddedBytes(ctx: ParseContext, bytes: number): void {
   const budget = budgetFor(ctx);
   budget.bytes += bytes;
   if (budget.bytes > ctx.limits.maxTotalEmbeddedBytes) {
-    throw new LimitExceededError(
+    throw wholeParseLimit(
       `Embedded bytes ${budget.bytes} exceed ${ctx.limits.maxTotalEmbeddedBytes}`,
     );
   }
@@ -84,7 +101,7 @@ export async function meterEmbeddedStream(
         );
       }
       if (budget.bytes > maxTotalEmbeddedBytes) {
-        throw new LimitExceededError(
+        throw wholeParseLimit(
           `Embedded bytes ${budget.bytes} exceed ${maxTotalEmbeddedBytes}`,
         );
       }

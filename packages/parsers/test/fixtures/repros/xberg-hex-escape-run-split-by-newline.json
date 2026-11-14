@@ -1,0 +1,26 @@
+{
+  "description": "(tikajs-ig3h) Adapted from xberg (MIT) crates/xberg/src/extractors/rtf/tests.rs: a line wrap between the bytes of one DBCS character does not split it.",
+  "tags": [
+    "xberg",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg932 \\'93\r\n\\'fa}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "日"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "�"
+    }
+  ]
+}

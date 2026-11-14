@@ -58,6 +58,11 @@ export function readRawBody(request: IncomingMessage, limit: number, keep: numbe
       resolve(new Uint8Array());
       return;
     }
+    // A request whose connection closed before this read began emits nothing more: settle now, or never.
+    if (request.destroyed) {
+      reject(new Error("Request aborted before its body was read"));
+      return;
+    }
     const tooLarge = (): RipstreamError => new RipstreamError("REQUEST_TOO_LARGE", `Request exceeds ${limit} bytes`);
     const chunks: Buffer[] = [];
     let total = 0;

@@ -88,3 +88,24 @@ test("custom mimetypes merge and override the registry", () => {
     "application/x-widget",
   );
 });
+
+// Tika's MimeTypes.getMimeType(String) retries a name in lower case after the exact match, and ends the name at `?` or `#`;
+// forName stays exact. Both measured against Tika 4.2.0 (Content-Disposition filename on /meta, tikajs-w7xw).
+test("getMimeType retries a name in lower case, forName does not", () => {
+  assert.equal(mimeTypes.getMimeType("DATA.CSV")?.toString(), "text/csv");
+  assert.equal(mimeTypes.getMimeType("FILE.PDF")?.toString(), "application/pdf");
+  assert.equal(mimeTypes.getMimeType("x.pdf")?.toString(), "application/pdf");
+  assert.equal(mimeTypes.getMimeType("no-extension-here"), null);
+});
+
+test("getMimeType ends the name at a query or fragment", () => {
+  assert.equal(mimeTypes.getMimeType("report.pdf?download=1")?.toString(), "application/pdf");
+  assert.equal(mimeTypes.getMimeType("report.pdf#page=2")?.toString(), "application/pdf");
+});
+
+test("root XML with no namespace in the registry matches only a document with none", () => {
+  const rss = MediaType.parse("application/rss+xml")!.toString();
+  assert.equal(mimeTypes.forRootXML("rss")?.toString(), rss);
+  assert.equal(mimeTypes.forRootXML("rss", "")?.toString(), rss);
+  assert.equal(mimeTypes.forRootXML("rss", "urn:other"), null);
+});

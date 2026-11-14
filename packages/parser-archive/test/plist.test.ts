@@ -99,3 +99,28 @@ test("binary plist: a trailer declaring more objects than bytes is malformed", a
   new DataView(bytes.buffer).setBigUint64(bytes.length - 24, 1n << 40n);
   await assert.rejects(parsePlist(bytes), MalformedDocumentError);
 });
+
+async function parsePlistText(xml: string): Promise<string> {
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(xml));
+  const handler = new BodyContentHandler();
+  try {
+    await new PlistParser().parse(stream, handler, new Metadata(), new ParseContext());
+  } finally {
+    await stream.close();
+  }
+  return handler.toString();
+}
+
+test("XML plist keeps a CDATA string value (tikajs-gz44)", async () => {
+  const text = await parsePlistText(
+    `<?xml version="1.0"?><plist version="1.0"><dict><key>Note</key><string><![CDATA[a <b> & c]]></string></dict></plist>`,
+  );
+  assert.match(text, /a <b> & c/);
+});
+
+test("XML plist that is not well-formed is a MalformedDocumentError, not a raw parser error (tikajs-gz44)", async () => {
+  await assert.rejects(
+    parsePlistText(`<?xml version="1.0"?><plist version="1.0"><dict><key>Name</key><string>Ada</dict></plist>`),
+    MalformedDocumentError,
+  );
+});

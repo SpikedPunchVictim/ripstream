@@ -5,6 +5,7 @@ import {
   Metadata,
   ParseContext,
   RipstreamInputStream,
+  TIKA_KEYS,
 } from "@spikedpunch/ripstream-core";
 import { MailParser, MboxParser } from "../src/index.ts";
 
@@ -61,4 +62,46 @@ test("mbox applies the part charset to raw 8-bit bytes like .eml does", async ()
   const fromMbox = await parseBytes(new MboxParser(), mbox);
   assert.match(eml, /café crème/);
   assert.match(fromMbox, /café crème/);
+});
+
+async function parseMboxWithMetadata(text: string): Promise<{ text: string; metadata: Metadata }> {
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(text));
+  const handler = new BodyContentHandler();
+  const metadata = new Metadata();
+  await new MboxParser().parse(stream, handler, metadata, new ParseContext());
+  await stream.close();
+  return { text: handler.toString(), metadata };
+}
+
+const FIRST = "From ada@example.com Mon Jan  1 00:00:00 2024\nFrom: Ada <ada@example.com>\nSubject: First\nContent-Type: text/plain\n\n";
+const SECOND = "From grace@example.com Tue Jan  2 00:00:00 2024\nFrom: Grace <grace@example.com>\nSubject: Second\nContent-Type: text/plain\n\nHello two\n";
+
+test("mbox keeps a body line that starts with From inside its message (tikajs-gz44)", async () => {
+  const result = await parseMboxWithMetadata(`${FIRST}Hello one\nFrom my perspective this is fine.\nlast line\n${SECOND}`);
+  assert.equal(result.metadata.get("Message:Count"), "2");
+  assert.match(result.text, /From my perspective this is fine\./);
+  assert.match(result.text, /last line/);
+  assert.match(result.text, /Hello two/);
+});
+
+test("mbox keeps a body line that starts with From after a paragraph break (tikajs-gz44)", async () => {
+  const result = await parseMboxWithMetadata(`${FIRST}Hello one\n\nFrom the desk of the CEO\nmore\n${SECOND}`);
+  assert.equal(result.metadata.get("Message:Count"), "2");
+  assert.match(result.text, /From the desk of the CEO/);
+});
+
+test("mbox keeps a From body line that is followed by a blank line (paragraph break)", async () => {
+  const result = await parseMboxWithMetadata(`${FIRST}Hello one\nFrom the desk of the CEO\n\nsecond paragraph\n${SECOND}`);
+  assert.equal(result.metadata.get("Message:Count"), "2");
+  assert.equal(result.metadata.get(TIKA_KEYS.EMBEDDED_EXCEPTION), null);
+  assert.match(result.text, /From the desk of the CEO/);
+  assert.match(result.text, /second paragraph/);
+});
+
+test("mbox continues past a message the mail parser rejects (tikajs-gz44)", async () => {
+  // The first message's block is not an email at all: no header line.
+  const broken = "From x@example.com Mon Jan  1 00:00:00 2024\n\nno headers here\n";
+  const result = await parseMboxWithMetadata(`${broken}${SECOND}`);
+  assert.equal(result.metadata.get("Message:Count"), "1");
+  assert.match(result.text, /Hello two/);
 });

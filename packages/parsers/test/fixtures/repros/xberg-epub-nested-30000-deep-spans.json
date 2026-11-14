@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-u03v. Adapted from xberg (MIT) EPUB edge cases (#1490). Oracle Tika 4.2.0 /rmeta: 30000 nested spans give LEAD-PARAGRAPH and a TIKA-237 container exception; the paragraph after the nesting is not read (xberg expected TAIL-PARAGRAPH). Must not blow the stack.",
+  "tags": [
+    "xberg",
+    "epub",
+    "hostile"
+  ],
+  "input": {
+    "base64": "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",
+    "filename": "a.epub"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "LEAD-PARAGRAPH"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "TAIL-PARAGRAPH"
+    }
+  ]
+}

@@ -56,7 +56,8 @@ export type PdfResponse =
   | {
       readonly type: "ready";
       readonly info: unknown;
-      readonly xmp: Record<string, unknown>;
+      /** The raw XMP packet, or "" when there is none (or pdf.js could not read it). */
+      readonly xmp: string;
       readonly numPages: number;
       readonly attachments: readonly PdfAttachment[];
       /** Outline (bookmark) titles in document order; Tika writes them as text. */
@@ -104,7 +105,7 @@ interface PdfPage {
 }
 
 interface PdfMetadata {
-  getAll?(): Record<string, unknown>;
+  getRaw?(): string;
 }
 
 interface PdfDocument {
@@ -118,12 +119,12 @@ interface PdfDocument {
   getOutline?(): Promise<unknown>;
 }
 
-interface RangeTransport {
+export interface RangeTransport {
   readonly length: number;
   onDataRange(begin: number, chunk: Uint8Array): void;
 }
 
-interface RangeTransportConstructor {
+export interface RangeTransportConstructor {
   new (length: number, initialData: Uint8Array): RangeTransport;
 }
 
@@ -138,6 +139,9 @@ interface PdfModule {
 }
 
 const PDF_DATA_LIMIT = 8 * 1024 * 1024;
+
+/** pdf.js's range size for a file read through the range transport (its default is 65,536). */
+const RANGE_CHUNK_BYTES = 1024 * 1024;
 
 interface PdfOutlineItem {
   readonly title?: unknown;
@@ -179,11 +183,12 @@ export class PdfSession {
 
     try {
       const metadata = await document.getMetadata();
-      let xmp: Record<string, unknown> = {};
+      let xmp = "";
       try {
-        xmp = metadata.metadata?.getAll?.() ?? {};
+        const raw = metadata.metadata?.getRaw?.();
+        if (typeof raw === "string") xmp = raw;
       } catch {
-        xmp = {};
+        xmp = "";
       }
       let attachments: PdfAttachment[] = [];
       try {
@@ -270,6 +275,9 @@ export class PdfSession {
           input.path,
           length,
         );
+        // Every range pdf.js lacks restarts its parse from the top, so the number of ranges is the number of restarts:
+        // at the default 64 KiB an 8.6 MB file took 31 s (132 ranges), and a quadratic fraction of that is the cost.
+        options.rangeChunkSize = RANGE_CHUNK_BYTES;
       }
     } else {
       options.data = input.data ?? new Uint8Array(0);
@@ -329,7 +337,8 @@ export class PdfSession {
       try {
         const values = (await page.getAnnotations?.({ intent: "display" })) ?? [];
         annotations = values.map((annotation) => ({
-          name: typeof annotation.id === "string" ? annotation.id : undefined,
+          // pdf.js has no /NM (the annotation's name) and its `id` is the object reference ("7R"), which is not a name.
+          name: undefined,
           subtype: annotation.subtype,
           title: annotation.titleObj?.str ?? annotation.title,
           subject: annotation.subject,
@@ -401,39 +410,59 @@ class LimitError extends Error {
   override readonly name = "LimitExceededError";
 }
 
-function createFileRangeTransport(
+/** The range transport pdf.js reads a file larger than PDF_DATA_LIMIT through. Exported for its tests. */
+export function createFileRangeTransport(
   Base: RangeTransportConstructor,
   path: string,
   length: number,
 ): RangeTransport {
   const transport = new Base(length, new Uint8Array(0));
   const deliver = transport.onDataRange.bind(transport);
+  // pdf.js calls abort() when it tears the document down. A read still in flight then has nowhere to deliver to:
+  // pdf.js has dropped its range reader, and delivering throws, which in a detached promise is an unhandled rejection
+  // that ends the process.
+  let closed = false;
+  const abort = (transport as unknown as { abort?: () => void }).abort?.bind(transport);
+  (transport as unknown as { abort: () => void }).abort = (): void => {
+    closed = true;
+    abort?.();
+  };
   (transport as unknown as {
     requestDataRange: (start: number, end: number) => void;
   }).requestDataRange = (start: number, end: number): void => {
-    void (async () => {
-      const handle = await open(path, "r");
-      try {
-        const size = Math.max(0, Math.min(end - start, length - start));
-        const chunk = new Uint8Array(size);
-        let offset = 0;
-        while (offset < size) {
-          const { bytesRead } = await handle.read(
-            chunk,
-            offset,
-            size - offset,
-            start + offset,
-          );
-          if (bytesRead === 0) break;
-          offset += bytesRead;
+    if (closed) return;
+    void readRange(path, length, start, end).then(
+      (chunk) => {
+        if (closed) return;
+        try {
+          deliver(start, chunk);
+        } catch {
+          // The transport was torn down between the read and the delivery.
         }
-        deliver(start, chunk.subarray(0, offset));
-      } finally {
-        await handle.close();
-      }
-    })();
+      },
+      () => {
+        // The file is gone or unreadable. pdf.js has no way to be told, so the page timeout ends the wait.
+      },
+    );
   };
   return transport;
+}
+
+async function readRange(path: string, length: number, start: number, end: number): Promise<Uint8Array> {
+  const handle = await open(path, "r");
+  try {
+    const size = Math.max(0, Math.min(end - start, length - start));
+    const chunk = new Uint8Array(size);
+    let offset = 0;
+    while (offset < size) {
+      const { bytesRead } = await handle.read(chunk, offset, size - offset, start + offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    return chunk.subarray(0, offset);
+  } finally {
+    await handle.close();
+  }
 }
 
 function standardFontsUrl(): string | undefined {

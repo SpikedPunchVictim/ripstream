@@ -7,7 +7,7 @@ import type { PdfRequest, PdfResponse } from "../src/pdf-session.ts";
 const READY: PdfResponse = {
   type: "ready",
   info: {},
-  xmp: {},
+  xmp: "",
   numPages: 1,
   attachments: [],
 };

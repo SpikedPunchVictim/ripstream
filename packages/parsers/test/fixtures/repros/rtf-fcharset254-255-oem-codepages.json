@@ -1,0 +1,26 @@
+{
+  "description": "(tikajs-u03v, Fixer D) \\fcharset254 is code page 437 and \\fcharset255 code page 850. Tika 4.2.0 (oracle, PUT /tika/text) answers the box characters of 437 for 254 and the OEM 850 characters for 255, both over \\ansicpg1252.",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\rtf1\\ansi\\ansicpg1252{\\fonttbl{\\f0\\fcharset254 A;}{\\f1\\fcharset255 B;}}\\pard \\f0 \\'cf\\'f0\\'e8 \\f1 \\'cf\\'f0\\'e8}",
+    "filename": "a.rtf"
+  },
+  "options": {
+    "contentType": "application/rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "╧≡Φ"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "¤­Þ"
+    }
+  ]
+}

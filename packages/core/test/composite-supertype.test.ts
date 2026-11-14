@@ -204,6 +204,23 @@ test("tk:parsed-by names the parser that handled the document, not one that decl
   assert.deepEqual(metadata.getAll("tk:parsed-by"), ["takes"]);
 });
 
+test("tk:parsed-by keeps what it held before a parser declined, and not the decliner, when the key was already set", async () => {
+  const declining: Parser = {
+    name: "declines",
+    getSupportedTypes: () => new Set([type(XLSX)]),
+    async parse() {
+      throw new ParserDeclinedError("not mine");
+    },
+  };
+  const parser = new CompositeParser({ parsers: [declining, named("takes", [XLSX])] });
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.CONTENT_TYPE, type(XLSX));
+  const metadata = new Metadata();
+  metadata.add("tk:parsed-by", "Outer");
+  await parser.parse(await RipstreamInputStream.from(new TextEncoder().encode("abc")), new BodyContentHandler(), metadata, context);
+  assert.deepEqual(metadata.getAll("tk:parsed-by"), ["Outer", "takes"]);
+});
+
 test("a parameterised claim outranks the bare type and is not offered another version", async () => {
   const calls: string[] = [];
   const r = new MediaTypeRegistry();

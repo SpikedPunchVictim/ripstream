@@ -4,14 +4,16 @@ import { BodyContentHandler, LimitExceededError, MalformedDocumentError, Metadat
 import { parquetWriteBuffer } from "hyparquet-writer";
 import {
   ColumnarParser,
+  DEFAULT_MAX_PARQUET_FOOTER_BYTES,
   DEFAULT_MAX_PARQUET_PAGE_VALUES,
   DEFAULT_MAX_PARQUET_ROW_GROUPS,
   DEFAULT_MAX_PARQUET_SCHEMA_DEPTH,
   DEFAULT_MAX_PARQUET_SCHEMA_ELEMENTS,
+  DEFAULT_MAX_PARQUET_TOTAL_VALUES,
   type ColumnarParserOptions,
 } from "../src/index.ts";
 import type { FileMetaData, SchemaElement } from "hyparquet";
-import { checkParquetFooter, checkParquetPages, type ParquetLimits } from "../src/parquet-limits.ts";
+import { checkParquetFooter, checkParquetPages, checkParquetTrailer, type ParquetLimits } from "../src/parquet-limits.ts";
 import {
   chunkOf,
   chunkSized,
@@ -147,7 +149,14 @@ test("a limit that is not a positive integer is refused when the parser is built
 // ---- the checks called directly, on footers and page bytes put together by hand ---------------------------------------
 // Every limit has a different value so a check that reads the wrong one is caught.
 
-const LIMITS: ParquetLimits = { maxSchemaElements: 1_000, maxSchemaDepth: 50, maxRowGroups: 7, maxPageValues: 10 };
+const LIMITS: ParquetLimits = {
+  maxSchemaElements: 1_000,
+  maxSchemaDepth: 50,
+  maxRowGroups: 7,
+  maxPageValues: 10,
+  maxFooterBytes: 100_000,
+  maxTotalValues: 1_000,
+};
 
 function footerOf(schema: SchemaElement[], rowGroups: FileMetaData["row_groups"] = []): FileMetaData {
   return { version: 1, schema, num_rows: 0n, row_groups: rowGroups, metadata_length: 0 };
@@ -332,4 +341,58 @@ test("every column chunk of a row group is walked, not just the first", () => {
   const { file, chunkSize } = pagesFile([{ kind: "data", values: 11 }]);
   const group = rowGroupOf(1, chunkOf("ok", 1n, 4n), chunkSized(chunkSize));
   assert.throws(() => checkParquetPages(file, footerOf([], [group]), LIMITS), LimitExceededError);
+});
+
+test("pages that are each within the page limit but claim more than the total limit between them are a LimitExceededError (tikajs-v6lm)", () => {
+  const pages: PageSpec[] = Array.from({ length: 11 }, () => ({ kind: "data", values: 10 }));
+  const { file, chunkSize } = pagesFile(pages);
+  const footer = footerOf([], [rowGroupOf(1, chunkSized(chunkSize, { numValues: 1_000_000n }))]);
+  checkParquetPages(file, footer, { ...LIMITS, maxTotalValues: 110 });
+  assert.throws(() => checkParquetPages(file, footer, { ...LIMITS, maxTotalValues: 109 }), LimitExceededError);
+});
+
+test("the total value limit counts the pages of every row group that is read (tikajs-v6lm)", () => {
+  const { file, chunkSize } = pagesFile([{ kind: "data", values: 10 }]);
+  const group = rowGroupOf(1, chunkSized(chunkSize, { numValues: 1_000_000n }));
+  const footer = footerOf([], [group, group, group]);
+  checkParquetPages(file, footer, { ...LIMITS, maxTotalValues: 30 });
+  assert.throws(() => checkParquetPages(file, footer, { ...LIMITS, maxTotalValues: 29 }), LimitExceededError);
+});
+
+test("an abort is seen between column chunks of the page walk (tikajs-v6lm)", () => {
+  const { file, chunkSize } = pagesFile([{ kind: "data", values: 1 }]);
+  const footer = footerOf([], [rowGroupOf(1, chunkSized(chunkSize))]);
+  assert.throws(
+    () =>
+      checkParquetPages(file, footer, LIMITS, () => {
+        throw new Error("aborted");
+      }),
+    /aborted/,
+  );
+});
+
+test("a trailer whose footer length is longer than the file is a MalformedDocumentError before the footer is decoded (tikajs-v6lm)", async () => {
+  const file = new Uint8Array(32);
+  file.set([0x50, 0x41, 0x52, 0x31], 0);
+  new DataView(file.buffer).setUint32(24, 48 * 1024 * 1024, true);
+  file.set([0x50, 0x41, 0x52, 0x31], 28);
+  assert.throws(() => checkParquetTrailer(file, LIMITS), MalformedDocumentError);
+  await assert.rejects(parse(file), MalformedDocumentError);
+});
+
+test("a file that starts PAR1 but has no trailer is a MalformedDocumentError (tikajs-v6lm)", async () => {
+  await assert.rejects(parse(new Uint8Array([0x50, 0x41, 0x52, 0x31, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])), MalformedDocumentError);
+});
+
+test("a footer longer than maxFooterBytes is a LimitExceededError (tikajs-v6lm)", async () => {
+  const file = wideSchemaFooter(40);
+  const footerLength = new DataView(file.buffer, file.byteOffset, file.byteLength).getUint32(file.byteLength - 8, true);
+  await assert.rejects(parse(file, { maxFooterBytes: footerLength - 1 }), LimitExceededError);
+  await parse(file, { maxFooterBytes: footerLength });
+});
+
+test("the default footer and total value limits are positive integers that can be set (tikajs-v6lm)", () => {
+  assert.throws(() => new ColumnarParser({ maxFooterBytes: 0 }), RangeError);
+  assert.throws(() => new ColumnarParser({ maxTotalValues: 2.5 }), RangeError);
+  assert.ok(DEFAULT_MAX_PARQUET_FOOTER_BYTES > 0 && DEFAULT_MAX_PARQUET_TOTAL_VALUES > DEFAULT_MAX_PARQUET_PAGE_VALUES);
 });

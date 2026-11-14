@@ -69,6 +69,38 @@ test("caps redirects and re-validates every hop", async () => {
   );
 });
 
+test("a redirect hop's body is cancelled, not left to hold its connection", async () => {
+  const cancelled: string[] = [];
+  const hop = (name: string, location: string): Response =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(8));
+        },
+        cancel() {
+          cancelled.push(name);
+        },
+      }),
+      { status: 302, headers: { location } },
+    );
+  let calls = 0;
+  const fetchImpl: typeof fetch = async () => (++calls < 3 ? hop(`hop${calls}`, "/next") : new Response("done"));
+  const response = await safeFetch("http://93.184.216.34/", {}, { fetchImpl });
+  assert.equal(await response.text(), "done");
+  assert.deepEqual(cancelled, ["hop1", "hop2"]);
+
+  cancelled.length = 0;
+  await assert.rejects(safeFetch("http://93.184.216.34/", {}, { fetchImpl: async () => hop("blocked", "http://127.0.0.1/") }), UrlSecurityError);
+  assert.deepEqual(cancelled, ["blocked"], "a hop refused for where it points is released too");
+
+  cancelled.length = 0;
+  await assert.rejects(
+    safeFetch("http://93.184.216.34/", {}, { fetchImpl: async () => hop("last", "/again"), maxRedirects: 0 }),
+    /Too many redirects/,
+  );
+  assert.deepEqual(cancelled, ["last"]);
+});
+
 test("blocks IPv6 forms that embed or alias IPv4 and special ranges", async () => {
   const blocked = [
     "::ffff:127.0.0.1",

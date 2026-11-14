@@ -93,7 +93,8 @@ function emfText(data: Uint8Array, view: DataView): string[] {
     const type = view.getUint32(position, true);
     const size = view.getUint32(position + 4, true);
     if (size < 8 || position + size > data.length) break;
-    if (type === EMR_EXTTEXTOUTA || type === EMR_EXTTEXTOUTW) {
+    // EmrText (chars at +44, string offset at +48) must lie inside its own record.
+    if ((type === EMR_EXTTEXTOUTA || type === EMR_EXTTEXTOUTW) && size >= 52) {
       const chars = view.getInt32(position + 44, true);
       const stringOffset = view.getUint32(position + 48, true);
       const start = position + stringOffset;
@@ -117,11 +118,12 @@ function wmfText(data: Uint8Array, view: DataView, start: number): string[] {
     const size = sizeWords * 2;
     if (size < 6 || position + size > data.length) break;
     const fn = view.getUint16(position + 4, true);
-    if (fn === WMF_TEXTOUT) {
+    // The fixed part of the record (TextOut: count at +6; ExtTextOut: count at +10, string at +14) must lie inside it.
+    if (fn === WMF_TEXTOUT && size >= 8) {
       const count = view.getInt16(position + 6, true);
       const textStart = position + 8;
       if (count > 0 && textStart + count <= position + size) texts.push(decodeWmfString(data.subarray(textStart, textStart + count)));
-    } else if (fn === WMF_EXTTEXTOUT) {
+    } else if (fn === WMF_EXTTEXTOUT && size >= 14) {
       const count = view.getInt16(position + 6 + 4, true);
       const textStart = position + 6 + 8;
       if (count > 0 && textStart + count <= position + size) texts.push(decodeWmfString(data.subarray(textStart, textStart + count)));

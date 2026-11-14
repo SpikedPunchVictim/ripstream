@@ -411,7 +411,9 @@ await engine.run();
   write goes to `<file>.<uuid>.tmp` beside it and is published in one step (`atomicWrites`, default true), so a reader never
   sees half a file. `compression: "GZIP"` adds `.gz`, `fileExtension` adds `.<ext>`, `prettyPrint` writes Jackson's layout.
   What is written follows the mode: RMETA, CONCATENATE and NO_PARSE a JSON list, CONTENT_ONLY the raw content, and the bytes
-  of an UNPACK file as they are, with neither extension nor compression.
+  of an UNPACK file as they are, with neither extension nor compression. Tika's emitter follows a symbolic link inside
+  `basePath` wherever it points; `new FileSystemEmitter({ basePath, confineSymlinks: true })` (ripstream's own option, off by
+  default, not a pipes-config key) refuses a write whose real path leaves `basePath`.
 - **The parse modes are Tika's, per input** (`tikajs-68os.6.3`). RMETA emits the document and what is embedded in it.
   CONCATENATE emits one document per input, its content the text of all of it (it used to join the whole run into one
   `concatenated` document; join the output files if that is what you want). CONTENT_ONLY is the same for an emitter that
