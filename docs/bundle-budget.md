@@ -26,7 +26,8 @@ measured size plus about five percent (KiB).
 |---|---|---|---|
 | core | 1,604,924 | 1650 (was 1500) | segments, labels, location, `pathParts`, `leafSegments` and the segment allowance; `onEmbeddedLimit`; email header block; `handlerType` validation |
 | parser-office | 692,687 | 710 (was 650) | segment hints for office formats; email headers; RDF blank-node labels |
-| parser-pdf | 335,430 | 345 (was 150) | brute-force damaged-file recovery (xref and page-tree rebuild, font repair, Flate salvage), image-only page keys, key repair, pdf.js import filter. Roughly doubled by design |
+| parser-pdf | 364,581 | 375 (was 345, 150 before recovery) | brute-force damaged-file recovery (xref and page-tree rebuild, font repair, Flate salvage), image-only page keys, key repair, pdf.js import filter (roughly doubled by design); then repair of intact-xref font damage (tikajs-w4ps), Tika-4 metadata keys: access permissions, marked content, EOF offsets, incremental updates (tikajs-p1qx), page labels and AcroForm field segments (tikajs-ex78) |
+| server | 205,970 | 212 (was 200) | opt-in `?segments=` on `/rmeta` and `/unpack` (tikajs-5wd0) |
 | cli | 120,674 | 125 (was 100) | split bundle stub, `--segments`, `--workers`, `--isolation-reuse*` |
 | pipes | 649,129 | 665 (was 550) | the parse worker pool and its codec, segments in the emit surface |
 | isolation-node | 692,882 | 710 (was 550) | opt-in child reuse (serve-mode protocol, leases, retire reasons, CPU and RSS checks), segment frames, admission refusal |
