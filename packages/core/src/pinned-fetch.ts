@@ -1,7 +1,7 @@
-import { request as httpRequest, type IncomingMessage } from "node:http";
-import { request as httpsRequest } from "node:https";
+import type { IncomingMessage } from "node:http";
 import type { LookupFunction } from "node:net";
 import { Readable } from "node:stream";
+import { loadRequest } from "./lazy-builtins.ts";
 
 export interface ResolvedAddress {
   readonly address: string;
@@ -45,7 +45,7 @@ export async function pinnedFetch(
   const combined = signals.length === 0 ? undefined : AbortSignal.any(signals);
   combined?.throwIfAborted();
 
-  const send = url.protocol === "https:" ? httpsRequest : httpRequest;
+  const send = await loadRequest(url.protocol === "https:");
   const headers: Record<string, string> = {};
   req.headers.forEach((value, name) => {
     headers[name] = value;

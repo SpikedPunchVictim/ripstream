@@ -1,4 +1,5 @@
-import { lookup } from "node:dns/promises";
+import type { lookup } from "node:dns/promises";
+import { loadDnsLookup } from "./lazy-builtins.ts";
 import { pinnedFetch, type ResolvedAddress } from "./pinned-fetch.ts";
 
 export class UrlSecurityError extends Error {
@@ -67,7 +68,7 @@ async function resolveAllowedUrl(value: string | URL, options: SafeFetchOptions)
     }
     let addresses: Array<{ address: string; family: number }>;
     try {
-      addresses = await (options.lookupImpl ?? lookup)(host, { all: true });
+      addresses = await (options.lookupImpl ?? (await loadDnsLookup()))(host, { all: true });
     } catch (error) {
       throw new UrlSecurityError(
         `Unable to resolve host ${host}: ${error instanceof Error ? error.message : String(error)}`,

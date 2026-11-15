@@ -22,13 +22,12 @@ import {
   type ParseRecord,
   type RipstreamConfig,
 } from "@spikedpunch/ripstream-core";
-import { createStandardIsolation, type StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
+import type { createStandardIsolation, StandardIsolation } from "@spikedpunch/ripstream-bundle-standard/isolation";
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
-import { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
-import { CheckpointStore, createEngineFromSettings, isFailure, type Reporter } from "@spikedpunch/ripstream-pipes";
-import { bearerTokenAuthenticator, createRipstreamServer, extensionFor, type ServerMimeType } from "@spikedpunch/ripstream-server";
+import type { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
+import type { CheckpointStore, Reporter } from "@spikedpunch/ripstream-pipes";
+import type { createRipstreamServer, ServerMimeType } from "@spikedpunch/ripstream-server";
 import { formatDoctor, runDoctor, type DoctorProbes } from "./doctor.ts";
-import { serverMimeTypes } from "./mime-types.ts";
 import {
   IsolationSettingsError,
   assertKnownVariables,
@@ -43,11 +42,20 @@ export interface CliIO {
   readonly readStdin: () => Promise<Uint8Array>;
 }
 
-/** Tika's own language detector, for the `language` command and the language filter. Its model is read when a text first needs it. */
-const LANGUAGE_DETECTOR = new CharSoupLanguageDetector();
+// Cold start: `parse`, `detect` and `metadata` need none of language, pipes, server or the isolation, so each is
+// imported by the command that uses it (a test pins this: cold-start.test.ts).
+
+/** Tika's own language detector, for the `language` command and the language filter. Built once, when first needed; its model is read when a text first needs it. */
+let languageDetector: Promise<CharSoupLanguageDetector> | undefined;
+function loadLanguageDetector(): Promise<CharSoupLanguageDetector> {
+  languageDetector ??= import("@spikedpunch/ripstream-language").then((language) => new language.CharSoupLanguageDetector());
+  return languageDetector;
+}
 
 /** What a configuration's metadata filters need that core has not. */
-const METADATA_FILTER_SERVICES: MetadataFilterServices = { languageIdentifier: LANGUAGE_DETECTOR };
+async function metadataFilterServices(): Promise<MetadataFilterServices> {
+  return { languageIdentifier: await loadLanguageDetector() };
+}
 
 const defaultIO: CliIO = {
   stdout: (value) => process.stdout.write(value),
@@ -167,6 +175,7 @@ export async function main(
   }
   if (options.command === "pipes") return pipes(options, settings, deps, io);
   if (options.command === "formats") {
+    const { serverMimeTypes } = await import("./mime-types.ts");
     const types = serverMimeTypes(settings.config?.customMimeTypes ?? null);
     io.stdout(
       options.json || options.output === "json"
@@ -212,7 +221,7 @@ export async function main(
 
     if (options.command === "language") {
       const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-      const result = LANGUAGE_DETECTOR.detect(text);
+      const result = (await loadLanguageDetector()).detect(text);
       if (options.json || options.output === "json") {
         io.stdout(`${JSON.stringify(result)}\n`);
       } else {
@@ -234,7 +243,7 @@ export async function main(
       );
       // Tika's CLI runs the configured `metadata-filters` over the list it writes as recursive JSON, and nowhere else.
       const metadataFilter =
-        settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES), parseContext: null }, false);
+        settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config, await metadataFilterServices()), parseContext: null }, false);
       const written = metadataFilter === null ? {} : { metadataFilter };
       if (options.output === "jsonl") {
         io.stdout(rmetaObjects(records, written).map((object) => `${JSON.stringify(object)}\n`).join(""));
@@ -289,6 +298,11 @@ export async function main(
 async function serve(options: Options, settings: CliSettings, deps: CliDeps, io: CliIO): Promise<number> {
   let isolation: StandardIsolation | null = null;
   try {
+    const [{ bearerTokenAuthenticator, createRipstreamServer }, { serverMimeTypes }] = await Promise.all([
+      import("@spikedpunch/ripstream-server"),
+      import("./mime-types.ts"),
+    ]);
+    const filterServices = settings.config === null ? null : await metadataFilterServices();
     // The ceiling is also the default: a request that names no cap gets it. With isolation it is required, because the
     // child's result cap and memory derive from it, so the isolation is built for exactly that cap.
     const isolating = settings.isolation.config.mode !== "off";
@@ -320,7 +334,7 @@ async function serve(options: Options, settings: CliSettings, deps: CliDeps, io:
         ...(settings.config?.throwOnWriteLimit === true ? { onOutputLimit: "throw" as const } : {}),
         endpoints: server.endpoints ?? DEFAULT_SERVER_ENDPOINTS,
         mimeTypes: serverMimeTypes(settings.config?.customMimeTypes ?? null),
-        ...(settings.config === null ? {} : { metadataFilters: metadataFiltersOf(settings.config, METADATA_FILTER_SERVICES) }),
+        ...(settings.config === null || filterServices === null ? {} : { metadataFilters: metadataFiltersOf(settings.config, filterServices) }),
         ...(server.cors === undefined ? {} : { corsOrigin: server.cors }),
         ...(server.authToken === undefined ? {} : { authenticate: bearerTokenAuthenticator(server.authToken) }),
         // The pipes sections are the fetchers, emitters and iterator of /pipes and /async; without a token the server
@@ -395,6 +409,11 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
       io.stderr("ripstream: pipes needs --config with the pipes sections (fetchers, emitters and a pipes-iterator)\n");
       return EXIT_USAGE;
     }
+    const [{ CheckpointStore, createEngineFromSettings, isFailure }, { extensionFor }, { serverMimeTypes }] = await Promise.all([
+      import("@spikedpunch/ripstream-pipes"),
+      import("@spikedpunch/ripstream-server"),
+      import("./mime-types.ts"),
+    ]);
     for (const notice of pipesSettings.notices) io.stderr(`ripstream: NOTE: ${notice}\n`);
     let checkpoint: CheckpointStore | undefined;
     if (options.checkpoint !== null) {
@@ -435,7 +454,7 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
     const engine = createEngineFromSettings(pipesSettings, {
       ripstream,
       reporter,
-      metadataFilterServices: METADATA_FILTER_SERVICES,
+      metadataFilterServices: await metadataFilterServices(),
       // UNPACK with `suffixStrategy: DETECTED` names files as `ripstream serve` and /unpack do: by the media type registry.
       extensionOf: (contentType) => extensionFor(contentType, (mimeTypes ??= serverMimeTypes(settings.config?.customMimeTypes ?? null))),
       ...(checkpoint === undefined ? {} : { checkpoint }),
@@ -485,7 +504,7 @@ async function openIsolation(
   io: CliIO,
   defaultMaxOutputChars?: number,
 ): Promise<StandardIsolation> {
-  const create = deps.createIsolation ?? createStandardIsolation;
+  const create = deps.createIsolation ?? (await import("@spikedpunch/ripstream-bundle-standard/isolation")).createStandardIsolation;
   try {
     return await create({
       config: settings.isolation.config,

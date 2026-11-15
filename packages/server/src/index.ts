@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { gzip } from "node:zlib";
 import {
@@ -1230,7 +1230,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
   const readMillis = options.maxRequestReadMillis ?? requestTimeoutMs;
   const checkingInterval =
     options.maxRequestReadMillis !== undefined && readMillis > 0 ? Math.min(30_000, Math.max(50, Math.floor(readMillis / 2))) : 30_000;
-  const server = createServer(
+  // Read here, not at import: a static `node:http` import costs every importer ~30 ms (see core/src/lazy-builtins.ts).
+  const server = process.getBuiltinModule("node:http").createServer(
     { requestTimeout: readMillis < 0 ? 0 : readMillis, connectionsCheckingInterval: checkingInterval },
     handler,
   );
