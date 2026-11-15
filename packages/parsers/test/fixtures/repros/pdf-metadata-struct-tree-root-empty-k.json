@@ -1,0 +1,19 @@
+{
+  "description": "tikajs-p1qx: expected values are what Tika 4.2.0 /rmeta returned for the same bytes. A /StructTreeRoot with an empty /K is not marked content (pdf.js alone would say it is: it only knows the root exists).",
+  "tags": [
+    "repro",
+    "pdf",
+    "metadata"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 36 >>\nstream\nBT /F1 24 Tf 72 700 Td (Hello) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Type /StructTreeRoot /K [] >>\nendobj\nxref\n0 7\n0000000000 65535 f \n0000000009 00000 n \n0000000080 00000 n \n0000000137 00000 n \n0000000263 00000 n \n0000000349 00000 n \n0000000419 00000 n \ntrailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n468\n%%EOF\n",
+    "filename": "pdf-metadata-struct-tree-root-empty-k.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.pdf:has-marked-content",
+      "value": "false"
+    }
+  ]
+}

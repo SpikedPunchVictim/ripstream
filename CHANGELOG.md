@@ -4,6 +4,28 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segment fidelity: xls rows, setext headings, repeated shape names (`tikajs-57wb`)
+
+Changed, with segments on only (text and metadata are untouched): an xls's rows now carry the sheet's own numbers, so an
+empty row no longer shifts them and a cell is `cell=C7` as in xlsx, not `row=3;col=2`; a markdown setext heading (`Title` over
+`===` or `---`) now labels what follows, by its title without the underline; and a second shape of a slide with the same name is
+located `Name~2`, so `(path, location)` stays unique. `SegmentHints.heading` takes an optional `title`. What is left of the bead's
+list is `tikajs-bwjq`.
+
+### PDF: Tika's access-permission, marked-content and revision keys (`tikajs-p1qx`)
+
+Added: `access-permission:*` (eight keys), `pdf:has-marked-content`, `pdf:eof-offsets`, `pdf:incremental-update-count` and
+`pdf:num-3d-annotations`, with the values Tika 4.2.0 writes (checked on about 100 PDFs). Still not written, with the reasons
+in docs/migration.md: `pdf:ocr-page-count`, `pdf:contains-damaged-font`, the unmapped-character statistics and
+`pdf:contains-non-embedded-font`.
+
+### PDF: a damaged font under an intact xref is repaired (`tikajs-w4ps`)
+
+Fixed: a PDF with an intact xref whose CID font had `/Orderin` for `/Ordering` read as ok with empty text and no
+`tk:pdf:repaired`, because only a file that needed its xref rebuilt had its fonts repaired. When a page shows text that pdf.js
+did not extract, the document is now reopened once from the rebuilt bytes (`tk:pdf:repaired`, step `font-repaired`). Sound
+files are not slowed: the extra load happens only on that evidence.
+
 ### Segments of a short csv are cells (`tikajs-e0sm`)
 
 Changed: a `.csv` read as text (under eleven rows at the default confidence, so `text/plain` as in Tika) had `line=N`

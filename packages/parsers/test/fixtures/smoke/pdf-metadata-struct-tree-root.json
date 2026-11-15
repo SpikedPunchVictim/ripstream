@@ -1,0 +1,19 @@
+{
+  "description": "tikajs-p1qx: expected values are what Tika 4.2.0 /rmeta returned for the same bytes. A catalog whose /StructTreeRoot holds a structure element is marked content.",
+  "tags": [
+    "smoke",
+    "pdf",
+    "metadata"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /MarkInfo << /Marked true >> /StructTreeRoot 6 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 62 >>\nstream\n/P << /MCID 0 >> BDC BT /F1 24 Tf 72 700 Td (Marked) Tj ET EMC\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Type /StructTreeRoot /K 7 0 R >>\nendobj\n7 0 obj\n<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K 0 >>\nendobj\nxref\n0 8\n0000000000 65535 f \n0000000009 00000 n \n0000000109 00000 n \n0000000166 00000 n \n0000000292 00000 n \n0000000404 00000 n \n0000000474 00000 n \n0000000526 00000 n \ntrailer\n<< /Size 8 /Root 1 0 R >>\nstartxref\n595\n%%EOF\n",
+    "filename": "pdf-metadata-struct-tree-root.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.pdf:has-marked-content",
+      "value": "true"
+    }
+  ]
+}

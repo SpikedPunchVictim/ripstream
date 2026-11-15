@@ -75,12 +75,12 @@ function rc4(key: Buffer, data: Buffer): Buffer {
  * One-page PDF reading "Secret text", encrypted with the standard security
  * handler (V1, R2, 40-bit RC4) so opening it needs `userPassword`.
  */
-export function encryptedPdf(userPassword: string): Buffer {
+export function encryptedPdf(userPassword: string, permissionBits = -4, ownerPassword = "owner-secret"): Buffer {
   const fileId = Buffer.from("00112233445566778899aabbccddeeff", "hex");
   const permissions = Buffer.alloc(4);
-  permissions.writeInt32LE(-4);
+  permissions.writeInt32LE(permissionBits);
 
-  const ownerKey = md5(padPassword("owner-secret")).subarray(0, 5);
+  const ownerKey = md5(padPassword(ownerPassword)).subarray(0, 5);
   const owner = rc4(ownerKey, padPassword(userPassword));
   const fileKey = md5(padPassword(userPassword), owner, permissions, fileId).subarray(0, 5);
   const user = rc4(fileKey, PASSWORD_PADDING);
@@ -106,7 +106,7 @@ export function encryptedPdf(userPassword: string): Buffer {
     ]),
     Buffer.from("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
     Buffer.from(
-      `<< /Filter /Standard /V 1 /R 2 /P -4 /O <${owner.toString("hex")}> /U <${user.toString("hex")}> >>`,
+      `<< /Filter /Standard /V 1 /R 2 /P ${permissionBits} /O <${owner.toString("hex")}> /U <${user.toString("hex")}> >>`,
     ),
   ];
 

@@ -4,10 +4,12 @@ import { createRequire } from "node:module";
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { PageContentScanner, type PageContent } from "./pdf-content.ts";
-import { streamDecryptor } from "./pdf-decrypt.ts";
+import { ownerPasswordMatches, streamDecryptor } from "./pdf-decrypt.ts";
+import { eofOffsets } from "./pdf-eof.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
 import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
 import { preflightPdf, preflightPdfChunks } from "./pdf-preflight.ts";
+import { structTreeHasKids } from "./pdf-struct.ts";
 import { diagnosePdf, latin1, rebuildPdf, type RebuiltPdf, type RepairStep } from "./pdf-rebuild.ts";
 import { isMissingCatalogError, recoverDocumentDetailed } from "./pdf-recover.ts";
 
@@ -68,6 +70,14 @@ export type PdfResponse =
       readonly outline: readonly string[];
       /** Set when the document only loaded after a recovery: what was done, and what was wrong with the file. */
       readonly repair?: PdfRepair;
+      /** The /P permission flags the document grants (pdf.js's PermissionFlag values), or null when it is not encrypted. */
+      readonly permissions: readonly number[] | null;
+      /** The password given opens the file as its owner: every permission, whatever /P says (as in PDFBox). */
+      readonly ownerAccess: boolean;
+      /** The catalog has a /StructTreeRoot (what Tika reports as pdf:has-marked-content). */
+      readonly hasMarkedContent: boolean;
+      /** Where each revision of the file ends (pdf-eof.ts); undefined when the file was too large to scan. */
+      readonly eofOffsets?: readonly number[];
     }
   | {
       readonly type: "page";
@@ -121,6 +131,8 @@ interface PdfjsAnnotation {
 interface PdfPage {
   /** The page object's reference. */
   readonly ref?: { readonly num: number; readonly gen: number } | null;
+  /** The structure tree for the page, or null when the catalog has no /StructTreeRoot. */
+  getStructTree?(): Promise<unknown>;
   streamTextContent(): ReadableStream<{ items: unknown[] }>;
   getAnnotations?(options?: { intent?: string }): Promise<PdfjsAnnotation[]>;
   cleanup(): void;
@@ -139,6 +151,7 @@ interface PdfDocument {
     readonly content?: Uint8Array;
   }>>;
   getOutline?(): Promise<unknown>;
+  getPermissions?(): Promise<number[] | null>;
   /** Drops what pdf.js keeps per page and per object (the page objects, the object cache). Absent on a stand-in. */
   cleanup?(keepLoadedFonts?: boolean): Promise<void>;
 }
@@ -208,6 +221,10 @@ export class PdfSession {
   /** The object index of #bytes, when loading built one. */
   #index: ObjectIndex | undefined;
   #repair: PdfRepair | undefined;
+  #eofOffsets: readonly number[] | undefined;
+  #ownerAccess = false;
+  /** Looks at the objects to say whether a structure tree root holds anything; set by #load when the file is in memory. */
+  #structKids: (() => boolean | null) | undefined;
   #failureCauses: readonly string[] | undefined;
   #scanner: PageContentScanner | null | undefined;
   /**
@@ -261,6 +278,12 @@ export class PdfSession {
       } catch {
         outline = [];
       }
+      let permissions: number[] | null = null;
+      try {
+        permissions = (await document.getPermissions?.()) ?? null;
+      } catch {
+        permissions = null;
+      }
       this.#document = document;
       return {
         type: "ready",
@@ -269,10 +292,27 @@ export class PdfSession {
         numPages: document.numPages,
         attachments,
         outline,
+        permissions,
+        ownerAccess: this.#ownerAccess,
+        hasMarkedContent: await this.#hasStructTree(document),
+        ...(this.#eofOffsets === undefined ? {} : { eofOffsets: this.#eofOffsets }),
         ...(this.#repair === undefined ? {} : { repair: this.#repair }),
       };
     } catch (error) {
       return { type: "error", ...describe(error) };
+    }
+  }
+
+  /** Whether the catalog has a structure tree: pdf.js answers null for a page when it has none. Best effort. */
+  async #hasStructTree(document: PdfDocument): Promise<boolean> {
+    if (document.numPages < 1) return false;
+    try {
+      const page = await document.getPage(1);
+      if (((await page.getStructTree?.()) ?? null) === null) return false;
+      // pdf.js says there is a root; Tika wants it to hold something, which the object index shows when it can.
+      return this.#structKids?.() ?? true;
+    } catch {
+      return false;
     }
   }
 
@@ -302,6 +342,7 @@ export class PdfSession {
     this.#index = undefined;
     this.#scanner = null;
     this.#reopenRepaired = undefined;
+    this.#structKids = undefined;
     try {
       await loading?.destroy();
     } catch {
@@ -331,8 +372,11 @@ export class PdfSession {
       } else {
         // The checks that keep pdf.js from spinning or exhausting memory run on every file, not only the ones small
         // enough to read whole: padding a file past the limit must not get it past them.
-        if (length <= CONTENT_SCAN_LIMIT) preflightPdf(new Uint8Array(await readFile(input.path)));
-        else await preflightPdfChunks((start, end) => readRange(input.path!, length, start, end), length);
+        if (length <= CONTENT_SCAN_LIMIT) {
+          const whole = new Uint8Array(await readFile(input.path));
+          preflightPdf(whole);
+          this.#eofOffsets = eofOffsets(whole);
+        } else await preflightPdfChunks((start, end) => readRange(input.path!, length, start, end), length);
         options.range = createFileRangeTransport(
           pdfjs.PDFDataRangeTransport,
           input.path,
@@ -345,15 +389,20 @@ export class PdfSession {
     } else {
       options.data = input.data ?? new Uint8Array(0);
     }
-    if (options.data instanceof Uint8Array) preflightPdf(options.data);
+    if (options.data instanceof Uint8Array) {
+      preflightPdf(options.data);
+      this.#eofOffsets = eofOffsets(options.data);
+    }
     const source = options.data instanceof Uint8Array ? options.data : undefined;
     if (source === undefined) return this.#start(pdfjs, options);
 
     const text = latin1(source);
+    if (text.includes("/Encrypt")) this.#ownerAccess = ownerPasswordMatches(text, input.password ?? "");
     const diagnosis = diagnosePdf(text);
     let sourceIndex: ObjectIndex | undefined;
     const indexed = (): ObjectIndex => (sourceIndex ??= indexObjects(text));
     let rebuilt: RebuiltPdf | null | undefined;
+    this.#structKids = () => structTreeHasKids(indexed());
     const rebuild = (): RebuiltPdf | null => (rebuilt === undefined ? (rebuilt = rebuildPdf(source, indexed())) : rebuilt);
     const attempt = async (data: Uint8Array, steps: readonly RepairStep[] | undefined): Promise<PdfDocument> => {
       await this.#loading?.destroy();

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { deflateSync } from "node:zlib";
 import { BodyContentHandler, Metadata, ParseContext, RipstreamInputStream } from "@spikedpunch/ripstream-core";
 import { PdfParser } from "../src/index.ts";
-import { streamDecryptor } from "../src/pdf-decrypt.ts";
+import { ownerPasswordMatches, streamDecryptor } from "../src/pdf-decrypt.ts";
 import { indexObjects } from "../src/pdf-objects.ts";
 import { preflightPdf } from "../src/pdf-preflight.ts";
 import { encryptedPdf } from "./fixtures.ts";
@@ -191,4 +191,50 @@ test("preflight decrypts form content before calling a resource pair a cycle (ti
     Buffer.concat([iv, aes("aes-256-cbc", fileKey, iv, Buffer.from("/X Do     \n      \n"))]).toString("latin1"),
   );
   assert.throws(() => preflightPdf(new Uint8Array(Buffer.from(painting, "latin1"))), /paints itself/);
+});
+
+test("ownerPasswordMatches tells the owner password from the user's and from a wrong one (revision 2)", () => {
+  const text = encryptedPdf("user", -3904, "owner-secret").toString("latin1");
+  assert.equal(ownerPasswordMatches(text, "owner-secret"), true);
+  assert.equal(ownerPasswordMatches(text, "user"), false);
+  assert.equal(ownerPasswordMatches(text, ""), false);
+  assert.equal(ownerPasswordMatches(encryptedPdf("", -3904, "").toString("latin1"), ""), true);
+  assert.equal(ownerPasswordMatches("%PDF-1.4\n1 0 obj\n<< >>\nendobj\n", ""), false);
+});
+
+test("ownerPasswordMatches reads /O of the AES-256 revisions (hash of the password, the owner salt and /U)", () => {
+  for (const revision of [5, 6] as const) {
+    const file = aesPdf(revision, "").toString("latin1");
+    const userData = Buffer.from(/\/U <([0-9a-f]+)>/.exec(file)![1]!, "hex").subarray(0, 48);
+    const secret = Buffer.from("owner pw", "utf8");
+    const salt = filled(8, 41);
+    const hash = revision === 5 ? sha256(secret, salt, userData) : hash2B(secret, salt, userData);
+    const owner = Buffer.concat([hash, salt, filled(8, 43)]);
+    const text = file.replace(/\/O <[0-9a-f]+>/, `/O <${owner.toString("hex")}>`);
+    assert.equal(ownerPasswordMatches(text, "owner pw"), true, `revision ${revision}`);
+    assert.equal(ownerPasswordMatches(text, ""), false, `revision ${revision}`);
+  }
+});
+
+test("ownerPasswordMatches reads /O of the AES-128 handler (revision 4)", () => {
+  // Algorithm 3 for revision 3+: /O is the user password, padded, encrypted under the owner key.
+  const file = aesPdf(4, "").toString("latin1");
+  const id = FILE_ID;
+  let ownerKey = md5(Buffer.concat([Buffer.from("boss", "latin1"), PADDING]).subarray(0, 32));
+  for (let i = 0; i < 50; i++) ownerKey = md5(ownerKey);
+  ownerKey = ownerKey.subarray(0, 16);
+  let owner: Buffer = PADDING;
+  for (let i = 0; i <= 19; i++) owner = rc4(Buffer.from(ownerKey.map((byte) => byte ^ i)), owner);
+  // /U depends on /O, so rebuild it the way aesPdf does for revision 4 with this /O.
+  const permissions = Buffer.alloc(4);
+  permissions.writeInt32LE(-4);
+  let key = md5(PADDING, owner, permissions, id);
+  for (let i = 0; i < 50; i++) key = md5(key);
+  let user = rc4(key, md5(PADDING, id));
+  for (let i = 1; i <= 19; i++) user = rc4(Buffer.from(key.map((byte) => byte ^ i)), user);
+  const text = file
+    .replace(/\/O <[0-9a-f]+>/, `/O <${owner.toString("hex")}>`)
+    .replace(/\/U <[0-9a-f]+>/, `/U <${Buffer.concat([user, filled(16, 9)]).toString("hex")}>`);
+  assert.equal(ownerPasswordMatches(text, "boss"), true);
+  assert.equal(ownerPasswordMatches(text, ""), false);
 });

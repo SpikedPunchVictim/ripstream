@@ -1,0 +1,54 @@
+{
+  "description": "tikajs-p1qx: expected values are what Tika 4.2.0 /rmeta returned for the same bytes. A revision 3 file whose /P clears the modify-contents and modify-annotations bits.",
+  "tags": [
+    "smoke",
+    "pdf",
+    "metadata"
+  ],
+  "input": {
+    "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0MiA+PgpzdHJlYW0KY65jm0bErNt54wRr7z2TguFYgAMO3Yk966gKeYDi7adpLWPh578VpKFPCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCjYgMCBvYmoKPDwgL0ZpbHRlciAvU3RhbmRhcmQgL1YgMiAvUiAzIC9MZW5ndGggMTI4IC9QIC00NCAvTyA8NTY2ZmE4NzNlZTMzYzc5N2NkM2I5MDRmZGFkZjgxNGFmYTM0ZGY5YTM4ZjZlZDQxYjk4NGUyYzZkYTJhYTZmNT4gL1UgPGM0NGI4NzFkOGZlY2Y5Njg4NDUxYWRjNDM5OTc0OWFlMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA+ID4+CmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDMzMyAwMDAwMCBuIAowMDAwMDAwNDAzIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNyAvUm9vdCAxIDAgUiAvRW5jcnlwdCA2IDAgUiAvSUQgWzwwMDExMjIzMzQ0NTU2Njc3ODg5OWFhYmJjY2RkZWVmZj4gPDAwMTEyMjMzNDQ1NTY2Nzc4ODk5YWFiYmNjZGRlZWZmPl0gPj4Kc3RhcnR4cmVmCjYxMQolJUVPRgo=",
+    "filename": "pdf-metadata-access-permissions-r3-no-modify.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-print",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-print-faithful",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-modify",
+      "value": "false"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:extract-content",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:extract-for-accessibility",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:fill-in-form",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:modify-annotations",
+      "value": "false"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:assemble-document",
+      "value": "true"
+    }
+  ]
+}

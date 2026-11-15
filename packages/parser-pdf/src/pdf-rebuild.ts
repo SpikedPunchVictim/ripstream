@@ -344,7 +344,7 @@ function isPage(entries: ReadonlyMap<string, string>): boolean {
 }
 
 /** The catalog: the one a trailer names when it is there, else the last `/Type /Catalog` object in the file. */
-function findCatalog(index: ObjectIndex): Reference | null {
+export function findCatalog(index: ObjectIndex): Reference | null {
   const text = index.text;
   const named: Reference[] = [];
   for (const match of text.matchAll(/trailer\s*<</g)) {

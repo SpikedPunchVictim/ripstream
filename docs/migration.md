@@ -84,6 +84,31 @@ when they apply:
   `/Registr` in a CID font's `/CIDSystemInfo`, or a CID font's `/W` written as a nameless key),
   `stream-salvaged` (the readable start of a cut Flate stream kept). `rebuilt-xref` alone means pdf.js indexed the
   objects itself because `startxref` was missing or pointed nowhere.
+  A file whose xref is intact is not rebuilt up front. When a page shows text pdf.js did not extract and the rebuild would
+  repair a font (`font-repaired`), the document is reopened once from the rebuilt bytes and these keys are written
+  (`tikajs-w4ps`); a sound file never takes that path. A damaged stream dictionary name (`/Filte`) is not repaired:
+  Tika 4.2.0 reads the same garbage.
+
+Tika's own PDF keys written since `tikajs-p1qx`, with Tika 4.2.0's values (checked against a running server on about 100
+files, with no difference left):
+
+- `access-permission:can-print`, `can-print-faithful`, `can-modify`, `extract-content`, `extract-for-accessibility`,
+  `fill-in-form`, `modify-annotations` and `assemble-document`: one `/P` bit each, `true` for a file that is not encrypted.
+  A password that opens the file as its owner (an empty owner password included) grants all of them, as PDFBox does.
+- `pdf:has-marked-content`: `true` when the catalog's `/StructTreeRoot` is a dictionary whose `/K` is a dictionary or a
+  non-empty array. A root with no or an empty `/K` is `false`; `/MarkInfo` and `BDC` operators do not count.
+- `pdf:eof-offsets` (one value per revision) and `pdf:incremental-update-count` (one fewer): read from every `startxref`
+  with a non-zero offset, the offset being the end of the `%%EOF` that follows plus one end-of-line character. Not
+  written for a file over 64 MiB, which is not read whole.
+- `pdf:num-3d-annotations`. One difference: an annotation with the Invisible flag (`/F 1`) is not counted, because the
+  annotations are read with pdf.js's display intent.
+
+Not written, on purpose: `pdf:ocr-page-count` (Tika's count of pages its OCR strategy would send to an engine, which
+depends on the OCR configuration and on an engine being installed), `pdf:contains-damaged-font` and the unmapped-character
+statistics `pdf:total-unmapped-unicode-chars`, `pdf:unmapped-unicode-chars-per-page`,
+`pdf:overall-percentage-unmapped-unicode-chars` (what PDFBox cannot map to Unicode is a property of its font loader: for the
+same three codes it counted 3 of 7 characters where pdf.js reads all 7), and `pdf:contains-non-embedded-font`
+(`tikajs-j60e`). The paragraph grouping of Tika's PDF text is not reproduced either: ripstream writes one `<p>` per line.
 
 A page that pdf.js cannot load is not silently gone (`tikajs-6ik0`): `tk:exception:warn` gets `MalformedDocumentError: page N
 could not be read: <reason>` and `pdf:chars-per-page` a `0` for it, so it still has one value per page. The same key names

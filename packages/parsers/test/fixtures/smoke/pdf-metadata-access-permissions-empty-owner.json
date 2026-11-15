@@ -1,0 +1,54 @@
+{
+  "description": "tikajs-p1qx: expected values are what Tika 4.2.0 /rmeta returned for the same bytes. /P forbids everything but the owner password is empty, so the empty password opens it as owner and PDFBox grants every permission.",
+  "tags": [
+    "smoke",
+    "pdf",
+    "metadata"
+  ],
+  "input": {
+    "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0MiA+PgpzdHJlYW0KqV2luP1SekaJB77PV2alX2r+SxnjZEfgJcOcLzb0iMnechUtPAJsHKrHCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCjYgMCBvYmoKPDwgL0ZpbHRlciAvU3RhbmRhcmQgL1YgMSAvUiAyIC9QIC0zOTA0IC9PIDwyMDU1Yzc1NmM3MmUxYWQ3MDI2MDhlODE5NmFjYWQ0NDdhZDMyZDE3Y2ZmNTgzMjM1ZjZkZDE1ZmVkN2RhYjY3PiAvVSA8NDZjNTU2MmQyNjNkNDlhYTk4OGJmZGI1YTQ1M2ZlZWM1NTA5YjY2YzE1YWVjODA5MjdkOTA4MDZkZGVjOWUwZT4gPj4KZW5kb2JqCnhyZWYKMCA3CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwMzMzIDAwMDAwIG4gCjAwMDAwMDA0MDMgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA3IC9Sb290IDEgMCBSIC9FbmNyeXB0IDYgMCBSIC9JRCBbPDAwMTEyMjMzNDQ1NTY2Nzc4ODk5YWFiYmNjZGRlZWZmPiA8MDAxMTIyMzM0NDU1NjY3Nzg4OTlhYWJiY2NkZGVlZmY+XSA+PgpzdGFydHhyZWYKNjAxCiUlRU9GCg==",
+    "filename": "pdf-metadata-access-permissions-empty-owner.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-print",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-print-faithful",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:can-modify",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:extract-content",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:extract-for-accessibility",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:fill-in-form",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:modify-annotations",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.access-permission:assemble-document",
+      "value": "true"
+    }
+  ]
+}

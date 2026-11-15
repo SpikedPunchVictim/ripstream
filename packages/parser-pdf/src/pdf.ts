@@ -141,6 +141,12 @@ export class PdfParser implements Parser {
       applyXmp(metadata, ready.xmp);
       applyInfo(metadata, ready.info);
       metadata.set("xmpTPg:NPages", ready.numPages);
+      applyPermissions(metadata, ready.permissions, ready.ownerAccess);
+      metadata.set("pdf:has-marked-content", ready.hasMarkedContent ? "true" : "false");
+      if (ready.eofOffsets !== undefined) {
+        for (const offset of ready.eofOffsets) metadata.add("pdf:eof-offsets", String(offset));
+        metadata.set("pdf:incremental-update-count", String(Math.max(0, ready.eofOffsets.length - 1)));
+      }
       let repair = ready.repair;
       if (repair !== undefined) recordRepair(metadata, repair);
 
@@ -156,6 +162,7 @@ export class PdfParser implements Parser {
       const annotationTypes = new Set<string>();
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
+      let threeDAnnotations = 0;
       const pages = ready.numPages;
       const imageOnlyPages: number[] = [];
       const emptiness = new EmptyDocumentEvidence();
@@ -193,6 +200,7 @@ export class PdfParser implements Parser {
         const hasText = message.lines.some((line) => line.trim().length > 0);
         emptiness.page(index, hasText, message.content);
         if (!hasText && message.content?.paintsImage === true) imageOnlyPages.push(index);
+        for (const annotation of message.annotations) if (annotation.subtype === "3D") threeDAnnotations++;
         if (this.#extractAnnotationText) {
           let fieldIndex = 0;
           for (const annotation of message.annotations) {
@@ -229,6 +237,7 @@ export class PdfParser implements Parser {
         for (const page of imageOnlyPages) metadata.add("tk:pdf:image-only-pages", String(page));
       }
 
+      metadata.set("pdf:num-3d-annotations", String(threeDAnnotations));
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
 
       for (const name of annotationTypes) {
@@ -301,6 +310,24 @@ export class PdfParser implements Parser {
       ctx.signal.removeEventListener("abort", onAbort);
       await channel.stop();
     }
+  }
+}
+
+/** Tika's access-permission:* keys, from the /P bits as PDFBox's AccessPermission reads them; everything is allowed to an owner. */
+const PERMISSION_KEYS: ReadonlyArray<readonly [string, number]> = [
+  ["can-print", 4],
+  ["can-modify", 8],
+  ["extract-content", 16],
+  ["modify-annotations", 32],
+  ["fill-in-form", 256],
+  ["extract-for-accessibility", 512],
+  ["assemble-document", 1024],
+  ["can-print-faithful", 2048],
+];
+
+function applyPermissions(metadata: Metadata, flags: readonly number[] | null, owner: boolean): void {
+  for (const [name, bit] of PERMISSION_KEYS) {
+    metadata.set(`access-permission:${name}`, flags === null || owner || flags.includes(bit) ? "true" : "false");
   }
 }
 

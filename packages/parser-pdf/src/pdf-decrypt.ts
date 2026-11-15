@@ -32,7 +32,7 @@ export function streamDecryptor(text: string, password = ""): StreamDecryptor | 
     return key === null ? null : (_num, _gen, data) => aesDecrypt("aes-256-cbc", key, data);
   }
 
-  const id = parseString(/\/ID\s*\[\s*((?:<[^>]*>|\((?:[^()\\]|\\[\s\S])*\)))/.exec(text.slice(-65536))?.[1] ?? "") ?? "";
+  const id = fileId(text);
   const length = revision === 2 ? 5 : Math.min(16, Math.max(5, Math.floor(Number(encrypt.get("Length") ?? 40) / 8)));
   const permissions = Number(encrypt.get("P"));
   if (!Number.isInteger(permissions) || owner.length < 32) return null;
@@ -50,6 +50,42 @@ export function streamDecryptor(text: string, password = ""): StreamDecryptor | 
     if (method === "AESV2") return aesDecrypt("aes-128-cbc", objectKey, data);
     return rc4(objectKey, Buffer.from(data, "latin1")).toString("latin1");
   };
+}
+
+function fileId(text: string): string {
+  return parseString(/\/ID\s*\[\s*((?:<[^>]*>|\((?:[^()\\]|\\[\s\S])*\)))/.exec(text.slice(-65536))?.[1] ?? "") ?? "";
+}
+
+/**
+ * Whether `password` is the file's owner password (algorithm 7 for revisions 2-4, 2.A for 5 and 6). PDFBox, and so Tika,
+ * grants every permission to the owner whatever /P says. False for a file that is not encrypted with the standard handler.
+ */
+export function ownerPasswordMatches(text: string, password = ""): boolean {
+  const encrypt = encryptDictionary(text);
+  if (encrypt === null || parseName(encrypt.get("Filter")) !== "Standard") return false;
+  const revision = Number(encrypt.get("R"));
+  const owner = Buffer.from(parseString(encrypt.get("O")) ?? "", "latin1");
+  const user = Buffer.from(parseString(encrypt.get("U")) ?? "", "latin1");
+  if (revision >= 5) {
+    if (owner.length < 48 || user.length < 48) return false;
+    const secret = Buffer.from(password, "utf8").subarray(0, 127);
+    const userData = user.subarray(0, 48);
+    const hash = revision === 5 ? createHash("sha256").update(secret).update(owner.subarray(32, 40)).update(userData).digest() : hash2B(secret, owner.subarray(32, 40), userData);
+    return hash.equals(owner.subarray(0, 32));
+  }
+  if (owner.length < 32 || !Number.isInteger(Number(encrypt.get("P")))) return false;
+  const length = revision === 2 ? 5 : Math.min(16, Math.max(5, Math.floor(Number(encrypt.get("Length") ?? 40) / 8)));
+  const padded = Buffer.concat([Buffer.from(password, "latin1").subarray(0, 32), PADDING]).subarray(0, 32);
+  let ownerKey = createHash("md5").update(padded).digest();
+  if (revision >= 3) for (let i = 0; i < 50; i++) ownerKey = createHash("md5").update(ownerKey).digest();
+  ownerKey = ownerKey.subarray(0, length);
+  let userPassword: Buffer = owner.subarray(0, 32);
+  if (revision === 2) userPassword = rc4(ownerKey, userPassword);
+  else for (let i = 19; i >= 0; i--) userPassword = rc4(Buffer.from(ownerKey.map((byte) => byte ^ i)), userPassword);
+  const id = Buffer.from(fileId(text), "latin1");
+  const encryptMetadata = encrypt.get("EncryptMetadata")?.trim() !== "false";
+  const key = rc4FileKey(userPassword.toString("latin1"), owner, Number(encrypt.get("P")), id, revision, length, encryptMetadata);
+  return userPasswordMatches(key, revision, user, id);
 }
 
 /** The trailer's /Encrypt dictionary entries, direct or by reference, or null. */
@@ -124,11 +160,11 @@ function aes256FileKey(revision: number, password: string, user: Buffer, userKey
   return Buffer.concat([decipher.update(userKey.subarray(0, 32)), decipher.final()]);
 }
 
-/** Algorithm 2.B (revision 6), for the user password (no owner data). */
-function hash2B(password: Buffer, salt: Buffer): Buffer {
-  let key = createHash("sha256").update(password).update(salt).digest();
+/** Algorithm 2.B (revision 6); `userData` is the 48 bytes of /U when the password is tried as the owner password. */
+function hash2B(password: Buffer, salt: Buffer, userData: Buffer = Buffer.alloc(0)): Buffer {
+  let key = createHash("sha256").update(password).update(salt).update(userData).digest();
   for (let round = 0; ; round++) {
-    const block = Buffer.concat([password, key]);
+    const block = Buffer.concat([password, key, userData]);
     const repeated = Buffer.concat(Array.from({ length: 64 }, () => block));
     const cipher = createCipheriv("aes-128-cbc", key.subarray(0, 16), key.subarray(16, 32));
     cipher.setAutoPadding(false);
