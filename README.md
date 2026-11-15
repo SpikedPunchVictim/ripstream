@@ -26,7 +26,7 @@ console.log(result.metadata.get("Content-Type"), result.text);
 | `@spikedpunch/ripstream-parser-pdf` | pdf.js parser (runs on the calling thread; isolate untrusted PDFs, see [docs/isolation.md](docs/isolation.md)) |
 | `@spikedpunch/ripstream-parser-media` | Images, audio, MP4 metadata |
 | `@spikedpunch/ripstream-language` | language detection: Tika's CharSoup model (what `/language`, `ripstream language` and `charsoup-metadata-filter` use), franc, CLD3 |
-| `@spikedpunch/ripstream-cli` | `ripstream` command |
+| `@spikedpunch/ripstream-cli` | `ripstream` command (starts about 40% faster from its bundle, see [docs/cli-startup.md](docs/cli-startup.md)) |
 | `@spikedpunch/ripstream-parity`, `@spikedpunch/ripstream-test-corpus` | Tika differential harness and corpus |
 
 ## Safety defaults
@@ -40,6 +40,7 @@ output/time/embedded limits, 0600 temp files, per-document parse isolation in a 
 ```sh
 pnpm install
 pnpm build
+pnpm build:bundle   # the CLI's split bundle (bin/ripstream.js runs it when it exists); needs pnpm build first
 pnpm test
 pnpm test:collect   # CBD coverage map
 pnpm corpus:pdf -- /path/to/pdfs   # external PDF corpus run

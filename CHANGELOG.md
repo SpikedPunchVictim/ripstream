@@ -4,6 +4,20 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### The CLI starts about 40% faster from a split bundle and a compile cache (`tikajs-jjat`)
+
+Added: `pnpm build:bundle` bundles the CLI with esbuild (new root devDependency, 0.28.2) into `packages/cli/bundle`, and
+`bin/ripstream.js` runs it when it is built, after switching on Node's compile cache (`NODE_COMPILE_CACHE`, else a
+per-user directory under the temp directory; an unwritable one is harmless). Cold `ripstream parse` of a small file, p50
+over 30 interleaved spawns: text 231 ms with `dist`, 144 with the bundle; JSON 222, 140; docx 249, 157; PDF 281, 193
+(`node -e ''` is 57). Output is unchanged: `parse` and `parse -r` print the same on both over a fixture sample.
+`RIPSTREAM_NO_BUNDLE=1` runs `dist` instead (a new setting; any other unknown `RIPSTREAM_*` name is still an error). The
+library entry and the API report are unchanged. `--isolation strict` and `pipes --workers` run from the bundle (their child
+and worker entries are bundle entries). The first run after an empty cache costs about 44 ms once. The CLI package now
+depends on `sql.js` and has an optional `pdfjs-dist` peer, because those two stay external to the bundle. CI builds the
+bundle; `bundle-budget.json` has a `cli-bundle` line. Cold-start guard for the bundle, identity test, numbers and layout:
+`docs/cli-startup.md`.
+
 ### Keep the first entries of a big archive: `onEmbeddedLimit: "truncate"` (`tikajs-1fz4`)
 
 Added: `ParseOptions.onEmbeddedLimit: "truncate"` (default `"throw"`, unchanged). A ZIP or tar with more than

@@ -11,3 +11,8 @@ When a package outgrows its cap for a real feature, raise that cap and the total
 say why in the commit message. If a package needs much more than the headroom, consider splitting it (for example
 `parser-media` into audio/video and image, or `parsers` into registry and individual format modules) rather than raising
 the cap. Never raise a cap just to pass CI without a feature that explains it.
+
+The CLI's split bundle (`pnpm build:bundle`, [cli-startup.md](cli-startup.md)) is a second copy of code that `dist`
+already counts, so it has its own `cli-bundle` line, in KiB of `packages/cli/bundle/dist`, and is not part of `total`. It
+is checked when the bundle has been built; CI builds it first. Its cap is the measured size (4,414 KiB) plus about ten
+percent; raise it with the feature that grows it, as for a package.
