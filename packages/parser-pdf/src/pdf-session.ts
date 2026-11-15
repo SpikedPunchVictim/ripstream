@@ -76,6 +76,8 @@ export type PdfResponse =
       readonly annotations: readonly PdfAnnotation[];
       /** For a page with no text: what its content streams do, when the file could be scanned. */
       readonly content?: PageContent;
+      /** Set on the page whose evidence made the session reopen the document from repaired bytes (tikajs-w4ps). */
+      readonly repair?: PdfRepair;
     }
   | {
       readonly type: "page-error";
@@ -208,6 +210,11 @@ export class PdfSession {
   #repair: PdfRepair | undefined;
   #failureCauses: readonly string[] | undefined;
   #scanner: PageContentScanner | null | undefined;
+  /**
+   * Reopens the document from a rebuild that repaired its fonts, for a file pdf.js opened as it stood (intact xref) but
+   * whose page shows text pdf.js did not extract. Set by #load when the file is in memory; used at most once.
+   */
+  #reopenRepaired: (() => Promise<PdfDocument | null>) | undefined;
 
   constructor(input: PdfSessionInput) {
     this.#input = input;
@@ -294,6 +301,7 @@ export class PdfSession {
     this.#bytes = undefined;
     this.#index = undefined;
     this.#scanner = null;
+    this.#reopenRepaired = undefined;
     try {
       await loading?.destroy();
     } catch {
@@ -358,6 +366,29 @@ export class PdfSession {
       this.#bytes = source;
       this.#index = sourceIndex;
       return document;
+    };
+
+    // The evidence for a damaged font arrives with the pages (a page paints text, pdf.js extracts none): then the
+    // document is reopened from the rebuild, once, for this document only.
+    this.#reopenRepaired = async (): Promise<PdfDocument | null> => {
+      const repaired = rebuild();
+      if (repaired === null || !repaired.steps.includes("font-repaired")) return null;
+      const previous = this.#loading;
+      const pages = this.#document?.numPages;
+      try {
+        const next = await this.#start(pdfjs, { ...options, data: repaired.data.slice() });
+        if (next.numPages !== pages) {
+          await this.#loading?.destroy();
+          this.#loading = previous;
+          return null;
+        }
+        await previous?.destroy();
+        this.#repair = { steps: repaired.steps, causes: diagnosePdf(text, indexed()).causes };
+        return next;
+      } catch {
+        this.#loading = previous;
+        return null;
+      }
     };
 
     // pdf.js reads an object the xref marks free as missing, even when the file holds it and the page tree needs it;
@@ -431,16 +462,32 @@ export class PdfSession {
   }
 
   async #extractPage(index: number): Promise<PdfResponse> {
-    const document = this.#document;
+    let document = this.#document;
     if (document === undefined) {
       return { type: "page-error", index, name: "Error", message: "PDF document is not open" };
     }
     let page: PdfPage | undefined;
     try {
       page = await document.getPage(index);
-      const items = await this.#readTextItems(page);
-      const pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
-      const content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
+      let items = await this.#readTextItems(page);
+      let pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
+      let content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
+      let repair: PdfRepair | undefined;
+      if (content?.showsText === true && this.#repair === undefined && this.#reopenRepaired !== undefined) {
+        const reopen = this.#reopenRepaired;
+        this.#reopenRepaired = undefined;
+        const reopened = await reopen();
+        if (reopened !== null) {
+          page.cleanup();
+          document = reopened;
+          this.#document = reopened;
+          repair = this.#repair;
+          page = await document.getPage(index);
+          items = await this.#readTextItems(page);
+          pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
+          content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
+        }
+      }
       let annotations: PdfAnnotation[] = [];
       try {
         const values = (await page.getAnnotations?.({ intent: "display" })) ?? [];
@@ -460,7 +507,14 @@ export class PdfSession {
       } catch {
         annotations = [];
       }
-      return { type: "page", index, lines: pageLines, annotations, ...(content === undefined ? {} : { content }) };
+      return {
+        type: "page",
+        index,
+        lines: pageLines,
+        annotations,
+        ...(content === undefined ? {} : { content }),
+        ...(repair === undefined ? {} : { repair }),
+      };
     } catch (error) {
       return { type: "page-error", index, ...describe(error) };
     } finally {

@@ -160,3 +160,37 @@ test("an empty page in a sound file stays an empty result", async () => {
   assert.equal(text.trim(), "");
   assert.equal(metadata.get("tk:pdf:image-only-page-count"), null);
 });
+
+/** An intact-xref one-page file whose CID font lost the last character of /Ordering (tikajs-w4ps). */
+function orderinDamaged(): string {
+  const font0 = "<< /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 8 0 R >>";
+  const cid =
+    "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ArialMT /CIDSystemInfo << /Registry (Adobe) /Orderin (Identity) /Supplement 0 >> /FontDescriptor 7 0 R /DW 0 /W [ 1 [ 600 600 600 600 600 ] ] /CIDToGIDMap /Identity >>";
+  const descriptor = "<< /Type /FontDescriptor /FontName /ArialMT /Flags 4 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 /CapHeight 700 /StemV 80 >>";
+  const cmap = streamObject(
+    "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Adobe-Identity-UCS def /CMapType 2 def 1 begincodespacerange <0000> <FFFF> endcodespacerange 5 beginbfchar <0001> <0048> <0002> <0065> <0003> <006C> <0004> <006F> <0005> <0020> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end",
+  );
+  const objects = onePageObjects("x");
+  objects[3] = streamObject("BT /F1 24 Tf 72 700 Td <0001000200030003000400050001000200030003000400020003> Tj ET");
+  objects[4] = font0;
+  objects.push(cid, descriptor, cmap);
+  return classicPdf(objects);
+}
+
+test("a CID font damaged under an intact xref is repaired when the page paints text pdf.js did not extract", async () => {
+  const { text, metadata } = await parse(orderinDamaged());
+  assert.match(text, /Hello Hello/);
+  assert.equal(metadata.get("tk:pdf:repaired"), "true");
+  assert.ok(metadata.getAll("tk:pdf:repair-steps").includes("font-repaired"));
+});
+
+test("a sound file with a CID font takes no repair", async () => {
+  const { text, metadata } = await parse(orderinDamaged().replace("/Orderin ", "/Ordering "));
+  assert.match(text, /Hello Hello/);
+  assert.equal(metadata.get("tk:pdf:repaired"), null);
+});
+
+test("a page of text-less content under an intact xref is not repaired", async () => {
+  const { metadata } = await parse(classicPdf(onePageObjects("")));
+  assert.equal(metadata.get("tk:pdf:repaired"), null);
+});

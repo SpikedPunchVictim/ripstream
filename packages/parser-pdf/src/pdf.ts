@@ -23,6 +23,7 @@ import type { PageContent } from "./pdf-content.ts";
 import {
   PdfSession,
   type PdfAnnotation,
+  type PdfRepair,
   type PdfSessionInput,
 } from "./pdf-session.ts";
 
@@ -140,10 +141,8 @@ export class PdfParser implements Parser {
       applyXmp(metadata, ready.xmp);
       applyInfo(metadata, ready.info);
       metadata.set("xmpTPg:NPages", ready.numPages);
-      if (ready.repair !== undefined) {
-        metadata.set("tk:pdf:repaired", "true");
-        for (const step of ready.repair.steps) metadata.add("tk:pdf:repair-steps", step);
-      }
+      let repair = ready.repair;
+      if (repair !== undefined) recordRepair(metadata, repair);
 
       const xhtml = new XHTMLContentHandler(handler, metadata);
       await xhtml.startDocument();
@@ -177,6 +176,11 @@ export class PdfParser implements Parser {
         if (message.type !== "page") {
           throw new MalformedDocumentError("Unexpected PDF session response");
         }
+        // A document pdf.js opened as it stood can be reopened from repaired bytes when a page proves lost text.
+        if (message.repair !== undefined && repair === undefined) {
+          repair = message.repair;
+          recordRepair(metadata, repair);
+        }
         await xhtml.startElement("div", "class", "page");
         let characters = 0;
         for (const line of message.lines) {
@@ -205,18 +209,18 @@ export class PdfParser implements Parser {
 
       for (const warning of emptiness.warnings()) metadata.add("tk:exception:warn", `${MalformedDocumentError.name}: ${warning}`);
       // Pages that could not be read, and not one with text: nothing was read of this document, whatever the xref said.
-      if (ready.repair === undefined && emptiness.unreadable()) {
+      if (repair === undefined && emptiness.unreadable()) {
         throw new MalformedDocumentError(`PDF pages could not be read (${emptiness.failures()})`);
       }
 
       // A PDF cut off before its %%EOF, or with padding after it, that yields no text is an empty document, as in Tika 4.2.0:
       // PDFBox answers 200 with empty text for such files (oracle: a text-less PDF cut at 20-60% of its length, or padded with 3 KB after %%EOF; bughunt B32).
       // That holds after a recovery only when every page is shown to be text-less (tikajs-4hfu); otherwise the damage is the answer.
-      if (ready.repair !== undefined) {
-        const unproven = emptiness.unproven(pages, ready.repair.steps.includes("page-tree-rebuilt"));
+      if (repair !== undefined) {
+        const unproven = emptiness.unproven(pages, repair.steps.includes("page-tree-rebuilt"));
         if (unproven.length > 0) {
           throw new MalformedDocumentError(
-            `PDF is damaged and no text could be recovered (${[...ready.repair.causes, ...unproven].join("; ")})`,
+            `PDF is damaged and no text could be recovered (${[...repair.causes, ...unproven].join("; ")})`,
           );
         }
       }
@@ -298,6 +302,11 @@ export class PdfParser implements Parser {
       await channel.stop();
     }
   }
+}
+
+function recordRepair(metadata: Metadata, repair: PdfRepair): void {
+  metadata.set("tk:pdf:repaired", "true");
+  for (const step of repair.steps) metadata.add("tk:pdf:repair-steps", step);
 }
 
 function resolvePassword(
