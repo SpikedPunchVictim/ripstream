@@ -30,6 +30,8 @@ const json = serializeRmeta(records, { typedMetadata: true });
 
 ### Paths of embedded documents
 
+(Where a piece of text is *inside* a document, a cell or a slide's shape, is `ParseOptions.segments`: `docs/segments.md`.)
+
 Each record names where its document is twice:
 
 - `embeddedResourcePath`: a string, the names from the root down joined with `/`, runs of `/` collapsed

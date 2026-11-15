@@ -4,6 +4,8 @@ import {
   type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedParseResult,
+  type IsolatedSegment,
+  parseSegmentLocation,
   type PathPart,
   type PathPartKind,
 } from "@spikedpunch/ripstream-core";
@@ -525,6 +527,7 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
     "depth",
     "mediaType",
     "exception",
+    "segments",
   ]);
   if (extra !== null) return `record: ${extra}`;
   const metadata = validateMetadata(value.metadata, limits);
@@ -539,6 +542,8 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
   }
   const exception = value.exception === null ? null : validateException(value.exception, "record.exception");
   if (typeof exception === "string") return exception;
+  const segments = value.segments === undefined ? undefined : validateSegments(value.segments, value.content.length);
+  if (typeof segments === "string") return segments;
   return {
     metadata,
     content: value.content,
@@ -547,7 +552,38 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
     depth: value.depth,
     mediaType: value.mediaType,
     exception,
+    ...(segments === undefined ? {} : { segments }),
   };
+}
+
+/**
+ * `record.segments`: a list of `{ start, end, labels, location }`, each a slice of the record's content (offsets in
+ * order, within it) with string labels and a location in the closed grammar.
+ */
+function validateSegments(value: unknown, contentLength: number): IsolatedSegment[] | string {
+  if (!Array.isArray(value)) return "record.segments must be an array";
+  const segments: IsolatedSegment[] = [];
+  for (const segment of value as unknown[]) {
+    if (!isObject(segment)) return "record.segments[] must be objects";
+    const extra = onlyKeys(segment, ["start", "end", "labels", "location"]);
+    if (extra !== null) return `record.segments[]: ${extra}`;
+    const { start, end, labels, location } = segment;
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || (start as number) < 0 ||
+      (end as number) <= (start as number) || (end as number) > contentLength) {
+      return "record.segments[] must have integer offsets with 0 <= start < end <= the content's length";
+    }
+    if (!Array.isArray(labels) || !labels.every((label) => typeof label === "string")) {
+      return "record.segments[].labels must be an array of strings";
+    }
+    if (typeof location !== "string") return "record.segments[].location must be a string";
+    try {
+      parseSegmentLocation(location);
+    } catch {
+      return "record.segments[].location is not a segment location";
+    }
+    segments.push({ start: start as number, end: end as number, labels: labels as string[], location });
+  }
+  return segments;
 }
 
 const PATH_PART_KINDS: readonly string[] = ["root", "entry", "embedded"] satisfies readonly PathPartKind[];

@@ -449,6 +449,7 @@ class Supervision {
       ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
+      ...(request.segments === true ? { segments: true } : {}),
       ...(this.#options.components === undefined ? {} : { components: this.#options.components }),
       ...(this.#options.maxParseMillis === undefined ? {} : { maxParseMillis: this.#options.maxParseMillis }),
     };

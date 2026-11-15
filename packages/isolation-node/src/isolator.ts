@@ -14,6 +14,7 @@ import {
   type IsolatedComponents,
   type IsolatedParseRequest,
   type IsolatedParseResult,
+  type IsolatedSegment,
   type IsolationConfig,
   type IsolationMode,
   type Metadata,
@@ -22,6 +23,7 @@ import {
   type ParseOptions,
   type ParseRecord,
   type Ripstream,
+  type Segment,
 } from "@spikedpunch/ripstream-core";
 import { defaultPoolMb, readCgroupLimits, validatePoolAgainstCgroup } from "./cgroup.ts";
 import { MAX_HEADER_BYTES } from "./child-io.ts";
@@ -257,6 +259,14 @@ function checkRequest(request: IsolatedParseRequest): void {
     }
     if (output !== "records") throw new TypeError('isolate: request.unpackBytes needs output "records"');
   }
+  const { segments } = request;
+  if (segments !== undefined) {
+    if (typeof segments !== "boolean") throw new TypeError(`isolate: request.segments must be a boolean, got ${String(segments)}`);
+    if (segments && output !== "records") throw new TypeError('isolate: request.segments needs output "records"');
+    if (segments && handlerType !== undefined && handlerType !== "text" && handlerType !== "body") {
+      throw new RangeError(`isolate: request.segments need a handlerType of "text" or "body", got "${handlerType}"`);
+    }
+  }
 }
 
 /** The facade rule for an aborted signal: a TimeoutError becomes ParseTimeoutError, anything else AbortError. */
@@ -292,8 +302,13 @@ function toIsolatedRecord(record: ParseRecord): IsolatedParseRecord {
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : toIsolatedException(record.exception),
+    ...(record.segments === undefined ? {} : { segments: record.segments.map(isolatedSegment) }),
     ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
   };
+}
+
+function isolatedSegment({ start, end, labels, location }: Segment): IsolatedSegment {
+  return { start, end, labels, location };
 }
 
 interface Isolating {
@@ -439,6 +454,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
+      ...(request.segments === true ? { segments: true } : {}),
     };
     return isolating.runner.run(effective, {
       ...(signal === undefined ? {} : { signal }),
@@ -467,6 +483,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(request.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
+      ...(request.segments === true ? { segments: true } : {}),
     };
     const { inProcess } = this.#plan;
     try {

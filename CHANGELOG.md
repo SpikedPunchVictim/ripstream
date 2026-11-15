@@ -4,6 +4,19 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments: labels and locations inside a document (`tikajs-62gk`)
+
+Added, in `@spikedpunch/ripstream-core`: `ParseOptions.segments` (parseRecursive only, off by default) gives each
+record `segments`, its content cut into paragraphs, shapes, table rows and cells, lines or JSON values. Each segment has
+its offsets into `content`, the heading chain and column header above it as `labels`, and a `location` in a closed
+grammar: `sheet=Vendors;cell=C7`, `table=2;row=3;col=1`, `slide=3;shape=Title 1`, `ptr=/customers/0/tax_id`, `line=120`,
+`selector=…`. `parseSegmentLocation` and `SEGMENT_LOCATION_KEYS` read the grammar. The content is unchanged with
+segments on (the hints parsers give go through `CONTEXT_KEYS.SEGMENT_HINTS`, never the SAX stream), and nothing is
+built when they are off. OOXML, the text and CSV parsers and markdown give hints (row numbers, heading styles, shape
+names, source lines). Segments cross the isolation boundary (`IsolatedParseRequest.segments`,
+`IsolatedParseRecord.segments` without their text, checked by the frame reader) and count against its result cap. Not in
+the rmeta JSON, the CLI or the pipes emitters. Coverage, grammar and gaps: `docs/segments.md`.
+
 ### Structured paths for embedded documents (`tikajs-0rze`)
 
 Added, in `@spikedpunch/ripstream-core`: `ParseRecord.pathParts`, the record's path as a list of `{ kind, name }` from the

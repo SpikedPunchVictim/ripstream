@@ -151,6 +151,9 @@ function toWireRecord(record: ParseRecord): IsolatedParseRecord {
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : wireException(record.exception),
+    ...(record.segments === undefined
+      ? {}
+      : { segments: record.segments.map(({ start, end, labels, location }) => ({ start, end, labels, location })) }),
   };
 }
 
@@ -173,6 +176,7 @@ function parseOptionsFor(header: InputHeader): ParseOptions {
     ...(header.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
     ...(header.handlerType === undefined ? {} : { handlerType: header.handlerType }),
     ...(header.unpackBytes === undefined ? {} : { unpackBytes: header.unpackBytes }),
+    ...(header.segments === true ? { segments: true } : {}),
   };
 }
 

@@ -170,6 +170,9 @@ function wireRecord(record: ParseRecord): IsolatedParseRecord {
       error === null
         ? null
         : { name: String(error.name), message: String(error.message), ...(typeof error.code === "string" ? { code: error.code } : {}) },
+    ...(record.segments === undefined
+      ? {}
+      : { segments: record.segments.map(({ start, end, labels, location }) => ({ start, end, labels, location })) }),
   };
 }
 
@@ -271,6 +274,38 @@ test("records parity: a container with embedded documents gives the same records
     { kind: "root", name: "bundle.zip" },
     { kind: "entry", name: "inner/report.docx" },
   ]);
+});
+
+test("records parity with segments: every record's segments cross, the same as in-process", async () => {
+  const container = storedZip({ "table.csv": csv(), "page.html": html(), "inner/report.docx": docx(["Heading-free PLANTED-SEG paragraph"]) });
+  const reference = (await inProcess.parseRecursive(container, { filename: "bundle.zip", segments: true })).map(wireRecord);
+  const result = await isolated({ input: container, filename: "bundle.zip", output: "records", segments: true });
+  assert.equal(result.kind, "records");
+  const records = (result as { records: readonly IsolatedParseRecord[] }).records;
+  assert.deepEqual(records.map(withoutTiming), reference.map(withoutTiming));
+  const report = records.find((r) => r.embeddedResourcePath === "/bundle.zip/inner/report.docx")!;
+  const planted = report.segments?.find((s) => report.content.slice(s.start, s.end).includes("PLANTED-SEG"));
+  assert.equal(planted?.location, "para=1");
+  const plain = await isolated({ input: container, filename: "bundle.zip", output: "records" });
+  assert.ok((plain as { records: readonly IsolatedParseRecord[] }).records.every((r) => r.segments === undefined), "off unless asked");
+});
+
+test("facade: segments cross a child and the in-process route alike, and need a records request", async () => {
+  const input = docx(["PLANTED-FACADE paragraph"]);
+  const reference = (await inProcess.parseRecursive(input, { filename: "f.docx", segments: true })).map(wireRecord);
+  const docxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  for (const [route, children, inProcessTypes] of [["child", 1, new Set<string>()], ["in-process", 0, new Set([docxType])]] as const) {
+    await withIsolator({ inProcessTypes }, async (isolator) => {
+      const before = facadeSettled.length;
+      const answer = await isolator.isolate({ input, filename: "f.docx", output: "records", segments: true });
+      assert.equal(facadeSettled.length - before, children, `${route}: the route taken`);
+      assert.equal(answer.kind, "records");
+      const records = (answer as { records: readonly IsolatedParseRecord[] }).records;
+      assert.deepEqual(records.map(withoutTiming), reference.map(withoutTiming), route);
+      await assert.rejects(isolator.isolate({ input, filename: "f.docx", segments: true }), TypeError);
+      await assert.rejects(isolator.isolate({ input, filename: "f.docx", output: "records", segments: true, handlerType: "xml" }), RangeError);
+    });
+  }
 });
 
 // ---- output cap parity and streaming ---------------------------------------------------------------------------------

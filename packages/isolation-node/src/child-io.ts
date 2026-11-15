@@ -56,6 +56,8 @@ export interface InputHeader {
   readonly handlerType?: HandlerType;
   /** ParseOptions.unpackBytes: keep the bytes of the embedded documents, up to this many in all. Records output only. */
   readonly unpackBytes?: number;
+  /** ParseOptions.segments: label and locate the parts of each record. Records output only. Omitted: false. */
+  readonly segments?: boolean;
 }
 
 export interface ChildInput {
@@ -204,6 +206,12 @@ function parseHeader(json: string): InputHeader {
   }
   if (header.handlerType !== undefined && !HANDLER_TYPES.includes(header.handlerType as HandlerType)) {
     throw new TypeError(`input header: handlerType must be one of ${HANDLER_TYPES.join(", ")}`);
+  }
+  if (header.segments !== undefined && typeof header.segments !== "boolean") {
+    throw new TypeError("input header: segments must be a boolean");
+  }
+  if (header.segments === true && header.output !== "records") {
+    throw new TypeError('input header: segments needs output "records"');
   }
   if (header.components !== undefined) checkComponents(header.components);
   return header as unknown as InputHeader;

@@ -92,6 +92,15 @@ test("a record's pathParts are accepted, each name whole", () => {
   assert.deepEqual(frames(events)[1], { t: "record", record: { ...RECORD, pathParts } });
 });
 
+test("a record's segments are accepted when each is a slice of its content with a location in the grammar", () => {
+  const record = { ...RECORD, content: "Name\tPLANTED", segments: [
+    { start: 0, end: 12, labels: [], location: "row=1" },
+    { start: 5, end: 12, labels: ["Sheet;1", "Name"], location: "sheet=Sheet%3B1;cell=B1" },
+  ] };
+  const events = feedAll(recordsReader(), line(READY) + line({ t: "record", record }));
+  assert.deepEqual(frames(events)[1], { t: "record", record });
+});
+
 test("multiple frames in one chunk are all returned", () => {
   assert.equal(frames(feedAll(reader(), line(READY) + line(META) + line(DONE))).length, 3);
 });
@@ -300,6 +309,14 @@ const afterReady: [string, unknown][] = [
   ["record with a pathParts kind outside the set", { t: "record", record: { ...RECORD, pathParts: [{ kind: "folder", name: "a" }] } }],
   ["record with a non-string pathParts name", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: 1 }] } }],
   ["record with an extra pathParts field", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: "a", x: 1 }] } }],
+  ["record with segments not a list", { t: "record", record: { ...RECORD, segments: {} } }],
+  ["record with a segment past its content", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 3, labels: [], location: "line=1" }] } }],
+  ["record with an empty segment", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 1, end: 1, labels: [], location: "line=1" }] } }],
+  ["record with a negative segment start", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: -1, end: 1, labels: [], location: "line=1" }] } }],
+  ["record with a fractional segment end", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1.5, labels: [], location: "line=1" }] } }],
+  ["record with a non-string segment label", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [1], location: "line=1" }] } }],
+  ["record with a segment location outside the grammar", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [], location: "x=1" }] } }],
+  ["record with an extra segment field", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [], location: "line=1", text: "a" }] } }],
   ["record with non-string mediaType", { t: "record", record: { ...RECORD, mediaType: 1 } }],
   ["record with negative depth", { t: "record", record: { ...RECORD, depth: -1 } }],
   ["record with float depth", { t: "record", record: { ...RECORD, depth: 0.5 } }],
