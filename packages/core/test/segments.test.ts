@@ -360,6 +360,43 @@ test("two shapes of a slide with the same name are located apart; the next slide
   ]);
 });
 
+const PDF_PAGES = script("pdf-pages", "application/x-pdf-like", async (xhtml, hints) => {
+  for (const [label, text] of [["iv", "first"], [undefined, "second"], ["A-1", "third"]] as const) {
+    hints?.pageLabel(label);
+    await xhtml.startElement("div", "class", "page");
+    await xhtml.element("p", text);
+    await xhtml.endElement("div");
+  }
+});
+
+test("a page label is an additive first label; the location keeps counting pages from 1 (tikajs-ex78)", async () => {
+  const [record] = await segmentsOf(PDF_PAGES);
+  assert.deepEqual(lines(record!.segments), ["page=1;para=1 | first | iv", "page=2;para=1 | second | ", "page=3;para=1 | third | A-1"]);
+});
+
+test("a form field is one segment located field=<name> and labelled with the name; a repeated name is told apart (tikajs-ex78)", async () => {
+  const form = script("pdf-form", "application/x-pdf-like", async (xhtml, hints) => {
+    await xhtml.startElement("div", "class", "page");
+    await xhtml.element("p", "Customer form");
+    for (const [name, value] of [["customer.name", "Ann"], ["taxid", "A1"], ["taxid", "A2"]] as const) {
+      hints?.field(name);
+      await xhtml.element("div", `${name}: ${value}`);
+      hints?.field(undefined);
+    }
+    await xhtml.element("p", "after the form");
+    await xhtml.endElement("div");
+  });
+  const [record] = await segmentsOf(form);
+  assert.deepEqual(lines(record!.segments), [
+    "page=1;para=1 | Customer form | ",
+    "page=1;field=customer.name | customer.name: Ann | customer.name",
+    "page=1;field=taxid | taxid: A1 | taxid",
+    "page=1;field=taxid~2 | taxid: A2 | taxid",
+    "page=1;para=2 | after the form | ",
+  ]);
+  assert.equal(parseSegmentLocation(record!.segments![1]!.location).get("field"), "customer.name");
+});
+
 test("html is located by selector: nth-of-type from the body, an id where there is one", async () => {
   const html = script("html", "text/html", async (xhtml) => {
     await xhtml.element("p", "first");

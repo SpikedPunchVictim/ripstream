@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ex78: an AcroForm field's text is one segment located field=<name>, labelled with the field's full name; a second field of the name is told apart",
+  "operation": "parseRecursive",
+  "input": { "file": "files/acroform.pdf", "filename": "acroform.pdf" },
+  "options": { "segments": true },
+  "assertions": [
+    { "type": "contains", "field": "records.0.segments", "value": "page=1;field=customer.name | 1. customer.name: PLANTED-FIELD-NAME | customer.name" },
+    { "type": "contains", "field": "records.0.segments", "value": "page=1;field=taxid | 2. taxid: PLANTED-TAX-ID | taxid" },
+    { "type": "contains", "field": "records.0.segments", "value": "page=1;field=taxid~2 | 3. taxid: SECOND-WIDGET | taxid" }
+  ]
+}

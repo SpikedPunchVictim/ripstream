@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF segments: page labels and form fields (`tikajs-ex78`)
+
+Added: with `segments` on, a PDF page's `/PageLabels` label ("iv", "A-3") is an additive first label of the segments on that page
+(`page=N` still counts pages from 1), and an AcroForm field's text is one segment located `page=1;field=customer.name`, labelled
+with the field's full name (a second field of the page with the same name is `field=taxid~2`). `field` is a new key of the location
+grammar, after `shape`: `SEGMENT_LOCATION_KEYS`, `parseSegmentLocation` and the isolation frames validator accept it, and
+`SegmentHints` gains `pageLabel(label)` and `field(name)` (api-report.json). Off by default, and then nothing is read or changed;
+with segments on, `content` is byte-identical (the fixture harness checks it). docs/segments.md.
+
 ### Server: segments on `/rmeta` and `/unpack` (`tikajs-5wd0`)
 
 Added: `PUT /rmeta?segments=true` (and `/rmeta/text`, `/rmeta/body`) writes `tk:segments` on each record that has segments, as

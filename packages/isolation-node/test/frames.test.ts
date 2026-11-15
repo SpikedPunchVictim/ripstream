@@ -97,10 +97,11 @@ test("a record's segments arrive in segments frames, each a slice of its content
   const segments = [
     { start: 0, end: 12, labels: [], location: "row=1" },
     { start: 5, end: 12, labels: ["Sheet;1", "Name"], location: "sheet=Sheet%3B1;cell=B1" },
+    { start: 0, end: 4, labels: ["iv", "customer.name"], location: "page=1;field=customer.name" },
   ];
   const record = { ...RECORD, content: "Name\tPLANTED" };
   const r = recordsReader({ maxSegmentBytes: 10_000 });
-  const events = feedAll(r, line(READY) + line({ t: "record", record, segmentCount: 2 }) + line({ t: "segments", segments }) + line(DONE));
+  const events = feedAll(r, line(READY) + line({ t: "record", record, segmentCount: 3 }) + line({ t: "segments", segments }) + line(DONE));
   assert.deepEqual(violationKinds(events), []);
   const result = r.result();
   assert.deepEqual(result.kind === "records" ? result.records[0] : null, { ...record, segments });

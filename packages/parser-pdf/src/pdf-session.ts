@@ -32,6 +32,8 @@ export interface PdfSessionInput {
   readonly maxAttachments?: number;
   readonly maxAttachmentBytes?: number;
   readonly maxTotalAttachmentBytes?: number;
+  /** Read the /PageLabels (only when segments were asked for: the labels are not part of the text). */
+  readonly pageLabels?: boolean;
 }
 
 export interface PdfAttachment {
@@ -76,6 +78,8 @@ export type PdfResponse =
       readonly ownerAccess: boolean;
       /** The catalog has a /StructTreeRoot (what Tika reports as pdf:has-marked-content). */
       readonly hasMarkedContent: boolean;
+      /** The page labels, one per page (null where a page has none), when they were asked for and the document has them. */
+      readonly pageLabels?: readonly (string | null)[];
       /** Where each revision of the file ends (pdf-eof.ts); undefined when the file was too large to scan. */
       readonly eofOffsets?: readonly number[];
     }
@@ -152,6 +156,7 @@ interface PdfDocument {
   }>>;
   getOutline?(): Promise<unknown>;
   getPermissions?(): Promise<number[] | null>;
+  getPageLabels?(): Promise<readonly string[] | null>;
   /** Drops what pdf.js keeps per page and per object (the page objects, the object cache). Absent on a stand-in. */
   cleanup?(keepLoadedFonts?: boolean): Promise<void>;
 }
@@ -195,6 +200,20 @@ const DOCUMENT_CLEANUP_INTERVAL_PAGES = 100;
 interface PdfOutlineItem {
   readonly title?: unknown;
   readonly items?: readonly PdfOutlineItem[];
+}
+
+/** A page label is a few characters ("iv", "A-3"); a longer one is cut, as it ends up in a segment's labels. */
+const MAX_PAGE_LABEL = 64;
+
+/** The document's page labels (pdf.js builds them from /PageLabels), or undefined when it has none or they cannot be read. */
+async function readPageLabels(document: PdfDocument): Promise<(string | null)[] | undefined> {
+  try {
+    const labels = await document.getPageLabels?.();
+    if (labels === null || labels === undefined) return undefined;
+    return labels.map((label) => (typeof label === "string" && label.length > 0 ? label.slice(0, MAX_PAGE_LABEL) : null));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Flattened outline titles, parents before their children, as Tika writes bookmarks as text. */
@@ -285,6 +304,7 @@ export class PdfSession {
         permissions = null;
       }
       this.#document = document;
+      const pageLabels = this.#input.pageLabels === true ? await readPageLabels(document) : undefined;
       return {
         type: "ready",
         info: metadata.info,
@@ -295,6 +315,7 @@ export class PdfSession {
         permissions,
         ownerAccess: this.#ownerAccess,
         hasMarkedContent: await this.#hasStructTree(document),
+        ...(pageLabels === undefined ? {} : { pageLabels }),
         ...(this.#eofOffsets === undefined ? {} : { eofOffsets: this.#eofOffsets }),
         ...(this.#repair === undefined ? {} : { repair: this.#repair }),
       };

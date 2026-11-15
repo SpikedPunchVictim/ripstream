@@ -54,11 +54,21 @@ export interface SegmentHints {
    * shape. A title shape's text is the heading of what follows it on the slide.
    */
   shape(name: string | undefined, title?: boolean): void;
+  /**
+   * The page, slide or sheet written next has this label (a PDF's `/PageLabels` entry, "iv" or "A-3"): it is added, first, to
+   * the `labels` of every segment in it. The location still counts pages from 1; a label is additive. `undefined` for none.
+   */
+  pageLabel(label: string | undefined): void;
+  /**
+   * The text written from now on is an AcroForm field's, until the next call; `undefined` ends it. It is one segment located
+   * `field=<name>` (a second field of the page with the name has `~2`, ...), labelled with the field's full name.
+   */
+  field(name: string | undefined): void;
 }
 
 /** The keys of a location, in the order they appear in one. */
 export const SEGMENT_LOCATION_KEYS = [
-  "page", "slide", "sheet", "part", "shape", "table", "row", "col", "cell", "para", "line", "ptr", "selector",
+  "page", "slide", "sheet", "part", "shape", "field", "table", "row", "col", "cell", "para", "line", "ptr", "selector",
 ] as const;
 
 export type SegmentLocationKey = (typeof SEGMENT_LOCATION_KEYS)[number];
@@ -165,6 +175,9 @@ interface Pending {
   /** The source line (lines layout, or a hint), 0 for none. */
   readonly line: number;
   readonly shape: string | undefined;
+  /** An AcroForm field's segment: the location value (unique on the page), and the field's own full name. */
+  readonly field: string | undefined;
+  readonly fieldName: string | undefined;
   readonly title: boolean;
   /** html: the element's selector. */
   readonly selector: string | undefined;
@@ -229,6 +242,9 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #shape: Pending | undefined;
 
   #container: { readonly key: "page" | "slide" | "sheet"; value: string; named: boolean } | undefined;
+  /** The label of the container (a PDF page's label) and the one the next container will have. */
+  #containerLabel: string | undefined;
+  #nextContainerLabel: string | undefined;
   #containerCount = new Map<string, number>();
   #part: string | undefined;
   #para = 0;
@@ -242,7 +258,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #headingLabelsVersion = 0;
 
   #delimiter: string | undefined;
-  /** The shape names a slide (or its notes) has used so far. */
+  /** The shape and field names a slide, page (or its notes) has used so far, by kind and part. */
   readonly #shapeNames = new Map<string, Set<string>>();
   #nextHeading = 0;
   #nextHeadingTitle: string | undefined;
@@ -302,15 +318,26 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     this.#closeShape();
     if (name === undefined) return;
     this.#closeImplicit();
-    this.#shape = this.#open("shape", this.#frames.length, { shape: this.#uniqueShapeName(name), title, capture: title });
+    this.#shape = this.#open("shape", this.#frames.length, { shape: this.#uniqueName("shape", name), title, capture: title });
+  }
+
+  pageLabel(label: string | undefined): void {
+    this.#nextContainerLabel = label;
+  }
+
+  field(name: string | undefined): void {
+    this.#closeShape();
+    if (name === undefined) return;
+    this.#closeImplicit();
+    this.#shape = this.#open("shape", this.#frames.length, { field: this.#uniqueName("field", name), fieldName: name, capture: false });
   }
 
   /**
-   * The name a shape is located by: its own, and for a second shape of the slide with the same name `~2`, `~3` ..., so that
-   * `(path, location)` stays unique. A slide's notes are a part of their own, so they have their own names.
+   * The name a shape or a field is located by: its own, and for a second one of the slide or page with the same name `~2`,
+   * `~3` ..., so that `(path, location)` stays unique. A slide's notes are a part of their own, so they have their own names.
    */
-  #uniqueShapeName(name: string): string {
-    const part = this.#part ?? "";
+  #uniqueName(kind: "shape" | "field", name: string): string {
+    const part = `${kind}:${this.#part ?? ""}`;
     let used = this.#shapeNames.get(part);
     if (used === undefined) this.#shapeNames.set(part, (used = new Set()));
     let unique = name;
@@ -473,6 +500,9 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     this.#containerCount.set(key, count);
     this.#container = { key, value: String(count), named: key !== "sheet" };
     this.#shapeNames.clear();
+    if (this.#containerLabel !== this.#nextContainerLabel) this.#headingVersion++;
+    this.#containerLabel = this.#nextContainerLabel;
+    this.#nextContainerLabel = undefined;
     this.#para = 0;
     this.#tableCount = 0;
     this.#resetHeadings();
@@ -493,6 +523,8 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       readonly headingTitle?: string | undefined;
       readonly line?: number;
       readonly shape?: string;
+      readonly field?: string;
+      readonly fieldName?: string;
       readonly title?: boolean;
       readonly capture: boolean;
     },
@@ -507,6 +539,8 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       headingTitle: fields.headingTitle,
       line: fields.line ?? 0,
       shape: fields.shape ?? this.#shape?.shape,
+      field: fields.field,
+      fieldName: fields.fieldName,
       title: fields.title ?? false,
       selector: this.#html ? this.#selector(depth) : undefined,
       hasText: false,
@@ -568,6 +602,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     if (this.#block !== undefined) this.#closeBlock();
     this.#shape = undefined;
     if (!shape.hasText) return;
+    if (shape.field !== undefined) {
+      this.#push(shape, `${this.#prefix(undefined)}field=${escapeValue(shape.field)}`, [...this.#baseLabels(), shape.fieldName ?? shape.field]);
+      return;
+    }
     const location = this.#prefix(undefined) + `shape=${escapeValue(shape.shape ?? "")}`;
     this.#push(shape, location, this.#baseLabels());
     if (shape.title) this.#setHeading(1, shape.capture ?? "");
@@ -635,7 +673,8 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
 
   #baseLabels(): readonly string[] {
     if (this.#headingLabelsVersion !== this.#headingVersion) {
-      this.#headingLabels = Object.freeze(this.#headings.filter((heading) => heading.length > 0));
+      const headings = this.#headings.filter((heading) => heading.length > 0);
+      this.#headingLabels = Object.freeze(this.#containerLabel === undefined ? headings : [this.#containerLabel, ...headings]);
       this.#headingLabelsVersion = this.#headingVersion;
     }
     return this.#headingLabels;

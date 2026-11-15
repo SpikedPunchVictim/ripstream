@@ -15,6 +15,7 @@ import {
   type ContentHandler,
   type ParseContext,
   type Parser,
+  type SegmentHints,
   RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { InlineChannel } from "./pdf-channel.ts";
@@ -109,6 +110,8 @@ export class PdfParser implements Parser {
     }
 
     const limits = ctx.limits;
+    // Only when segments were asked for: a page's label and a form field's name are read for them, and for nothing else.
+    const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
     const input: PdfSessionInput = {
       path,
       sortByPosition: this.#sortByPosition,
@@ -117,6 +120,7 @@ export class PdfParser implements Parser {
       maxAttachments: limits.maxEmbeddedResources,
       maxAttachmentBytes: limits.maxEmbeddedResourceBytes,
       maxTotalAttachmentBytes: limits.maxTotalEmbeddedBytes,
+      pageLabels: hints !== undefined,
     };
     const channel = new InlineChannel(new PdfSession(input));
     const onAbort = (): void => {
@@ -188,6 +192,7 @@ export class PdfParser implements Parser {
           repair = message.repair;
           recordRepair(metadata, repair);
         }
+        hints?.pageLabel(ready.pageLabels?.[index - 1] ?? undefined);
         await xhtml.startElement("div", "class", "page");
         let characters = 0;
         for (const line of message.lines) {
@@ -206,7 +211,7 @@ export class PdfParser implements Parser {
           for (const annotation of message.annotations) {
             recordAnnotation(annotation, annotationTypes, annotationSubtypes);
             if (annotation.fieldName !== undefined) hasAcroForm = true;
-            await renderAnnotation(annotation, xhtml, annotation.fieldName === undefined ? 0 : ++fieldIndex);
+            await renderAnnotation(annotation, xhtml, annotation.fieldName === undefined ? 0 : ++fieldIndex, hints);
           }
         }
         await xhtml.endElement("div");
@@ -456,6 +461,7 @@ async function renderAnnotation(
   annotation: PdfAnnotation,
   xhtml: XHTMLContentHandler,
   fieldIndex: number,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   if (annotation.url !== undefined && annotation.url.length > 0) {
     await xhtml.startElement("div", "class", "annotation");
@@ -466,12 +472,14 @@ async function renderAnnotation(
   }
 
   if (annotation.fieldName !== undefined) {
+    hints?.field(annotation.fieldName);
     await xhtml.startElement("div", "class", "annotation");
     await xhtml.startElement("div", "class", "annotationField");
     const field = `${annotation.fieldName}: ${String(annotation.fieldValue ?? "")}`.trim();
     await xhtml.characters(fieldIndex > 0 ? `${fieldIndex}. ${field}` : field);
     await xhtml.endElement("div");
     await xhtml.endElement("div");
+    hints?.field(undefined);
   }
 
   // pdf.js does not expose /Subj; Acrobat writes these subjects for the two standard annotation kinds.

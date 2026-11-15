@@ -82,7 +82,8 @@ offsets stale, which is for whoever configured it to know.
 | text, log, csv read as text | a line | `line=120` | none |
 | markdown | a block | `line=7`, the source line the block starts on (fences counted) | the heading chain, `#` and setext (`Title` over `===` or `---`) |
 | html, xhtml | each block, row and cell | `selector=body > table:nth-of-type(1) tr:nth-of-type(2) > td:nth-of-type(2)`, `selector=#footer > span:nth-of-type(1)` | headings (`h1`-`h6`), the column header |
-| pdf and the rest | a paragraph | `page=2;para=5` where the parser writes pages, else `para=5` | headings the parser writes |
+| pdf | a paragraph, or a form field | `page=2;para=5`; an AcroForm field is `page=1;field=customer.name` (a second field of the page with the same name is `taxid~2`) | the page's `/PageLabels` label (`iv`, `A-3`), a field's full name, headings the parser writes |
+| the rest | a paragraph | `para=5`, or `page=2;para=5` where the parser writes pages | headings the parser writes |
 | any title | the document title | `part=title` (the root record's content starts with it) | none |
 
 The parser fixtures in `packages/parsers/test/fixtures/segments/` plant a value per format and assert the location
@@ -128,7 +129,7 @@ segments. The segments are all that changes: `content` and the metadata are the 
 ### What labels there are not
 
 Labels are names the document gives, so a format that names nothing has none. A log has no labels, and a pdf has only
-what the parser writes as a heading (the text a pdf writes as a row, such as `label  value`, is one paragraph
+what the parser writes as a heading, the page's label and a form field's name (the text a pdf writes as a row, such as `label  value`, is one paragraph
 `page=1;para=4`: the label is in the segment's text, not in `labels`). An archive's entries are records of their own, each with
 its own segments and `embeddedResourcePath`; the archive's record holds the entry names. A consumer that matches a
 detector's context (a keyword near the value) sees the header only in `labels`, so a detector that looks at a segment's
@@ -139,7 +140,7 @@ text alone does not see the header of a csv, short or not.
 A location is `key=value` parts joined by `;`. The keys come in this order, each at most once:
 
 ```text
-page, slide, sheet, part, shape, table, row, col, cell, para, line, ptr, selector
+page, slide, sheet, part, shape, field, table, row, col, cell, para, line, ptr, selector
 ```
 
 Values escape `%`, `;`, `=`, CR and LF as `%25`, `%3B`, `%3D`, `%0D`, `%0A`. A sheet named `Q1;Q2` gives
@@ -168,6 +169,8 @@ only when segments are on, and a hint never touches the SAX stream:
 | `heading(level, title?)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`), markdown `#` and setext (`title` is the text without the underline) |
 | `line(n)` | markdown: a block's source line |
 | `shape(name, title)` | OOXML presentation: `cNvPr@name`, title placeholders |
+| `pageLabel(label)` | PDF: the next page's `/PageLabels` label, an additive first label of its segments (the location still counts pages from 1) |
+| `field(name)` | PDF: the text written until `field(undefined)` is an AcroForm field's: one segment `field=<name>`, labelled with the field's full name |
 
 ## The allowance for locations (`tikajs-yub3`)
 
@@ -192,7 +195,8 @@ encoding of a document with very many segments, and that is still a `LimitExceed
 
 ## Not done
 
-- PDF page labels (`/PageLabels`, "iv" or "A-3"): pages are numbered from 1.
+- A PDF's page label is read only when segments are on, and a label longer than 64 characters is cut. A field of a form that the parser
+  does not write as text (`extractAnnotationText` off) has no segment.
 - A docx `para` counts the paragraphs written, not Word's own count, which includes empty paragraphs.
 - Localized heading style ids (`berschrift1`, `Titre1`) are not recognized as headings.
 - xlsb and ods number rows as written, so an empty row is not counted; xlsb also leaves empty cells out of its row, so its `col=` can be

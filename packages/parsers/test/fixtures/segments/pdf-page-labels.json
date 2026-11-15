@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ex78: a PDF page is located page=N (counted from 1) and its /PageLabels label is an additive first label",
+  "operation": "parseRecursive",
+  "input": { "file": "files/page-labels.pdf", "filename": "page-labels.pdf" },
+  "options": { "segments": true },
+  "assertions": [
+    { "type": "contains", "field": "records.0.segments", "value": "page=1;para=1 | PLANTED-PREFACE-ONE | i" },
+    { "type": "contains", "field": "records.0.segments", "value": "page=2;para=1 | PLANTED-PREFACE-TWO | ii" },
+    { "type": "contains", "field": "records.0.segments", "value": "page=3;para=1 | PLANTED-CHAPTER-ONE | A-1" }
+  ]
+}
