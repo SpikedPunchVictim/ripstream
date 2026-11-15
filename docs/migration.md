@@ -77,6 +77,13 @@ when they apply:
   `stream-salvaged` (the readable start of a cut Flate stream kept). `rebuilt-xref` alone means pdf.js indexed the
   objects itself because `startxref` was missing or pointed nowhere.
 
+A page that pdf.js cannot load is not silently gone (`tikajs-6ik0`): `tk:exception:warn` gets `MalformedDocumentError: page N
+could not be read: <reason>` and `pdf:chars-per-page` a `0` for it, so it still has one value per page. The same key names
+a page whose content stream is cut off, missing or cannot be decoded, or that shows text pdf.js did not extract, in every
+file (a repaired one or not); the first ten pages are named and the rest counted. A PDF in which pages failed to load and
+none had text is a `MalformedDocumentError` whether or not it was repaired. A PDF with more than 10,000 pages is a
+`LimitExceededError` (it used to be read up to page 10,000 with the rest dropped, no key saying so).
+
 A repaired file that yields no text is an empty success only when every page is shown to have none: the page's content
 was read whole, in the file as given, and shows no text. A page or content stream that is cut off proves nothing.
 Otherwise it is a `MalformedDocumentError` that names the damage, for example

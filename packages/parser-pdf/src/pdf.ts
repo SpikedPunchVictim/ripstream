@@ -27,6 +27,9 @@ import {
 } from "./pdf-session.ts";
 
 const MAX_PAGES = 10_000;
+
+/** Pages named one by one in `tk:exception:warn` before the rest are counted. */
+const MAX_PAGE_WARNINGS = 10;
 const MIB = 1024 * 1024;
 
 /**
@@ -127,6 +130,12 @@ export class PdfParser implements Parser {
         throw new MalformedDocumentError("PDF session returned no document");
       }
 
+      // The pages are read one by one up to a cap, and a document over it is refused, as every other limit is: reading
+      // the first MAX_PAGES and saying nothing about the rest hid whatever was on them.
+      if (ready.numPages > MAX_PAGES) {
+        throw new LimitExceededError(`PDF has ${ready.numPages} pages, exceeding the ${MAX_PAGES} page limit`);
+      }
+
       // Tika reads the XMP packet first, then the Info dictionary, which fills what the packet left empty.
       applyXmp(metadata, ready.xmp);
       applyInfo(metadata, ready.info);
@@ -148,7 +157,7 @@ export class PdfParser implements Parser {
       const annotationTypes = new Set<string>();
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
-      const pages = Math.min(ready.numPages, MAX_PAGES);
+      const pages = ready.numPages;
       const imageOnlyPages: number[] = [];
       const emptiness = new EmptyDocumentEvidence();
       for (let index = 1; index <= pages; index++) {
@@ -159,8 +168,10 @@ export class PdfParser implements Parser {
         if (message.type === "page-error") {
           if (message.name === "LimitExceededError") throw mapSessionError(message);
           // Upstream PDFBox recovers individual pages; keep the pages that
-          // did parse instead of failing the whole document.
-          emptiness.pageFailed();
+          // did parse instead of failing the whole document. The page is not silently gone: a warning names it, and
+          // pdf:chars-per-page keeps one value per page.
+          emptiness.pageFailed(index, message.message);
+          metadata.add("pdf:chars-per-page", "0");
           continue;
         }
         if (message.type !== "page") {
@@ -190,6 +201,12 @@ export class PdfParser implements Parser {
         if (index < pages && this.#pageSeparator.length > 0) {
           await xhtml.characters(this.#pageSeparator);
         }
+      }
+
+      for (const warning of emptiness.warnings()) metadata.add("tk:exception:warn", `${MalformedDocumentError.name}: ${warning}`);
+      // Pages that could not be read, and not one with text: nothing was read of this document, whatever the xref said.
+      if (ready.repair === undefined && emptiness.unreadable()) {
+        throw new MalformedDocumentError(`PDF pages could not be read (${emptiness.failures()})`);
       }
 
       // A PDF cut off before its %%EOF, or with padding after it, that yields no text is an empty document, as in Tika 4.2.0:
@@ -325,8 +342,34 @@ class EmptyDocumentEvidence {
   #unlisted = 0;
   readonly #problems: string[] = [];
 
-  pageFailed(): void {
+  /** Warnings written to `tk:exception:warn`: what was lost, by page; the first few, then a count. */
+  readonly #warnings: string[] = [];
+  #unwarned = 0;
+  readonly #failures: string[] = [];
+
+  pageFailed(index: number, message: string): void {
     this.#failed++;
+    this.#warn(`page ${index} could not be read: ${message}`);
+    if (this.#failures.length < 4) this.#failures.push(`page ${index}: ${message}`);
+  }
+
+  #warn(warning: string): void {
+    if (this.#warnings.length < MAX_PAGE_WARNINGS) this.#warnings.push(warning);
+    else this.#unwarned++;
+  }
+
+  warnings(): string[] {
+    return this.#unwarned === 0 ? [...this.#warnings] : [...this.#warnings, `${this.#unwarned} more pages with a problem`];
+  }
+
+  /** True when pages failed to load and none had text. */
+  unreadable(): boolean {
+    return this.#failed > 0 && !this.#text;
+  }
+
+  failures(): string {
+    const more = this.#failed - this.#failures.length;
+    return [...this.#failures, ...(more > 0 ? [`${more} more`] : [])].join("; ");
   }
 
   page(index: number, hasText: boolean, content: PageContent | undefined): void {
@@ -342,6 +385,9 @@ class EmptyDocumentEvidence {
     else if (content.showsText) problem = `page ${index} shows text that could not be extracted`;
     if (content?.contents === "read") this.#contentRead = true;
     if (problem === null) return;
+    // Content that is cut off, missing or unreadable, or that shows text pdf.js did not extract, is lost text. That the
+    // content could not be checked at all is no finding about the document.
+    if (content !== undefined) this.#warn(problem);
     // The message names the first few; the rest are counted, so a document of many pages does not read as four.
     if (this.#problems.length < 4) this.#problems.push(problem);
     else this.#unlisted++;

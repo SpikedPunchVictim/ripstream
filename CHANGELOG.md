@@ -42,6 +42,15 @@ past 8 MiB got an object number near 2^31 (rejected in 20 ms unpadded) past the 
 A file up to 64 MiB is now read once for the full preflight; a larger one is checked a chunk at a time (object numbers and
 font lengths; the form-cycle check needs the whole file and still covers only files that fit in memory).
 
+### Bug hunt at 9a828fc: PDF pages that could not be read (`tikajs-6ik0`, F17 F18 F19)
+
+Changed (visible to callers): a PDF with more than 10,000 pages now throws `LimitExceededError` (it was read up to page 10,000
+and the rest dropped with no exception or key). A page that fails to load adds `tk:exception:warn` (`page N could not be read:
+...`) and a `0` to `pdf:chars-per-page`; a PDF where pages failed and none had text throws `MalformedDocumentError` (it was a
+clean empty parse unless the file had been repaired). A page whose content is cut off, missing or cannot be decoded, or shows
+text pdf.js did not extract, is named in `tk:exception:warn` for every file, not only repaired ones (it stays a success; the
+text that is there is kept). Files with no unreadable page are unchanged.
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

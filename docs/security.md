@@ -205,6 +205,8 @@ configuration: `endpointConfigurationService`, `esUrl`, `openSearchUrl`. That ad
 - `maxInputBytes` (default 512 MiB): larger files are rejected with `LimitExceededError` before
   pdf.js is loaded.
 - `maxPageTextChars` (default 32 Mi): per-page cap on extracted text characters.
+- Pages (fixed at 10,000): a PDF whose page count is over it is rejected with `LimitExceededError`, naming the count,
+  rather than read up to the cap with the rest dropped. `xmpTPg:NPages` is the document's own count.
 - `pageTimeoutMs` (default 30 s): ends a load or page extraction that stalls asynchronously with
   `ParseTimeoutError`. It cannot interrupt a synchronous pdf.js loop, because the timer cannot fire
   while the thread is busy.
