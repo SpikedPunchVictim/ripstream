@@ -4,6 +4,12 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### WordPerfect 4.2 parses as an empty document (`tikajs-5ur3`)
+
+Fixed: a WordPerfect 4.2 file (`CB 0A 01 .. CB`, no `WPC` header; media type `application/vnd.wordperfect; version=4.2`) failed with
+"Not a WordPerfect document". Tika 4.2.0 has no 4.2 extractor and its EmptyParser returns an empty document with that
+Content-Type, no error; ripstream now does the same (no text is read from the file, as in Tika).
+
 ### XML: a UTF-16 document that declares another encoding is plain text (`tikajs-5tjh`)
 
 Fixed in detection: a UTF-16 document (byte order mark) whose declaration says `encoding="UTF-8"` has no readable root to Tika 4.2.0

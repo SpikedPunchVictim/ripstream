@@ -1,0 +1,28 @@
+{
+  "description": "(tikajs-5ur3) WordPerfect 4.2 (named a.wpd; CB 0A 01 .. CB, no WPC header): Tika 4.2.0 detects application/vnd.wordperfect; version=4.2 and its EmptyParser returns no content and no error.",
+  "tags": [
+    "wordperfect",
+    "repro"
+  ],
+  "input": {
+    "base64": "ywoB9gDLAABIZWxsbyB3cDQyAAAAAAAA",
+    "filename": "a.wpd"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/vnd.wordperfect; version=4.2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "EmptyParser"
+    }
+  ]
+}

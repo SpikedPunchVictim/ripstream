@@ -148,7 +148,12 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
   }
   const parsers = options.parsers ?? [
       // Tika detects these but has no text extractor: its EmptyParser answers an empty document.
-      new EmptyFormatParser(["image/x-pict", "application/vnd.lotus-1-2-3", "application/x-mobipocket-ebook"]),
+      new EmptyFormatParser([
+        "image/x-pict",
+        "application/vnd.lotus-1-2-3",
+        "application/x-mobipocket-ebook",
+        "application/vnd.wordperfect; version=4.2",
+      ]),
       new TextParser(),
       new CsvParser(options.csv),
       new HtmlDocumentParser(),
