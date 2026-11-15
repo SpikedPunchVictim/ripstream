@@ -10,6 +10,7 @@ import { maybeDigest } from "./digest.ts";
 import { MediaType } from "./media-type.ts";
 import type { MediaTypeRegistry } from "./media-type-registry.ts";
 import { Metadata } from "./metadata.ts";
+import { bumpParserEpoch, currentParserEpoch } from "./parser-epoch.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
 import type { RipstreamInputStream } from "./ripstream-input-stream.ts";
@@ -34,6 +35,10 @@ export const DEFAULT_PARSER_CAPABILITIES: ParserCapabilities = Object.freeze({
 export interface Parser {
   readonly name: string;
   readonly capabilities?: ParserCapabilities;
+  /**
+   * The media types this parser takes. A CompositeParser keeps its ranking of candidates, so the answer must not change
+   * after the parser is registered unless it reads `ctx`; a parser that reads `ctx` is asked again with every call's.
+   */
   getSupportedTypes(ctx: ParseContext): MaybePromise<ReadonlySet<MediaType>>;
   parse(
     stream: RipstreamInputStream,
@@ -85,6 +90,28 @@ export interface ParserMatch {
 const MAX_SUPERTYPE_DEPTH = 16;
 
 /**
+ * How many content types a composite keeps a ranked list for. The key is the full type, parameters included, and a
+ * caller can send any parameter it likes, so the memory has to be bounded; the oldest list goes first.
+ */
+const MAX_CACHED_TYPES = 512;
+
+/**
+ * `ctx` as a view that notes whether anything was read from it. A parser whose supported types do not touch the
+ * context gives the same answer for every context, so a list ranked from it can be kept; one that does touch it is
+ * asked again with each call's own context.
+ */
+function watchContext(ctx: ParseContext): { readonly probe: ParseContext; readonly touched: () => boolean } {
+  let touched = false;
+  const probe = new Proxy(ctx, {
+    get(target, property, receiver) {
+      touched = true;
+      return Reflect.get(target, property, receiver) as unknown;
+    },
+  });
+  return { probe, touched: () => touched };
+}
+
+/**
  * Runs the best parser whose supported set matches the detected type.
  * Candidates rank exact, then supertype by distance (Tika's registry walk),
  * then `type/*`, then `*` + `/*`; ties go to registration order.
@@ -94,6 +121,15 @@ export class CompositeParser implements Parser {
   readonly name = "CompositeParser";
   private readonly parsers: Parser[];
   private readonly registry: MediaTypeRegistry | undefined;
+  /**
+   * Ranked candidates by full content type. Valid only while `cacheEpoch` is the parser epoch: a parser added anywhere
+   * or a registry changed since, and the lists are dropped. This assumes what Tika's CompositeParser assumes, that a
+   * parser's supported types do not change once it is registered, other than through the context it is asked with.
+   */
+  private readonly ranked = new Map<string, readonly ParserMatch[]>();
+  private cacheEpoch = -1;
+  /** Set when some parser's supported types read the context: lists are then ranked per call, never kept. */
+  private contextSensitive = false;
 
   constructor(options: CompositeParserOptions = {}) {
     this.parsers = [...(options.parsers ?? [])];
@@ -102,6 +138,33 @@ export class CompositeParser implements Parser {
 
   /** Every parser that can take `type`, best match first. */
   async selectParsers(type: MediaType, ctx: ParseContext): Promise<readonly ParserMatch[]> {
+    const epoch = currentParserEpoch();
+    if (this.cacheEpoch !== epoch) {
+      this.ranked.clear();
+      this.contextSensitive = false;
+      this.cacheEpoch = epoch;
+    }
+    const key = type.toString();
+    const kept = this.ranked.get(key);
+    if (kept !== undefined) return kept;
+    if (this.contextSensitive) return this.rank(type, ctx);
+
+    const watch = watchContext(ctx);
+    const matches = Object.freeze(await this.rank(type, watch.probe));
+    if (watch.touched()) {
+      this.contextSensitive = true;
+      // The lists were ranked from a view of this context only; rank again from the context itself, as before.
+      return this.rank(type, ctx);
+    }
+    // A parser added while this one was ranking: the list may predate it, so it is answered but not kept.
+    if (currentParserEpoch() === epoch) {
+      if (this.ranked.size >= MAX_CACHED_TYPES) this.ranked.delete(this.ranked.keys().next().value as string);
+      this.ranked.set(key, matches);
+    }
+    return matches;
+  }
+
+  private async rank(type: MediaType, ctx: ParseContext): Promise<ParserMatch[]> {
     const chain = this.supertypeChain(type);
     const position = new Map<string, number>();
     chain.forEach((link, index) => {
@@ -170,6 +233,7 @@ export class CompositeParser implements Parser {
 
   addParser(parser: Parser): void {
     this.parsers.push(parser);
+    bumpParserEpoch();
   }
 
   getParsers(): readonly Parser[] {

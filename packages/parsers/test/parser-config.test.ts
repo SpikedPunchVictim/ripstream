@@ -244,3 +244,13 @@ test("a pdf-parser entry sets the PDFParserConfig properties of the parser that 
   assert.deepEqual(await order({ parsers: [{ "pdf-parser": { sortByPosition: true } }] }), sorted);
   assert.deepEqual(await order({ parsers: [{ "pdf-parser": { sortByPosition: false } }] }), [...sorted].reverse());
 });
+
+test("composites configured differently do not share ranked candidates, whichever is asked first", async () => {
+  const withoutJpeg = parserList([{ "default-parser": { exclude: ["jpeg-parser"] } }]);
+  const first = await taking(withoutJpeg, "image/jpeg");
+  const full = await taking(DEFAULT, "image/jpeg");
+  assert.ok(full.length > first.length, "the excluded composite lost a candidate for image/jpeg");
+  // Asked again, in the other order: each still answers from its own parsers.
+  assert.deepEqual(await taking(DEFAULT, "image/jpeg"), full);
+  assert.deepEqual(await taking(withoutJpeg, "image/jpeg"), first);
+});

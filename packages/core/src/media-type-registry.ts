@@ -1,4 +1,5 @@
 import { MediaType } from "./media-type.ts";
+import { bumpParserEpoch } from "./parser-epoch.ts";
 
 /**
  * Port of org.apache.tika.mime.MediaTypeRegistry: canonical types, aliases,
@@ -12,10 +13,12 @@ export class MediaTypeRegistry {
   addType(type: MediaType): void {
     const base = type.getBaseType();
     this.canonical.set(base.toString(), base);
+    bumpParserEpoch();
   }
 
   addAlias(type: MediaType, alias: MediaType): void {
     this.aliases.set(alias.getBaseType().toString(), type.getBaseType());
+    bumpParserEpoch();
   }
 
   /**
@@ -24,6 +27,7 @@ export class MediaTypeRegistry {
    */
   addSuperType(type: MediaType, parent: MediaType): void {
     this.inheritance.set(type.toString(), parent.getBaseType());
+    bumpParserEpoch();
   }
 
   normalize(type: MediaType | null): MediaType | null {
