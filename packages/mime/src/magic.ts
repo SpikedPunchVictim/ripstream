@@ -168,6 +168,14 @@ function evaluateLeaf(leaf: Leaf, data: Uint8Array): boolean {
   if (leaf.length === 0) return leaf.start <= leaf.end && leaf.start <= data.length;
 
   const last = Math.min(leaf.end, data.length - leaf.length);
+  if (last > leaf.start && !leaf.ignoreCase && leaf.mask[0] === 0xff) {
+    // A range rule is scanned at every offset: test the first byte inline and compare the rest only where it matches.
+    const first = leaf.pattern[0]!;
+    for (let position = leaf.start; position <= last; position++) {
+      if (data[position] === first && equalsAt(leaf, data, position)) return true;
+    }
+    return false;
+  }
   for (let position = leaf.start; position <= last; position++) {
     if (equalsAt(leaf, data, position)) return true;
   }

@@ -3,6 +3,7 @@ import {
   MediaType,
   XHTMLContentHandler,
   type ContentHandler,
+  type MaybePromise,
   type Metadata,
   type ParseContext,
   type Parser,
@@ -100,17 +101,19 @@ export async function writeText(
   // fire mid-line. Several characters() calls within one <p> are legal SAX.
   let inParagraph = false;
   let heldCarriageReturn = false;
-  const emitSegment = async (segment: string): Promise<void> => {
-    if (!inParagraph) {
-      await xhtml.startElement("p");
+  // The handler chain answers synchronously unless a sink is slow, and an await costs a promise tick per call: with a
+  // paragraph and a segment per source line that is most of a large text file's time. So wait only for a real promise.
+  const emitSegment = (segment: string): MaybePromise<void> => {
+    const opened = inParagraph ? undefined : xhtml.startElement("p");
+    return after(opened, () => {
       inParagraph = true;
-    }
-    if (segment.length > 0) await xhtml.characters(segment);
+      return segment.length > 0 ? xhtml.characters(segment) : undefined;
+    });
   };
-  const endLine = async (): Promise<void> => {
-    await xhtml.endElement("p");
-    inParagraph = false;
-  };
+  const endLine = (): MaybePromise<void> =>
+    after(xhtml.endElement("p"), () => {
+      inParagraph = false;
+    });
   const feed = async (decoded: string, final: boolean): Promise<void> => {
     let text = heldCarriageReturn ? `\r${decoded}` : decoded;
     heldCarriageReturn = false;
@@ -121,11 +124,14 @@ export async function writeText(
     }
     let position = 0;
     for (const match of text.matchAll(/\r\n|\r|\n/g)) {
-      await emitSegment(text.slice(position, match.index));
-      await endLine();
+      const emitted = emitSegment(text.slice(position, match.index));
+      if (isThenable(emitted)) await emitted;
+      const ended = endLine();
+      if (isThenable(ended)) await ended;
       position = match.index + match[0].length;
     }
-    await emitSegment(text.slice(position));
+    const last = emitSegment(text.slice(position));
+    if (isThenable(last)) await last;
     if (final) await endLine();
   };
   for await (const chunk of stream) {
@@ -133,4 +139,12 @@ export async function writeText(
   }
   await feed(decoder.decode(), true);
   await xhtml.endDocument();
+}
+
+function isThenable(value: unknown): value is PromiseLike<void> {
+  return typeof value === "object" && value !== null && typeof (value as PromiseLike<void>).then === "function";
+}
+
+function after(result: MaybePromise<void>, next: () => MaybePromise<void>): MaybePromise<void> {
+  return isThenable(result) ? Promise.resolve(result).then(next) : next();
 }

@@ -90,6 +90,37 @@ test("WriteOutContentHandler truncate mode drops the remainder", async () => {
   assert.equal(handler.isWriteLimitReached, true);
 });
 
+test("WriteOutContentHandler answers synchronously while the delegate does", () => {
+  const target = new TextContentHandler();
+  const handler = new WriteOutContentHandler(target, { writeLimit: 10 });
+  assert.equal(handler.characters("abc", 0, 3), undefined);
+  assert.equal(handler.charactersWritten, 3);
+  assert.equal(target.toString(), "abc");
+});
+
+test("WriteOutContentHandler counts a slow delegate's characters once it has settled", async () => {
+  const written: string[] = [];
+  const slow = new TextContentHandler(async (text) => {
+    await Promise.resolve();
+    written.push(text);
+  });
+  const handler = new WriteOutContentHandler(slow, { writeLimit: 10 });
+  const pending = handler.characters("abcd", 0, 4);
+  assert.ok(pending instanceof Promise);
+  assert.equal(handler.charactersWritten, 0);
+  await pending;
+  assert.equal(handler.charactersWritten, 4);
+  assert.deepEqual(written, ["abcd"]);
+});
+
+test("XHTMLContentHandler keeps a surrogate pair and replaces a lone surrogate, a control and U+FFFE", async () => {
+  const recorder = new Recorder();
+  const handler = new XHTMLContentHandler(recorder);
+  await handler.startDocument();
+  await handler.characters("a\u{1F600}b\ud800c\u0007d\ufffee\t\r\nf");
+  assert.ok(recorder.events.includes("a\u{1F600}b\ufffdc\ufffdd\ufffde\t\r\nf"), recorder.events.join("|"));
+});
+
 test("XHTMLContentHandler emits the upstream skeleton and metadata head", async () => {
   const recorder = new Recorder();
   const metadata = new Metadata();

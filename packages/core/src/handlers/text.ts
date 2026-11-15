@@ -37,35 +37,32 @@ export class WriteOutContentHandler extends ContentHandlerDecorator {
     return this.writeCount;
   }
 
-  async characters(ch: string, start: number, length: number): Promise<void> {
-    await this.write(
-      length,
-      (count) => this.getDelegate().characters?.(ch, start, count),
-    );
+  // Synchronous unless the delegate returns a promise: an async wrapper costs two promises per event, and a text
+  // document is thousands of events.
+  characters(ch: string, start: number, length: number): MaybePromise<void> {
+    return this.write(length, (count) => this.getDelegate().characters?.(ch, start, count));
   }
 
-  async ignorableWhitespace(
-    ch: string,
-    start: number,
-    length: number,
-  ): Promise<void> {
-    await this.write(
-      length,
-      (count) => this.getDelegate().ignorableWhitespace?.(ch, start, count),
-    );
+  ignorableWhitespace(ch: string, start: number, length: number): MaybePromise<void> {
+    return this.write(length, (count) => this.getDelegate().ignorableWhitespace?.(ch, start, count));
   }
 
-  private async write(
-    length: number,
-    forward: (count: number) => MaybePromise<void>,
-  ): Promise<void> {
+  private write(length: number, forward: (count: number) => MaybePromise<void>): MaybePromise<void> {
     if (this.reached) return;
     if (this.writeLimit === -1 || this.writeCount + length <= this.writeLimit) {
-      await forward(length);
+      const result = forward(length);
+      if (isThenable(result)) {
+        return Promise.resolve(result).then(() => {
+          this.writeCount += length;
+        });
+      }
       this.writeCount += length;
       return;
     }
+    return this.writeTruncated(forward);
+  }
 
+  private async writeTruncated(forward: (count: number) => MaybePromise<void>): Promise<void> {
     const allowed = Math.max(0, this.writeLimit - this.writeCount);
     if (allowed > 0) {
       await forward(allowed);
@@ -74,6 +71,10 @@ export class WriteOutContentHandler extends ContentHandlerDecorator {
     this.reached = true;
     if (this.onLimit === "throw") throw new WriteLimitReachedError(this.writeLimit);
   }
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object" && value !== null && typeof (value as PromiseLike<unknown>).then === "function";
 }
 
 export class TextContentHandler implements ContentHandler {

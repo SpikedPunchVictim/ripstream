@@ -39,6 +39,12 @@ function isInvalid(codePoint: number): boolean {
 function filterText(text: string): string {
   let invalid = -1;
   for (let index = 0; index < text.length; ) {
+    const unit = text.charCodeAt(index);
+    // Printable ASCII and the common whitespace controls are valid: skip the code point decoding for them.
+    if ((unit >= 0x20 && unit < 0x7f) || unit === 0x0a || unit === 0x0d || unit === 0x09) {
+      index++;
+      continue;
+    }
     const codePoint = text.codePointAt(index)!;
     if (isInvalid(codePoint)) {
       invalid = index;

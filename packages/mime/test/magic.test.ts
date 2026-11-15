@@ -47,6 +47,28 @@ test("searches within an offset range", () => {
   assert.equal(detector.detect(bytes("xCDR")).length, 0);
 });
 
+test("a range rule finds a match after earlier occurrences of its first byte", () => {
+  const detector = new MagicDetector([
+    entry("application/x-range", [
+      { priority: 50, matches: [{ type: "string", value: "CDR", offset: "0:12" }] },
+    ]),
+  ]);
+  assert.equal(detector.detect(bytes("CCCCDXCDR")).length, 1);
+  assert.equal(detector.detect(bytes("CCCCDXCD")).length, 0);
+  assert.equal(detector.detect(bytes("CDCDCDCDR")).length, 1);
+});
+
+test("a range rule with a masked first byte still searches every offset", () => {
+  const detector = new MagicDetector([
+    entry("application/x-masked-range", [
+      { priority: 50, matches: [{ type: "string", value: "0x40", offset: "0:4", mask: "0xF0" }] },
+    ]),
+  ]);
+  // 0x4F & 0xF0 is 0x40 at offset 3.
+  assert.equal(detector.detect(new Uint8Array([0x00, 0x00, 0x00, 0x4f])).length, 1);
+  assert.equal(detector.detect(new Uint8Array([0x00, 0x00, 0x00, 0x5f])).length, 0);
+});
+
 test("evaluates nested matches and group thresholds", () => {
   const detector = new MagicDetector([
     entry("audio/wav", [
