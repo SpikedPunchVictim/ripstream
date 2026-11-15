@@ -5,6 +5,7 @@ import {
   CONTEXT_KEYS,
   MalformedDocumentError,
   Metadata,
+  MissingDependencyError,
   ParseContext,
   RipstreamInputStream,
   XHTMLContentHandler,
@@ -94,4 +95,9 @@ test("a stream that fails mid-decode fails as a document, and the next one decod
 test("decodes that overlap each finish", async () => {
   const results = await Promise.all([decode(fixture), decode(fixture), decode(fixture)]);
   for (const text of results) assert.match(text, /Hello XZ/);
+});
+
+test("a decompressor that cannot be found is a missing dependency, not a corrupt file", () => {
+  const without = { resolve: () => { throw new Error("Cannot find module 'xz-decompress'"); } } as unknown as NodeJS.Require;
+  assert.throws(() => loadXzReadableStream(without), MissingDependencyError);
 });

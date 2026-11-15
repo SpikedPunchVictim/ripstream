@@ -77,6 +77,9 @@ importers:
       sql.js:
         specifier: ^1.13.0
         version: 1.15.2
+      xz-decompress:
+        specifier: 0.2.3
+        version: 0.2.3
     devDependencies:
       '@spikedpunch/ripstream-isolation-node':
         specifier: workspace:*

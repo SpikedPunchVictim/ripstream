@@ -2,6 +2,7 @@ import {
   LimitExceededError,
   MalformedDocumentError,
   MediaType,
+  MissingDependencyError,
   OutputBudget,
   inflateBounded,
   type ContentHandler,
@@ -104,7 +105,7 @@ abstract class CompressorParser implements Parser {
         ctx,
       );
     } catch (error) {
-      if (error instanceof LimitExceededError) throw error;
+      if (error instanceof LimitExceededError || error instanceof MissingDependencyError) throw error;
       throw new MalformedDocumentError(`Invalid ${this.name} stream`, {
         cause: error,
       });

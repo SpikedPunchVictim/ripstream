@@ -29,8 +29,9 @@ makes, so run them in that order. `packages/cli/bundle/` is git-ignored; CI buil
   `pipes --workers 2` run from the bundle (tests: `packages/cli/test/bundle.test.ts`).
 - **Left external**, as real packages in `node_modules`: `pdfjs-dist` (finds its standard fonts by `require.resolve`, and
   the canvas block in `bundle-standard` recognises it by `/pdfjs-dist/` in the importer's URL, which inlined code would
-  not have), `sql.js` (its wasm sits next to its entry), `@napi-rs/canvas` and `cld3-asm` (native or optional). So the CLI
-  package depends on `sql.js` and has `pdfjs-dist` as an optional peer, as `parser-pdf` does; a package manager that links
+  not have), `sql.js` (its wasm sits next to its entry), `xz-decompress` (the archive parser resolves it by name at run time and loads
+  it afresh for each document, so a bundler cannot inline it: without the package every XZ file read as malformed),
+  `@napi-rs/canvas` and `cld3-asm` (native or optional). So the CLI package depends on `sql.js` and `xz-decompress` and has `pdfjs-dist` as an optional peer, as `parser-pdf` does; a package manager that links
   strictly would not otherwise let the bundle find them. Install them as before: PDF needs `pdfjs-dist` installed.
 
 ## Which one runs

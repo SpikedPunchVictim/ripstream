@@ -32,7 +32,8 @@
     "@spikedpunch/ripstream-language": "workspace:*",
     "@spikedpunch/ripstream-pipes": "workspace:*",
     "@spikedpunch/ripstream-server": "workspace:*",
-    "sql.js": "^1.13.0"
+    "sql.js": "^1.13.0",
+    "xz-decompress": "0.2.3"
   },
   "devDependencies": {
     "@spikedpunch/ripstream-isolation-node": "workspace:*",

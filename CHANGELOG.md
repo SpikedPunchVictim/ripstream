@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
+
+Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current
+tree: the archive parser resolves `xz-decompress` by name at run time, which a bundler cannot inline, and the CLI did not
+depend on it. The CLI now depends on `xz-decompress` (same pin as `parser-archive`) and the bundle build lists it as
+external; a package that cannot be found is a `MissingDependencyError` instead of a corrupt-file error. New bundle tests
+parse an XZ file. Run `pnpm install` and `pnpm build:bundle` to pick it up.
+
 ### pdf.js warnings no longer reach stdout (`tikajs-08ld`)
 
 Fixed: pdf.js reports with `console.log`, so `ripstream parse file.pdf` (and an eml with a PDF attachment) printed

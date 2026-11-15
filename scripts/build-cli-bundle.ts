@@ -24,8 +24,11 @@ const entries = [
 //                    "/pdfjs-dist/" in the importer's URL; inlined, it would silently stop blocking the native canvas
 //   @napi-rs/canvas  native addon (only pdf.js asks for it)
 //   sql.js           its wasm sits next to its entry file
+//   xz-decompress    parser-archive loads it with createRequire().resolve() and takes it out of the require cache for each
+//                    document (xz.ts), which a bundler cannot inline: without a real file the lookup fails and every XZ file
+//                    reads as malformed
 //   cld3-asm         optional backend, imported by name when asked for
-const external = ["pdfjs-dist", "@napi-rs/canvas", "sql.js", "cld3-asm"];
+const external = ["pdfjs-dist", "@napi-rs/canvas", "sql.js", "xz-decompress", "cld3-asm"];
 
 const missing = entries.filter((entry) => !existsSync(entry));
 if (missing.length > 0) {

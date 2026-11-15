@@ -53,6 +53,9 @@ trailer << /Root 1 0 R /Size 6 >>
 %%EOF
 `;
 
+/** An XZ file ("Hello XZ"): xz-decompress is loaded by name at run time, so only a real bundle run shows whether it is found (tikajs-wiwf). */
+const XZ = Buffer.from("/Td6WFoAAATm1rRGBMAMCCEBFgAAAAAAAAAAAKx3qqQBAAdIZWxsbyBYWgBXz7NGvwtu0gABKAizkwBzH7bzfQEAAAAABFla", "base64");
+
 interface Run {
   code: number | null;
   stdout: string;
@@ -93,7 +96,9 @@ test("parse and parse -r print the same on the bundle as on dist, over a sample 
   try {
     const pdf = join(dir, "generated.pdf");
     writeFileSync(pdf, PDF);
-    const files = [...sample(), pdf];
+    const xz = join(dir, "generated.xz");
+    writeFileSync(xz, XZ);
+    const files = [...sample(), pdf, xz];
     assert.ok(files.length >= 30, `the sample reads the fixtures (${files.length} files)`);
     const different: string[] = [];
     let compared = 0;
@@ -108,6 +113,19 @@ test("parse and parse -r print the same on the bundle as on dist, over a sample 
     );
     assert.equal(compared, files.length * 2);
     assert.deepEqual(different.sort(), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the bundle decompresses an XZ file instead of reporting it as malformed", { skip: SKIP_WITHOUT_BUNDLE }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ripstream-xz-"));
+  try {
+    const xz = join(dir, "hello.xz");
+    writeFileSync(xz, XZ);
+    const result = await run(BUNDLE_ENTRY, ["parse", xz]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Hello XZ/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
