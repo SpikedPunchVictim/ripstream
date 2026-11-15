@@ -58,6 +58,9 @@ export class ZipParser implements Parser {
       files = decodeEntries(data, central, ctx.limits, truncate);
       entries = central.length;
     } else try {
+      // fflate's result is an object, which lists integer-like names (`1`, `2`) before the rest, so the order the entries
+      // are admitted in is kept here: it is the archive's.
+      const admitted: string[] = [];
       const record = unzipSync(data, {
         filter: (file) => {
           entries++;
@@ -87,10 +90,11 @@ export class ZipParser implements Parser {
               `ZIP entry ${file.name} exceeds the decompression ratio limit`,
             );
           }
+          admitted.push(file.name);
           return true;
         },
       });
-      files = Object.keys(record).map((name) => ({ name, bytes: record[name]! }));
+      files = admitted.map((name) => ({ name, bytes: record[name]! }));
     } catch (error) {
       if (error instanceof LimitExceededError) throw error;
       throw new MalformedDocumentError("Invalid ZIP archive", { cause: error });

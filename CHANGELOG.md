@@ -4,6 +4,12 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: ZIP entry order (`tikajs-0s94`, F10)
+
+Fixed: a ZIP with entries named by whole numbers (`1`, `2`) listed them before the others, so the text was out of
+archive order and `onEmbeddedLimit: "truncate"` read the integer-named entries rather than the first ones. Entries are
+now taken in the order the archive lists them.
+
 ### Bug hunt at 9a828fc: output cut is not an embedded failure (`tikajs-qhmb`, F9)
 
 Fixed: when the output limit cut a parse inside an archive member or a database blob, the container also got a

@@ -164,3 +164,20 @@ test("zip: a bzip2 entry (method 12) is decoded", async () => {
   await parseZip(zip([{ name: "z.txt", method: 12, compressed, declaredSize: 16 }]), ctx);
   assert.deepEqual(seen, ["BZIP2-ENTRY-TEXT"]);
 });
+
+test("zip: entries are read in archive order, whatever their names (tikajs-0s94)", async () => {
+  const text = (value: string, name: string): RawEntry => entry(name, new TextEncoder().encode(value), 0);
+  const archive = zip([text("B", "b.txt"), text("two", "2"), text("one", "1"), text("Z", "z")]);
+  const all: string[] = [];
+  const ctx = new ParseContext();
+  ctx.set(CONTEXT_KEYS.PARSER, lister(all));
+  await parseZip(archive, ctx);
+  assert.deepEqual(all, ["B", "two", "one", "Z"]);
+  // Under truncation the entries that are read are the first ones in the archive, not the integer-named ones.
+  const first: string[] = [];
+  const truncating = new ParseContext({ limits: { maxZipEntries: 3 } });
+  truncating.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
+  truncating.set(CONTEXT_KEYS.PARSER, lister(first));
+  await parseZip(archive, truncating);
+  assert.deepEqual(first, ["B", "two", "one"]);
+});
