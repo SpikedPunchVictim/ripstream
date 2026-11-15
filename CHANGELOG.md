@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: output cut is not an embedded failure (`tikajs-qhmb`, F9)
+
+Fixed: when the output limit cut a parse inside an archive member or a database blob, the container also got a
+`tk:exception:embedded-exception` of `WriteLimitReachedError: Write limit of N characters reached` next to
+`write-limit-reached`, as if the member had failed. Archives and SQLite-family files now rethrow what the other
+embedded-document loops do (`isFatalParseError`: a limit, a timeout, an abort, the output cut).
+
 ### Bug hunt at 9a828fc: tar entries with unsafe names (`tikajs-xg31`, F2)
 
 Fixed: a tar entry whose name is absolute, contains `..` or starts with a drive letter was dropped with nothing on the

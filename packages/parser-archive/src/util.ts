@@ -2,6 +2,7 @@ import {
   CONTEXT_KEYS,
   LimitExceededError,
   MalformedDocumentError,
+  isFatalParseError,
   MediaType,
   Metadata,
   ParsingEmbeddedDocumentExtractor,
@@ -142,7 +143,7 @@ export async function parseEntry(
     markArchiveEntries(ctx);
     await extractor.parseEmbedded(stream, handler, childMetadata, ctx);
   } catch (error) {
-    if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
+    if (isFatalParseError(error, ctx)) throw error;
     // The entry's metadata is dropped by a plain parse, so the archive carries the marker too, as Tika's
     // CompositeParser.recordEmbeddedMetadata puts each failed child's exception on the container.
     const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

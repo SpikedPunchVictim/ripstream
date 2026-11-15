@@ -3,6 +3,7 @@ import {
   CONTEXT_KEYS,
   LimitExceededError,
   MalformedDocumentError,
+  isFatalParseError,
   MediaType,
   Metadata,
   ParsingEmbeddedDocumentExtractor,
@@ -416,7 +417,7 @@ async function parseEmbeddedBlob(
   try {
     await extractor.parseEmbedded(stream, xhtml, metadata, ctx);
   } catch (error) {
-    if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
+    if (isFatalParseError(error, ctx)) throw error;
     // The blob's metadata is dropped by a plain parse, so the database carries the marker too.
     const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);

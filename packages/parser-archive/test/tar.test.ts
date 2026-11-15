@@ -7,6 +7,7 @@ import {
   Metadata,
   ParseContext,
   RipstreamInputStream,
+  WriteLimitReachedError,
   XHTMLContentHandler,
   type Parser,
 } from "@spikedpunch/ripstream-core";
@@ -106,4 +107,23 @@ test("tar: an entry named with an absolute, .. or drive-letter path is skipped a
     "unsafe archive path skipped: ../up.txt",
     "unsafe archive path skipped: C:evil.txt",
   ]);
+});
+
+test("tar: a member the output limit cuts is not recorded as a failed embedded document (tikajs-qhmb)", async () => {
+  const archive = await makeTar({ "a.txt": "first", "b.txt": "second" });
+  const metadata = new Metadata();
+  const stream = await RipstreamInputStream.from(archive);
+  const ctx = new ParseContext();
+  ctx.set(CONTEXT_KEYS.PARSER, {
+    getSupportedTypes: () => new Set(),
+    async parse() {
+      throw new WriteLimitReachedError(40);
+    },
+  } satisfies Parser);
+  try {
+    await assert.rejects(new TarParser().parse(stream, new BodyContentHandler(), metadata, ctx), WriteLimitReachedError);
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(metadata.getAll("tk:exception:embedded-exception"), []);
 });

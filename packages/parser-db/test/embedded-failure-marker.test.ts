@@ -11,6 +11,7 @@ import {
   ParseContext,
   RipstreamInputStream,
   TIKA_KEYS,
+  WriteLimitReachedError,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
 } from "@spikedpunch/ripstream-core";
@@ -92,4 +93,10 @@ test("blobs that parse leave the database unmarked", async () => {
 
 test("a limit in a blob ends the parse instead of becoming a marker", async () => {
   await assert.rejects(parseWith(new PartialThenFail(new LimitExceededError("too much"))), LimitExceededError);
+});
+
+test("a blob the output limit cuts ends the parse and leaves no embedded-exception marker (tikajs-qhmb)", async () => {
+  const extractor = new PartialThenFail(new WriteLimitReachedError(40));
+  await assert.rejects(parseWith(extractor), WriteLimitReachedError);
+  assert.equal(extractor.seen[0]!.get(TIKA_KEYS.EMBEDDED_EXCEPTION), null);
 });
