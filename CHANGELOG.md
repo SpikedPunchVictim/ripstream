@@ -4,6 +4,12 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: tar entries with unsafe names (`tikajs-xg31`, F2)
+
+Fixed: a tar entry whose name is absolute, contains `..` or starts with a drive letter was dropped with nothing on the
+metadata, while the ZIP reader records it. It is still not read, but a regular file is now listed as
+`tk:exception:embedded-stream-exception` ("unsafe archive path skipped: <name>"). Links are skipped as before.
+
 ### Bug hunt at 9a828fc: PDF object index and freed objects (`tikajs-8c0w`, F13 F15 F21)
 
 Fixed: the PDF object index (used by the rebuild) took the word `stream` anywhere between `obj` and `endobj` for the stream

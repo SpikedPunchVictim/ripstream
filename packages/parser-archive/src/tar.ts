@@ -74,11 +74,15 @@ export class TarParser implements Parser {
             `Tar entries exceed ${ctx.limits.maxZipEntries}`,
           );
         }
-        if (
-          header.type === "symlink" ||
-          header.type === "link" ||
-          safeEntryName(header.name) === null
-        ) {
+        if (header.type === "symlink" || header.type === "link") {
+          entry.resume();
+          return;
+        }
+        if (safeEntryName(header.name) === null) {
+          // Not read, but not unsaid: a file the archive holds under a path that leaves its root is on the metadata, as zip does.
+          if (header.type === "file") {
+            metadata.add("tk:exception:embedded-stream-exception", `unsafe archive path skipped: ${header.name}`);
+          }
           entry.resume();
           return;
         }

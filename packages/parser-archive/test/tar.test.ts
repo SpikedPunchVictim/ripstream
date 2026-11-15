@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   BodyContentHandler,
+  CONTEXT_KEYS,
   LimitExceededError,
   Metadata,
   ParseContext,
   RipstreamInputStream,
+  XHTMLContentHandler,
+  type Parser,
 } from "@spikedpunch/ripstream-core";
 import { pack } from "tar-stream";
 import { TarParser } from "../src/index.ts";
@@ -71,4 +74,36 @@ test("tar: handler error in an entry rejects the parse once", { timeout: 10_000 
     parseTar({ "boom.txt": "x", "next.txt": "y" }, new ParseContext(), new Boom()),
     /handler exploded/,
   );
+});
+
+test("tar: an entry named with an absolute, .. or drive-letter path is skipped and recorded, as the ZIP reader does (tikajs-xg31)", async () => {
+  const archive = await makeTar({ "ok.txt": "visible", "/abs/secret.txt": "SECRET-ABS", "../up.txt": "SECRET-UP", "C:evil.txt": "SECRET-DRIVE" });
+  const metadata = new Metadata();
+  const handler = new BodyContentHandler();
+  const stream = await RipstreamInputStream.from(archive);
+  const ctx = new ParseContext();
+  ctx.set(CONTEXT_KEYS.PARSER, {
+    getSupportedTypes: () => new Set(),
+    async parse(input, out) {
+      const xhtml = new XHTMLContentHandler(out, new Metadata());
+      await xhtml.startDocument();
+      let text = "";
+      for await (const chunk of input) text += new TextDecoder().decode(chunk);
+      await xhtml.element("p", text);
+      await xhtml.endDocument();
+    },
+  } satisfies Parser);
+  try {
+    await new TarParser().parse(stream, handler, metadata, ctx);
+  } finally {
+    await stream.close();
+  }
+  assert.match(handler.toString(), /ok\.txt/);
+  assert.doesNotMatch(handler.toString(), /SECRET/);
+  const recorded = metadata.getAll("tk:exception:embedded-stream-exception");
+  assert.deepEqual(recorded, [
+    "unsafe archive path skipped: /abs/secret.txt",
+    "unsafe archive path skipped: ../up.txt",
+    "unsafe archive path skipped: C:evil.txt",
+  ]);
 });
