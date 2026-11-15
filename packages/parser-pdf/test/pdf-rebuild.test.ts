@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { deflateSync } from "node:zlib";
 import { indexObjects } from "../src/pdf-objects.ts";
 import { diagnosePdf, latin1, rebuildPdf } from "../src/pdf-rebuild.ts";
+import { decodeStream } from "../src/pdf-syntax.ts";
 import { classicPdf, onePageObjects, streamObject } from "./fixtures.ts";
 
 const bytes = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "latin1"));
@@ -290,4 +291,22 @@ test("rebuildPdf writes one xref subsection per run of object numbers, so a high
   assert.match(out, /xref\n0 6\n0000000000 65535 f \n(?:\d{10} \d{5} n \n){5}8388607 1\n\d{10} 00000 n \ntrailer\n<< \/Size 8388608 /);
   const entry = /8388607 1\n(\d{10}) /.exec(out)!;
   assert.ok(out.startsWith("8388607 0 obj", Number(entry[1])));
+});
+
+test("ASCII85 data that would decode past the budget is refused without first being decoded in memory (tikajs-8cx1)", () => {
+  const z = "z".repeat(7 * 1024 * 1024);
+  const entries = new Map([["Filter", "/ASCII85Decode"]]);
+  const heapBefore = process.memoryUsage().heapUsed;
+  const budget = { left: 1000 };
+  assert.equal(decodeStream(entries, z, budget), null);
+  // The decode held every output byte as a number in an array: 28 million of them for this input, hundreds of MB.
+  assert.ok(process.memoryUsage().heapUsed - heapBefore < 100 * 1024 * 1024, "the decode held the whole output");
+});
+
+test("ASCII85 decoding is unchanged within the budget: groups, z, a short last group, and the <~ ~> markers", () => {
+  const entries = new Map([["Filter", "/ASCII85Decode"]]);
+  assert.equal(decodeStream(entries, "<~87cURD]i,\"Ebo7~>", { left: 100 }), "Hello World");
+  assert.equal(decodeStream(entries, "zz", { left: 100 }), "\0".repeat(8));
+  assert.equal(decodeStream(entries, "87cURD]i,\"Ebo7", { left: 11 }), "Hello World");
+  assert.equal(decodeStream(entries, "87cURD]i,\"Ebo7", { left: 10 }), null);
 });

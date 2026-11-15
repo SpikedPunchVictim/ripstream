@@ -29,6 +29,12 @@ defining object 8388607 (allowed by the preflight) was rebuilt as a 168 MB file 
 as one subsection per run of consecutive numbers; a file with contiguous numbering gets the same table as before (434
 bytes: 83 ms, 131 MB).
 
+### Bug hunt at 9a828fc: ASCII85 decode memory (`tikajs-8cx1`, F22)
+
+Fixed: the ASCII85 filter of the PDF recovery decoded into an array of numbers and charged the decode budget afterwards,
+so 7 MiB of `z` (four bytes a character) reached 893 MiB before it was refused. It now decodes into a buffer sized by the
+remaining budget and stops at the first byte over it (same input: 173 MiB, refused).
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

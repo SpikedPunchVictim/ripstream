@@ -227,8 +227,11 @@ export function decodeStream(entries: ReadonlyMap<string, string>, data: string,
       } catch {
         return null;
       }
-    } else if (filter === "ASCII85Decode" || filter === "A85") out = ascii85(out);
-    else if (filter === "ASCIIHexDecode" || filter === "AHx") {
+    } else if (filter === "ASCII85Decode" || filter === "A85") {
+      const decoded = ascii85(out, budget.left);
+      if (decoded === null) return null;
+      out = decoded;
+    } else if (filter === "ASCIIHexDecode" || filter === "AHx") {
       const end = out.indexOf(">");
       const hex = (end === -1 ? out : out.slice(0, end)).replace(/[^0-9A-Fa-f]/g, "");
       out = Buffer.from(hex.length % 2 === 1 ? `${hex}0` : hex, "hex").toString("latin1");
@@ -239,32 +242,42 @@ export function decodeStream(entries: ReadonlyMap<string, string>, data: string,
   return out;
 }
 
-function ascii85(data: string): string {
+/**
+ * ASCII85 data decoded into a buffer made for at most `limit` bytes (one more, to tell the limit was passed), or null
+ * when the output would be longer. The size is the allowance, not what the input could make: a run of `z` is four bytes a
+ * character, and decoding it into an array first held hundreds of megabytes before the budget was looked at.
+ */
+function ascii85(data: string, limit: number): string | null {
+  if (limit < 0) return null;
   const start = data.startsWith("<~") ? 2 : 0;
   const stop = data.indexOf("~>", start);
   const body = data.slice(start, stop === -1 ? undefined : stop);
-  const bytes: number[] = [];
-  let group: number[] = [];
-  for (const char of body) {
-    if (char === "z" && group.length === 0) {
-      bytes.push(0, 0, 0, 0);
+  const out = Buffer.allocUnsafe(Math.min(4 * body.length, limit + 1));
+  let length = 0;
+  const put = (value: number, count: number): boolean => {
+    if (length + count > limit) return false;
+    for (let shift = 24, written = 0; written < count; shift -= 8, written++) out[length++] = (value >>> shift) & 0xff;
+    return true;
+  };
+  const group: number[] = [];
+  for (let i = 0; i < body.length; i++) {
+    const code = body.charCodeAt(i);
+    if (code === 0x7a && group.length === 0) {
+      // "z": four zero bytes.
+      if (!put(0, 4)) return null;
       continue;
     }
-    const code = char.charCodeAt(0);
     if (code < 33 || code > 117) continue;
     group.push(code - 33);
     if (group.length === 5) {
-      const value = group.reduce((sum, digit) => sum * 85 + digit, 0);
-      bytes.push((value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff);
-      group = [];
+      if (!put(group.reduce((sum, digit) => sum * 85 + digit, 0), 4)) return null;
+      group.length = 0;
     }
   }
   if (group.length > 1) {
     const count = group.length - 1;
     while (group.length < 5) group.push(84);
-    const value = group.reduce((sum, digit) => sum * 85 + digit, 0);
-    const tail = [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
-    bytes.push(...tail.slice(0, count));
+    if (!put(group.reduce((sum, digit) => sum * 85 + digit, 0), count)) return null;
   }
-  return Buffer.from(bytes).toString("latin1");
+  return out.toString("latin1", 0, length);
 }
