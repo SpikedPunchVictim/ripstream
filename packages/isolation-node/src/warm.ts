@@ -1324,15 +1324,19 @@ export class WarmRunner {
     if (entry.busy === 0 && entry.idle.length === 0) this.#domains.delete(child.domain);
   }
 
-  /** The pool's reclaimer: retires idle children, least recently used first, until `shortfallMb` is on its way back. */
-  #reclaim(shortfallMb: number): void {
+  /**
+   * The pool's reclaimer: retires idle children, least recently used first, until `shortfallMb` is on its way back.
+   * True when it retired any, so the pool lets the request that asked wait for the memory (tikajs-moxa).
+   */
+  #reclaim(shortfallMb: number): boolean {
     let freed = 0;
     while (freed < shortfallMb) {
       const oldest = this.#leastRecentlyUsedIdle();
-      if (oldest === null) return;
+      if (oldest === null) break;
       freed += oldest.lease.reservedMb;
       oldest.retire("evicted");
     }
+    return freed > 0;
   }
 }
 

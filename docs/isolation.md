@@ -383,7 +383,7 @@ chunked or gzip body reserves `maxBodyBytes`, and a request that would pass it i
 before its body is read (tikajs-x1f3). Under isolation a `/pipes` run holds one gate slot and parses one document
 at a time, so one slot is one child, whatever concurrency the request or the settings ask for. For CONTENT_ONLY and
 RMETA its file-system fetcher hands the child the validated path, so a large input is not also copied into the parent;
-NO_PARSE (which digests and detects) and UNPACK (which builds a package) read the bytes in the parent (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once.
+NO_PARSE (which digests and detects) and UNPACK (which builds a package) read the bytes in the parent (tikajs-2az5). `maxQueue: 0` turns the waiting off: whatever the slots cannot run is refused at once. With children reused, "cannot run" does not include memory an idle child of another trust domain holds: the pool asks for those to be retired first, and one request may wait for their exit (the only one over `maxQueue`, so with `maxQueue: 0` one). With nothing idle to retire, it is refused at once (`tikajs-moxa`).
 
 **Errors.** Isolation failures keep their meaning across the boundary:
 

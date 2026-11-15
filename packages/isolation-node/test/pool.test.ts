@@ -887,3 +887,52 @@ for (const seed of [1, 2, 3, 42, 1234, 99999]) {
     assert.ok(pending.every((t) => t.state().status !== "pending"));
   });
 }
+
+test("reclaimer: with no waiting room, a request is let wait for memory a reclaimer has started to free, not refused (tikajs-moxa)", async () => {
+  const { pool } = makePool(1000, 0);
+  const idle = await pool.acquire(800);
+  pool.addReclaimer(() => {
+    setImmediate(() => idle.release()); // the child's exit, a moment later
+    return true;
+  });
+  const first = track(pool.acquire(500));
+  // Only one waits over maxQueue: another request while it does is refused.
+  const second = track(pool.acquire(100));
+  await tick();
+  assert.ok(rejection(second) instanceof IsolationError);
+  assert.equal((rejection(second) as IsolationError).reason, "queue_full");
+  await tick();
+  granted(first).release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("reclaimer: with no waiting room and nothing a reclaimer can end, the request is refused at once (tikajs-moxa)", async () => {
+  const { pool } = makePool(1000, 0);
+  const busy = await pool.acquire(800);
+  let asked = 0;
+  pool.addReclaimer(() => {
+    asked += 1;
+    return false; // no idle child
+  });
+  const refused = track(pool.acquire(500));
+  await tick();
+  assert.equal((rejection(refused) as IsolationError).reason, "queue_full");
+  assert.equal(asked, 1);
+  busy.release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("reclaimer: a request that cannot wait (deadline 0) is not made to wait by one (tikajs-moxa)", async () => {
+  const { pool } = makePool(1000, 0);
+  const idle = await pool.acquire(800);
+  let asked = 0;
+  pool.addReclaimer(() => {
+    asked += 1;
+    return true;
+  });
+  const refused = track(pool.acquire(500, { deadlineMs: 0 }));
+  await tick();
+  assert.equal((rejection(refused) as IsolationError).reason, "queue_full");
+  assert.equal(asked, 0);
+  idle.release();
+});

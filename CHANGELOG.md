@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: no waiting room and reused children (`tikajs-moxa`, F7)
+
+Fixed: with children reused and `maxQueue: 0`, a request of one trust domain was refused with `queue_full` while the only
+thing holding the pool was an idle child of another domain, because the refusal came before the pool asked for idle
+children to be retired (with `maxQueue: 1` it succeeded). A request that would be refused is now let wait, as the only one
+over `maxQueue`, when a reclaimer has started retiring idle children; with nothing idle to retire it is still refused at
+once.
+
 ### Bug hunt at 9a828fc: isolated markup output (`tikajs-n89x`, F6)
 
 Fixed: with `handlerType` `html`, `xml` or `markdown`, an isolated parse failed with "Isolated parser result exceeded the

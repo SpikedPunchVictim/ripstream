@@ -481,6 +481,26 @@ test("a request waiting for memory makes the pool reclaim an idle child of anoth
   await expectGroupGone(a.pid);
 });
 
+test("with no waiting room, a request of another domain still takes the memory of an idle child, which is retired (tikajs-moxa)", async () => {
+  const pool = poolFor(1, 0);
+  const { runner } = warm({ pool });
+  const a = await ask(runner, "ok", { trustDomain: "a" });
+  await sleep(100); // a's child is idle: its lease is the whole pool
+  const b = await ask(runner, "ok", { trustDomain: "b" });
+  assert.notEqual(b.pid, a.pid);
+  assert.equal(retired(runner, "evicted"), 1);
+  await expectGroupGone(a.pid);
+});
+
+test("with no waiting room and every child busy, another request is refused at once (tikajs-moxa)", async () => {
+  const pool = poolFor(1, 0);
+  const { runner } = warm({ pool });
+  const busy = ask(runner, "slow:600", { trustDomain: "a" });
+  await sleep(150);
+  await assert.rejects(ask(runner, "ok", { trustDomain: "b" }), (error) => error instanceof IsolationError && error.reason === "queue_full");
+  await busy;
+});
+
 test("a child that finishes while someone else waits for memory is retired, not parked", async () => {
   const pool = poolFor(1);
   const { runner } = warm({ pool });

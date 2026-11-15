@@ -89,8 +89,12 @@ const systemClock: PoolClock = {
  * Called when a request has to wait: `shortfallMb` is how much memory the queue (this request included) needs beyond
  * what is free. A reclaimer frees memory only by ending what holds it (the lease is released when the holder is
  * gone), never by releasing a lease whose memory is still in use.
+ *
+ * It may return `true` to say it has started ending holders, so memory is on its way back. A request that would be
+ * refused with `queue_full` is then let wait, as the only one over `maxQueue`, rather than refused for memory that is
+ * about to be free (`tikajs-moxa`). Anything else returned is ignored.
  */
-export type PoolReclaimer = (shortfallMb: number) => void;
+export type PoolReclaimer = (shortfallMb: number) => unknown;
 
 export interface MemoryPoolOptions {
   readonly poolMb: number;
@@ -224,7 +228,17 @@ export class MemoryPool {
     if (this.#queue.length === 0 && sizeMb <= this.#poolMb - this.#reservedMb) {
       return Promise.resolve(this.#grant(sizeMb, deadlineAt));
     }
-    if (this.#queue.length >= this.#maxQueue) {
+    // Ending idle holders is what a full queue cannot wait for, so it is tried before the request is turned away: with
+    // `maxQueue` 0 an idle reused child of another trust domain would otherwise refuse the request that could have it
+    // retired. One request over `maxQueue` may wait for that, and only while a reclaimer says it has started one.
+    let transient = false;
+    if (this.#queue.length >= this.#maxQueue && deadlineMs !== 0) {
+      transient = this.#reclaim(sizeMb) && this.#queue.length === this.#maxQueue;
+      if (this.#queue.length === 0 && sizeMb <= this.#poolMb - this.#reservedMb) {
+        return Promise.resolve(this.#grant(sizeMb, deadlineAt)); // a reclaimer that frees at once
+      }
+    }
+    if (this.#queue.length >= this.#maxQueue && !transient) {
       return Promise.reject(
         new IsolationError(
           "queue_full",
@@ -259,7 +273,7 @@ export class MemoryPool {
       }
       this.#queue.push(waiter);
     });
-    this.#reclaim();
+    if (!transient) this.#reclaim(); // a transient waiter's reclaim is done: asking again would end more than it needs
     return lease;
   }
 
@@ -375,21 +389,24 @@ export class MemoryPool {
   }
 
   /**
-   * Tells the reclaimers how much the queue lacks. A reclaimer must not throw; one that does is reported as a process
+   * Tells the reclaimers how much the queue (and `extraMb` more, a request not queued) lacks, and says whether one has
+   * started ending holders. A reclaimer must not throw; one that does is reported as a process
    * warning and skipped, because failing here would orphan the waiter just queued (its deadline still bounds it).
    */
-  #reclaim(): void {
-    if (this.#reclaimers.size === 0) return;
-    const queuedMb = this.#queue.reduce((sum, waiter) => sum + waiter.sizeMb, 0);
+  #reclaim(extraMb = 0): boolean {
+    if (this.#reclaimers.size === 0) return false;
+    const queuedMb = this.#queue.reduce((sum, waiter) => sum + waiter.sizeMb, extraMb);
     const shortfallMb = queuedMb - (this.#poolMb - this.#reservedMb);
-    if (shortfallMb <= 0) return;
+    if (shortfallMb <= 0) return false;
+    let started = false;
     for (const reclaimer of [...this.#reclaimers]) {
       try {
-        reclaimer(shortfallMb);
+        if (reclaimer(shortfallMb) === true) started = true;
       } catch (error) {
         process.emitWarning(`ripstream memory pool reclaimer threw: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+    return started;
   }
 
   #grant(sizeMb: number, deadlineAt: number | null): Lease {
