@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments in the recursive output: `--segments`, `tk:segments` (`tikajs-xock`)
+
+Added: `ripstream parse -r --segments` and `ripstream pipes --segments`, `RmetaOptions.segments` (`serializeRmeta`,
+`rmetaObjects`) and the pipes engine option `segments`. Each record that has segments gets a `tk:segments` key whose
+value is a string of JSON, `[{ start, end, labels, location }]`, offsets into its `tk:content` (docs/segments.md). Off by
+default, and then the output is unchanged. New export: `SEGMENTS_KEY`. The server's `/rmeta` does not take it yet.
+
 ### xz-decompress: a class, WASM instance and mutex for every XZ document (`tikajs-3o6d`)
 
 Fixed: xz-decompress keeps its WASM instance and the mutex that serializes decodes as statics, and the mutex is not

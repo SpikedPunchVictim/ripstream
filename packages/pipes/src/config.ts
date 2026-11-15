@@ -91,6 +91,7 @@ export function assertValidEngineOptions(options: {
   readonly maxQueue?: unknown;
   readonly maxBuffered?: unknown;
   readonly ordered?: unknown;
+  readonly segments?: unknown;
   readonly limits?: Partial<ParseLimits> | undefined;
   readonly iterator?: unknown;
   readonly source?: unknown;
@@ -119,6 +120,10 @@ export function assertValidEngineOptions(options: {
     }
   }
   if (options.ordered !== undefined && typeof options.ordered !== "boolean") issues.push("ordered must be a boolean");
+  if (options.segments !== undefined && typeof options.segments !== "boolean") issues.push("segments must be a boolean");
+  if (options.segments === true && options.mode !== "RMETA" && options.mode !== "UNPACK") {
+    issues.push(`segments need the parse mode RMETA or UNPACK, which write the list of records they go in; got ${String(options.mode ?? "CONTENT_ONLY")}`);
+  }
   if (options.retry !== undefined) {
     const retry = options.retry as Record<string, unknown> | null;
     if (typeof retry !== "object" || retry === null) {

@@ -7,12 +7,25 @@ import type { ParseRecord } from "./recursive.ts";
 import { handlerTypeName } from "./handler-type.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
 
+/**
+ * The key of a record's segments in its rmeta object, with `RmetaOptions.segments`. The value is a string, as every
+ * value in Tika's rmeta is: the JSON of an array of `{ start, end, labels, location }`, in content order (docs/segments.md).
+ */
+export const SEGMENTS_KEY = "tk:segments";
+
 export interface RmetaOptions {
   /** Coerce values using the upstream metadata schema value types. */
   readonly typedMetadata?: boolean;
   /** "records" (rmeta array) or "document" (first record only). */
   readonly jsonShape?: "records" | "document";
   readonly includeContent?: boolean;
+  /**
+   * Write each record's `segments` (from a parse with `ParseOptions.segments`) as `tk:segments`: a string holding the
+   * JSON of `{ start, end, labels, location }` for each segment, offsets into the same record's `tk:content`. A record
+   * with none has no key. It is a metadata key like the others, so the metadata filters see it and can drop it, and an
+   * allow-list has to name it. Off (the default), the objects are what Tika writes, key for key.
+   */
+  readonly segments?: boolean;
   /**
    * Runs over the list of `rmetaObjects` and `serializeRmeta` as it would be written, with `tk:content`, the depth, the
    * embedded paths and every other key already in it, as Tika's emit runs its filters. The filter may drop keys, change
@@ -57,6 +70,11 @@ export function rmetaObject(
   const failureKey = record.depth === 0 ? TIKA_KEYS.CONTAINER_EXCEPTION : TIKA_KEYS.EMBEDDED_EXCEPTION;
   if (record.exception !== null && result[failureKey] === undefined) {
     result[failureKey] = `${record.exception.name}: ${record.exception.message}`;
+  }
+  if (options.segments === true && record.segments !== undefined && record.segments.length > 0) {
+    result[SEGMENTS_KEY] = JSON.stringify(
+      record.segments.map(({ start, end, labels, location }) => ({ start, end, labels, location })),
+    );
   }
   // Tika adds content only when it is not blank, with the handler that made it.
   if (includeContent && record.content.trim() !== "") {

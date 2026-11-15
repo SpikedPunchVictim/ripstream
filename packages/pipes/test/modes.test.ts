@@ -323,3 +323,48 @@ test("a Tika-shaped configuration with the emitter's own settings: extension, co
     assert.deepEqual(readdirSync(join(output, "sub")), ["a.txt.json.gz"], "the first run's file is left whole");
   });
 });
+
+async function segmentsRun(mode: PipeMode, directory: string, segments: boolean | undefined): Promise<EmittedDocument[]> {
+  const emitter = new MemoryEmitter();
+  await new PipesEngine({
+    ...fileSystem(directory),
+    emitter,
+    mode,
+    ...(mode === "UNPACK" ? { unpack: REGULAR } : {}),
+    ...(segments === undefined ? {} : { segments }),
+  }).run();
+  return emitter.documents;
+}
+
+test("segments: RMETA and UNPACK write tk:segments in the list and in its JSON, offsets into the record's own tk:content", async () => {
+  await scratch(async (directory) => {
+    writeFileSync(join(directory, "a.txt"), "first line\nsecond line\n");
+    for (const mode of ["RMETA", "UNPACK"] as const) {
+      const [document] = await segmentsRun(mode, directory, true);
+      const object = document!.objects![0]!;
+      const segments = JSON.parse(object["tk:segments"] as string) as Array<{ start: number; end: number; location: string }>;
+      assert.deepEqual(segments.map((segment) => segment.location), ["line=1", "line=2"], mode);
+      assert.equal((object["tk:content"] as string).slice(segments[1]!.start, segments[1]!.end), "second line", mode);
+      assert.deepEqual(JSON.parse(document!.text!)[0], object, mode);
+    }
+  });
+});
+
+test("segments are off by default, and false is the same: the list has no tk:segments and the same keys", async () => {
+  await scratch(async (directory) => {
+    writeFileSync(join(directory, "a.txt"), "first line\nsecond line\n");
+    const keysOf = (documents: EmittedDocument[]): string[] => Object.keys(documents[0]!.objects![0]!).sort();
+    const off = keysOf(await segmentsRun("RMETA", directory, undefined));
+    assert.equal(off.includes("tk:segments"), false);
+    assert.deepEqual(keysOf(await segmentsRun("RMETA", directory, false)), off);
+    assert.deepEqual(keysOf(await segmentsRun("RMETA", directory, true)), [...off, "tk:segments"].sort());
+  });
+});
+
+test("segments are refused by a mode that writes no list of records, and by a value that is not a boolean", () => {
+  const options = fileSystem("unused");
+  for (const mode of ["CONTENT_ONLY", "CONCATENATE", "NO_PARSE"] as const) {
+    assert.throws(() => new PipesEngine({ ...options, emitter: new MemoryEmitter(), mode, segments: true }), /segments need the parse mode RMETA or UNPACK/, mode);
+  }
+  assert.throws(() => new PipesEngine({ ...options, emitter: new MemoryEmitter(), mode: "RMETA", segments: "yes" as never }), /segments must be a boolean/);
+});

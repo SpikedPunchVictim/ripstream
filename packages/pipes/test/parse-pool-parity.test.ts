@@ -205,3 +205,12 @@ function storedZip(entries: readonly { readonly name: string; readonly data: Uin
   end.writeUInt32LE(offset, 16);
   return new Uint8Array(Buffer.concat([...locals, directory, end]));
 }
+
+test("records parsed with segments on a worker carry the segments an in-process parse gives", async () => {
+  const bytes = new TextEncoder().encode("first line\nsecond line\n");
+  const options = { filename: "a.txt", segments: true } as const;
+  const [fromWorker] = await pool.parseRecursive(bytes, options);
+  const [fromHere] = await local.parseRecursive(bytes, options);
+  assert.ok(fromHere!.segments!.length > 0);
+  assert.deepEqual(fromWorker!.segments, fromHere!.segments);
+});

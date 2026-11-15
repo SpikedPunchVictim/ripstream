@@ -201,6 +201,12 @@ export interface PipesEngineOptions {
    */
   readonly unpackBytes?: number;
   /**
+   * RMETA and UNPACK: parse with `ParseOptions.segments` and write each record's segments as `tk:segments` in the metadata
+   * list (`RmetaOptions.segments`; docs/segments.md), so every emitter that writes the list carries them. Default off: the
+   * list is what Tika writes. Other modes refuse it.
+   */
+  readonly segments?: boolean;
+  /**
    * UNPACK only: what is emitted for an input (Tika's UnpackConfig, `parse-context` `unpack-config` in a configuration).
    * By default one zip, `<emitKey>-frictionless.zip`, of `datapackage.json`, `rmeta.json` and `unpacked/<file>`: the package
    * `/unpack` answers, which replaces the `<emitKey>` metadata document. `outputFormat: "REGULAR"` emits that document and
@@ -489,6 +495,7 @@ export class PipesEngine {
           // A document that cannot be read is a result of the input, not the end of the run.
           onDocumentFailure: "record" as const,
           ...(limits === undefined ? {} : { limits }),
+          ...(options.segments === true ? { segments: true } : {}),
         };
         if (mode === "RMETA" || mode === "UNPACK") {
           const records = await ripstream.parseRecursive(source, mode === "UNPACK" ? { ...parseOptions, unpackBytes } : parseOptions);
@@ -500,7 +507,10 @@ export class PipesEngine {
           // What the embedded documents' bytes are paired with is the records, as the parse made them: a filter may take an
           // `tk:embedded-id` out of the list, or a document, and the bytes still go with the document they came from.
           const filter = emitMetadataFilter(metadataFilters, false);
-          const objects = rmetaObjects(records, filter === null ? {} : { metadataFilter: filter });
+          const objects = rmetaObjects(records, {
+            ...(filter === null ? {} : { metadataFilter: filter }),
+            ...(options.segments === true ? { segments: true } : {}),
+          });
           const rmeta = JSON.stringify(objects);
           if (mode === "RMETA") return emitting([{ id: emitKey, mode, text: rmeta, records, objects }], exception);
           return emitting(
@@ -778,6 +788,8 @@ export interface PipesRunOptions {
   readonly extensionOf?: ExtensionOf;
   /** The metadata filters of the run. See `PipesEngineOptions.metadataFilters`; they replace those of the settings. */
   readonly metadataFilters?: EmitMetadataFilters;
+  /** RMETA and UNPACK: write each record's segments as `tk:segments`. See `PipesEngineOptions.segments`. */
+  readonly segments?: boolean;
 }
 
 /** The id the shorthand config gives its one fetcher. */
@@ -1007,6 +1019,7 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
     ...(settings.digest === undefined ? {} : { digest: settings.digest }),
     ...(metadataFilters === undefined ? {} : { metadataFilters }),
     ...(options.extensionOf === undefined ? {} : { extensionOf: options.extensionOf }),
+    ...(options.segments === undefined ? {} : { segments: options.segments }),
   });
 }
 

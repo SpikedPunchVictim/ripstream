@@ -29,12 +29,38 @@ interface Segment {
   byte for byte what it is with them off, and what Tika 4.2.0 gives. The parity tests run every parser fixture both ways.
 - **The cost when off.** Off is the default. No tap is built and parsers get no hint object, so a parser's
   `ctx.get(CONTEXT_KEYS.SEGMENT_HINTS)?.row(n)` does nothing.
-- **Other output.** `parse()`, the rmeta JSON, `tk:` metadata and the CLI and pipes emitters carry no segments.
+- **Other output.** `parse()` and `tk:` metadata carry no segments. The rmeta JSON, the CLI and the pipes emitters carry
+  them only when asked (below), and are byte for byte what Tika writes when not.
 
 Segments need a `handlerType` of `text` (the default) or `body`, because their offsets index plain text. Any other
 handlerType, or a `segments` that is not a boolean, is refused (RangeError, TypeError). Under isolation the flag crosses
 on `IsolatedParseRequest.segments` (records only). The segments come back without their text, which is rebuilt from the
 content, and the frame reader checks every offset and location. Segments count against the isolation's result cap.
+
+## In the recursive output: `--segments`
+
+`ripstream parse -r --segments FILE` (and `-o jsonl`) and `ripstream pipes --segments` add one key to the object of each
+record that has segments, `tk:segments`. Its value is a string, as every value in Tika's rmeta is (a reader written for
+Tika's list of metadata, which has no nested objects, still reads it): the JSON of an array of the segments in content
+order, each `{ "start", "end", "labels", "location" }`, with no `text`:
+
+```json
+{ "tk:content": "Tax ID\nPLANTED-XLSX-C7", "tk:segments": "[{\"start\":7,\"end\":22,\"labels\":[\"Vendors\",\"Tax ID\"],\"location\":\"sheet=Vendors;cell=C7\"}]" }
+```
+
+`start` and `end` index the same object's `tk:content`, in UTF-16 code units, so the text is
+`tk:content.slice(start, end)`. A record with no segments has no key. The key is metadata like the others: a
+`metadata-filters` allow-list has to name `tk:segments` to keep it, and a filter that rewrites `tk:content` makes the
+offsets stale, which is for whoever configured it to know.
+
+- **Library:** `serializeRmeta(records, { segments: true })` and `rmetaObjects(records, { segments: true })`, for
+  records parsed with `ParseOptions.segments`; `SEGMENTS_KEY` is the key. The pipes engine's `segments: true` option (and
+  `createEngineFromSettings(settings, { segments: true })`) parses with segments and passes the flag, so every emitter that
+  writes the list carries them: the file, cloud and search emitters and an UNPACK package's `rmeta.json`.
+- **Modes:** pipes takes `--segments` for the parse modes RMETA and UNPACK, which write the list; another mode is refused
+  (exit 2 for the CLI). `parse` takes it only with `-r`; any other command refuses it.
+- **Under workers and isolation:** the flag crosses to a worker thread and to an isolated child like any other option.
+- **Server:** not yet; `/rmeta` writes no segments.
 
 ## Coverage
 

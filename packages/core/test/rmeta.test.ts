@@ -141,3 +141,39 @@ test("parse timing is recorded", () => {
   markParseTiming(metadata, performance.now());
   assert.match(metadata.get("tk:parse-time-millis") ?? "", /^\d+$/);
 });
+
+function withSegments(base: ParseRecord, content: string): ParseRecord {
+  return {
+    ...base,
+    content,
+    segments: [
+      { text: "Tax ID", start: 0, end: 6, labels: ["Vendors"], location: "sheet=Vendors;cell=A1" },
+      { text: "PLANTED", start: 7, end: 14, labels: ["Vendors", "Tax ID"], location: "sheet=Vendors;cell=A2" },
+    ],
+  };
+}
+
+test("segments are not in the rmeta objects unless asked for, whatever the record carries", () => {
+  const records = [withSegments(record("/doc", 0, {}, ""), "Tax ID\nPLANTED")];
+  assert.equal("tk:segments" in rmetaObjects(records)[0]!, false);
+  assert.equal(serializeRmeta(records), serializeRmeta([{ ...records[0]!, segments: undefined } as ParseRecord]));
+});
+
+test("segments: true writes tk:segments as a string of JSON, offsets into the same object's tk:content, without the text", () => {
+  const records = [withSegments(record("/doc", 0, {}, ""), "Tax ID\nPLANTED")];
+  const [object] = rmetaObjects(records, { segments: true });
+  assert.equal(typeof object!["tk:segments"], "string");
+  const segments = JSON.parse(object!["tk:segments"] as string) as Array<{ start: number; end: number; labels: string[]; location: string }>;
+  assert.deepEqual(Object.keys(segments[1]!), ["start", "end", "labels", "location"]);
+  assert.equal((object!["tk:content"] as string).slice(segments[1]!.start, segments[1]!.end), "PLANTED");
+  assert.deepEqual(segments[1]!.labels, ["Vendors", "Tax ID"]);
+  assert.equal(segments[1]!.location, "sheet=Vendors;cell=A2");
+});
+
+test("segments: true leaves a record without segments, or with none, without the key, and every other key as it was", () => {
+  const plain = record("/doc/a.txt", 1, { "Content-Type": ["text/plain"] }, "child");
+  const empty = { ...record("/doc/b.txt", 1, {}, "x"), segments: [] };
+  const before = rmetaObjects([plain, empty]);
+  const after = rmetaObjects([plain, empty], { segments: true });
+  assert.deepEqual(after, before);
+});

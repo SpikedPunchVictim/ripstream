@@ -95,6 +95,8 @@ interface Options {
   readonly retryAttempts: string | null;
   /** `--workers` as typed, pipes only; validated by resolveWorkers. */
   readonly workers: string | null;
+  /** `--segments`: write the segments of each record (docs/segments.md) in the recursive output; parse -r and pipes. */
+  readonly segments: boolean;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -243,14 +245,14 @@ export async function main(
     }
 
     if (options.recursive) {
-      const records = await ripstream.parseRecursive(
-        bytes,
-        filename === undefined ? {} : { filename },
-      );
+      const records = await ripstream.parseRecursive(bytes, {
+        ...(filename === undefined ? {} : { filename }),
+        ...(options.segments ? { segments: true } : {}),
+      });
       // Tika's CLI runs the configured `metadata-filters` over the list it writes as recursive JSON, and nowhere else.
       const metadataFilter =
         settings.config === null ? null : emitMetadataFilter({ ...metadataFiltersOf(settings.config, await metadataFilterServices()), parseContext: null }, false);
-      const written = metadataFilter === null ? {} : { metadataFilter };
+      const written = { ...(metadataFilter === null ? {} : { metadataFilter }), ...(options.segments ? { segments: true } : {}) };
       if (options.output === "jsonl") {
         io.stdout(rmetaObjects(records, written).map((object) => `${JSON.stringify(object)}\n`).join(""));
       } else {
@@ -421,6 +423,10 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
       import("@spikedpunch/ripstream-server"),
       import("./mime-types.ts"),
     ]);
+    if (options.segments && (pipesSettings.parseMode ?? "RMETA") !== "RMETA" && pipesSettings.parseMode !== "UNPACK") {
+      io.stderr(`ripstream: --segments needs the parse mode RMETA or UNPACK, and the configuration's is ${String(pipesSettings.parseMode)}\n`);
+      return EXIT_USAGE;
+    }
     for (const notice of pipesSettings.notices) io.stderr(`ripstream: NOTE: ${notice}\n`);
     let checkpoint: CheckpointStore | undefined;
     if (options.checkpoint !== null) {
@@ -470,6 +476,7 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
       extensionOf: (contentType) => extensionFor(contentType, (mimeTypes ??= serverMimeTypes(settings.config?.customMimeTypes ?? null))),
       ...(checkpoint === undefined ? {} : { checkpoint }),
       ...(settings.retryAttempts === null ? {} : { retry: { attempts: settings.retryAttempts } }),
+      ...(options.segments ? { segments: true } : {}),
     });
     await engine.run();
     const stats = engine.stats;
@@ -615,6 +622,12 @@ async function resolveSettings(
     // A flag that changes nothing for the command it is given to must not look as if it did.
     throw new Error(`ripstream: ${flagged.join(" and ")} applies to parse and metadata, not ${options.command}`);
   }
+  if (options.segments && options.command !== "pipes" && !(options.command === "parse" && options.recursive)) {
+    // Segments are written into the list of records, which only `parse -r` and `pipes` write.
+    throw new Error(
+      `ripstream: --segments applies to parse --recursive and pipes, not ${options.command === "parse" ? "parse without --recursive" : options.command}`,
+    );
+  }
   const pipesOnly = [
     ...(options.checkpoint === null ? [] : ["--checkpoint"]),
     ...(options.retryAttempts === null ? [] : ["--retry-attempts"]),
@@ -704,6 +717,7 @@ function parseArgs(argv: readonly string[]): Options {
   let checkpoint: string | null = null;
   let retryAttemptsFlag: string | null = null;
   let workers: string | null = null;
+  let segments = false;
 
   for (let index = 0; index < rest.length; index++) {
     const written = rest[index]!;
@@ -724,6 +738,7 @@ function parseArgs(argv: readonly string[]): Options {
     if (argument === "--json" || argument === "-j") json = true;
     else if (argument === "--metadata" || argument === "-m") metadataOnly = true;
     else if (argument === "--recursive" || argument === "-r") recursive = true;
+    else if (argument === "--segments") segments = true;
     // Tika's serve takes -h as the host and -p as the port; everywhere else -h is help and -p the password.
     else if (argument === "--help" || argument === "-?" || (argument === "-h" && command !== "serve")) {
       return { ...defaultOptions(), command: "help" };
@@ -759,13 +774,13 @@ function parseArgs(argv: readonly string[]): Options {
   }
   return {
     command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars,
-    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers,
+    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers, segments,
   };
 }
 
 /** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
 const FLAGS: ReadonlySet<string> = new Set([
-  "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "-?", "--version", "-V",
+  "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--segments", "--help", "-h", "-?", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
   "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
 ]);
@@ -808,6 +823,7 @@ function defaultOptions(): Options {
     checkpoint: null,
     retryAttempts: null,
     workers: null,
+    segments: false,
   };
 }
 
@@ -829,6 +845,9 @@ function usage(): string {
     "  -j, --json           JSON output",
     "  -m, --metadata       Metadata only",
     "  -r, --recursive      Recursive metadata JSON",
+    "      --segments          parse -r, pipes: add tk:segments to each document of the recursive output, a JSON string of",
+    "                          {start,end,labels,location} for each piece (paragraph, cell, line...), offsets into its tk:content;",
+    "                          pipes: RMETA and UNPACK modes. Off by default; the output is then what Tika writes (docs/segments.md)",
     "  -o, --output <mode>  text, json or jsonl",
     "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context, metadata-filters, custom-mimetypes, server)",
     "  -p, --password <pw>  Document password (not available with --isolation; serve: -p is the port)",

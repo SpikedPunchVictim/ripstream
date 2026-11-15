@@ -334,6 +334,7 @@ export {
   filterRmetaObjects,
   markParseTiming,
   metadataJson,
+  SEGMENTS_KEY,
   rmetaObject,
   rmetaObjects,
   serializeRmeta,
