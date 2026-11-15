@@ -36,7 +36,15 @@ absolute and every segment is one container step below the previous one: the roo
 (`/archive.zip`), a member appends its entry name (`/archive.zip/member.csv`), and a nested member appends again
 (`/archive.zip/inner.zip/member.csv`). `tk:embedded-depth` is the number of segments below the root, so a direct member
 has depth 1. A member name containing `/` contributes its own path segments, and a name that is unsafe to use as a path
-is skipped and noted (`tk:exception:embedded-stream-exception`). Each embedded document also has `tk:embedded-id` and
+(absolute, containing `..`, or starting with a drive letter) is read under a sanitised name, so a scanner still sees its
+content: `../../x.txt` is `x.txt`, `/abs/x.txt` is `abs/x.txt`, `C:x.txt` is `x.txt`, a name with nothing left is `unnamed`,
+and a name another member already has gets `~2`, `~3` before its extension. `tk:resource-name` and the path carry the
+sanitised name, `tk:internal-path` carries the archive's own, and the container notes each rewrite as
+`tk:exception:embedded-stream-exception` (`unsafe archive path renamed: ../../x.txt as x.txt`). Safe names are untouched.
+This is for zip, tar and Unix dump; nothing is written to disk by a parse, so the name is only a label. Tika 4.2.0 (oracle,
+synthetic zip and tar) reads every one of these entries and keeps the raw name in `tk:resource-name` and `tk:internal-path`,
+but builds the embedded path from the last path segment; ripstream keeps the sanitised path's segments, as it does for a safe
+name. Each embedded document also has `tk:embedded-id` and
 `tk:embedded-id-path` (`/1/2`) and, once the whole file is read, `tk:final-embedded-resource-path`. `tk:content` is present only when it is not blank. `tk:parsed-by` names the parser
 that handled the document (ripstream's parser names, not Java class names) and `tk:parsed-by-full-set` on the
 container lists every parser used. `Content-Length` is the size of the input once it has been read in full.
@@ -452,8 +460,7 @@ Not the same:
   be opened is a 422 with the failure as the body; one inside it that cannot be read stays in `rmeta.json`. The bytes
   kept are held to `maxUnpackBytes` (100 MiB; a document past it is not in the zip). A text, HTML or Markdown document is named
   `.bin`, as Tika names it: its `Content-Type` carries a charset (`text/plain; charset=windows-1252`), which Tika's
-  registry does not know as a type (`tikajs-68os.29`). Differences from Tika: an entry named `../x` or `/x` in a zip is skipped by the archive
-  parser, not unpacked under its id; a truncated zip is not salvaged; `/unpack/preset/{name}` and the config routes
+  registry does not know as a type (`tikajs-68os.29`). Differences from Tika: a truncated zip is not salvaged; `/unpack/preset/{name}` and the config routes
   are not served; the response is not gzipped.
 - A response of text, JSON or XML of 32 bytes or more is gzipped for a client that sends `Accept-Encoding: gzip`
   (`Content-Encoding`, `Vary: Accept-Encoding`), as Tika's is; a request body sent with `Content-Encoding: gzip` is

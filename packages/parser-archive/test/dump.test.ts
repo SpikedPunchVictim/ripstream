@@ -191,7 +191,7 @@ test("an inode no directory names is skipped, and the data after it is still rea
   assert.deepEqual(seen.map((s) => s.name), ["named"]);
 });
 
-test("a name that would leave the archive root is skipped and recorded, as the ZIP reader does", async () => {
+test("a name that would leave the archive root is read under a sanitised name and recorded, as the ZIP reader does (tikajs-bsv0)", async () => {
   const records = [
     ...prologue(),
     ...inode(2, MODE.DIRECTORY, directoryData([{ ino: 2, name: "." }, { ino: 3, name: "../evil" }, { ino: 4, name: "ok" }])),
@@ -200,8 +200,10 @@ test("a name that would leave the archive root is skipped and recorded, as the Z
     END_RECORD(),
   ];
   const { seen, metadata } = await run(volume(records));
-  assert.deepEqual(seen.map((s) => s.name), ["ok"]);
-  assert.match(metadata.get("tk:exception:embedded-stream-exception") ?? "", /unsafe archive path skipped: \.\.\/evil/);
+  assert.deepEqual(seen.map((s) => s.name), ["evil", "ok"]);
+  assert.equal(seen[0]?.metadata.get("tk:internal-path"), "../evil");
+  assert.equal(seen[1]?.metadata.get("tk:internal-path"), "ok");
+  assert.deepEqual(metadata.getAll("tk:exception:embedded-stream-exception"), ["unsafe archive path renamed: ../evil as evil"]);
 });
 
 test("a volume with no files has no embedded documents", async () => {
@@ -845,7 +847,7 @@ test("a segment of a type that is neither inode nor ADDR is skipped with its blo
   }
 });
 
-test("an unsafe path's blocks are skipped and the file after it is read", async () => {
+test("an unsafe path's blocks are read under a sanitised name and the file after it is read too (tikajs-bsv0)", async () => {
   const records = [
     ...prologue(),
     ...inode(2, MODE.DIRECTORY, directoryData([{ ino: 2, name: "." }, { ino: 3, name: "../evil" }, { ino: 4, name: "ok" }])),
@@ -854,7 +856,8 @@ test("an unsafe path's blocks are skipped and the file after it is read", async 
     END_RECORD(),
   ];
   const { seen } = await run(volume(records));
-  assert.deepEqual(seen.map((s) => decode(s.bytes)), ["ok"]);
+  assert.deepEqual(seen.map((s) => s.name), ["evil", "ok"]);
+  assert.deepEqual(seen.map((s) => decode(s.bytes).slice(0, 1)), ["\t", "o"]);
 });
 
 test("a file in a directory that was never read has no path and is skipped", async () => {

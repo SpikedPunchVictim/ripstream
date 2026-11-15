@@ -15,7 +15,7 @@ import { inflateBounded, OutputBudget, type InflateLimits } from "@spikedpunch/r
 import bzip from "seek-bzip";
 import { BudgetedSink } from "./compressor.ts";
 import { decodeDeflate64 } from "./deflate64.ts";
-import { parseEntry, readAll, safeEntryName, withXhtml } from "./util.ts";
+import { EntryNames, parseEntry, readAll, renamedEntryNote, withXhtml } from "./util.ts";
 
 /**
  * An entry at or below this many bytes is never refused for its decompression ratio. It is Tika's
@@ -110,16 +110,16 @@ export class ZipParser implements Parser {
     }
 
     let total = 0;
+    // An entry whose name leaves the archive root is read under a sanitised name, and the archive says so (tikajs-bsv0).
+    const names = new EntryNames();
+    for (const { name } of files) names.reserve(name);
     await withXhtml(handler, metadata, async (xhtml) => {
-      for (const { name, bytes, failure } of files) {
-        if (name.endsWith("/")) continue;
-        if (safeEntryName(name) === null) {
-          metadata.add(
-            "tk:exception:embedded-stream-exception",
-            `unsafe archive path skipped: ${name}`,
-          );
-          continue;
-        }
+      for (const file of files) {
+        const { bytes, failure } = file;
+        if (file.name.endsWith("/")) continue;
+        const entry = names.resolve(file.name);
+        const name = entry.name;
+        if (entry.original !== undefined) metadata.add("tk:exception:embedded-stream-exception", renamedEntryNote(entry));
         if (failure !== undefined) {
           // Oracle (Tika 4.2.0 /rmeta): an entry that cannot be read (an encrypted one, or a method commons-compress does not
           // know: 14, 99) is recorded on the archive as embedded-stream-exception and listed by name; the others are read.
@@ -137,7 +137,7 @@ export class ZipParser implements Parser {
 
         await xhtml.startElement("div", "class", "package-entry");
         await xhtml.element("h1", name);
-        await parseEntry(xhtml, name, bytes, metadata, ctx);
+        await parseEntry(xhtml, name, bytes, metadata, ctx, entry.original);
         await xhtml.endElement("div");
       }
     });

@@ -13,7 +13,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { strToU8, zipSync } from "fflate";
 import { ZipParser } from "../src/index.ts";
-import { safeEntryName } from "../src/util.ts";
+import { EntryNames, safeEntryName, sanitiseEntryName } from "../src/util.ts";
 
 const plainTextParser: Parser = {
   getSupportedTypes(): ReadonlySet<MediaType> {
@@ -54,18 +54,59 @@ test("normalizes safe paths and rejects escaping paths", () => {
   assert.equal(safeEntryName("../a/../../b"), null);
 });
 
-test("skips entries that escape the archive root", async () => {
+test("reads an entry that escapes the archive root under a sanitised name and records the rewrite (tikajs-bsv0)", async () => {
   const result = await parseZip({
     "good.txt": strToU8("safe content"),
     "../../evil.txt": strToU8("evil content"),
   });
   assert.match(result.text, /safe content/);
-  assert.doesNotMatch(result.text, /evil content/);
-  assert.ok(
-    result.metadata
-      .getAll("tk:exception:embedded-stream-exception")
-      .some((value) => value.includes("evil")),
-  );
+  assert.match(result.text, /evil content/);
+  assert.deepEqual(result.metadata.getAll("tk:exception:embedded-stream-exception"), [
+    "unsafe archive path renamed: ../../evil.txt as evil.txt",
+  ]);
+});
+
+test("sanitises absolute, drive, backslash and interior .. names; nothing is left of a bare .. (tikajs-bsv0)", () => {
+  assert.equal(sanitiseEntryName("/abs/secret.txt"), "abs/secret.txt");
+  assert.equal(sanitiseEntryName("../up.txt"), "up.txt");
+  assert.equal(sanitiseEntryName("C:evil.txt"), "evil.txt");
+  assert.equal(sanitiseEntryName("C:\\win\\..\\..\\x.txt"), "x.txt");
+  assert.equal(sanitiseEntryName("a/../../b.txt"), "b.txt");
+  assert.equal(sanitiseEntryName(".."), "unnamed");
+  assert.equal(sanitiseEntryName("/"), "unnamed");
+});
+
+test("a sanitised name never replaces another entry's name, and a safe name is never changed (tikajs-bsv0)", () => {
+  const names = new EntryNames();
+  assert.deepEqual(names.resolve("up.txt"), { name: "up.txt" });
+  assert.deepEqual(names.resolve("../up.txt"), { name: "up~2.txt", original: "../up.txt" });
+  assert.deepEqual(names.resolve("/up.txt"), { name: "up~3.txt", original: "/up.txt" });
+  assert.deepEqual(names.resolve("a/./b"), { name: "a/./b" });
+  assert.deepEqual(names.resolve("../d/noext"), { name: "d/noext", original: "../d/noext" });
+  assert.deepEqual(names.resolve("../d/noext"), { name: "d/noext~2", original: "../d/noext" });
+});
+
+test("a zip's later safe name keeps its name and the rewrite avoids it (tikajs-bsv0)", async () => {
+  const result = await parseZip({ "../x.txt": strToU8("rewritten"), "x.txt": strToU8("plain") });
+  assert.deepEqual(result.metadata.getAll("tk:exception:embedded-stream-exception"), [
+    "unsafe archive path renamed: ../x.txt as x~2.txt",
+  ]);
+});
+
+test("unsafe entries count against maxZipEntries as before (tikajs-bsv0)", async () => {
+  const files = { "a.txt": strToU8("a"), "../b.txt": strToU8("b"), "/c.txt": strToU8("c") };
+  const parse = async (maxZipEntries: number): Promise<void> => {
+    const stream = await RipstreamInputStream.from(zipSync(files));
+    const ctx = new ParseContext({ limits: { maxZipEntries } });
+    ctx.set(CONTEXT_KEYS.PARSER, plainTextParser);
+    try {
+      await new ZipParser().parse(stream, new BodyContentHandler(), new Metadata(), ctx);
+    } finally {
+      await stream.close();
+    }
+  };
+  await assert.rejects(parse(2), LimitExceededError);
+  await parse(3);
 });
 
 test("rejects zip bombs by decompression ratio", async () => {

@@ -77,7 +77,7 @@ test("tar: handler error in an entry rejects the parse once", { timeout: 10_000 
   );
 });
 
-test("tar: an entry named with an absolute, .. or drive-letter path is skipped and recorded, as the ZIP reader does (tikajs-xg31)", async () => {
+test("tar: an entry named with an absolute, .. or drive-letter path is read under a sanitised name and recorded, as the ZIP reader does (tikajs-bsv0)", async () => {
   const archive = await makeTar({ "ok.txt": "visible", "/abs/secret.txt": "SECRET-ABS", "../up.txt": "SECRET-UP", "C:evil.txt": "SECRET-DRIVE" });
   const metadata = new Metadata();
   const handler = new BodyContentHandler();
@@ -100,13 +100,44 @@ test("tar: an entry named with an absolute, .. or drive-letter path is skipped a
     await stream.close();
   }
   assert.match(handler.toString(), /ok\.txt/);
-  assert.doesNotMatch(handler.toString(), /SECRET/);
+  assert.match(handler.toString(), /SECRET-ABS/);
+  assert.match(handler.toString(), /SECRET-UP/);
+  assert.match(handler.toString(), /SECRET-DRIVE/);
   const recorded = metadata.getAll("tk:exception:embedded-stream-exception");
   assert.deepEqual(recorded, [
-    "unsafe archive path skipped: /abs/secret.txt",
-    "unsafe archive path skipped: ../up.txt",
-    "unsafe archive path skipped: C:evil.txt",
+    "unsafe archive path renamed: /abs/secret.txt as abs/secret.txt",
+    "unsafe archive path renamed: ../up.txt as up.txt",
+    "unsafe archive path renamed: C:evil.txt as evil.txt",
   ]);
+});
+
+test("tar: an unsafe directory entry is not an embedded document and is not recorded (tikajs-bsv0)", async () => {
+  const archive = pack();
+  const chunks: Uint8Array[] = [];
+  archive.on("data", (chunk: Uint8Array) => chunks.push(chunk));
+  const done = new Promise<void>((resolve) => archive.on("end", resolve));
+  archive.entry({ name: "../dir/", type: "directory" });
+  archive.finalize();
+  await done;
+  const metadata = new Metadata();
+  const stream = await RipstreamInputStream.from(Buffer.concat(chunks));
+  try {
+    await new TarParser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(metadata.getAll("tk:exception:embedded-stream-exception"), []);
+});
+
+test("tar: unsafe entries count against maxZipEntries as before (tikajs-bsv0)", async () => {
+  const files = { "a.txt": "1", "../b.txt": "2", "/c.txt": "3" };
+  const context = (maxZipEntries: number): ParseContext => {
+    const ctx = new ParseContext({ limits: { maxZipEntries } });
+    ctx.set(CONTEXT_KEYS.PARSER, { getSupportedTypes: () => new Set(), async parse() {} } satisfies Parser);
+    return ctx;
+  };
+  await assert.rejects(parseTar(files, context(2)), LimitExceededError);
+  await parseTar(files, context(3));
 });
 
 test("tar: a member the output limit cuts is not recorded as a failed embedded document (tikajs-qhmb)", async () => {

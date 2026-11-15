@@ -37,6 +37,67 @@ export function safeEntryName(name: string): string | null {
   return parts.length === 0 ? null : parts.join("/");
 }
 
+/**
+ * The name an unsafe entry is read under: a relative path with no `..`, no drive letter and no leading separator
+ * (`../up.txt` is `up.txt`, `/abs/x` is `abs/x`, `C:evil.txt` is `evil.txt`), and `unnamed` when nothing is left.
+ * It is a display name only: a parse writes nothing to disk, and an embedded document's path is built from it.
+ */
+export function sanitiseEntryName(name: string): string {
+  const parts: string[] = [];
+  for (const part of name.replace(/\\/g, "/").replace(/^[A-Za-z]:/, "").split("/")) {
+    if (part.length === 0 || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts.length === 0 ? "unnamed" : parts.join("/");
+}
+
+/** How one archive member is named: as the archive gives it when that is safe, otherwise under a sanitised name. */
+export interface ResolvedEntryName {
+  readonly name: string;
+  /** The archive's own name, set only when `name` is a rewrite of it. */
+  readonly original?: string;
+}
+
+/**
+ * Names the members of one archive. A safe name is kept as it is (byte-identical output); an unsafe one is rewritten by
+ * `sanitiseEntryName`, and by a `~2`, `~3` ... suffix when that is a name this archive already uses, so a rewrite
+ * never makes two members one. A member that comes after a rewrite and has the rewrite's name is a duplicate of it, as
+ * two members of one archive with the same name already are; a reader that sees every name first can `reserve` them.
+ */
+export class EntryNames {
+  readonly #taken = new Set<string>();
+
+  /** Marks `name` as in use, so a rewrite does not take it. */
+  reserve(name: string): void {
+    this.#taken.add(name);
+  }
+
+  resolve(raw: string): ResolvedEntryName {
+    if (safeEntryName(raw) !== null) {
+      this.#taken.add(raw);
+      return { name: raw };
+    }
+    const base = sanitiseEntryName(raw);
+    let name = base;
+    for (let n = 2; this.#taken.has(name); n++) name = withSuffix(base, n);
+    this.#taken.add(name);
+    return { name, original: raw };
+  }
+}
+
+/** `dir/up.txt` as `dir/up~2.txt`: the suffix goes before the extension of the last segment. */
+function withSuffix(name: string, n: number): string {
+  const slash = name.lastIndexOf("/") + 1;
+  const dot = name.lastIndexOf(".");
+  return dot > slash ? `${name.slice(0, dot)}~${n}${name.slice(dot)}` : `${name}~${n}`;
+}
+
+/** The archive's note that a member was read under another name: the archive's own name and the one used. */
+export function renamedEntryNote(entry: ResolvedEntryName): string {
+  return `unsafe archive path renamed: ${entry.original} as ${entry.name}`;
+}
+
 /** Enforces decompression size and ratio limits for one archive member. */
 export function checkDecompression(
   ctx: ParseContext,
@@ -131,9 +192,12 @@ export async function parseEntry(
   bytes: Uint8Array,
   metadata: Metadata,
   ctx: ParseContext,
+  originalName?: string,
 ): Promise<void> {
   const childMetadata = new Metadata();
   childMetadata.set("tk:resource-name", name);
+  // Tika's key for the entry's own name; set only for a member that is read under another (tikajs-bsv0).
+  if (originalName !== undefined) childMetadata.set("tk:internal-path", originalName);
   const stream = await RipstreamInputStream.from(bytes, { context: ctx });
   try {
     const extractor =

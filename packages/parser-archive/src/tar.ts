@@ -12,7 +12,7 @@ import {
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 import { extract as tarExtract, type ExtractEvents, type Header } from "tar-stream";
-import { parseEntry, readAll, safeEntryName, withXhtml } from "./util.ts";
+import { EntryNames, parseEntry, readAll, renamedEntryNote, withXhtml } from "./util.ts";
 
 /** Port of Ripstream's tar handling from PackageParser. */
 export class TarParser implements Parser {
@@ -40,6 +40,7 @@ export class TarParser implements Parser {
       let chain = Promise.resolve();
       let entries = 0;
       let total = 0;
+      const names = new EntryNames();
 
       extractor.on("entry", (header, entry, next) => {
         chain = chain.then(async () => {
@@ -78,13 +79,10 @@ export class TarParser implements Parser {
           entry.resume();
           return;
         }
-        if (safeEntryName(header.name) === null) {
-          // Not read, but not unsaid: a file the archive holds under a path that leaves its root is on the metadata, as zip does.
-          if (header.type === "file") {
-            metadata.add("tk:exception:embedded-stream-exception", `unsafe archive path skipped: ${header.name}`);
-          }
-          entry.resume();
-          return;
+        const entryName = header.type === "file" ? names.resolve(header.name) : { name: header.name };
+        if (entryName.original !== undefined) {
+          // A file the archive holds under a path that leaves its root is read under a sanitised name, and the archive says so.
+          metadata.add("tk:exception:embedded-stream-exception", renamedEntryNote(entryName));
         }
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -105,13 +103,14 @@ export class TarParser implements Parser {
         }
         if (header.type === "file") {
           await xhtml.startElement("div", "class", "package-entry");
-          await xhtml.element("h1", header.name);
+          await xhtml.element("h1", entryName.name);
           await parseEntry(
             xhtml,
-            header.name,
+            entryName.name,
             concat(chunks, size),
             metadata,
             ctx,
+            entryName.original,
           );
           await xhtml.endElement("div");
         }

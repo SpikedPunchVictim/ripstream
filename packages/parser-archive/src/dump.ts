@@ -29,7 +29,7 @@ import {
   isOnTape,
   type Segment,
 } from "./dump-records.ts";
-import { markArchiveEntries, safeEntryName, withXhtml } from "./util.ts";
+import { EntryNames, markArchiveEntries, renamedEntryNote, withXhtml } from "./util.ts";
 
 /*
  * Unix dump volumes (application/x-tika-unix-dump), which Tika 4.2.0's PackageParser reads through commons-compress's
@@ -108,6 +108,7 @@ class Volume {
   private readonly ctx: ParseContext;
   private readonly extractor: EmbeddedDocumentExtractor;
   private files = 0;
+  private readonly entryNames = new EntryNames();
   private total = 0;
 
   constructor(reader: RecordReader, xhtml: XHTMLContentHandler, metadata: Metadata, ctx: ParseContext) {
@@ -214,16 +215,14 @@ class Volume {
       await this.reader.skipBlocks(first, 0);
       return this.reader.readHeader();
     }
-    if (safeEntryName(path) === null) {
-      this.metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, `unsafe archive path skipped: ${path}`);
-      await this.reader.skipBlocks(first, 0);
-      return this.reader.readHeader();
-    }
+    // A name that leaves the archive root is read under a sanitised name, and the archive says so (tikajs-bsv0).
+    const entry = this.entryNames.resolve(path);
+    if (entry.original !== undefined) this.metadata.add(TIKA_KEYS.EMBEDDED_STREAM_EXCEPTION, renamedEntryNote(entry));
     const size = this.entrySize(first);
     this.charge(size);
     const { bytes, last, index } = await this.readBlocks(first, size);
     await this.reader.skipBlocks(last, index);
-    await this.emit(path, bytes, first);
+    await this.emit(entry.name, bytes, first, entry.original);
     return this.reader.readHeader();
   }
 
@@ -284,13 +283,14 @@ class Volume {
   }
 
   /** AbstractArchiveParser.handleEntryMetadata, then PackageParser.parseEntry's embedded parse. */
-  private async emit(path: string, bytes: Uint8Array, segment: Segment): Promise<void> {
+  private async emit(path: string, bytes: Uint8Array, segment: Segment, original?: string): Promise<void> {
     const name = path.replace(/\\/g, "/");
     const embedded = new Metadata();
     embedded.set("fs:modified", `${new Date(segment.modifiedMillis).toISOString().slice(0, 19)}Z`);
     embedded.set("Content-Length", String(bytes.byteLength));
     embedded.set(TIKA_KEYS.RESOURCE_NAME, name);
-    embedded.set("tk:internal-path", name);
+    // `original` is set only for a name that was rewritten; a safe name's internal path is the name itself.
+    embedded.set("tk:internal-path", original ?? name);
     const attributes = new AttributesImpl();
     attributes.addAttribute("", "class", "class", "CDATA", "embedded");
     attributes.addAttribute("", "id", "id", "CDATA", name);

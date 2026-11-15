@@ -4,6 +4,16 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Archive entries with unsafe names are parsed (`tikajs-bsv0`)
+
+Changed: a zip, tar or Unix dump entry whose name is absolute, contains `..` or starts with a drive letter was skipped
+(`tikajs-xg31` recorded it), which hid its content from a scanner. It is now parsed under a sanitised name
+(`../../x.txt` is `x.txt`; a name another member has gets `~2`), `tk:internal-path` keeps the archive's own name, and the
+archive's `tk:exception:embedded-stream-exception` says `unsafe archive path renamed: <name> as <name>` instead of
+`skipped`. A parse writes nothing to disk, so the name is only a label. Safe names give byte-identical output, and the
+entries still count against `maxZipEntries`. Tika 4.2.0 reads these entries too and keeps the raw name in
+`tk:resource-name`; see docs/migration.md for the one difference.
+
 ### Bug hunt at 9a828fc: password on an isolated parse (`tikajs-rkmb`, F11)
 
 Fixed: `ParseOptions.password` handed to the isolated ripstream was dropped without a word, so an encrypted document was

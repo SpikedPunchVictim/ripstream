@@ -133,3 +133,39 @@ test("extracts bzip2 and brotli", async () => {
     /hello brotli/,
   );
 });
+
+test("a zip member whose name leaves the archive root is parsed under a sanitised name that keeps the original (tikajs-bsv0)", async () => {
+  const archive = zip([
+    { name: "ok.txt", data: "plain member" },
+    { name: "../../secret.txt", data: "CARD 4111 1111 1111 1111" },
+    { name: "/abs/other.txt", data: "absolute member" },
+  ]);
+  const records = await ripstream.parseRecursive(archive, { filename: "archive.zip" });
+  assert.deepEqual(records.map((record) => record.embeddedResourcePath), [
+    "/archive.zip",
+    "/archive.zip/ok.txt",
+    "/archive.zip/secret.txt",
+    "/archive.zip/abs/other.txt",
+  ]);
+  assert.match(records[2]?.content ?? "", /CARD 4111/);
+  assert.equal(records[2]?.metadata.get("tk:resource-name"), "secret.txt");
+  assert.equal(records[2]?.metadata.get("tk:internal-path"), "../../secret.txt");
+  assert.equal(records[3]?.metadata.get("tk:internal-path"), "/abs/other.txt");
+  // A safe name's record is what it was: no internal path.
+  assert.equal(records[1]?.metadata.get("tk:internal-path"), null);
+  assert.deepEqual(records[0]?.metadata.getAll("tk:exception:embedded-stream-exception"), [
+    "unsafe archive path renamed: ../../secret.txt as secret.txt",
+    "unsafe archive path renamed: /abs/other.txt as abs/other.txt",
+  ]);
+});
+
+test("a tar member whose name leaves the archive root is parsed under a sanitised name that keeps the original (tikajs-bsv0)", async () => {
+  const archive = await makeTar([
+    { name: "ok.txt", data: "plain member" },
+    { name: "C:\\win\\..\\..\\secret.txt", data: "tar secret" },
+  ]);
+  const records = await ripstream.parseRecursive(archive, { filename: "archive.tar" });
+  assert.equal(records[2]?.embeddedResourcePath, "/archive.tar/secret.txt");
+  assert.match(records[2]?.content ?? "", /tar secret/);
+  assert.equal(records[2]?.metadata.get("tk:internal-path"), "C:\\win\\..\\..\\secret.txt");
+});
