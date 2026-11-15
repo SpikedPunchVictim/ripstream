@@ -294,4 +294,9 @@ export const CONTEXT_KEYS = {
   ),
   /** The metadata of the document whose parse started this tree: failures of nested children also land there. */
   ROOT_METADATA: new ParseContextKey<Metadata>("root-metadata"),
+  /**
+   * `ParseOptions.onEmbeddedLimit: "truncate"`: an archive that has more entries than `maxZipEntries` is read up to
+   * that many, instead of failing. See `truncatesEmbeddedLimit`.
+   */
+  TRUNCATE_EMBEDDED_LIMIT: new ParseContextKey<boolean>("truncate-embedded-limit"),
 } as const;

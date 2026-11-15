@@ -935,6 +935,27 @@ test("a request that truncates reaches the child as a header field, and an in-pr
   assert.equal(plain.ripstream.parseCalls[1]?.options.onOutputLimit, undefined);
 });
 
+test("a request with a truncateEmbedded that is not a boolean is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), truncateEmbedded: "yes" as never }), /truncateEmbedded/);
+});
+
+test("a request that truncates the embedded count reaches the child as a header field, and an in-process parse as the option", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const child = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await child.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+  assert.equal((await header({ input: bytes("x"), truncateEmbedded: true })).truncateEmbedded, true);
+  assert.equal("truncateEmbedded" in (await header({ input: bytes("x") })), false);
+
+  const plain = setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) });
+  const inProcess = await plain.create();
+  await inProcess.isolate({ input: bytes("x"), truncateEmbedded: true });
+  await inProcess.isolate({ input: bytes("x") });
+  assert.equal(plain.ripstream.parseCalls[0]?.options.onEmbeddedLimit, "truncate");
+  assert.equal(plain.ripstream.parseCalls[1]?.options.onEmbeddedLimit, undefined);
+});
+
 test("a request with a handlerType that is not one is refused", async () => {
   const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
   await assert.rejects(isolator.isolate({ input: bytes("x"), handlerType: "txt" as never }), /handlerType/);

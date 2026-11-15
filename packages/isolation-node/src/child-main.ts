@@ -174,6 +174,7 @@ function parseOptionsFor(header: InputHeader): ParseOptions {
     limits,
     ...(header.recordFailures === true ? { onDocumentFailure: "record" as const } : {}),
     ...(header.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
+    ...(header.truncateEmbedded === true ? { onEmbeddedLimit: "truncate" as const } : {}),
     ...(header.handlerType === undefined ? {} : { handlerType: header.handlerType }),
     ...(header.unpackBytes === undefined ? {} : { unpackBytes: header.unpackBytes }),
     ...(header.segments === true ? { segments: true } : {}),

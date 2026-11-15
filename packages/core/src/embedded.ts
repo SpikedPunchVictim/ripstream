@@ -1,6 +1,7 @@
 import type { ContentHandler } from "./content-handler.ts";
 import { LimitExceededError } from "./errors.ts";
 import { Metadata } from "./metadata.ts";
+import { TIKA_KEYS } from "./tika-keys.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
 import type { Parser } from "./parser.ts";
 import { RipstreamInputStream } from "./ripstream-input-stream.ts";
@@ -33,6 +34,49 @@ export function isWholeParseLimit(error: unknown): boolean {
   return error instanceof Error && WHOLE_PARSE_LIMITS.has(error);
 }
 
+/**
+ * `maxEmbeddedResources` crossed: the parse is out of room for embedded documents. A whole-parse limit like any other
+ * (nothing absorbs it on the way up); the root catches it only under `onEmbeddedLimit: "truncate"` (see
+ * `isEmbeddedCountLimit`), and the numbers are what it notes on the container.
+ */
+export class EmbeddedCountLimitError extends LimitExceededError {
+  readonly limit = "maxEmbeddedResources" as const;
+  readonly max: number;
+  readonly seen: number;
+
+  constructor(seen: number, max: number) {
+    super(`Embedded count ${seen} exceeds ${max}`);
+    this.seen = seen;
+    this.max = max;
+    WHOLE_PARSE_LIMITS.add(this);
+  }
+}
+
+export function isEmbeddedCountLimit(error: unknown): error is EmbeddedCountLimitError {
+  return error instanceof EmbeddedCountLimitError;
+}
+
+/** Whether this parse keeps what it read when an archive has too many entries (`ParseOptions.onEmbeddedLimit: "truncate"`). */
+export function truncatesEmbeddedLimit(ctx: ParseContext): boolean {
+  return ctx.get(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT) === true;
+}
+
+/**
+ * Notes on `metadata` that a limit on embedded documents or archive entries cut a document short: Tika's
+ * `tk:exception:embedded-resource-limit-reached`, which of ripstream's limits it was, its value, how many the parse had
+ * come across and how many it read. `set`, so a document that met both limits carries the numbers of the later.
+ */
+export function noteEmbeddedLimit(
+  metadata: Metadata,
+  note: { readonly limit: "maxEmbeddedResources" | "maxZipEntries"; readonly max: number; readonly seen: number; readonly read: number },
+): void {
+  metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_REACHED, "true");
+  metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT, note.limit);
+  metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_MAX, String(note.max));
+  metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_SEEN, String(note.seen));
+  metadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_READ, String(note.read));
+}
+
 function budgetFor(ctx: ParseContext): { count: number; bytes: number } {
   let budget = ctx.get(CONTEXT_KEYS.EMBEDDED_BUDGET);
   if (budget === undefined) {
@@ -50,9 +94,7 @@ export function chargeEmbeddedResource(ctx: ParseContext): number {
   const budget = budgetFor(ctx);
   budget.count += 1;
   if (budget.count > ctx.limits.maxEmbeddedResources) {
-    throw wholeParseLimit(
-      `Embedded count ${budget.count} exceeds ${ctx.limits.maxEmbeddedResources}`,
-    );
+    throw new EmbeddedCountLimitError(budget.count, ctx.limits.maxEmbeddedResources);
   }
   const depth = (ctx.get(CONTEXT_KEYS.EMBEDDED_DEPTH) ?? 0) + 1;
   if (depth > ctx.limits.maxNodeDepth) {
@@ -193,6 +235,20 @@ export class ParsingEmbeddedDocumentExtractor
           root.add("tk:exception:embedded-exception", failure);
           known.add(failure);
         }
+      }
+    }
+    // An archive among the children that was cut at `maxZipEntries` says so on its own metadata, which a plain parse drops.
+    // The first such archive is the one the root names.
+    if (root !== undefined && root !== metadata && root.get(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_REACHED) === null) {
+      for (const key of [
+        TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_REACHED,
+        TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT,
+        TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_MAX,
+        TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_SEEN,
+        TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_READ,
+      ]) {
+        const value = metadata.get(key);
+        if (value !== null && metadata.get(TIKA_KEYS.EMBEDDED_RESOURCE_LIMIT_REACHED) !== null) root.set(key, value);
       }
     }
     // The child ended on a lone high surrogate: let the enclosing handler filter it.

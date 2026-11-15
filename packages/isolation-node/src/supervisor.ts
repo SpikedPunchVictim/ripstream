@@ -447,6 +447,7 @@ class Supervision {
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
       ...(request.recordFailures === true ? { recordFailures: true } : {}),
       ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
+      ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
       ...(request.segments === true ? { segments: true } : {}),

@@ -15,6 +15,7 @@ import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
 import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
 import { ParseTimeoutError } from "./errors.ts";
+import { isEmbeddedCountLimit, noteEmbeddedLimit } from "./embedded.ts";
 import { classifyFailure, isWriteLimitReached } from "./failure.ts";
 import { noteEmptyParser, recordFailure, RecursiveParserWrapper, type ParseRecord } from "./recursive.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
@@ -72,6 +73,18 @@ export interface ParseOptions {
    * always throw.
    */
   readonly onOutputLimit?: "throw" | "truncate";
+  /**
+   * What `parse` and `parseRecursive` do when a document holds more embedded resources or archive entries than
+   * `limits.maxEmbeddedResources` or `limits.maxZipEntries` allow. "throw" (default): the call rejects with a
+   * LimitExceededError ("Embedded count N exceeds M", "ZIP entries exceed M"). "truncate": what was read is the answer,
+   * in archive order, and the document carries `tk:exception:embedded-resource-limit-reached` = "true" with
+   * `tk:exception:embedded-resource-limit` (which limit), `-max`, `-seen` and `-read`. `maxEmbeddedResources` is one
+   * budget for the whole tree, so reaching it stops the parse and the flag is on the container's metadata; an archive
+   * with too many entries (ZIP, tar) is read up to `maxZipEntries` entries and flagged on its own metadata (its
+   * record's, in `parseRecursive`). The bomb limits (`maxTotalEmbeddedBytes`, `maxEmbeddedResourceBytes`, the
+   * decompression ratio) and every other limit still reject. The other parse methods always throw. See "The entry-count limit" in docs/migration.md.
+   */
+  readonly onEmbeddedLimit?: "throw" | "truncate";
   /**
    * The shape the content of `parse` (`ParseResult.text`) and of each `parseRecursive` record is written in; see
    * HandlerType. Default "text". `maxOutputChars` counts the characters a handler is given, as Tika's write limit does
@@ -269,6 +282,8 @@ export class Ripstream {
     return this.withStream(source, options, async (stream, metadata, ctx) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
+      const truncateEmbedded = options.onEmbeddedLimit === "truncate";
+      if (truncateEmbedded) ctx.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
       const started = performance.now();
       this.eventSink?.emit({
         type: "start",
@@ -297,6 +312,9 @@ export class Ripstream {
         const failure = recording && !ctx.signal.aborted ? classifyFailure(error) : "fatal";
         if (cut) {
           // The output ended the parse early, by design: what was written is the answer.
+        } else if (truncateEmbedded && isEmbeddedCountLimit(error)) {
+          // So did the count of embedded resources: what was read is the answer.
+          noteEmbeddedLimit(metadata, { limit: error.limit, max: error.max, seen: error.seen, read: error.max });
         } else if (failure === "unsupported") {
           noteEmptyParser(metadata);
         } else {
@@ -345,6 +363,7 @@ export class Ripstream {
       const wrapper = new RecursiveParserWrapper(this.parser, {
         recordFailures: recording,
         truncateOutput: options.onOutputLimit === "truncate",
+        truncateEmbedded: options.onEmbeddedLimit === "truncate",
         handlerType: options.handlerType ?? "text",
         ...(options.unpackBytes === undefined ? {} : { unpackBytes: options.unpackBytes }),
         segments: options.segments === true,

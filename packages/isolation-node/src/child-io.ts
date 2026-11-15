@@ -52,6 +52,8 @@ export interface InputHeader {
   readonly recordFailures?: boolean;
   /** ParseOptions.onOutputLimit "truncate": the output limit ends the parse with the text so far, flagged. Omitted: false. */
   readonly truncateOutput?: boolean;
+  /** ParseOptions.onEmbeddedLimit "truncate": an entry-count limit ends the read with the entries so far, flagged. Omitted: false. */
+  readonly truncateEmbedded?: boolean;
   /** ParseOptions.handlerType: the shape the content is written in. Omitted: "text". */
   readonly handlerType?: HandlerType;
   /** ParseOptions.unpackBytes: keep the bytes of the embedded documents, up to this many in all. Records output only. */
@@ -203,6 +205,9 @@ function parseHeader(json: string): InputHeader {
   }
   if (header.truncateOutput !== undefined && typeof header.truncateOutput !== "boolean") {
     throw new TypeError("input header: truncateOutput must be a boolean");
+  }
+  if (header.truncateEmbedded !== undefined && typeof header.truncateEmbedded !== "boolean") {
+    throw new TypeError("input header: truncateEmbedded must be a boolean");
   }
   if (header.handlerType !== undefined && !HANDLER_TYPES.includes(header.handlerType as HandlerType)) {
     throw new TypeError(`input header: handlerType must be one of ${HANDLER_TYPES.join(", ")}`);

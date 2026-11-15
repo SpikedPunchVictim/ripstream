@@ -307,7 +307,9 @@ export {
 } from "./parser.ts";
 export {
   EmbeddedDocumentBytesHandler,
+  noteEmbeddedLimit,
   ParsingEmbeddedDocumentExtractor,
+  truncatesEmbeddedLimit,
   type EmbeddedDocumentExtractor,
   type EmbeddedResource,
 } from "./embedded.ts";

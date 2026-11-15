@@ -8,6 +8,7 @@ import {
   ParseTimeoutError,
   Ripstream,
   XHTMLContentHandler,
+  truncatesEmbeddedLimit,
   type ContentHandler,
   type Detector,
   type ParseContext,
@@ -252,6 +253,16 @@ test("records: a truncating request answers with the records so far, the contain
   assert.ok(record.content.trim() !== "" && "abcdefghij".startsWith(record.content.trim()), JSON.stringify(record.content));
   assert.deepEqual(record.metadata["tk:exception:write-limit-reached"], ["true"]);
   assert.equal(record.exception, null);
+});
+
+test("a request that truncates the embedded count reaches the parsers' context", async () => {
+  const seen: boolean[] = [];
+  const ripstream = ripstreamOf(async (_handler, _metadata, ctx) => {
+    seen.push(truncatesEmbeddedLimit(ctx));
+  });
+  await run(ripstream, input(header({ truncateEmbedded: true }))).outcome;
+  await run(ripstream, input(header())).outcome;
+  assert.deepEqual(seen, [true, false]);
 });
 
 test("a request's handlerType decides the shape of the content, for the text and the records answer", async () => {

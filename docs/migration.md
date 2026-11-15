@@ -292,6 +292,41 @@ Tika's behaviour; the text so far is the result and the flag is on the metadata.
 `parseToStream` always throw. The limit is one total for the container and everything embedded in it, where Tika's
 applies to each document. Read from Tika source and its saved responses, not checked against a live Tika.
 
+## The entry-count limit
+
+A container with more entries than the limits allow fails the parse by default: a ZIP or tar with more than
+`maxZipEntries` (10,000) entries ("ZIP entries exceed 10000", "Tar entries exceed 10000"), or a tree with more than
+`maxEmbeddedResources` (10,000) embedded documents ("Embedded count 10001 exceeds 10000"), is a `LimitExceededError`.
+Tika's default is to stop quietly: it parses the first N embedded documents, in archive order, and sets
+`tk:exception:embedded-resource-limit-reached` = `true` on the container (checked against Tika 4.2.0 with `maxCount`
+100, `throwOnMaxCount` false, on a 300-entry ZIP: 100 embedded records in archive order and the flag; with exactly as many
+entries as the limit there is no flag).
+
+Pass `onEmbeddedLimit: "truncate"` to `parse` or `parseRecursive` to get that. What was read is the answer and the
+container carries the flag plus four keys that say what was cut:
+
+| Key | Value |
+| --- | --- |
+| `tk:exception:embedded-resource-limit-reached` | `true` (Tika's key) |
+| `tk:exception:embedded-resource-limit` | which limit: `maxZipEntries` or `maxEmbeddedResources` |
+| `tk:exception:embedded-resource-limit-max` | the limit's value |
+| `tk:exception:embedded-resource-limit-seen` | entries or embedded documents counted when the read stopped |
+| `tk:exception:embedded-resource-limit-read` | entries or embedded documents read (the limit) |
+
+`seen` is exact for a ZIP (its directory is read first) and for a tar (the rest of the archive is walked past, unparsed);
+for `maxEmbeddedResources` it is the count at which the parse stopped (N+1), not the total, since a tree is not walked
+further. The keys are ripstream's addition: Tika sets the flag alone. In `parseRecursive` an archive with too many
+entries is flagged on its own record (a nested archive on the nested record); reaching `maxEmbeddedResources`, a budget
+for the whole tree, flags the container's. `parse` carries them on the one metadata it returns. The bomb limits
+(`maxTotalEmbeddedBytes`, `maxEmbeddedResourceBytes`, `maxDecompressionRatio`) and every other
+limit still throw. `onEmbeddedLimit` crosses the isolation boundary like `onOutputLimit` (`truncateEmbedded` in the
+request), and an isolated and an in-process parse agree. `maxZipEntries` is not a per-request limit: an isolated child
+always applies 10,000. Dump, cpio, ar and other archive formats, `serve` and the CLI still throw at their limits.
+
+A configuration file's `embedded-limits` is unchanged: `maxCount` is accepted only beside `throwOnMaxCount: true`
+(ripstream fails the parse). Tika with `throwOnMaxCount: false` behaves as `onEmbeddedLimit: "truncate"` does, so
+accepting it there is possible; it is left for a decision.
+
 ## Command line
 
 The ripstream CLI is its own interface (`parse`, `detect`, `metadata`, `language`, `serve`), not tika-app's, and it

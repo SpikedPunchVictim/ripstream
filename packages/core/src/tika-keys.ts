@@ -26,6 +26,19 @@ export const TIKA_KEYS = {
   EMBEDDED_PARSER: "tk:exception:embedded-parser",
   EMBEDDED_STREAM_EXCEPTION: "tk:exception:embedded-stream-exception",
   WRITE_LIMIT_REACHED: "tk:exception:write-limit-reached",
+  /**
+   * Tika's `TikaCoreProperties.EMBEDDED_RESOURCE_LIMIT_REACHED`. Ripstream sets it under `onEmbeddedLimit: "truncate"`,
+   * on the document whose embedded resources or archive entries were cut off, with the four keys below beside it.
+   */
+  EMBEDDED_RESOURCE_LIMIT_REACHED: "tk:exception:embedded-resource-limit-reached",
+  /** Ripstream's own, beside the flag: which limit it was ("maxEmbeddedResources" or "maxZipEntries"). */
+  EMBEDDED_RESOURCE_LIMIT: "tk:exception:embedded-resource-limit",
+  /** The limit's value. */
+  EMBEDDED_RESOURCE_LIMIT_MAX: "tk:exception:embedded-resource-limit-max",
+  /** Resources or entries the parse had come across when it stopped (at least this many exist). */
+  EMBEDDED_RESOURCE_LIMIT_SEEN: "tk:exception:embedded-resource-limit-seen",
+  /** Resources or entries that were read, in archive order. */
+  EMBEDDED_RESOURCE_LIMIT_READ: "tk:exception:embedded-resource-limit-read",
   IS_ENCRYPTED: "tk:encrypted",
 } as const;
 

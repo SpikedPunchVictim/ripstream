@@ -137,6 +137,12 @@ export interface IsolatedParseRequest {
    */
   readonly truncateOutput?: boolean;
   /**
+   * `ParseOptions.onEmbeddedLimit: "truncate"`: an archive or container with more entries than `maxZipEntries` or
+   * `maxEmbeddedResources` is read up to the limit, in archive order, and flagged with
+   * `tk:exception:embedded-resource-limit-reached`, instead of a thrown LimitExceededError. Omitted: false.
+   */
+  readonly truncateEmbedded?: boolean;
+  /**
    * `ParseOptions.handlerType`: the shape the content of the answer is written in (`text` of the text arm, `content` of
    * each record). Omitted: "text".
    */

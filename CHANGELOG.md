@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Keep the first entries of a big archive: `onEmbeddedLimit: "truncate"` (`tikajs-1fz4`)
+
+Added: `ParseOptions.onEmbeddedLimit: "truncate"` (default `"throw"`, unchanged). A ZIP or tar with more than
+`maxZipEntries` entries, or a tree with more than `maxEmbeddedResources` embedded documents, now resolves with the first
+N in archive order instead of throwing, and the container's metadata says so: `tk:exception:embedded-resource-limit-reached`
+(Tika's key) plus `-limit`, `-max`, `-seen` and `-read`. A 50,000-entry ZIP at the default limits gives its first 10,000
+entries. The bomb limits still throw. It crosses the isolation boundary as `truncateEmbedded` (request, input header),
+like `onOutputLimit`; an isolated and an in-process parse give the same records. The configuration file's
+`embedded-limits` is unchanged. `noteEmbeddedLimit` and `truncatesEmbeddedLimit` are new core exports for archive
+parsers. Behaviour compared with Tika 4.2.0; see `docs/migration.md`.
+
 ### Pool reservation for large results: 3.2 GiB, not 10 GiB, at 52,428,800 characters (`tikajs-2cvh`)
 
 Changed: a records result's content longer than 64 Ki characters now crosses the isolation boundary in `text` frames

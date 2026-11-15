@@ -48,6 +48,11 @@ test("truncateOutput round trips, and anything but a boolean is refused", async 
   assert.equal((await readInput(stream(wire(header())))).header.truncateOutput, undefined);
 });
 
+test("truncateEmbedded round trips", async () => {
+  assert.equal((await readInput(stream(wire(header({ truncateEmbedded: true }))))).header.truncateEmbedded, true);
+  assert.equal((await readInput(stream(wire(header())))).header.truncateEmbedded, undefined);
+});
+
 test("unpackBytes round trips for a records request, including 0", async () => {
   for (const unpackBytes of [0, 1, 268_435_456]) {
     const got = await readInput(stream(wire(header({ output: "records", unpackBytes }))));
@@ -149,6 +154,7 @@ for (const [label, json] of [
   ["string maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":"3"}'],
   ["string recordFailures", '{"v":1,"output":"text","byteLength":0,"recordFailures":"yes"}'],
   ["string truncateOutput", '{"v":1,"output":"text","byteLength":0,"truncateOutput":"yes"}'],
+  ["string truncateEmbedded", '{"v":1,"output":"text","byteLength":0,"truncateEmbedded":"yes"}'],
   ["negative unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":-1}'],
   ["fractional unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":1.5}'],
   ["string unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":"9"}'],

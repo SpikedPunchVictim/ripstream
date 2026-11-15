@@ -248,6 +248,10 @@ function checkRequest(request: IsolatedParseRequest): void {
   if (truncateOutput !== undefined && typeof truncateOutput !== "boolean") {
     throw new TypeError(`isolate: request.truncateOutput must be a boolean, got ${String(truncateOutput)}`);
   }
+  const { truncateEmbedded } = request;
+  if (truncateEmbedded !== undefined && typeof truncateEmbedded !== "boolean") {
+    throw new TypeError(`isolate: request.truncateEmbedded must be a boolean, got ${String(truncateEmbedded)}`);
+  }
   const { handlerType } = request;
   if (handlerType !== undefined && !HANDLER_TYPES.includes(handlerType)) {
     throw new TypeError(`isolate: request.handlerType must be one of ${HANDLER_TYPES.join(", ")}, got ${String(handlerType)}`);
@@ -446,6 +450,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
       ...(request.recordFailures === true ? { recordFailures: true } : {}),
       ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
+      ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
       ...(request.segments === true ? { segments: true } : {}),
@@ -475,6 +480,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(signal === undefined ? {} : { signal }),
       ...(request.recordFailures === true ? { onDocumentFailure: "record" as const } : {}),
       ...(request.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
+      ...(request.truncateEmbedded === true ? { onEmbeddedLimit: "truncate" as const } : {}),
       ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
       ...(request.segments === true ? { segments: true } : {}),

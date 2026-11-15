@@ -2,8 +2,10 @@ import type { ContentHandler, MaybePromise } from "./content-handler.ts";
 import {
   chargeEmbeddedBytes,
   chargeEmbeddedResource,
+  isEmbeddedCountLimit,
   isWholeParseLimit,
   meterEmbeddedStream,
+  noteEmbeddedLimit,
   ParsingEmbeddedDocumentExtractor,
   type EmbeddedDocumentExtractor,
 } from "./embedded.ts";
@@ -79,6 +81,7 @@ export class RecursiveParserWrapper implements Parser {
   private readonly records: ParseRecord[] = [];
   private readonly recordFailures: boolean;
   private readonly truncateOutput: boolean;
+  private readonly truncateEmbedded: boolean;
   private readonly handlerType: HandlerType;
   private readonly unpackBytes: number | undefined;
   private readonly segments: boolean;
@@ -92,6 +95,10 @@ export class RecursiveParserWrapper implements Parser {
    * kept, the records parsed so far are the answer, and `tk:exception:write-limit-reached` is set on the container
    * and on the document whose text was cut. Every other limit still fails the parse.
    *
+   * `truncateEmbedded`: reaching `maxEmbeddedResources`, or an archive with more than `maxZipEntries` entries, keeps what
+   * was read instead of failing the parse, and notes it on the metadata (see `noteEmbeddedLimit`). The count ends the
+   * parse and is noted on the container's record; an archive's entries are cut in the archive, on its own record.
+   *
    * `handlerType`: the shape each record's content is written in (default "text"). An embedded document's "text" is
    * the text of its body; the container's is every character it writes. "ignore" keeps no content and counts no
    * output: its budget is unlimited, as Tika's ignore handler has no write limit.
@@ -104,6 +111,7 @@ export class RecursiveParserWrapper implements Parser {
     options: {
       readonly recordFailures?: boolean;
       readonly truncateOutput?: boolean;
+      readonly truncateEmbedded?: boolean;
       readonly handlerType?: HandlerType;
       readonly unpackBytes?: number;
       readonly segments?: boolean;
@@ -112,6 +120,7 @@ export class RecursiveParserWrapper implements Parser {
     this.delegate = delegate;
     this.recordFailures = options.recordFailures ?? false;
     this.truncateOutput = options.truncateOutput ?? false;
+    this.truncateEmbedded = options.truncateEmbedded ?? false;
     this.handlerType = options.handlerType ?? "text";
     this.unpackBytes = options.unpackBytes;
     this.segments = options.segments ?? false;
@@ -152,6 +161,7 @@ export class RecursiveParserWrapper implements Parser {
     this.records.push(record);
 
     ctx.set(CONTEXT_KEYS.EMBEDDED_BUDGET, { count: 0, bytes: 0 });
+    if (this.truncateEmbedded) ctx.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
     const counted = this.handlerType !== "ignore";
     const output: OutputBudget = {
       chars: 0,
@@ -182,6 +192,9 @@ export class RecursiveParserWrapper implements Parser {
     } catch (error) {
       if (output.truncate && output.reached && isWriteLimitReached(error)) {
         // The output ended the parse early, by design: what was read is the answer.
+      } else if (this.truncateEmbedded && isEmbeddedCountLimit(error)) {
+        // So did the count of embedded resources: the records so far are the answer, the container says where it stopped.
+        noteEmbeddedLimit(metadata, { limit: error.limit, max: error.max, seen: error.seen, read: error.max });
       } else if (this.recordFailures && classifyFailure(error) === "unsupported") {
         noteEmptyParser(metadata);
       } else {

@@ -96,6 +96,18 @@ test("parse and parseRecursive: onOutputLimit truncate crosses as truncateOutput
   assert.equal("truncateOutput" in (plain.calls[0]?.request ?? {}), false);
 });
 
+test("parse and parseRecursive: onEmbeddedLimit truncate crosses as truncateEmbedded, and throw sends nothing", async () => {
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { onEmbeddedLimit: "truncate" });
+  assert.equal(text.calls[0]?.request.truncateEmbedded, true);
+  const records = fakeIsolator(RECORDS_ANSWER);
+  await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { onEmbeddedLimit: "truncate" });
+  assert.equal(records.calls[0]?.request.truncateEmbedded, true);
+  const plain = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { onEmbeddedLimit: "throw" });
+  assert.equal("truncateEmbedded" in (plain.calls[0]?.request ?? {}), false);
+});
+
 test("parse and parseRecursive: handlerType crosses in the request, and the records come back stamped with it", async () => {
   const text = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { handlerType: "markdown" });

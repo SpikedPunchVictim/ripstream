@@ -3,6 +3,8 @@ import {
   MalformedDocumentError,
   RipstreamError,
   MediaType,
+  noteEmbeddedLimit,
+  truncatesEmbeddedLimit,
   type ContentHandler,
   type Metadata,
   type ParseContext,
@@ -28,6 +30,10 @@ export class TarParser implements Parser {
   ): Promise<void> {
     const data = await readAll(stream);
     const extractor = tarExtract();
+    // Under `onEmbeddedLimit: "truncate"` an archive with more than `maxZipEntries` entries is read up to that many, in
+    // archive order. The rest are walked past (a tar has no index) only to count them and to leave their data unread.
+    const truncate = truncatesEmbeddedLimit(ctx);
+    let cut = false;
 
     await withXhtml(handler, metadata, async (xhtml) => {
       let failure: unknown = null;
@@ -59,6 +65,11 @@ export class TarParser implements Parser {
       ): Promise<void> => {
         entries++;
         if (entries > ctx.limits.maxZipEntries) {
+          if (truncate) {
+            cut = true;
+            entry.resume();
+            return;
+          }
           throw new LimitExceededError(
             `Tar entries exceed ${ctx.limits.maxZipEntries}`,
           );
@@ -102,6 +113,10 @@ export class TarParser implements Parser {
         }
       };
 
+      const noteCut = (): void => {
+        if (cut) noteEmbeddedLimit(metadata, { limit: "maxZipEntries", max: ctx.limits.maxZipEntries, seen: entries, read: ctx.limits.maxZipEntries });
+      };
+
       const finished = new Promise<void>((resolve, reject) => {
         extractor.on("finish", resolve);
         extractor.on("error", reject);
@@ -116,12 +131,15 @@ export class TarParser implements Parser {
         // #21: a limit/other RipstreamError from an entry keeps its code; a raw
         // tar-stream parse error becomes a 422 MalformedDocumentError, not a 500.
         const reason = failure ?? error;
+        // The tail after the entries that were read is not read, so a fault in it is not this parse's to report.
+        if (failure === null && cut) return noteCut();
         throw reason instanceof RipstreamError
           ? reason
           : new MalformedDocumentError("Invalid tar archive", { cause: reason });
       }
       await chain;
       if (failure !== null) throw failure;
+      noteCut();
     });
   }
 }

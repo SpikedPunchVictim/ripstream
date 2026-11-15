@@ -105,6 +105,7 @@ function toRequest(
     ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
     ...(options.onDocumentFailure === "record" ? { recordFailures: true } : {}),
     ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
+    ...(options.onEmbeddedLimit === "truncate" ? { truncateEmbedded: true } : {}),
     ...(options.handlerType === undefined ? {} : { handlerType: options.handlerType }),
     // Only a records answer has records to hang bytes on.
     ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),

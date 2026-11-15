@@ -3,6 +3,8 @@ import {
   MalformedDocumentError,
   MediaType,
   type ContentHandler,
+  noteEmbeddedLimit,
+  truncatesEmbeddedLimit,
   type Metadata,
   type ParseContext,
   type Parser,
@@ -42,6 +44,9 @@ export class ZipParser implements Parser {
     ctx: ParseContext,
   ): Promise<void> {
     const data = await readAll(stream);
+    // Under `onEmbeddedLimit: "truncate"` an archive with more than `maxZipEntries` entries is read up to that many, in
+    // archive order, and says so on its metadata; the entries after them are neither read nor counted against any byte limit.
+    const truncate = truncatesEmbeddedLimit(ctx);
     let entries = 0;
     let originalTotal = 0;
     let files: ZipFile[];
@@ -50,13 +55,14 @@ export class ZipParser implements Parser {
       // fflate does not decode method 9 (Deflate64) or the others (bzip2 is read here, the rest are refused one entry at a
       // time), and it ignores the encryption flag, so an archive that carries any is read entry by entry. So is one with a
       // repeated name or an entry named __proto__, which fflate's plain result object would drop.
-      files = decodeEntries(data, central, ctx.limits);
+      files = decodeEntries(data, central, ctx.limits, truncate);
       entries = central.length;
     } else try {
       const record = unzipSync(data, {
         filter: (file) => {
           entries++;
           if (entries > ctx.limits.maxZipEntries) {
+            if (truncate) return false; // not read; the walk goes on only to count them
             throw new LimitExceededError(
               `ZIP entries exceed ${ctx.limits.maxZipEntries}`,
             );
@@ -94,6 +100,9 @@ export class ZipParser implements Parser {
       throw new LimitExceededError(
         `ZIP entries ${files.length} exceed ${ctx.limits.maxZipEntries}`,
       );
+    }
+    if (truncate && entries > ctx.limits.maxZipEntries) {
+      noteEmbeddedLimit(metadata, { limit: "maxZipEntries", max: ctx.limits.maxZipEntries, seen: entries, read: ctx.limits.maxZipEntries });
     }
 
     let total = 0;
@@ -224,12 +233,16 @@ function readCentralDirectory(data: Uint8Array): CentralEntry[] | null {
 
 function decodeEntries(
   data: Uint8Array,
-  entries: readonly CentralEntry[],
+  allEntries: readonly CentralEntry[],
   limits: { readonly maxZipEntries: number; readonly maxEmbeddedResourceBytes: number; readonly maxTotalEmbeddedBytes: number; readonly maxDecompressionRatio: number },
+  truncate: boolean,
 ): ZipFile[] {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const files: ZipFile[] = [];
-  if (entries.length > limits.maxZipEntries) throw new LimitExceededError(`ZIP entries ${entries.length} exceed ${limits.maxZipEntries}`);
+  if (allEntries.length > limits.maxZipEntries && !truncate) {
+    throw new LimitExceededError(`ZIP entries ${allEntries.length} exceed ${limits.maxZipEntries}`);
+  }
+  const entries = allEntries.slice(0, limits.maxZipEntries);
   // Declared sizes only reject early; what an entry really inflates to is bounded by what is left of the total.
   let total = 0;
   let produced = 0;
