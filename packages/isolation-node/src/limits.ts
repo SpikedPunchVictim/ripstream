@@ -1,4 +1,4 @@
-import { DEFAULT_LIMITS, LimitExceededError, type IsolationConfig } from "@spikedpunch/ripstream-core";
+import { DEFAULT_LIMITS, LimitExceededError, type HandlerType, type IsolationConfig } from "@spikedpunch/ripstream-core";
 import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
 
 /**
@@ -95,6 +95,28 @@ export const MAX_RECORDS_METADATA_BYTES = 16 * MIB;
 export const SEGMENT_BASE_BYTES = 24 * MIB;
 export const SEGMENT_BYTES_PER_OUTPUT_CHAR = 0.75;
 
+/**
+ * Room for the markup of a request whose handlerType is "html", "xml" or "markdown" (tikajs-n89x), in characters. Core
+ * counts, against `maxOutputChars`, the characters the parsers write and not the markup its handler adds around them, as
+ * Tika's write limit does, so the content of such a result can be far longer than `maxOutputChars` (an HTML file of
+ * 1.26 million empty `<span></span>` is 16.4 million characters of content and none counted). The result cap sized for
+ * `maxOutputChars` refused it, though the same parse in this process returns it. The allowance is a base plus a number
+ * of characters per output character, on top of the text allowance and held in the parent as text is (see
+ * `parentResultMb`'s `textChars`); a result with more markup than this is a LimitExceededError, like any other cap. The
+ * base is the repro (16.4 million characters) rounded up to 16 Mi; the rate covers tag-dense tables (about 30 characters
+ * of markup around a one-character cell) up to a few thousand output characters. Neither is measured beyond that, and
+ * both are an owner's to tune. A request whose text allowance already leaves less than this under
+ * MAX_RESULT_BYTES_CEILING gets what is left.
+ */
+export const MARKUP_BASE_CHARS = 16 * MIB;
+export const MARKUP_CHARS_PER_OUTPUT_CHAR = 16;
+
+/** The characters of markup a request with this handlerType and `maxOutputChars` may carry beyond its counted text, before the ceiling. */
+export function markupAllowanceChars(handlerType: HandlerType | undefined, maxOutputChars: number): number {
+  if (handlerType !== "html" && handlerType !== "xml" && handlerType !== "markdown") return 0;
+  return MARKUP_BASE_CHARS + maxOutputChars * MARKUP_CHARS_PER_OUTPUT_CHAR;
+}
+
 /** Most bytes of `segments` frames a request with `maxOutputChars` may carry. */
 export function segmentAllowanceBytes(maxOutputChars: number): number {
   return SEGMENT_BASE_BYTES + Math.ceil(maxOutputChars * SEGMENT_BYTES_PER_OUTPUT_CHAR);
@@ -150,6 +172,8 @@ export interface LimitsRequest {
   readonly unpackBytes?: number;
   /** Segments are asked for (records output only): their list travels in the record frame, which has no cap of its own then. */
   readonly segments?: boolean;
+  /** The shape of the content; for "html", "xml" and "markdown" the result has room for markup beyond `maxOutputChars`. */
+  readonly handlerType?: HandlerType;
 }
 
 export interface DerivedLimits {
@@ -172,6 +196,8 @@ export interface DerivedLimits {
   readonly maxOutputChars: number;
   readonly maxEmbeddedResources: number;
   readonly output: "text" | "records";
+  /** Present for a markup handlerType: characters of markup, beyond `maxOutputChars`, the result has room for (part of `maxResultBytes`). */
+  readonly maxMarkupChars?: number;
   /** Present when segments were asked for (records output). */
   readonly segments?: true;
   /** With `segments`: the most bytes of segments frames the parent accepts, and reserves memory for. It is part of `maxResultBytes`. */
@@ -306,18 +332,24 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
   if (segments && output !== "records") throw new RangeError('segments needs a "records" request');
   const unpackWire = unpackBytes === undefined ? 0 : unpackWireBytes(unpackBytes, maxEmbeddedResources);
   const maxSegmentBytes = segments ? segmentAllowanceBytes(maxOutputChars) : undefined;
-  const maxResultBytes =
+  const textResultBytes =
     maxOutputChars * WIRE_BYTES_PER_OUTPUT_CHAR +
     metadataAllowanceBytes(output, maxEmbeddedResources) +
     unpackWire +
     (maxSegmentBytes ?? 0) +
     RESULT_SLACK_BYTES;
-  if (maxResultBytes > MAX_RESULT_BYTES_CEILING) {
+  if (textResultBytes > MAX_RESULT_BYTES_CEILING) {
     throw new LimitExceededError(
-      `maxOutputChars ${maxOutputChars} needs a result of up to ${maxResultBytes} bytes, above the isolation ` +
+      `maxOutputChars ${maxOutputChars} needs a result of up to ${textResultBytes} bytes, above the isolation ` +
         `ceiling of ${MAX_RESULT_BYTES_CEILING} bytes`,
     );
   }
+  // Markup never makes a request refusable that its text allowance fits: it gets what is left under the ceiling.
+  const maxMarkupChars = Math.min(
+    markupAllowanceChars(request.handlerType, maxOutputChars),
+    Math.floor((MAX_RESULT_BYTES_CEILING - textResultBytes) / WIRE_BYTES_PER_OUTPUT_CHAR),
+  );
+  const maxResultBytes = textResultBytes + maxMarkupChars * WIRE_BYTES_PER_OUTPUT_CHAR;
 
   return {
     perChildMb,
@@ -331,6 +363,7 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     maxOutputChars,
     maxEmbeddedResources,
     output,
+    ...(maxMarkupChars > 0 ? { maxMarkupChars } : {}),
     ...(segments ? { segments: true as const, maxSegmentBytes: maxSegmentBytes as number } : {}),
     maxResultBytes,
     // A record frame carries no more than one text chunk of content (the rest follows in text frames, and the segments

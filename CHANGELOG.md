@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: isolated markup output (`tikajs-n89x`, F6)
+
+Fixed: with `handlerType` `html`, `xml` or `markdown`, an isolated parse failed with "Isolated parser result exceeded the
+maximum result size" for a document whose markup is long (1.26 million empty `<span></span>`: 16.4 million characters, none
+counted against `maxOutputChars`) while the in-process parse returned it. The result cap and the parent's memory
+reservation now include an allowance for markup for those types (16 Mi + 16 characters per output character, cut to
+what fits under the 512 MiB ceiling); docs/isolation.md, "What a request reserves". A result with more markup still fails.
+
 ### Bug hunt at 9a828fc: segments allowance for locations (`tikajs-yub3`, F4)
 
 Fixed: with `segments: true`, every JSON scalar got a pointer holding all its keys and every HTML block a selector holding

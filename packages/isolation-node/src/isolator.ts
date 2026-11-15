@@ -500,6 +500,7 @@ class NodeIsolatorImpl implements NodeIsolator {
         maxParseMillis: limits.maxParseMillis,
         ...(limits.unpackWireBytes === undefined ? {} : { unpackWireBytes: limits.unpackWireBytes }),
         ...(limits.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: limits.maxSegmentBytes }),
+        ...(limits.maxMarkupChars === undefined ? {} : { maxMarkupChars: limits.maxMarkupChars }),
       },
     };
     const { runner } = isolating;

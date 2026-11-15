@@ -284,6 +284,18 @@ character escaped as `\uXXXX`) + the metadata allowance + 64 KiB. The characters
 holds, which is why they are reserved per character. A request with `segments` adds the segments' own allowance to
 `maxResultBytes` and reserves it apart, see "Segments", below.
 
+**Markup (`tikajs-n89x`).** For `handlerType` `html`, `xml` and `markdown`, core counts against `maxOutputChars` the
+characters the parsers write and not the markup around them (as Tika's write limit does), so the content can be far longer
+than `maxOutputChars`: an HTML file of 1.26 million empty `<span></span>` is 16.4 million characters of content and counts
+none, and the same parse in this process returns it. The isolator therefore adds a markup allowance of
+`16 Mi + 16 * maxOutputChars` characters (18.4 million at the default), at the wire rate of 6 bytes, to `maxResultBytes`,
+and reserves those characters in the parent with the text, at 5 bytes each (the markup travels in the same text frames), so
+`maxOutputChars` in the formulas above is `maxOutputChars + markup` for those types. A result with more markup than that is a
+`LimitExceededError`, as before. The allowance never makes a request refusable that its text fits: it is cut to what is left
+under the 512 MiB ceiling (a request of 80 million characters gets about 5 million of markup). The numbers are the repro
+rounded up and a rate for tag-dense tables; they are not measured beyond that. Core still does not count markup
+(counting it would change what the in-process parse returns).
+
 **Worked example**, `maxOutputChars` 52,428,800, records, default `perChildMb`, `maxEmbeddedResources` 1000 (the metadata
 allowance is then its floor of 12 MiB; the default of 10,000 makes it 16 MiB):
 

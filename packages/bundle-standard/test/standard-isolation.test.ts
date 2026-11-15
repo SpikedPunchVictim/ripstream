@@ -207,6 +207,20 @@ test("text/plain is parsed in this process; a DOCX, a zip and a PDF each get a c
   });
 });
 
+test("an xml handler's markup beyond maxOutputChars does not fail the isolated parse the in-process one answers (tikajs-n89x)", async () => {
+  // 1.26 million empty spans: 16.4 million characters of content, none of them counted against maxOutputChars.
+  const html = encoder.encode(`<html><body>${"<span></span>".repeat(1_260_000)}hello</body></html>`);
+  const expected = await reference.parse(html, { handlerType: "xml", filename: "markup.html" });
+  assert.ok(expected.text.length > 16_000_000, "the fixture is markup, not text");
+  await withStandard({ inProcessTypes: new Set() }, async ({ ripstream }) => {
+    const before = settled.length;
+    const viaChild = await ripstream.parse(html, { handlerType: "xml", filename: "markup.html" });
+    assert.equal(settled.length - before, 1, "it went to a child");
+    assert.equal(viaChild.text.length, expected.text.length);
+    assert.ok(viaChild.text === expected.text, "the same text");
+  });
+});
+
 test("detect() answers in this process, with the full ripstream's verdict", async () => {
   await withStandard({}, async ({ ripstream }) => {
     const before = settled.length;

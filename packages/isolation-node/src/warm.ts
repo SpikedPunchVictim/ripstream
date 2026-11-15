@@ -991,7 +991,7 @@ export class WarmRunner {
       maxResultBytes,
       request.output,
       request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-      request.maxOutputChars,
+      request.maxOutputChars === undefined ? undefined : request.maxOutputChars + (limits.maxMarkupChars ?? 0),
       segmentBytes,
     );
     // Heap first: the domain is the caller's string and may contain anything.

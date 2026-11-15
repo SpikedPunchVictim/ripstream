@@ -7,6 +7,8 @@ import {
   DEFAULT_PER_CHILD_MB,
   MAX_RECORDS_METADATA_BYTES,
   MAX_RESULT_BYTES_CEILING,
+  MARKUP_BASE_CHARS,
+  MARKUP_CHARS_PER_OUTPUT_CHAR,
   MAX_UNPACK_BYTES_CEILING,
   RESULT_SLACK_BYTES,
   SEGMENT_BASE_BYTES,
@@ -15,6 +17,7 @@ import {
   segmentAllowanceBytes,
 } from "../src/limits.ts";
 import { MAX_TEXT_CHUNK_CHARS } from "../src/frames.ts";
+import { parentResultMbFor } from "../src/runner.ts";
 
 const MIB = 1024 * 1024;
 const strict: IsolationConfig = { mode: "strict" };
@@ -168,6 +171,36 @@ test("records with segments: the segments have a budget of their own on top of t
   assert.equal(segmentAllowanceBytes(0), SEGMENT_BASE_BYTES);
   assert.ok(segmentAllowanceBytes(52_428_800) < 64 * MIB, "62 MiB at the largest cap the pool of a 4 GiB container admits");
   assert.throws(() => deriveLimits(strict, { output: "text", segments: true }), /segments needs a "records" request/);
+});
+
+test("a markup handlerType has room for markup beyond maxOutputChars, held in the parent as text is (tikajs-n89x)", () => {
+  const plain = deriveLimits(strict, { output: "records" });
+  for (const handlerType of ["html", "xml", "markdown"] as const) {
+    const limits = deriveLimits(strict, { output: "records", handlerType });
+    const markup = MARKUP_BASE_CHARS + DEFAULT_LIMITS.maxOutputChars * MARKUP_CHARS_PER_OUTPUT_CHAR;
+    assert.equal(limits.maxMarkupChars, markup, handlerType);
+    assert.equal(limits.maxResultBytes, plain.maxResultBytes + markup * 6, handlerType);
+    assert.equal(limits.maxFrameBytes, plain.maxFrameBytes, "a text frame is the same size whatever is in it");
+    // 16.4 million characters of content with none counted (1.26 million empty spans) fits.
+    assert.ok(DEFAULT_LIMITS.maxOutputChars + (limits.maxMarkupChars as number) > 16_400_000, handlerType);
+    // The parent reserves them at the text rate, 5 bytes a character, and not at the records rate of the rest.
+    const extraMb = parentResultMbFor(limits) - parentResultMbFor(plain);
+    assert.ok(extraMb >= Math.floor((markup * 5) / MIB) && extraMb <= Math.ceil((markup * 5) / MIB) + 1, `${handlerType}: ${extraMb} MiB`);
+  }
+  for (const handlerType of ["text", "body", "ignore"] as const) {
+    assert.deepEqual(deriveLimits(strict, { output: "records", handlerType }), plain, handlerType);
+  }
+});
+
+test("markup never makes a request refusable that its text allowance fits: it gets what is left under the ceiling (tikajs-n89x)", () => {
+  const largest = 80_000_000; // 480 MB of text on the wire, 32 MB under the ceiling with the metadata and slack
+  const text = deriveLimits(strict, { maxOutputChars: largest });
+  const html = deriveLimits(strict, { maxOutputChars: largest, handlerType: "html" });
+  assert.ok(html.maxResultBytes <= MAX_RESULT_BYTES_CEILING);
+  assert.ok((html.maxMarkupChars as number) < MARKUP_BASE_CHARS);
+  assert.ok(html.maxResultBytes > text.maxResultBytes);
+  // A request the text allowance does not fit is refused as it was, handlerType or not.
+  assert.throws(() => deriveLimits(strict, { maxOutputChars: 90_000_000, handlerType: "html" }), LimitExceededError);
 });
 
 test("records: the metadata allowance is 4 KiB per record, between the 12 MiB text allowance and 16 MiB", () => {

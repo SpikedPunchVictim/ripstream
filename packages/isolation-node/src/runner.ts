@@ -156,6 +156,8 @@ export function parentResultMbFor(limits: {
   readonly maxResultBytes: number;
   readonly output: "text" | "records";
   readonly maxOutputChars: number;
+  /** Characters of markup beyond `maxOutputChars` the result has room for (a markup handlerType); held as text is. */
+  readonly maxMarkupChars?: number;
   readonly segments?: boolean;
   readonly maxSegmentBytes?: number;
   readonly unpackBytes?: number;
@@ -165,7 +167,7 @@ export function parentResultMbFor(limits: {
     limits.maxResultBytes,
     limits.output,
     limits.unpackBytes === undefined ? undefined : { bytes: limits.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-    limits.maxOutputChars,
+    limits.maxOutputChars + (limits.maxMarkupChars ?? 0),
     limits.segments === true ? segmentBytesFor({ segments: true, maxOutputChars: limits.maxOutputChars }, limits) : undefined,
   );
 }
@@ -253,6 +255,8 @@ export interface RunLimits {
   readonly unpackWireBytes?: number;
   /** The part of `maxResultBytes` that is for segments (`request.segments`); see segmentBytesFor. */
   readonly maxSegmentBytes?: number;
+  /** The characters of `maxResultBytes` that are for markup beyond `maxOutputChars` (a markup handlerType): reserved as text. */
+  readonly maxMarkupChars?: number;
 }
 
 /**
@@ -384,7 +388,7 @@ export class ChildRunner {
         maxResultBytes,
         request.output,
         request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-        request.maxOutputChars,
+        request.maxOutputChars === undefined ? undefined : request.maxOutputChars + (limits.maxMarkupChars ?? 0),
         segmentBytesFor(request, limits),
       ),
     });
