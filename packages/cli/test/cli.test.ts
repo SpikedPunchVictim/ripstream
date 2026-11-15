@@ -226,7 +226,7 @@ test("help says --workers is for CPU-bound documents, not tiny ones, and is not 
   assert.equal(await main(["--help"], sink), 0);
   const text = sink.out.join("").replace(/\s+/g, " ");
   assert.match(text, /--workers <n\|auto\|off>/);
-  assert.match(text, /not for tiny ones \(under ~0\.1 ms each, such as short RTF\), which can run slower/);
+  assert.match(text, /not for tiny ones \(under ~0\.1 ms each, such as short RTF\), which gain little and can run slower when the\s+machine has no CPU to spare/);
   assert.match(text, /cannot be combined with --isolation/);
   assert.match(text, /RIPSTREAM_WORKERS/);
 });

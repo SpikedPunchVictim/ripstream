@@ -76,10 +76,11 @@ Use isolation for documents that might.
 ## When workers help
 
 Workers pay for CPU-bound parsing of many documents: office files, PDFs, HTML and XML, spreadsheets. They do not help
-when the run waits on fetching or emitting (a slow object store, a remote search index). They do not reliably help for
-tiny documents either, ones that parse in well under a tenth of a millisecond: handing such a document to a worker and
-taking its result back costs the run's own thread about as much as parsing it there, so that thread stays the limit
-however many workers there are, and a run can be slower than without them (RTF below). One worker is about as fast
+when the run waits on fetching or emitting (a slow object store, a remote search index). They gain little for tiny
+documents, ones that parse in well under a tenth of a millisecond: handing such a document to a worker and taking its
+result back costs the run's own thread about half of what parsing it there does, so that thread stays the limit
+however many workers there are, and on a machine with no CPU to spare a run can be slower than without them (RTF below,
+and [Small documents](#small-documents)). One worker is about as fast
 as no workers, or slower for tiny documents: the gain comes from parsing several documents at once.
 
 ### Measurements
@@ -105,12 +106,67 @@ workers keep `2n` in flight, as the CLI does. Documents per second:
 - **RTF is the group `auto` does not win.** Its documents are about 85 bytes and parse in about 50 µs each; with 8
   workers the run's own thread was busy 71 to 98% of the time. Over eight runs of 8 workers against in-process
   (these three and five more), workers were faster in four and slower in four, from 0.57 to 1.36 times. `--help`
-  says the same.
+  says the same. The next section measures this again, on documents of every size, and why it is left as it is.
 - **Email** at 8 workers swung from 2,620 to 8,304 documents a second over the same eight runs, never below
   in-process (about 2,000).
 - **Office files** gain least of the larger documents. The run's own thread was busy only about 8% of the time at
   8 workers, so the workers are the limit. A separate series on the same machine measured 1.6 to 2.2 times at
   8 workers; `auto` stays capped at 8 because 8 workers had the best median for office files in every series.
+
+### Small documents
+
+`tikajs-czll` asked whether the documents `auto` does not win should be parsed on the run's own thread (below a size),
+or batched several to a worker message. Measured 2026-11-15 with `scripts/bench/workers.ts` on the same machine (Node
+24), parse-only as above: documents of one format and size built for the purpose (a few distinct ones, so nothing is a
+cache hit), 1,500 to 2,000 of them parsed warm with `parseRecursive`, in-process with 8 in flight against 8 workers
+with 16 in flight, alternated back to back, 7 runs, median and the range of the ratio between pool and in-process in
+each run. Another agent kept the machine at a load average of 13 to 15.
+
+| Format (bytes) | In-process | 8 workers | Ratio (range over 7 runs) |
+| --- | ---: | ---: | --- |
+| RTF (85) | 29,207 | 50,133 | 1.72 (1.00 to 2.04) |
+| RTF with a font table and info group (106) | 22,544 | 42,225 | 1.87 (1.17 to 2.46) |
+| Text (85) | 23,421 | 36,841 | 1.57 (1.27 to 2.32) |
+| CSV (85) | 22,510 | 47,534 | 2.11 (1.64 to 2.33) |
+| HTML (85) | 32,518 | 48,741 | 1.50 (1.33 to 1.71) |
+| JSON (85) | 23,318 | 48,363 | 2.07 (1.88 to 2.45) |
+
+From 200 bytes up, the pool was faster in every run of every format tried (1.4 to 5 times at 200 B to 8 KB). So the
+slowdown measured for `tikajs-ow39` is not there on a machine with CPUs to spare: the run's own thread spends about
+20 µs on a tiny document that goes to a worker, against about 35 µs to parse it there.
+
+It comes back when the CPUs are all taken. With 12 busy loops on the 12 CPUs, 7 runs again (documents a second, median
+and range of the ratio of the pool to in-process):
+
+| Format (bytes) | In-process | 8 workers | Ratio (range over 7 runs) |
+| --- | ---: | ---: | --- |
+| RTF (85) | 16,206 | 14,916 | 0.92 (0.64 to 1.24) |
+| HTML (85) | 17,475 | 18,377 | 1.05 (0.76 to 1.55) |
+| Text (85) | 13,928 | 16,643 | 1.19 (1.14 to 1.45) |
+| CSV (85) | 12,523 | 18,897 | 1.51 (1.02 to 1.79) |
+| JSON (85) | 12,671 | 19,149 | 1.51 (1.11 to 1.97) |
+| RTF (293) | 12,928 | 17,248 | 1.33 (1.01 to 1.57) |
+| RTF, info group (271) | 13,556 | 15,491 | 1.14 (0.89 to 1.47) |
+
+On a saturated machine the pool's gain for documents of about 100 bytes is small, and for RTF and HTML of that size it
+can be a loss; from about 250 bytes it is a gain again in the median.
+
+**What was not built.** A size threshold below which a document is parsed on the run's own thread would give exactly
+the in-process figure for those documents, which is 1.0 by construction. Against the table above it helps the one
+group that loses (RTF at 85 bytes, 0.92) and costs the others their gain (text 1.19, CSV and JSON 1.51): no threshold
+size wins on both. It would also take those documents out of the pool's protection: a worker that does not answer
+within `maxParseMillis` plus 5 s is terminated, and a worker that runs out of heap is replaced, while a document parsed
+on the run's own thread that loops without yielding, or that asks for more memory than the process has, ends the run;
+documents under a few hundred bytes are as able to do that as any other. Batching several small documents to a worker
+message was not tried: the pool already beats parsing in-process for them in the median, and a batch would make one
+document's hang fail its neighbours. The pool therefore treats every document alike, and a run whose documents are all
+tiny and whose machine has no CPU to spare should leave `--workers` off.
+
+To measure on another machine (needs a built tree, `pnpm typecheck`):
+
+```sh
+node scripts/bench/workers.ts --workers 8 --runs 7 --docs 2000 --sizes 85,250,1000
+```
 
 ## How failures arrive
 
