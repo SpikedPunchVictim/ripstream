@@ -228,7 +228,7 @@ export interface RunLimits {
   readonly unpackWireBytes?: number;
 }
 
-function requirePositiveInteger(name: string, value: number): void {
+export function requirePositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new RangeError(`${name} must be a positive safe integer, got ${String(value)}`);
   }
@@ -236,7 +236,7 @@ function requirePositiveInteger(name: string, value: number): void {
 
 // The RSS limit must leave room for the heap (else every child trips it) and fit inside the pool reservation
 // (else a child can be admitted for less memory than it is allowed to use).
-function requireMemoryOrder(heapMb: number, rssLimitMb: number, perChildMb: number): void {
+export function requireMemoryOrder(heapMb: number, rssLimitMb: number, perChildMb: number): void {
   if (!(heapMb < rssLimitMb && rssLimitMb <= perChildMb)) {
     throw new RangeError(
       `heapMb < rssLimitMb <= perChildMb is required, got heapMb=${heapMb}, ` +

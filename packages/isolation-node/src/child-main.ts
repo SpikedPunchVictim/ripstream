@@ -11,8 +11,10 @@ import {
 } from "@spikedpunch/ripstream-core";
 import {
   initChildProcess,
+  InputReader,
   readInput,
   sendFrame,
+  SERVE_ENV,
   type ChildInput,
   type ChildProcessOptions,
   type InputHeader,
@@ -44,6 +46,13 @@ import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
  * error frame (never a typed class: a fault the request did not catch is not its answer) and exits with code 1.
  * If one was sent already, the verdict stands and it only exits (0 when that frame was delivered). Nothing is lost
  * by exiting at once: the frame is already in the pipe, and stderr is best-effort diagnostics.
+ *
+ * A REUSED child (the parent set SERVE_ENV through the wrapper, see warm.ts) sends "ready" once, then answers request
+ * after request on the same stdin: steps 4 to 6 repeat, each with its own terminal frame, until the parent closes
+ * stdin (exit code 0) or kills the group. Nothing of one request's header, options or frames is kept for the next;
+ * the ripstream is built once per distinct `components` and reused. A fault outside a request's promise chain still
+ * ends the process, as above. The parent retires the child after any error frame, so the loop never has to decide
+ * whether it is still fit to serve.
  */
 
 /** What the child needs of a Ripstream. A structural subset, so tests can inject a fake pipeline. */
@@ -60,15 +69,23 @@ const FATAL_LABEL: Readonly<Record<FatalOrigin, string>> = {
 export interface ChildMainIo {
   initChildProcess(options?: ChildProcessOptions): void;
   readInput(): Promise<ChildInput>;
+  /** Whether this process serves several requests (SERVE_ENV is "1"). */
+  serving(): boolean;
+  /** A serving child's next request, or null once the parent closed stdin between two requests. */
+  nextInput(): Promise<ChildInput | null>;
   sendFrame(frame: object): void;
   /** Calls `handler` for every uncaught exception and unhandled rejection from now on (for the life of the process). */
   onFatal(handler: (reason: unknown, origin: FatalOrigin) => void): void;
   exit(code: number): void;
 }
 
+let processReader: InputReader | undefined;
+
 const PROCESS_IO: ChildMainIo = {
   initChildProcess,
   readInput,
+  serving: () => process.env[SERVE_ENV] === "1",
+  nextInput: () => (processReader ??= new InputReader(process.stdin)).next(),
   sendFrame,
   onFatal: (handler) => {
     process.on("uncaughtException", (error) => handler(error, "uncaughtException"));
@@ -80,8 +97,9 @@ const PROCESS_IO: ChildMainIo = {
 export interface ChildMainOptions {
   /**
    * The ripstream that parses, or a function that builds it from the header's `components` (undefined when the
-   * parent sent none). The child parses one document, so the function runs once. It runs after the input is read,
-   * inside the parse: a configuration it cannot build is an error frame, not a crash before the parent is told.
+   * parent sent none). A one-shot child parses one document, so the function runs once; a serving child calls it
+   * again only when `components` change. It runs after the input is read, inside the parse: a configuration it
+   * cannot build is an error frame, not a crash before the parent is told.
    */
   readonly ripstream: ChildRipstream | ((components: IsolatedComponents | undefined) => ChildRipstream);
   /** Passed to initChildProcess: JS-level stderr bytes let through before the rest is dropped. */
@@ -223,16 +241,21 @@ function armParseWatchdog(maxParseMillis: number | undefined): {
   return { expired, fired: () => fired, disarm: () => clearTimeout(timer) };
 }
 
-/** Runs one parse and answers over fd 3. Never rejects. */
-export async function runChildMain(options: ChildMainOptions): Promise<void> {
-  const io: ChildMainIo = { ...PROCESS_IO, ...options.io };
+/** One request's frame state: what the terminal-frame rule is checked against. */
+interface RequestState {
   // True from the moment a terminal frame is ATTEMPTED: if its write fails halfway, another frame would corrupt the
   // line, and the parent is gone anyway. Nothing is sent after it, whoever tries (a fault handler may have sent the
   // terminal frame while the main flow is still running).
-  let terminalAttempted = false;
-  let terminalDelivered = false;
+  terminalAttempted: boolean;
+  terminalDelivered: boolean;
+}
+
+/** Runs one parse (or, serving, one parse per request) and answers over fd 3. Never rejects. */
+export async function runChildMain(options: ChildMainOptions): Promise<void> {
+  const io: ChildMainIo = { ...PROCESS_IO, ...options.io };
+  let request: RequestState = { terminalAttempted: false, terminalDelivered: false };
   const requireOpen = (): void => {
-    if (terminalAttempted) throw new Error("a frame was about to be sent after the terminal frame");
+    if (request.terminalAttempted) throw new Error("a frame was about to be sent after the terminal frame");
   };
   const send = (frame: object): void => {
     requireOpen();
@@ -240,33 +263,37 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
   };
   const sendTerminal = (frame: object): void => {
     requireOpen();
-    terminalAttempted = true;
+    request.terminalAttempted = true;
     io.sendFrame(frame);
-    terminalDelivered = true;
+    request.terminalDelivered = true;
+  };
+  /** The error frame for `error`, unless a terminal frame was already attempted. False when fd 3 is gone. */
+  const answerError = (error: unknown): boolean => {
+    if (request.terminalAttempted) return request.terminalDelivered;
+    try {
+      sendTerminal(encodeChildError(error));
+      return true;
+    } catch {
+      // The parent closed fd 3 (it gave up, or it is gone): there is no one to tell.
+      return false;
+    }
+  };
+  let built: { readonly key: string; readonly ripstream: ChildRipstream } | undefined;
+  const ripstreamFor = (components: IsolatedComponents | undefined): ChildRipstream => {
+    if (typeof options.ripstream !== "function") return options.ripstream;
+    const key = JSON.stringify(components ?? null);
+    if (built?.key !== key) built = { key, ripstream: options.ripstream(components) };
+    return built.ripstream;
   };
 
-  try {
-    io.initChildProcess(options.stderrBudgetBytes === undefined ? {} : { stderrBudgetBytes: options.stderrBudgetBytes });
-    io.onFatal((reason, origin) => {
-      const verdictSent = terminalDelivered;
-      if (!terminalAttempted) {
-        try {
-          const crash = encodeCrashError(reason);
-          sendTerminal({ ...crash, message: oneLineText(`${FATAL_LABEL[origin]}: ${crash.message}`) });
-        } catch {
-          // fd 3 is gone: there is no one to tell.
-        }
-      }
-      io.exit(verdictSent ? 0 : 1);
-    });
-    send({ t: "ready", pid: process.pid });
-    const input = await io.readInput();
+  /** Parses `input` and sends its frames, ending with "done". Throws whatever the parse threw. */
+  const answer = async (input: ChildInput): Promise<void> => {
     const source = sourceFor(input);
     const parseOptions = parseOptionsFor(input.header);
 
     const watchdog = armParseWatchdog(input.header.maxParseMillis);
     try {
-      const ripstream = typeof options.ripstream === "function" ? options.ripstream(input.header.components) : options.ripstream;
+      const ripstream = ripstreamFor(input.header.components);
       if (input.header.output === "records") {
         const records = await Promise.race([ripstream.parseRecursive(source, parseOptions), watchdog.expired]);
         for (const record of records) {
@@ -293,7 +320,7 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
         for (const chunk of textChunks(result.text)) send({ t: "text", chunk });
       }
     } catch (error) {
-      if (watchdog.fired() && !terminalAttempted) {
+      if (watchdog.fired() && !request.terminalAttempted) {
         // The parse ignored core's timer and is still pending; it may hold handles (an open file, a socket) that
         // would keep this process alive. Answer, then leave instead of waiting for the parent's grace kill.
         try {
@@ -307,18 +334,54 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
       watchdog.disarm();
     }
     sendTerminal({ t: "done" });
-  } catch (error) {
-    if (!terminalAttempted) {
-      try {
-        sendTerminal(encodeChildError(error));
-      } catch {
-        // The parent closed fd 3 (it gave up, or it is gone): there is no one to tell.
+  };
+
+  let endedCleanly = false;
+  try {
+    io.initChildProcess(options.stderrBudgetBytes === undefined ? {} : { stderrBudgetBytes: options.stderrBudgetBytes });
+    io.onFatal((reason, origin) => {
+      const verdictSent = request.terminalDelivered;
+      if (!request.terminalAttempted) {
+        try {
+          const crash = encodeCrashError(reason);
+          sendTerminal({ ...crash, message: oneLineText(`${FATAL_LABEL[origin]}: ${crash.message}`) });
+        } catch {
+          // fd 3 is gone: there is no one to tell.
+        }
+      }
+      io.exit(verdictSent ? 0 : 1);
+    });
+    send({ t: "ready", pid: process.pid });
+    if (!io.serving()) {
+      await answer(await io.readInput());
+    } else {
+      for (;;) {
+        // A fresh state BEFORE reading: the parent writes a request only when it waits for an answer, so a message
+        // that cannot be read is answered with an error frame, like any failure of the request it carried.
+        request = { terminalAttempted: false, terminalDelivered: false };
+        const input = await io.nextInput();
+        if (input === null) {
+          endedCleanly = true;
+          break;
+        }
+        try {
+          await answer(input);
+        } catch (error) {
+          if (!answerError(error)) break;
+        }
+        if (!request.terminalDelivered) break;
       }
     }
+  } catch (error) {
+    answerError(error);
   }
-  if (!terminalDelivered) {
+  if (endedCleanly) {
+    process.exitCode = 0;
+    return;
+  }
+  if (!request.terminalDelivered) {
     // Nothing reached the parent, so this line (bounded by the stderr guard) is the only trace.
     process.stderr.write("ripstream child: the terminal frame could not be written to fd 3\n");
   }
-  process.exitCode = terminalDelivered ? 0 : 1;
+  process.exitCode = request.terminalDelivered ? 0 : 1;
 }

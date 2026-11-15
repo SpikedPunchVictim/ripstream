@@ -1,3 +1,4 @@
+import { SERVE_ENV } from "./child-io.ts";
 import { supportsAddressSpaceCap } from "./containment.ts";
 
 /**
@@ -74,6 +75,11 @@ export interface WrapperOptions {
    * send the child's spool files somewhere the disk budget does not look.
    */
   readonly tmpDir?: string;
+  /**
+   * The child serves request after request on one stdin (SERVE_ENV=1, see warm.ts) instead of exactly one. Omitted
+   * or false: the variable is absent and the command is the one-shot command, byte for byte.
+   */
+  readonly serve?: boolean;
 }
 
 export interface WrapperCommand {
@@ -172,7 +178,11 @@ function checkExecArgv(execArgv: readonly string[]): string[] {
   });
 }
 
-function buildEnv(parentEnv: Readonly<Record<string, string | undefined>>, tmpDir: string | undefined): Record<string, string> {
+function buildEnv(
+  parentEnv: Readonly<Record<string, string | undefined>>,
+  tmpDir: string | undefined,
+  serve: boolean,
+): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of ENV_ALLOWLIST) {
     const value = parentEnv[name];
@@ -180,6 +190,7 @@ function buildEnv(parentEnv: Readonly<Record<string, string | undefined>>, tmpDi
   }
   env.MALLOC_ARENA_MAX = "1";
   if (tmpDir !== undefined) env.TMPDIR = tmpDir;
+  if (serve) env[SERVE_ENV] = "1";
   return env;
 }
 
@@ -210,6 +221,6 @@ export function buildWrapperCommand(options: WrapperOptions): WrapperCommand {
       scriptPath,
       ...scriptArgs,
     ],
-    env: buildEnv(options.parentEnv ?? process.env, tmpDir),
+    env: buildEnv(options.parentEnv ?? process.env, tmpDir, options.serve === true),
   };
 }

@@ -10,7 +10,8 @@ import { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, HANDLER_TYPES, type HandlerType, t
  *
  *   [4 bytes: big-endian uint32 H][H bytes: UTF-8 JSON InputHeader][header.byteLength raw input bytes]
  *
- * then the parent closes stdin. For `{ path }` input `byteLength` is 0 and
+ * then the parent closes stdin (a reused child, SERVE_ENV, gets the next message
+ * instead, after its answer; see InputReader). For `{ path }` input `byteLength` is 0 and
  * `path` names a TRUSTED local file the child reads itself. The header is
  * parent-authored, so it is validated for shape but not treated as hostile;
  * the input bytes are hostile and are never interpreted here.
@@ -273,6 +274,18 @@ class ByteSource {
   }
 }
 
+/** One message: the length prefix, the header, then exactly `header.byteLength` bytes. */
+async function readMessage(source: ByteSource): Promise<ChildInput> {
+  const lengthBytes = await source.take(4, "header length");
+  const headerLength = new DataView(lengthBytes.buffer, lengthBytes.byteOffset, 4).getUint32(0, false);
+  if (headerLength > MAX_HEADER_BYTES) {
+    throw new RangeError(`input header is ${headerLength} bytes, the maximum is ${MAX_HEADER_BYTES}`);
+  }
+  const header = parseHeader(new TextDecoder("utf-8", { fatal: true }).decode(await source.take(headerLength, "header")));
+  const bytes = await source.take(header.byteLength, "input");
+  return { header, bytes };
+}
+
 /**
  * Reads one input message from `stdin` (default process.stdin). Resolves once
  * the stream ends after exactly the announced bytes; rejects on truncation,
@@ -281,17 +294,51 @@ class ByteSource {
 export async function readInput(stdin: AsyncIterable<Uint8Array> = process.stdin): Promise<ChildInput> {
   const source = new ByteSource(stdin);
   try {
-    const lengthBytes = await source.take(4, "header length");
-    const headerLength = new DataView(lengthBytes.buffer, lengthBytes.byteOffset, 4).getUint32(0, false);
-    if (headerLength > MAX_HEADER_BYTES) {
-      throw new RangeError(`input header is ${headerLength} bytes, the maximum is ${MAX_HEADER_BYTES}`);
-    }
-    const header = parseHeader(new TextDecoder("utf-8", { fatal: true }).decode(await source.take(headerLength, "header")));
-    const bytes = await source.take(header.byteLength, "input");
+    const input = await readMessage(source);
     if (await source.hasMore()) throw new Error("input has trailing bytes after the announced length");
-    return { header, bytes };
+    return input;
   } finally {
     await source.close();
+  }
+}
+
+/**
+ * The environment variable that makes a child serve several requests (warm.ts sets it through the wrapper; see
+ * runChildMain). Its absence is the one-shot protocol, unchanged.
+ */
+export const SERVE_ENV = "RIPSTREAM_CHILD_SERVE";
+
+/**
+ * Reads input messages one after another from a stream that stays open (a reused child, warm.ts). The parent writes
+ * the next message only after the previous answer, so nothing is ever read ahead of the request in hand.
+ */
+export class InputReader {
+  readonly #source: ByteSource;
+  #closed = false;
+
+  constructor(stdin: AsyncIterable<Uint8Array> = process.stdin) {
+    this.#source = new ByteSource(stdin);
+  }
+
+  /** The next message, or null when the stream ended cleanly between two messages. Rejects on truncation or a malformed header. */
+  async next(): Promise<ChildInput | null> {
+    if (this.#closed) return null;
+    try {
+      if (!(await this.#source.hasMore())) {
+        await this.close();
+        return null;
+      }
+      return await readMessage(this.#source);
+    } catch (error) {
+      await this.close();
+      throw error;
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.#closed) return;
+    this.#closed = true;
+    await this.#source.close();
   }
 }
 

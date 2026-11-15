@@ -26,7 +26,7 @@ import { clampTimerMs } from "./timers.ts";
 import { buildWrapperCommand } from "./wrapper.ts";
 
 /** How a frame-reader objection is recorded as the reason the child was killed. */
-const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>> = {
+export const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>> = {
   total_too_large: "result_cap",
   frame_too_large: "frame_cap",
   metadata_cap: "metadata_cap",
@@ -109,9 +109,9 @@ export const DEFAULT_GRACE_MS = 250;
 /** Bytes of child stderr read before the pipe is closed. */
 export const DEFAULT_STDERR_BUDGET_BYTES = 1024 * 1024;
 /** After 'exit' without a verdict: how long to wait for the pipes to drain. */
-const DRAIN_MS = 500;
+export const DRAIN_MS = 500;
 /** After a kill: how long to wait for the leader to be reaped before answering the caller anyway. */
-const REAP_WAIT_MS = 2000;
+export const REAP_WAIT_MS = 2000;
 
 type SpawnFn = (file: string, args: string[], options: SpawnOptions) => ChildProcess;
 
@@ -248,6 +248,40 @@ function earlyFailure(killReason: "abort" | "timeout", abortReason?: unknown): E
   const error = classifyExit(facts);
   if (error === null) throw new Error("unreachable: a kill reason always classifies to an error");
   return error;
+}
+
+/**
+ * The input header of one request (the child's whole view of it besides the bytes). Shared with warm.ts, so a reused
+ * child is told exactly what a fresh one would be. Throws TypeError for a `{ path }` input without a path.
+ */
+export function inputHeaderFor(
+  request: IsolatedParseRequest,
+  components: IsolatedComponents | undefined,
+  maxParseMillis: number | undefined,
+): InputHeader {
+  const inline = request.input instanceof Uint8Array;
+  if (!inline && (typeof request.input.path !== "string" || request.input.path.length === 0)) {
+    throw new TypeError("request.input.path must be a non-empty string");
+  }
+  return {
+    v: 1,
+    output: request.output ?? "text",
+    byteLength: inline ? request.input.length : 0,
+    ...(inline ? {} : { path: (request.input as { path: string }).path }),
+    ...(request.filename === undefined ? {} : { filename: request.filename }),
+    ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
+    ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
+    ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+    ...(request.recordFailures === true ? { recordFailures: true } : {}),
+    ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
+    ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
+    ...(request.emailHeaders === true ? { emailHeaders: true } : {}),
+    ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
+    ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
+    ...(request.segments === true ? { segments: true } : {}),
+    ...(components === undefined ? {} : { components }),
+    ...(maxParseMillis === undefined ? {} : { maxParseMillis }),
+  };
 }
 
 /** Starts one supervised child. Never throws: every failure is a rejection of `result`. */
@@ -431,30 +465,7 @@ class Supervision {
   }
 
   #header(): InputHeader {
-    const { request } = this.#options;
-    const inline = request.input instanceof Uint8Array;
-    if (!inline && (typeof request.input.path !== "string" || request.input.path.length === 0)) {
-      throw new TypeError("request.input.path must be a non-empty string");
-    }
-    return {
-      v: 1,
-      output: this.#output,
-      byteLength: inline ? request.input.length : 0,
-      ...(inline ? {} : { path: (request.input as { path: string }).path }),
-      ...(request.filename === undefined ? {} : { filename: request.filename }),
-      ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
-      ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
-      ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
-      ...(request.recordFailures === true ? { recordFailures: true } : {}),
-      ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
-      ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
-      ...(request.emailHeaders === true ? { emailHeaders: true } : {}),
-      ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
-      ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
-      ...(request.segments === true ? { segments: true } : {}),
-      ...(this.#options.components === undefined ? {} : { components: this.#options.components }),
-      ...(this.#options.maxParseMillis === undefined ? {} : { maxParseMillis: this.#options.maxParseMillis }),
-    };
+    return inputHeaderFor(this.#options.request, this.#options.components, this.#options.maxParseMillis);
   }
 
   #fd3(): Readable | null {

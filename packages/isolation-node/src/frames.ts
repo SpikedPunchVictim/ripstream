@@ -166,6 +166,7 @@ export class FrameReader {
   #frameCount = 0;
   #sawReady = false;
   #terminal: "done" | "error" | null = null;
+  #trailingBytes = false;
   #errorFrame: ErrorFrame | null = null;
   #violation: Extract<FrameEvent, { type: "violation" }> | null = null;
   // The result, folded as the frames arrive. Frame objects themselves are not kept.
@@ -251,12 +252,22 @@ export class FrameReader {
   }
 
   /**
+   * Whether any byte arrived after the terminal frame (the rest of its chunk, or a later push). They never change the
+   * verdict; a one-shot child is killed after its grace anyway, but a child kept for another request must have
+   * written nothing past its answer, or it is retired (warm.ts).
+   */
+  get trailingBytes(): boolean {
+    return this.#trailingBytes;
+  }
+
+  /**
    * Feeds bytes. Once a violation OR a terminal frame ("done" | "error") has been accepted, all further input is
    * ignored: the terminal verdict is final. Nothing after it can fail the stream, so nothing after it can discard
    * the result already folded (the supervisor acts on the terminal frame at once and group-kills the child once
    * its grace period is over, so bytes that arrive later are only noise).
    */
   push(chunk: Uint8Array): FrameEvent[] {
+    if (this.#terminal !== null && chunk.length > 0) this.#trailingBytes = true;
     if (this.#violation !== null || this.#terminal !== null) return [];
     const events: FrameEvent[] = [];
 
@@ -289,7 +300,11 @@ export class FrameReader {
       }
       this.#lineLength = 0;
       if (!this.#acceptLine(line, events)) return events;
-      if (this.#terminal !== null) return events; // the rest of this chunk, whatever it is, is ignored
+      if (this.#terminal !== null) {
+        // The rest of this chunk, whatever it is, is ignored. A reused child must not write past its answer.
+        if (newline + 1 < chunk.length) this.#trailingBytes = true;
+        return events;
+      }
       offset = newline + 1;
     }
 

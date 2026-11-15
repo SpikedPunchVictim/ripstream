@@ -26,6 +26,14 @@ import { clampTimerMs } from "./timers.ts";
  * Deadlines are RELATIVE milliseconds measured from the `acquire` call and
  * include queue wait. The lease reports the rest through `remainingMs()` so
  * the caller's run timer shares one budget.
+ *
+ * Reused children (warm.ts) keep their lease for their whole life, so an idle
+ * child's memory is never admitted twice. Two operations exist for them:
+ * `refund` gives back the part of a lease that a finished request no longer
+ * needs (the parent's result memory), and `tryCharge` takes it again for the
+ * next request only when that cannot jump the queue. Memory an idle child holds
+ * can be reclaimed: whenever a request has to wait, every registered reclaimer
+ * is told how much memory the queue lacks, and retires idle children to free it.
  */
 
 export interface Lease {
@@ -47,6 +55,11 @@ export interface AcquireOptions {
    * later it would be too late, the bytes are already materialised. Default 0.
    */
   readonly parentMb?: number;
+  /**
+   * Opaque marker for this request while it waits, returned by `headTag()` when it is at the head of the queue. Lets a
+   * runner that holds a reusable child recognise its own request there and hand it the child (warm.ts).
+   */
+  readonly tag?: object;
 }
 
 export interface PoolStats {
@@ -71,6 +84,13 @@ const systemClock: PoolClock = {
   setTimeout: (callback, ms) => setTimeout(callback, ms),
   clearTimeout: (handle) => clearTimeout(handle as NodeJS.Timeout),
 };
+
+/**
+ * Called when a request has to wait: `shortfallMb` is how much memory the queue (this request included) needs beyond
+ * what is free. A reclaimer frees memory only by ending what holds it (the lease is released when the holder is
+ * gone), never by releasing a lease whose memory is still in use.
+ */
+export type PoolReclaimer = (shortfallMb: number) => void;
 
 export interface MemoryPoolOptions {
   readonly poolMb: number;
@@ -131,6 +151,7 @@ class LeaseImpl implements Lease {
 
 interface Waiter {
   readonly sizeMb: number;
+  readonly tag: object | undefined;
   readonly deadlineAt: number | null;
   readonly signal: AbortSignal | undefined;
   readonly resolve: (lease: Lease) => void;
@@ -145,6 +166,7 @@ export class MemoryPool {
   readonly #overshootMb: number;
   readonly #maxQueue: number;
   readonly #queue: Waiter[] = [];
+  readonly #reclaimers = new Set<PoolReclaimer>();
   #reservedMb = 0;
   #running = 0;
   #disposed = false;
@@ -215,9 +237,10 @@ export class MemoryPool {
       return Promise.reject(new ParseTimeoutError("Parse timed out while waiting for memory"));
     }
 
-    return new Promise<Lease>((resolve, reject) => {
+    const lease = new Promise<Lease>((resolve, reject) => {
       const waiter: Waiter = {
         sizeMb,
+        tag: options.tag,
         deadlineAt,
         signal,
         resolve,
@@ -236,6 +259,8 @@ export class MemoryPool {
       }
       this.#queue.push(waiter);
     });
+    this.#reclaim();
+    return lease;
   }
 
   /**
@@ -266,6 +291,44 @@ export class MemoryPool {
     }
     lease.totalMb += extraMb;
     this.#reservedMb += extraMb;
+  }
+
+  /**
+   * Like `charge`, but it never jumps the queue: the memory is added only when nobody is waiting and it fits right
+   * now. Returns whether it was. For a reused child taking back, for its next request, the result memory its lease
+   * gave up (`refund`) when it went idle.
+   */
+  tryCharge(lease: Lease, extraMb: number): boolean {
+    requireInt("extraMb", extraMb, 0);
+    const owned = this.#owned(lease, "tryCharge");
+    if (this.#disposed || this.#queue.length > 0 || extraMb > this.#poolMb - this.#reservedMb) return false;
+    owned.totalMb += extraMb;
+    this.#reservedMb += extraMb;
+    return true;
+  }
+
+  /**
+   * Gives `mb` of a live lease back to the pool and admits the waiters it lets in. The lease stays held for the rest
+   * (a reused child going idle keeps its own memory and returns the result memory of the request it answered).
+   */
+  refund(lease: Lease, mb: number): void {
+    requireInt("mb", mb, 0);
+    const owned = this.#owned(lease, "refund");
+    if (mb > owned.totalMb) throw new RangeError(`refund: ${mb} MiB is more than the lease holds (${owned.totalMb} MiB)`);
+    owned.totalMb -= mb;
+    this.#reservedMb -= mb;
+    this.#drain();
+  }
+
+  /** The `tag` of the request at the head of the queue, or undefined (no waiter, or it gave none). */
+  headTag(): object | undefined {
+    return this.#queue[0]?.tag;
+  }
+
+  /** Registers `reclaimer` (see PoolReclaimer); returns the function that removes it. */
+  addReclaimer(reclaimer: PoolReclaimer): () => void {
+    this.#reclaimers.add(reclaimer);
+    return () => this.#reclaimers.delete(reclaimer);
   }
 
   /** MiB added to every reservation on top of the child's cap (see MemoryPoolOptions.overshootMb). */
@@ -301,6 +364,32 @@ export class MemoryPool {
     this.#reservedMb -= lease.totalMb;
     this.#running -= 1;
     this.#drain();
+  }
+
+  #owned(lease: Lease, operation: string): LeaseImpl {
+    if (!(lease instanceof LeaseImpl) || lease.pool !== this) {
+      throw new TypeError(`${operation}: lease does not belong to this pool`);
+    }
+    if (lease.released) throw new Error(`${operation}: lease is already released`);
+    return lease;
+  }
+
+  /**
+   * Tells the reclaimers how much the queue lacks. A reclaimer must not throw; one that does is reported as a process
+   * warning and skipped, because failing here would orphan the waiter just queued (its deadline still bounds it).
+   */
+  #reclaim(): void {
+    if (this.#reclaimers.size === 0) return;
+    const queuedMb = this.#queue.reduce((sum, waiter) => sum + waiter.sizeMb, 0);
+    const shortfallMb = queuedMb - (this.#poolMb - this.#reservedMb);
+    if (shortfallMb <= 0) return;
+    for (const reclaimer of [...this.#reclaimers]) {
+      try {
+        reclaimer(shortfallMb);
+      } catch (error) {
+        process.emitWarning(`ripstream memory pool reclaimer threw: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
   }
 
   #grant(sizeMb: number, deadlineAt: number | null): Lease {
