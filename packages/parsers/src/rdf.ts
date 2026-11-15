@@ -8,7 +8,7 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { Parser as N3Parser } from "n3";
+import { DataFactory, Parser as N3Parser } from "n3";
 
 const FORMATS: Record<string, string> = {
   "text/turtle": "text/turtle",
@@ -18,6 +18,20 @@ const FORMATS: Record<string, string> = {
   "application/trig": "application/trig",
   "text/n3": "text/n3",
 };
+
+/**
+ * A parser that numbers blank nodes for this parse alone. n3's own numbering is module state: the `b<N>_` prefix of
+ * labelled blank nodes counts the parsers created and the `n3-<N>` name of anonymous ones counts every anonymous node
+ * made, so the same document would print different labels depending on what the process parsed before, and those
+ * labels would tell one document how many blank nodes earlier documents had (tikajs-dasw).
+ */
+function documentScopedParser(format: string): N3Parser {
+  let anonymous = 0;
+  // An empty name is anonymous too, as in n3's own factory, which would otherwise number it from its module counter.
+  const blankNode = (name?: string) => DataFactory.blankNode(name === undefined || name === "" ? `n3-${anonymous++}` : name);
+  const factory = { ...DataFactory, blankNode };
+  return new N3Parser({ format, factory, blankNodePrefix: "b0_" });
+}
 
 /** RDF parsers backed by n3: Turtle, N-Triples/N-Quads, TriG, N3. */
 export class RdfParser implements Parser {
@@ -49,7 +63,7 @@ export class RdfParser implements Parser {
 
     let failure: Error | null = null;
     const lines: string[] = [];
-    const parser = new N3Parser({ format });
+    const parser = documentScopedParser(format);
     try {
       await new Promise<void>((resolve, reject) => {
         parser.parse(
