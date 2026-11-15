@@ -12,7 +12,7 @@ import type { Detector, Parser } from "./parser.ts";
 import { MediaType } from "./media-type.ts";
 import { StaticPasswordProvider, type PasswordProvider } from "./passwords.ts";
 import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
-import { createOutputHandler, type HandlerType } from "./handler-type.ts";
+import { assertHandlerType, createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
 import { ParseTimeoutError } from "./errors.ts";
 import { isEmbeddedCountLimit, noteEmbeddedLimit } from "./embedded.ts";
@@ -163,7 +163,7 @@ export class Ripstream {
   }
 
   async parse(source: InputSource, options: ParseOptions = {}): Promise<ParseResult> {
-    const type = options.handlerType ?? "text";
+    const type = assertHandlerType(options.handlerType);
     // `parse` filters to the body before the handler (see parseNoting), so a text handler gives a body handler's output
     // and a body handler would never see the body begin.
     const handler = createOutputHandler(type === "body" ? "text" : type);
@@ -362,7 +362,7 @@ export class Ripstream {
     if (options.segments !== undefined && typeof options.segments !== "boolean") {
       throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
     }
-    const handlerType = options.handlerType ?? "text";
+    const handlerType = assertHandlerType(options.handlerType);
     if (options.segments === true && handlerType !== "text" && handlerType !== "body") {
       throw new RangeError(`segments need a handlerType of "text" or "body", got "${handlerType}"`);
     }
@@ -374,7 +374,7 @@ export class Ripstream {
         recordFailures: recording,
         truncateOutput: options.onOutputLimit === "truncate",
         truncateEmbedded: options.onEmbeddedLimit === "truncate",
-        handlerType: options.handlerType ?? "text",
+        handlerType,
         ...(options.unpackBytes === undefined ? {} : { unpackBytes: options.unpackBytes }),
         segments: options.segments === true,
       });

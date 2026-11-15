@@ -24,6 +24,7 @@ import {
   WriteLimitReachedError,
   ZeroByteFileError,
   type ComponentEntry,
+  assertHandlerType,
   type DigestSettings,
   type HandlerType,
   type InputSource,
@@ -189,6 +190,7 @@ export function wireOptions(options: ParseOptions): WireParseOptions {
     throw new TypeError("the parse pool takes a password as a string: a PasswordProvider cannot cross to a worker thread");
   }
   const wire: Record<string, unknown> = {};
+  assertHandlerType(options.handlerType);
   for (const [name, how] of Object.entries(PARSE_OPTION_FIELDS)) {
     const value = (options as Record<string, unknown>)[name];
     if (how === "copied" && value !== undefined) wire[name] = value;

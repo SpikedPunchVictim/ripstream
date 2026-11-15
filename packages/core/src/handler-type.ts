@@ -19,6 +19,22 @@ export type HandlerType = "text" | "body" | "html" | "xml" | "markdown" | "ignor
 /** Every handler type, for validating one that arrives from outside. */
 export const HANDLER_TYPES: readonly HandlerType[] = ["text", "body", "html", "xml", "markdown", "ignore"];
 
+/**
+ * Checks a `handlerType` option that may have come from outside the type system (JSON, a CLI, a worker message). A
+ * missing value is `fallback`; a value that is not a string is a TypeError and a string that is not one of
+ * {@link HANDLER_TYPES} is a RangeError, both naming the allowed values.
+ */
+export function assertHandlerType(value: unknown, fallback: HandlerType = "text"): HandlerType {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string") {
+    throw new TypeError(`handlerType must be a string, one of ${HANDLER_TYPES.join(", ")}; got ${typeof value}`);
+  }
+  if (!(HANDLER_TYPES as readonly string[]).includes(value)) {
+    throw new RangeError(`handlerType must be one of ${HANDLER_TYPES.join(", ")}; got "${value}"`);
+  }
+  return value as HandlerType;
+}
+
 /** Every spelling Tika's `parseHandlerType` accepts, for messages. */
 export const HANDLER_TYPE_NAMES = "text, txt, html, xml, body, markdown, md, ignore";
 
@@ -28,6 +44,9 @@ export const HANDLER_TYPE_NAMES = "text, txt, html, xml, body, markdown, md, ign
  */
 export function parseHandlerType(name: string | null | undefined, fallback: HandlerType = "text"): HandlerType {
   if (name === null || name === undefined) return fallback;
+  if (typeof name !== "string") {
+    throw new TypeError(`handler type must be a string, got ${typeof name}`);
+  }
   switch (name.toLowerCase()) {
     case "text":
     case "txt":

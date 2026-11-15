@@ -8,6 +8,7 @@ import {
   Metadata,
   Ripstream,
   RipstreamInputStream,
+  assertHandlerType,
   handlerTypeName,
   parseHandlerType,
   rmetaObjects,
@@ -161,4 +162,31 @@ test("parseRecursive: a limit on html counts the markup's characters across the 
   assert.match(over[1]!.metadata.get("tk:exception:embedded-exception") ?? "", /^LimitExceededError: Recursive output exceeds 30/);
   const fits = await ripstream.parseRecursive(bytes, { handlerType: "html", limits: { maxOutputChars: 47 } });
   assert.equal(fits[1]!.metadata.get("tk:exception:embedded-exception"), null);
+});
+
+test("handlerType that is not a string is a TypeError and an unknown string a RangeError, naming the allowed values, at every entry point", async () => {
+  const allowed = /text, body, html, xml, markdown, ignore/;
+  for (const bad of [500, null, true, {}, ["text"]]) {
+    const options = { handlerType: bad as never };
+    await assert.rejects(ripstream.parse(bytes, options), (e: unknown) => e instanceof TypeError && allowed.test(e.message));
+    await assert.rejects(ripstream.parseToString(bytes, options), TypeError);
+    await assert.rejects(ripstream.parseRecursive(bytes, options), TypeError);
+  }
+  for (const bad of ["500", "txt", "TEXT", ""]) {
+    const options = { handlerType: bad as never };
+    await assert.rejects(ripstream.parse(bytes, options), (e: unknown) => e instanceof RangeError && allowed.test(e.message));
+    await assert.rejects(ripstream.parseToString(bytes, options), RangeError);
+    await assert.rejects(ripstream.parseRecursive(bytes, options), RangeError);
+  }
+});
+
+test("parseHandlerType: a name that is not a string is a TypeError, not a crash on toLowerCase", () => {
+  assert.throws(() => parseHandlerType(500 as never), TypeError);
+  assert.throws(() => parseHandlerType({} as never), TypeError);
+});
+
+test("assertHandlerType: the canonical names pass, a missing one is the fallback", () => {
+  for (const type of ["text", "body", "html", "xml", "markdown", "ignore"] as const) assert.equal(assertHandlerType(type), type);
+  assert.equal(assertHandlerType(undefined), "text");
+  assert.equal(assertHandlerType(undefined, "html"), "html");
 });

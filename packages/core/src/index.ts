@@ -271,6 +271,7 @@ export { OutputLimitContentHandler } from "./handlers/limits.ts";
 export { MarkdownContentHandler } from "./handlers/markdown.ts";
 export {
   HANDLER_TYPES,
+  assertHandlerType,
   HANDLER_TYPE_NAMES,
   createOutputHandler,
   handlerTypeName,

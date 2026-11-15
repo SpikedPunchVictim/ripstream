@@ -3,6 +3,7 @@ import { test } from "node:test";
 import * as core from "@spikedpunch/ripstream-core";
 import {
   AbortError,
+  AdmissionRefusedError,
   IsolationError,
   MalformedDocumentError,
   MediaType,
@@ -40,6 +41,13 @@ test("every Error class core exports is one the codec builds again", () => {
   const classes = Object.entries(core).filter(([, value]) => typeof value === "function" && value.prototype instanceof Error);
   assert.ok(classes.length >= 21, `core exports ${classes.length} Error classes`);
   assert.deepEqual(classes.filter(([, value]) => !known.has(value)).map(([name]) => name), []);
+});
+
+test("a pool refusal crosses as itself, not as the limit it extends", () => {
+  const decoded = roundTrip(new AdmissionRefusedError("Admission refused: needs 10146 MiB")) as AdmissionRefusedError;
+  assert.ok(decoded instanceof AdmissionRefusedError);
+  assert.equal(decoded.code, "ADMISSION_REFUSED");
+  assert.equal(decoded.name, "AdmissionRefusedError");
 });
 
 test("an error crosses as its class, with its name, message, fields, stack and cause", () => {
@@ -209,6 +217,12 @@ test("parse options cross without the signal; a password must be a string", () =
     onDocumentFailure: "record",
   });
   assert.throws(() => wireOptions({ password: (() => "x") as never }), TypeError);
+});
+
+test("a handlerType that is not a handler type is refused before it crosses", () => {
+  assert.deepEqual(wireOptions({ handlerType: "html" }), { handlerType: "html" });
+  assert.throws(() => wireOptions({ handlerType: 500 as never }), TypeError);
+  assert.throws(() => wireOptions({ handlerType: "500" as never }), /handlerType must be one of text, body, html, xml, markdown, ignore/);
 });
 
 test("onEmbeddedLimit and emailHeaders cross to a worker", () => {

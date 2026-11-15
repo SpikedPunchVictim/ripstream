@@ -2,7 +2,7 @@ import type { InputSource } from "./content-handler.ts";
 import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
 import type { IsolatedException, IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
-import type { HandlerType } from "./handler-type.ts";
+import { assertHandlerType, type HandlerType } from "./handler-type.ts";
 import type { ParseRecord } from "./recursive.ts";
 import type { Segment } from "./segments.ts";
 import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
@@ -95,6 +95,7 @@ function toRequest(
   if (options.segments !== undefined && typeof options.segments !== "boolean") {
     throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
   }
+  const handlerType = options.handlerType === undefined ? undefined : assertHandlerType(options.handlerType);
   if (options.emailHeaders !== undefined && typeof options.emailHeaders !== "boolean") {
     throw new TypeError(`emailHeaders must be a boolean, got ${typeof options.emailHeaders}`);
   }
@@ -110,7 +111,7 @@ function toRequest(
     ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
     ...(options.onEmbeddedLimit === "truncate" ? { truncateEmbedded: true } : {}),
     ...(options.emailHeaders === true ? { emailHeaders: true } : {}),
-    ...(options.handlerType === undefined ? {} : { handlerType: options.handlerType }),
+    ...(handlerType === undefined ? {} : { handlerType }),
     // Only a records answer has records to hang bytes on.
     ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),
     ...(options.segments === true && output === "records" ? { segments: true } : {}),

@@ -18,7 +18,7 @@ import type { Parser } from "./parser.ts";
 import type { RipstreamInputStream } from "./ripstream-input-stream.ts";
 import { ContentHandlerDecorator } from "./content-handler.ts";
 import { TeeContentHandler } from "./handlers/tee.ts";
-import { createOutputHandler, type HandlerType } from "./handler-type.ts";
+import { assertHandlerType, createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { markParseTiming } from "./rmeta.ts";
 import { SegmentTap, type Segment } from "./segments.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
@@ -121,7 +121,7 @@ export class RecursiveParserWrapper implements Parser {
     this.recordFailures = options.recordFailures ?? false;
     this.truncateOutput = options.truncateOutput ?? false;
     this.truncateEmbedded = options.truncateEmbedded ?? false;
-    this.handlerType = options.handlerType ?? "text";
+    this.handlerType = assertHandlerType(options.handlerType);
     this.unpackBytes = options.unpackBytes;
     this.segments = options.segments ?? false;
     if (this.segments && this.handlerType !== "text" && this.handlerType !== "body") {

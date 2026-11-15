@@ -124,6 +124,15 @@ test("parse and parseRecursive: emailHeaders crosses in the request, false sends
   );
 });
 
+test("parse and parseRecursive: a handlerType that is not a handler type is refused with a typed error, nothing sent", async () => {
+  const fake = fakeIsolator(TEXT);
+  const isolated = createIsolatedRipstream({ isolator: fake.isolator, detector });
+  await assert.rejects(isolated.parse(new Uint8Array(1), { handlerType: 500 as never }), TypeError);
+  await assert.rejects(isolated.parse(new Uint8Array(1), { handlerType: "500" as never }), RangeError);
+  await assert.rejects(isolated.parseRecursive(new Uint8Array(1), { handlerType: "500" as never }), RangeError);
+  assert.equal(fake.calls.length, 0);
+});
+
 test("parse and parseRecursive: handlerType crosses in the request, and the records come back stamped with it", async () => {
   const text = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { handlerType: "markdown" });
