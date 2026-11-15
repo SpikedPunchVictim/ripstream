@@ -109,6 +109,13 @@ export class HtmlDocumentParser implements Parser {
     let titleDone = false;
     let svgDepth = 0;
     let title = "";
+    // HTML5 does not close the body or the html element at their end tags: text and elements that follow still belong to
+    // the body, and a second <html> or <body> only merges into the first. Their end events are written once the input ends.
+    let htmlOpen = false;
+    let bodyOpen = false;
+    // Tika drops the whitespace-only text that follows an end of the body or html element, up to the first element or text
+    // with a character in it (measured on 4.2.0: "</body>\n</html>\n" adds nothing, "</html>\n<p>y</p>" starts at the p).
+    let afterEnd = false;
 
     const parser = new HtmlParser(
       {
@@ -119,6 +126,8 @@ export class HtmlDocumentParser implements Parser {
             return;
           }
           if (suppressed > 0) return;
+          if ((name === "html" && htmlOpen) || (name === "body" && bodyOpen)) return;
+          afterEnd = false;
           if (++depth > maxDepth) {
             throw new LimitExceededError(
               `HTML nesting exceeds ${maxDepth} open elements`,
@@ -132,6 +141,8 @@ export class HtmlDocumentParser implements Parser {
             return;
           }
           if (!HEAD_ELEMENTS.has(name)) bodyStarted = true;
+          if (name === "html") htmlOpen = true;
+          if (name === "body") bodyOpen = true;
 
           const atts = new AttributesImpl();
           for (const [key, value] of Object.entries(attributes)) {
@@ -148,9 +159,10 @@ export class HtmlDocumentParser implements Parser {
           if (inHeadTitle) return;
           // Whitespace between the head's elements is the head's, not body text (the first character would open the body).
           if (text.trim().length === 0) {
-            if (!bodyStarted) return;
+            if (!bodyStarted || afterEnd) return;
           } else {
             bodyStarted = true;
+            afterEnd = false;
           }
           events.push({ type: "text", text });
         },
@@ -160,6 +172,10 @@ export class HtmlDocumentParser implements Parser {
             return;
           }
           if (suppressed > 0) return;
+          if ((name === "html" && htmlOpen) || (name === "body" && bodyOpen)) {
+            afterEnd = true;
+            return;
+          }
           depth = Math.max(0, depth - 1);
           if (name === "svg") svgDepth = Math.max(0, svgDepth - 1);
           if (name === "title" && inTitle) {
@@ -195,6 +211,8 @@ export class HtmlDocumentParser implements Parser {
       await drain(events, xhtml, tick);
     }
     parser.end();
+    if (bodyOpen) events.push({ type: "close", name: "body" });
+    if (htmlOpen) events.push({ type: "close", name: "html" });
     await drain(events, xhtml, tick);
 
     await xhtml.endDocument();

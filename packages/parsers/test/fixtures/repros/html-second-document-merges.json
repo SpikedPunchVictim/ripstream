@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) A second <html><body> is merged into the first, as HTML5 does (Tika 4.2.0: \"onetwo\"); a stray </html></html> then text is kept (\"onethree\").",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body>one</body></html><html><body>two</body></html></html>three",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "onetwothree"
+    }
+  ]
+}

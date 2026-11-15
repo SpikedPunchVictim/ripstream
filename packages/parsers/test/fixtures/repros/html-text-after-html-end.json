@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) Text after </html> is body text: Tika 4.2.0 (body handler) gives \"inside words\\n\\nFrom trailing words after html\\n\".",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body>inside words</body></html>\n\nFrom trailing words after html\n",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "inside words\n\nFrom trailing words after html\n"
+    }
+  ]
+}

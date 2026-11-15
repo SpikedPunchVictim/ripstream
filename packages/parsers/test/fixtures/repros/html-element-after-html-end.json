@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) An element and text after </html> are body content (Tika 4.2.0: \"inside\\ntail para\\n more\").",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body><p>inside</p></body></html><p>tail para</p> more",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "inside\ntail para\n more"
+    }
+  ]
+}

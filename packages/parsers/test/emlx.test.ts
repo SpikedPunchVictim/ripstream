@@ -93,7 +93,8 @@ test("a count that does not land on the plist is not trusted: the message is not
     const result = await parseWithMailParser(bytes);
     assert.equal(result.metadata.get("dc:title"), "Trial balance", `count ${bad}`);
     assert.match(result.text, /The trial balance is ready for review\./, `count ${bad}`);
-    assert.ok(!result.text.includes(padded(bad).trim() + "\n"), `count ${bad}: the count line is dropped`);
+    // The plist text after </html> is body text (Tika 4.2.0 keeps it), so look for the count as a line of its own.
+    assert.ok(!result.text.split("\n").includes(padded(bad).trim()), `count ${bad}: the count line is dropped`);
   }
 });
 

@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) Whitespace-only text after </body> or </html>, before the first element or text, is dropped (Tika 4.2.0: \"x\\n\" for </body>\\n</html>\\n).",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body><p>x</p></body>\n</html>\n",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "x\n"
+    }
+  ]
+}

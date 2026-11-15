@@ -4,6 +4,21 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### XML: a UTF-16 document that declares another encoding is plain text (`tikajs-5tjh`)
+
+Fixed in detection: a UTF-16 document (byte order mark) whose declaration says `encoding="UTF-8"` has no readable root to Tika 4.2.0
+(Xerces re-reads the rest of the bytes as UTF-8), so it is `text/plain` and the text is the decoded markup; ripstream decoded it
+by the mark and parsed it as XML. `encoding="UTF-16"` is still `application/xml`. Under an `.xml` name Tika's XML parser fails on
+such a file and ripstream still reads it by the mark.
+
+### HTML: text after the end of the body or html element is body text (`tikajs-ftl1`)
+
+Fixed: `</body>` and `</html>` no longer close the page, as in HTML5 and Tika's parser: text and elements after them are body
+text (`inside words</body></html>\n\nFrom trailing words` kept its second paragraph; before it was dropped), a second `<html>` or
+`<body>` merges into the first, and whitespace-only text between the end tags and the first element or text is dropped, so a
+page ending `</body>\n</html>\n` gives what it gave. Measured on Tika 4.2.0 over 20 variants. An emlx whose byte count is wrong
+now keeps the plist text after `</html>`, as Tika does.
+
 ### Segment fidelity: xls rows, setext headings, repeated shape names (`tikajs-57wb`)
 
 Changed, with segments on only (text and metadata are untouched): an xls's rows now carry the sheet's own numbers, so an

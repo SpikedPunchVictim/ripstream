@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) After </html> the leading whitespace is dropped and later whitespace kept (Tika 4.2.0: \"x\\ny\\n\\n z\\n\\n\").",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body><p>x</p></body>\n</html>\n <p>y</p>\n <p>z</p>\n",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "x\ny\n\n z\n\n"
+    }
+  ]
+}

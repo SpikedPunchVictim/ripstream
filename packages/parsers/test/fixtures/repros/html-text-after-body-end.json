@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-ftl1) Text between </body> and </html> is body text (Tika 4.2.0: \"inside\\nafter body\").",
+  "tags": [
+    "html",
+    "repro"
+  ],
+  "input": {
+    "text": "<html><body><p>inside</p></body>after body</html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "inside\nafter body"
+    }
+  ]
+}
