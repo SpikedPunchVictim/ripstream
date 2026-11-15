@@ -506,6 +506,18 @@ queued goes to the request at the head of the queue (when it is of the same doma
 so the head gets its memory. The queue stays first in, first out. A request that can never fit the pool gets the same
 message as without reuse.
 
+### What is left
+
+- A reused child that dies after it was checked out and before it reads the request fails that request; it is not
+  retried on a fresh child (`tikajs-krih`). An idle child that dies is retired on its exit event, so the death has to
+  land in that instant.
+- CPU a child spends while idle counts toward its next request. An idle child does nothing unless a parser left work
+  behind, which is why it is counted, but the next request then pays for it.
+- The audit and the marker test cover the parsers and fixtures named above, not every path of every parser. What they
+  miss can only live in the heap or module state, which only a new process clears: hence `maxRequests` and the domains.
+- On macOS the CPU and RSS reads start `ps`: about 2 ms per request for the CPU read, and about 50 ms for an RSS sample
+  every `rssSampleEvery` requests.
+
 ### Measured
 
 `packages/isolation-node/test/bench/warm.mjs` (needs `pnpm build`), darwin/arm64, 12 CPUs, Node 24.18.0. Corpus: the
