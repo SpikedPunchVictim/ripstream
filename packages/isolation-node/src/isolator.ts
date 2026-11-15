@@ -3,6 +3,7 @@ import { totalmem } from "node:os";
 import { isAbsolute } from "node:path";
 import {
   AbortError,
+  AdmissionRefusedError,
   DEFAULT_LIMITS,
   HANDLER_TYPES,
   IsolationError,
@@ -464,9 +465,12 @@ class NodeIsolatorImpl implements NodeIsolator {
     const resultMb = parentResultMbFor(limits);
     const needMb = limits.perChildMb + overshootMb + resultMb;
     if (needMb > poolMb) {
-      throw new LimitExceededError(
-        `A ${limits.output} request with maxOutputChars ${limits.maxOutputChars} and maxEmbeddedResources ` +
-          `${limits.maxEmbeddedResources} (the defaults unless the caller set them) needs ${needMb} MiB ` +
+      // The wording avoids the names of the limits a parse itself can hit (output, entries, embedded...): a consumer
+      // that classifies failures by matching the message must not read a pool refusal as one of them (tikajs-b3wp).
+      throw new AdmissionRefusedError(
+        `Admission refused: a ${limits.output} request${limits.segments === undefined ? "" : " with segments"} allowing ` +
+          `${limits.maxOutputChars} characters and ${limits.maxEmbeddedResources} nested documents (the defaults unless ` +
+          `the caller set them) needs ${needMb} MiB ` +
           `(${limits.perChildMb} per child + ${overshootMb} overshoot + ${resultMb} for the parent to hold the result), ` +
           `more than the whole memory pool of ${poolMb} MiB. Lower the caps or enlarge the pool`,
       );

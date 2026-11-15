@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { IsolationError, LimitExceededError, MediaType, Metadata } from "@spikedpunch/ripstream-core";
+import { AdmissionRefusedError, IsolationError, LimitExceededError, MediaType, Metadata } from "@spikedpunch/ripstream-core";
 import { main, type CliDeps, type CliIO } from "../src/main.ts";
 
 function io(input = ""): CliIO & { out: string[]; err: string[] } {
@@ -329,6 +329,17 @@ test("the isolation is disposed when the parse fails", async () => {
   assert.equal(await main(["--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 3);
   assert.match(sink.err.join(""), /too much text/);
   assert.equal(log.disposed, 1);
+});
+
+test("a pool refusal exits as bad input data, like the limit it extends, and its message says it is a refusal", async () => {
+  const { createIsolation } = fakeIsolation({
+    parse: async () => {
+      throw new AdmissionRefusedError("Admission refused: needs 10146 MiB");
+    },
+  });
+  const sink = io("x");
+  assert.equal(await main(["--isolation", "strict", "-"], sink, { env: {}, createIsolation }), 3);
+  assert.match(sink.err.join(""), /Admission refused/);
 });
 
 test("strict isolation that cannot start is an environment failure, never an in-process parse", async () => {

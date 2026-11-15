@@ -6,6 +6,7 @@ export type RipstreamErrorCode =
   | "PARSE_TIMEOUT"
   | "REQUEST_TOO_LARGE"
   | "LIMIT_EXCEEDED"
+  | "ADMISSION_REFUSED"
   | "MISSING_DEPENDENCY"
   | "RANDOM_ACCESS_UNAVAILABLE"
   | "PARSER_DECLINED"
@@ -86,6 +87,16 @@ export class LimitExceededError extends RipstreamError {
   constructor(message: string, options: { cause?: unknown } = {}) {
     super("LIMIT_EXCEEDED", message, { ...options, recoverable: true });
   }
+}
+
+/**
+ * The isolation memory pool refused a request that could never fit it: the caps the request carries (or defaults to)
+ * reserve more than the whole pool. It is about the deployment and the caps, not the document, and not any one limit
+ * the parse hit, so it has its own code and name; it is still a LimitExceededError (exit 3, 422, PAYLOAD_LIMIT_EXCEEDED
+ * keep applying). Raised in the parent: it never crosses the child boundary.
+ */
+export class AdmissionRefusedError extends LimitExceededError {
+  override readonly code: RipstreamErrorCode = "ADMISSION_REFUSED";
 }
 
 export class MissingDependencyError extends RipstreamError {
@@ -177,6 +188,7 @@ export function httpStatusForError(error: unknown): number {
     case "ENCRYPTED_DOCUMENT":
     case "MALFORMED_DOCUMENT":
     case "LIMIT_EXCEEDED":
+    case "ADMISSION_REFUSED":
       return 422;
     case "WRITE_LIMIT_REACHED":
     case "EMPTY_DOCUMENT":

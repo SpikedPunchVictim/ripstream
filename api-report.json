@@ -3,6 +3,7 @@
   "packages": {
     "bundle-standard": [
       "AbortError",
+      "AdmissionRefusedError",
       "AnpaParser",
       "AppleSingleParser",
       "ArParser",
@@ -521,6 +522,7 @@
     ],
     "core": [
       "AbortError",
+      "AdmissionRefusedError",
       "AsyncClosable",
       "Attribute",
       "Attributes",

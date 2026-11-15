@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AbortError,
+  AdmissionRefusedError,
   EncryptedDocumentError,
   IsolationError,
   LimitExceededError,
@@ -24,6 +25,7 @@ test("errors carry stable codes and names", () => {
     [new ParseTimeoutError(), "PARSE_TIMEOUT"],
     [new RequestTooLargeError(), "REQUEST_TOO_LARGE"],
     [new LimitExceededError("too much"), "LIMIT_EXCEEDED"],
+    [new AdmissionRefusedError("pool too small"), "ADMISSION_REFUSED"],
     [new MissingDependencyError("pdfjs-dist", "PDF"), "MISSING_DEPENDENCY"],
     [new AbortError(), "ABORTED"],
     [new IsolationError("crash", "child died"), "ISOLATION_FAILED"],
@@ -44,6 +46,15 @@ test("maps errors to server status codes", () => {
   assert.equal(httpStatusForError(new ParseTimeoutError()), 408);
   assert.equal(httpStatusForError(new RequestTooLargeError()), 413);
   assert.equal(httpStatusForError(new Error("plain")), 500);
+});
+
+test("a pool refusal is told apart from a limit by name and code, and still maps as a limit", () => {
+  const error = new AdmissionRefusedError("pool too small");
+  assert.equal(error.name, "AdmissionRefusedError");
+  assert.notEqual(error.code, new LimitExceededError("x").code);
+  assert.ok(error instanceof LimitExceededError);
+  assert.equal(error.recoverable, true);
+  assert.equal(httpStatusForError(error), 422);
 });
 
 test("missing dependency error names the package and capability", () => {

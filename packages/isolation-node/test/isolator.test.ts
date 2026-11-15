@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { after, test } from "node:test";
 import {
   AbortError,
+  AdmissionRefusedError,
   DEFAULT_LIMITS,
   IsolationError,
   LimitExceededError,
@@ -835,7 +836,7 @@ test("a pool too small for the request names every part of the reservation and w
   await assert.rejects(
     isolator.isolate({ input: bytes("a"), output: "records", maxOutputChars: 52_428_800 }),
     (error: unknown) =>
-      error instanceof LimitExceededError &&
+      error instanceof AdmissionRefusedError &&
       /needs 3292 MiB \(1536 per child \+ 1024 overshoot \+ 732 for the parent to hold the result\)/.test(error.message) &&
       /memory pool of 3200 MiB\. Lower the caps or enlarge the pool/.test(error.message),
   );
@@ -844,6 +845,27 @@ test("a pool too small for the request names every part of the reservation and w
   const fits = new MemoryPool({ poolMb: 3584, overshootMb: 1024, maxQueue: 0 });
   const ok = setup({ pool: fits, config: { mode: "strict" }, childArgs: ["records"] });
   assert.equal((await (await ok.create()).isolate({ input: bytes("a"), output: "records", maxOutputChars: 52_428_800 })).kind, "records");
+});
+
+test("a pool refusal is its own class and its message names none of the words other limits use (tikajs-b3wp)", async () => {
+  const small = new MemoryPool({ poolMb: 3200, overshootMb: 1024, maxQueue: 0 });
+  const isolator = await setup({ pool: small, config: { mode: "strict" }, childArgs: ["records"] }).create();
+  // A consumer that classifies a failure by matching its message must not read a pool refusal as any of these.
+  const otherLimits = /password|timeout|entries|ratio|expanded|bomb|inflate|output|write-limit|maxoutput|malformed|corrupt|invalid|unexpected|truncated|embedded|unavailable/i;
+  for (const request of [
+    { output: "records" as const, maxOutputChars: 52_428_800 },
+    { output: "records" as const, maxOutputChars: 52_428_800, segments: true as const },
+  ]) {
+    await assert.rejects(isolator.isolate({ input: bytes("a"), ...request }), (error: unknown) => {
+      assert.ok(error instanceof AdmissionRefusedError, String(error));
+      assert.equal(error.name, "AdmissionRefusedError");
+      assert.equal(error.code, "ADMISSION_REFUSED");
+      assert.ok(error instanceof LimitExceededError, "still a limit for the exit code, the HTTP status and pipes");
+      assert.doesNotMatch(error.message, otherLimits);
+      assert.match(error.message, /\d+ per child \+ \d+ overshoot \+ \d+ for the parent to hold the result/);
+      return true;
+    });
+  }
 });
 
 test("components too large for the request header are refused when the isolator is built, not on every request", async () => {

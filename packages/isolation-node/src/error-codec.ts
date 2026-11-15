@@ -97,6 +97,8 @@ const CROSSINGS: Readonly<Record<RipstreamErrorCode, Crossing | null>> = {
   TRANSLATION_FAILED: null, // thrown only by the separate language package
   // Needs a numeric limit, and only WriteOutContentHandler throws it; the isolated pipeline installs none.
   WRITE_LIMIT_REACHED: null,
+  // Raised by the parent's own admission check; a child that sends one is not ours.
+  ADMISSION_REFUSED: null,
   // Infrastructure. A child must not be able to mint queue_full / unavailable, which callers treat specially.
   ISOLATION_FAILED: null,
 };

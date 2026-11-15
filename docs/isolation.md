@@ -250,7 +250,7 @@ The consequence is a cliff: **a pool below 2729 MiB cannot run one child.** In p
 raise the limit, or lower `perChildMb` and `heapMb` and accept a smaller budget per document.
 
 Between 2729 and 3042 MiB the pool runs text requests (`/tika`, `/meta`) but cannot hold a recursive one (`/rmeta`,
-`/unpack`, `--recursive`): those that reach a child are refused with 422 ("more than the whole memory pool"), which
+`/unpack`, `--recursive`): those that reach a child are refused with 422 (`AdmissionRefusedError`, "more than the whole memory pool"), which
 describes the deployment and not the document. The isolator logs a WARN at startup when that is the case. Size the
 pool to at least 3042 MiB to serve recursive requests; `/unpack` reserves a little more for the bytes it carries
 (see its budget, below).
@@ -324,12 +324,17 @@ peak above baseline, before / after): ASCII 210 / 152 MiB, characters above U+00
 306 / 171, control characters (6 wire bytes each) 903 / 168. After the change records and text cost the same, 2.9 - 5.2
 bytes a character, 5 is the factor.
 
-A request that does not fit the pool is a `LimitExceededError` (422 from the server) that gives each part:
+A request that does not fit the pool is an `AdmissionRefusedError` (code `ADMISSION_REFUSED`, 422 from the server, exit
+3 from the CLI, `PAYLOAD_LIMIT_EXCEEDED` in pipes). It extends `LimitExceededError`, so code that catches that keeps
+working, and it has its own name and code so a consumer can tell it from a limit the parse itself hit (output,
+entries, nested documents) and from a crash. Its message gives each part and, on purpose, uses none of the words those
+limits use (`output`, `entries`, `embedded`, `ratio`, `timeout`, `corrupt`...), so a classifier that matches messages
+does not mistake it for one:
 
 ```
-A records request with maxOutputChars 52428800 and maxEmbeddedResources 1000 (the defaults unless the caller set them)
-needs 3196 MiB (1536 per child + 1024 overshoot + 636 for the parent to hold the result), more than the whole memory
-pool of 3200 MiB. Lower the caps or enlarge the pool
+Admission refused: a records request allowing 52428800 characters and 1000 nested documents (the defaults unless the
+caller set them) needs 3196 MiB (1536 per child + 1024 overshoot + 636 for the parent to hold the result), more than
+the whole memory pool of 3200 MiB. Lower the caps or enlarge the pool
 ```
 
 To fit a small container, lower `maxOutputChars` (each million characters costs about 5 MiB of reservation), or
