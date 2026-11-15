@@ -16,3 +16,18 @@ The CLI's split bundle (`pnpm build:bundle`, [cli-startup.md](cli-startup.md)) i
 already counts, so it has its own `cli-bundle` line, in KiB of `packages/cli/bundle/dist`, and is not part of `total`. It
 is checked when the bundle has been built; CI builds it first. Its cap is the measured size (4,414 KiB) plus about ten
 percent; raise it with the feature that grows it, as for a package.
+
+## Cap raises
+
+Each raise names the features that grew the package. Measured sizes are `dist` bytes at the raise; caps are the
+measured size plus about five percent (KiB).
+
+| package | measured | cap | what grew it |
+|---|---|---|---|
+| core | 1,604,924 | 1650 (was 1500) | segments, labels, location, `pathParts`, `leafSegments` and the segment allowance; `onEmbeddedLimit`; email header block; `handlerType` validation |
+| parser-office | 692,687 | 710 (was 650) | segment hints for office formats; email headers; RDF blank-node labels |
+| parser-pdf | 335,430 | 345 (was 150) | brute-force damaged-file recovery (xref and page-tree rebuild, font repair, Flate salvage), image-only page keys, key repair, pdf.js import filter. Roughly doubled by design |
+| cli | 120,674 | 125 (was 100) | split bundle stub, `--segments`, `--workers`, `--isolation-reuse*` |
+| pipes | 649,129 | 665 (was 550) | the parse worker pool and its codec, segments in the emit surface |
+| isolation-node | 692,882 | 710 (was 550) | opt-in child reuse (serve-mode protocol, leases, retire reasons, CPU and RSS checks), segment frames, admission refusal |
+| total | 7,301,192 | 7500 (was 7000) | the sum of the above |
