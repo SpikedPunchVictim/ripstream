@@ -278,3 +278,16 @@ test("diagnosePdf reads an xref table that is one long run of digits in linear t
     assert.ok(performance.now() - started < 5000, "reading the table took too long");
   }
 });
+
+test("rebuildPdf writes one xref subsection per run of object numbers, so a high object number costs a line, not a table (tikajs-gf8w)", () => {
+  const objects = onePageObjects("Hello");
+  const text = "%PDF-1.4\n" + objects.map((object, index) => `${index + 1} 0 obj\n${object}\nendobj\n`).join("") + "8388607 0 obj\n<< >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n";
+  const rebuilt = rebuildPdf(bytes(text));
+  assert.notEqual(rebuilt, null);
+  // The dense table was one 20-byte line for each of the 8,388,607 numbers: about 168 MB for this 434-byte file.
+  assert.ok(rebuilt!.data.length < 10_000, `rebuilt file is ${rebuilt!.data.length} bytes`);
+  const out = latin1(rebuilt!.data);
+  assert.match(out, /xref\n0 6\n0000000000 65535 f \n(?:\d{10} \d{5} n \n){5}8388607 1\n\d{10} 00000 n \ntrailer\n<< \/Size 8388608 /);
+  const entry = /8388607 1\n(\d{10}) /.exec(out)!;
+  assert.ok(out.startsWith("8388607 0 obj", Number(entry[1])));
+});

@@ -22,6 +22,13 @@ synchronously, before pdf.js and out of reach of the page timeout (an 80 KB file
 four times more). Numbers are now at most ten digits and are not matched from inside a longer run (80 KB: 74 ms), and
 the 2 MB cap on the table text applies whether or not a `trailer` keyword follows.
 
+### Bug hunt at 9a828fc: PDF rebuild xref size (`tikajs-gf8w`, F16)
+
+Fixed: the rebuilt file's xref table had a 20-byte line for every object number up to the largest, so a 434-byte file
+defining object 8388607 (allowed by the preflight) was rebuilt as a 168 MB file and used 1.1 GB. The table is now written
+as one subsection per run of consecutive numbers; a file with contiguous numbering gets the same table as before (434
+bytes: 83 ms, 131 MB).
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

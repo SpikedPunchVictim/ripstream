@@ -152,10 +152,21 @@ export function rebuildPdf(data: Uint8Array, index: ObjectIndex = indexObjects(l
     if (!index.objects.has(num)) write(num, 0, `${num} 0 obj\n${body}\nendobj\n`);
   }
 
-  const xref = [`xref\n0 ${size}\n0000000000 65535 f \n`];
-  for (let num = 1; num < size; num++) {
-    const entry = offsets.get(num);
-    xref.push(entry === undefined ? "0000000000 65535 f \n" : `${String(entry.offset).padStart(10, "0")} ${String(entry.gen).padStart(5, "0")} n \n`);
+  // One subsection per run of consecutive object numbers (the free head, entry 0, starts the first): a table with a line
+  // for every number up to the largest cost 20 bytes each, 168 MB for a 434-byte file that defines object 8388607.
+  // Numbers no object has stay out of the table, which a reader takes as free.
+  const xref = ["xref\n"];
+  const numbers = [0, ...[...offsets.keys()].sort((a, b) => a - b)];
+  for (let first = 0; first < numbers.length; ) {
+    let last = first;
+    while (last + 1 < numbers.length && numbers[last + 1] === numbers[last]! + 1) last++;
+    xref.push(`${numbers[first]!} ${last - first + 1}\n`);
+    for (let at = first; at <= last; at++) {
+      const num = numbers[at]!;
+      const entry = offsets.get(num);
+      xref.push(entry === undefined ? "0000000000 65535 f \n" : `${String(entry.offset).padStart(10, "0")} ${String(entry.gen).padStart(5, "0")} n \n`);
+    }
+    first = last + 1;
   }
   if (streamsSalvaged) steps.push("stream-salvaged");
   const info = findInfo(index);
