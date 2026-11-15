@@ -6,11 +6,13 @@
  * and `result.text` as the output.
  *
  * Usage:
- *   node scripts/bench/inproc-worker.ts --root <ripstream checkout> [--config <file>] server
+ *   node scripts/bench/inproc-worker.ts --root <ripstream checkout> [--config <file>] [--email-headers] server
  *     Prints READY, then answers each stdin line (a file path) with one JSON line:
  *     {"content", "metadata": {"mimeType"}, "_extraction_time_ms"} or {"error"}.
  *     The same protocol as xberg's TikaExtract `server` mode.
- *   node scripts/bench/inproc-worker.ts --root <ripstream checkout> [--config <file>] batch <file>...
+ *   node scripts/bench/inproc-worker.ts --root <ripstream checkout> [--config <file>] [--email-headers] batch <file>...
+ *
+ * `--email-headers` parses with ParseOptions.emailHeaders: an email's Subject/From/To/CC/BCC/Date block ahead of its body.
  *     Parses the files in order and prints one JSON array of the same objects.
  *
  * The root must hold a built tree (packages/core/dist, packages/parsers/dist).
@@ -26,7 +28,7 @@ interface ParseResult {
   readonly metadata: { get(name: string): string | null };
 }
 interface Ripstream {
-  parse(bytes: Uint8Array, options: { filename?: string }): Promise<ParseResult>;
+  parse(bytes: Uint8Array, options: { filename?: string; emailHeaders?: boolean }): Promise<ParseResult>;
 }
 interface ParsersModule {
   createRipstream(options: { config?: unknown }): Ripstream;
@@ -43,7 +45,13 @@ const flag = (name: string): { value: string | undefined; index: number } => {
 const root = flag("--root");
 const config = flag("--config");
 if (root.value === undefined) usage("--root is required");
-const flagIndexes = new Set([root.index, root.index + 1, ...(config.index < 0 ? [] : [config.index, config.index + 1])]);
+const emailHeaders = args.includes("--email-headers");
+const flagIndexes = new Set([
+  root.index,
+  root.index + 1,
+  ...(config.index < 0 ? [] : [config.index, config.index + 1]),
+  ...(emailHeaders ? [args.indexOf("--email-headers")] : []),
+]);
 const positional = args.filter((_, index) => !flagIndexes.has(index));
 const mode = positional[0];
 
@@ -75,7 +83,7 @@ async function extract(path: string): Promise<object> {
   const started = performance.now();
   try {
     const bytes = new Uint8Array(await readFile(path));
-    const result = await ripstream.parse(bytes, { filename: path });
+    const result = await ripstream.parse(bytes, { filename: path, ...(emailHeaders ? { emailHeaders: true } : {}) });
     return {
       content: result.text,
       metadata: { mimeType: result.metadata.get("Content-Type") ?? "application/octet-stream" },

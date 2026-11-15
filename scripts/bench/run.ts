@@ -27,6 +27,8 @@
  *   --ripstream-root <dir>   built ripstream checkout (default /opt/ripstream)
  *   --ripstream-config <f>   ripstream config for the CLI and the worker (default ripstream-config.json beside
  *                            this script: writeLimit -1, matching TikaExtract; "" keeps ripstream's defaults)
+ *   --ripstream-email-headers  parse emails with ParseOptions.emailHeaders (the Subject/From/To/CC/BCC/Date block ahead
+ *                            of the body) in the worker lanes (ripstream-inproc, ripstream-batch); off by default
  *   --tika-classpath <cp>    (default /opt/bench/tika-classes:/opt/tika-server/lib/*)
  *   --xberg <path>           (default /opt/xberg/xberg)
  *   --java <path>            (default java)
@@ -103,6 +105,7 @@ const registry = createAdapters({
   java: options.java,
   ripstreamRoot: options.ripstreamRoot,
   ripstreamConfig: options.ripstreamConfig,
+  ripstreamEmailHeaders: options.ripstreamEmailHeaders,
   tikaClasspath: options.tikaClasspath,
   xberg: options.xberg,
   benchDir,
@@ -386,6 +389,7 @@ interface Options {
   readonly batchSize: number;
   readonly ripstreamRoot: string;
   readonly ripstreamConfig: string | null;
+  readonly ripstreamEmailHeaders: boolean;
   readonly tikaClasspath: string;
   readonly xberg: string;
   readonly java: string;
@@ -408,6 +412,7 @@ function parseArgs(argv: readonly string[]): Options {
   let batchSize = 8;
   let ripstreamRoot = "/opt/ripstream";
   // Unlimited output, as TikaExtract's BodyContentHandler(-1) and xberg; ripstream's own default stops at 100,000 chars.
+  let ripstreamEmailHeaders = false;
   let ripstreamConfig: string | null = join(dirname(fileURLToPath(import.meta.url)), "ripstream-config.json");
   let tikaClasspath = "/opt/bench/tika-classes:/opt/tika-server/lib/*";
   let xberg = "/opt/xberg/xberg";
@@ -474,6 +479,9 @@ function parseArgs(argv: readonly string[]): Options {
         ripstreamConfig = raw === "" ? null : resolve(raw);
         break;
       }
+      case "--ripstream-email-headers":
+        ripstreamEmailHeaders = true;
+        break;
       case "--tika-classpath":
         tikaClasspath = value();
         break;
@@ -523,6 +531,7 @@ function parseArgs(argv: readonly string[]): Options {
     batchSize,
     ripstreamRoot,
     ripstreamConfig,
+    ripstreamEmailHeaders,
     tikaClasspath,
     xberg,
     java,

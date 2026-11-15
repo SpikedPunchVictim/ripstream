@@ -4,6 +4,22 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Opt-in email header block in the text: `emailHeaders` (`tikajs-5qkk`, email half)
+
+Added: `ParseOptions.emailHeaders` (default `false`, unchanged). With `true`, `parse` and `parseRecursive` write an email's
+`Subject`, `From`, `To`, `CC`, `BCC` and `Date` as `Name: value` lines, then a blank line, ahead of the body. A header the
+message lacks has no line; values are as the sender wrote them, unfolded, RFC 2047 words decoded, and the `Date` is the
+original string (Tika keeps only the normalised `dcterms:created`, and so does ripstream: no new metadata key). A line
+break in a decoded subject cannot forge a header line. The default text and metadata are unchanged and checked against
+Tika 4.2.0's keys; the parity suites and the benchmark's default scores are identical to before. On the xberg benchmark's 37
+common `eml` fixtures TF1 goes from 0.567 to 0.968 with the option (`scripts/bench/run.ts --ripstream-email-headers`, the
+worker lanes; the ground truth contains the header block). It crosses the isolation boundary like `onOutputLimit`
+(`emailHeaders` in the request and the input header) and the pipes worker codec. The xml, latex, svg and markdown options of
+the same bead are not done. See `docs/migration.md`.
+
+Fixed: the pipes worker codec did not place `onEmbeddedLimit`, so the typecheck of the exhaustive option table failed and a
+pooled parse dropped the option; it now crosses like `onOutputLimit`.
+
 ### The CLI starts about 40% faster from a split bundle and a compile cache (`tikajs-jjat`)
 
 Added: `pnpm build:bundle` bundles the CLI with esbuild (new root devDependency, 0.28.2) into `packages/cli/bundle`, and

@@ -61,6 +61,8 @@ export interface ToolPaths {
   readonly benchDir: string;
   /** ripstream configuration for the CLI (`-c`) and the worker (`--config`), or null for ripstream's defaults. */
   readonly ripstreamConfig: string | null;
+  /** Parse emails with ParseOptions.emailHeaders (the header block ahead of the body). Applies to the worker lanes; the CLI has no such option. */
+  readonly ripstreamEmailHeaders: boolean;
   readonly timeBinary: string | null;
   readonly scratchDir: string;
 }
@@ -93,7 +95,13 @@ const XBERG_ENV = { XBERG_EMIT_STAGE_TIMING: "1" };
 export function createAdapters(paths: ToolPaths): { single: Map<string, () => Adapter>; batch: Map<string, () => BatchAdapter> } {
   const worker = join(paths.benchDir, "inproc-worker.ts");
   const cliConfig = paths.ripstreamConfig === null ? [] : ["-c", paths.ripstreamConfig];
-  const workerArgs = [worker, "--root", paths.ripstreamRoot, ...(paths.ripstreamConfig === null ? [] : ["--config", paths.ripstreamConfig])];
+  const workerArgs = [
+    worker,
+    "--root",
+    paths.ripstreamRoot,
+    ...(paths.ripstreamConfig === null ? [] : ["--config", paths.ripstreamConfig]),
+    ...(paths.ripstreamEmailHeaders ? ["--email-headers"] : []),
+  ];
   const tikaJava = (mode: string, files: readonly string[]): CommandSpec => ({
     program: paths.java,
     args: [...JVM_ARGS, "-cp", paths.tikaClasspath, "io.xberg.benchmark.TikaExtract", "--no-ocr", mode, ...files],

@@ -327,6 +327,50 @@ A configuration file's `embedded-limits` is unchanged: `maxCount` is accepted on
 (ripstream fails the parse). Tika with `throwOnMaxCount: false` behaves as `onEmbeddedLimit: "truncate"` does, so
 accepting it there is possible; it is left for a decision.
 
+## The email header block
+
+Tika's RFC822Parser writes the body of a message and nothing else: the headers are metadata (`message:from`, `message:to`,
+`message:cc`, `message:bcc`, `dc:subject`, `dcterms:created`, and every other header as `message:raw-header:<Name>`).
+Ripstream does the same by default, and its text and metadata for an email are unchanged. Checked against Tika 4.2.0
+(`/rmeta/text` of an `.eml`): `Date` is not kept as written there either, only the normalised `dcterms:created`, so there
+is no `message:raw-header:Date` and none is added.
+
+Pass `emailHeaders: true` to `parse` or `parseRecursive` (a `ParseOptions` field, default `false`) to put the header block
+ahead of the body in the text. It exists for text that has to stand on its own, a search index or a model prompt, where who
+wrote the message, to whom and when are content. The block is:
+
+```
+Subject: Quarterly numbers
+From: "Jürgen Müller" <jm@example.com>
+To: bob@example.com, sue@example.com
+CC: ...
+BCC: ...
+Date: Tue, 01 Oct 2024 12:34:56 -0500
+
+<the body, as without the option>
+```
+
+- The lines come in that order and a header the message does not have has no line (so no empty `CC:`); a message with none
+  of the six has no block. Nothing else is added: the other headers stay metadata.
+- Each value is the header as the message wrote it, unfolded to one line, with RFC 2047 encoded words decoded. An address
+  list keeps its quoting (a quoted name with a comma is still one address); a list given in two headers is joined with
+  `, `. The `Date` is the sender's string, even one no date can be read from (`dcterms:created` is then absent), because the
+  normalised value is not what the message says.
+- A value never spans lines: an encoded word that decodes to a line break becomes a space, so a subject cannot add a
+  `From:` line of its own.
+- The metadata is the same with the option and without it, and the body is exactly what it is without it. Multipart messages
+  read as before (the best alternative, the attachments as the default does them); the block is written once, for the
+  message, not for a part. Each message of an mbox gets its own block, as paragraphs like the rest of the mbox's text.
+  `parseRecursive` records have the block in the container's content after the title that the text handler writes first
+  (the title repeats the subject); an attached message parsed as its own record has its own block. Outlook `.msg` files
+  are not changed.
+- It crosses the isolation boundary like `onOutputLimit` (`emailHeaders` in the request and the child's input header) and the
+  worker pool, so an isolated and an in-process parse agree. The characters of the block count against `maxOutputChars`.
+
+The option exists because the xberg benchmark's ground truth for email includes this block: scored with its TF1 on the 37
+common `eml` fixtures, ripstream's mean goes from 0.567 to 0.968 with `emailHeaders` (31 of 37 at 0.95 or more, from none),
+with nothing tuned to those fixtures. See `docs/xberg-benchmark.md`.
+
 ## Command line
 
 The ripstream CLI is its own interface (`parse`, `detect`, `metadata`, `language`, `serve`), not tika-app's, and it
