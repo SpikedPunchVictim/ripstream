@@ -1,0 +1,22 @@
+{
+  "description": "(tikajs-5tjh) Guard: UTF-16LE BOM with encoding=UTF-16 stays application/xml and parses (Tika 4.2.0: 'hello world').",
+  "tags": [
+    "xml",
+    "repro"
+  ],
+  "input": {
+    "base64": "//48AD8AeABtAGwAIAB2AGUAcgBzAGkAbwBuAD0AIgAxAC4AMAAiACAAZQBuAGMAbwBkAGkAbgBnAD0AIgBVAFQARgAtADEANgAiAD8APgAKADwAcgBvAG8AdAA+ADwAYQA+AGgAZQBsAGwAbwA8AC8AYQA+ADwAYgA+AHcAbwByAGwAZAA8AC8AYgA+ADwALwByAG8AbwB0AD4ACgA="
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "hello\\s+world"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/xml"
+    }
+  ]
+}

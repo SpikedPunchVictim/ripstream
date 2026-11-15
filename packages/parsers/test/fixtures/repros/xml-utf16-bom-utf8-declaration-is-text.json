@@ -1,0 +1,22 @@
+{
+  "description": "(tikajs-5tjh) A UTF-16LE document (BOM) whose declaration says encoding=UTF-8 is not well formed XML to Tika 4.2.0 (Xerces re-reads the rest as UTF-8): with no name it is text/plain and the text is the decoded markup.",
+  "tags": [
+    "xml",
+    "repro"
+  ],
+  "input": {
+    "base64": "//48AD8AeABtAGwAIAB2AGUAcgBzAGkAbwBuAD0AIgAxAC4AMAAiACAAZQBuAGMAbwBkAGkAbgBnAD0AIgBVAFQARgAtADgAIgA/AD4ACgA8AHIAbwBvAHQAPgA8AGEAPgBoAGUAbABsAG8APAAvAGEAPgA8AGIAPgB3AG8AcgBsAGQAPAAvAGIAPgA8AC8AcgBvAG8AdAA+AAoA"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root><a>hello</a><b>world</b></root>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-16LE"
+    }
+  ]
+}

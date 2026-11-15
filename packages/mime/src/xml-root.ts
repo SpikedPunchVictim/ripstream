@@ -14,6 +14,7 @@ const STOP = Symbol("xml-root-found");
  */
 export function extractXmlRoot(data: Uint8Array): XmlRoot | null {
   const text = decodePrefix(data);
+  if (text === null) return null;
 
   const parser = new SaxesParser({ xmlns: true });
   let root: XmlRoot | null = null;
@@ -36,17 +37,30 @@ export function extractXmlRoot(data: Uint8Array): XmlRoot | null {
   return root;
 }
 
-function decodePrefix(data: Uint8Array): string {
+function decodePrefix(data: Uint8Array): string | null {
   if (data.length >= 2) {
     if (data[0] === 0xff && data[1] === 0xfe) {
-      return new TextDecoder("utf-16le").decode(data.subarray(2));
+      return utf16Prefix(new TextDecoder("utf-16le").decode(data.subarray(2)), "utf-16le");
     }
     if (data[0] === 0xfe && data[1] === 0xff) {
-      return new TextDecoder("utf-16be").decode(data.subarray(2));
+      return utf16Prefix(new TextDecoder("utf-16be").decode(data.subarray(2)), "utf-16be");
     }
   }
   if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
     return new TextDecoder("utf-8").decode(data.subarray(3));
   }
   return new TextDecoder("utf-8", { fatal: false }).decode(data);
+}
+
+/**
+ * Xerces, which Tika reads the root with, takes the byte order mark as the encoding until the declaration names another:
+ * `UTF-16` (or the same byte order) keeps it, anything else re-reads the rest of the bytes in that encoding, and the
+ * 16-bit units then are not XML ("Content is not allowed in prolog"). Tika 4.2.0 finds no root there, so a UTF-16 document
+ * that declares encoding="UTF-8" is plain text.
+ */
+function utf16Prefix(text: string, order: "utf-16le" | "utf-16be"): string | null {
+  const declared = /^<\?xml[^>]*?\sencoding\s*=\s*["']([^"']+)["']/.exec(text)?.[1]?.toLowerCase();
+  if (declared === undefined) return text;
+  const compatible = declared === "utf-16" || declared === order || declared.startsWith("iso-10646-ucs-");
+  return compatible ? text : null;
 }

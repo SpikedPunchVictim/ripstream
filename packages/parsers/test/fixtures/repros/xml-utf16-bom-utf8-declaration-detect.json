@@ -1,0 +1,18 @@
+{
+  "description": "(tikajs-5tjh) Detection: UTF-16LE BOM with a UTF-8 declaration is text/plain on Tika 4.2.0 (the XML root cannot be read).",
+  "tags": [
+    "xml",
+    "repro"
+  ],
+  "operation": "detect",
+  "input": {
+    "base64": "//48AD8AeABtAGwAIAB2AGUAcgBzAGkAbwBuAD0AIgAxAC4AMAAiACAAZQBuAGMAbwBkAGkAbgBnAD0AIgBVAFQARgAtADgAIgA/AD4ACgA8AHIAbwBvAHQAPgA8AGEAPgBoAGUAbABsAG8APAAvAGEAPgA8AGIAPgB3AG8AcgBsAGQAPAAvAGIAPgA8AC8AcgBvAG8AdAA+AAoA"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "mediaType",
+      "value": "text/plain"
+    }
+  ]
+}
