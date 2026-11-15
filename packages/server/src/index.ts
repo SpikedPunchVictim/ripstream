@@ -454,8 +454,8 @@ const QUERY_PARAMS: Readonly<Record<string, readonly string[]>> = {
   "/detect": ["filename"],
   "/tika": ["filename", "preset", "handler", ...LIMIT_PARAMS],
   "/meta": ["filename", "preset", ...LIMIT_PARAMS],
-  "/rmeta": ["filename", "preset", ...LIMIT_PARAMS],
-  "/unpack": ["filename", "preset", ...LIMIT_PARAMS],
+  "/rmeta": ["filename", "preset", "segments", ...LIMIT_PARAMS],
+  "/unpack": ["filename", "preset", "segments", ...LIMIT_PARAMS],
   "/async": ["filename"],
   "/language": [],
   "/mime-types": [],
@@ -1019,6 +1019,15 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     };
     // A bad handler in the path is the caller's mistake, found before the document is read, as Tika's is.
     const pathType = target.handler === null ? null : formatOf(target.handler, "text", true);
+    // `?segments=true` (ripstream's own, off by default): each record's segments as `tk:segments` (docs/segments.md). They point
+    // into the content a text or body handler writes, so any other is refused here, before the document is read.
+    const segments = clientFlag(url.searchParams.get("segments"), "segments");
+    if (segments && (target.endpoint === "/rmeta" || target.endpoint === "/unpack")) {
+      const type = pathType ?? formatOf(handlerOverride, "text");
+      if (type !== "text" && type !== "body") {
+        throw new HttpError(400, `segments need a text or body handler, and this request's is ${handlerTypeName(type)}`);
+      }
+    }
     // Tika picks the resource by Accept before it reads the request: what the route writes is all it offers.
     const offered = ((): readonly string[] => {
       switch (target.endpoint) {
@@ -1088,9 +1097,11 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         ...withLimits,
         handlerType,
         ...(unpacking ? { unpackBytes: maxUnpackBytes } : {}),
+        ...(segments ? { segments: true } : {}),
       });
+      const written = segments ? { ...rmetaOptions, segments: true } : rmetaOptions;
       if (!unpacking) {
-        sendJson(response, 200, JSON.parse(serializeRmeta(records, rmetaOptions)));
+        sendJson(response, 200, JSON.parse(serializeRmeta(records, written)));
         return;
       }
       // A document that could not be read at all has nothing to unpack: Tika answers 422 with the failure as the body.
@@ -1104,7 +1115,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         records,
         container: target.all ? body : null,
         filename: name,
-        rmeta: Buffer.from(`${serializeRmeta(records, rmetaOptions)}\n`, "utf8"),
+        rmeta: Buffer.from(`${serializeRmeta(records, written)}\n`, "utf8"),
         nameOf: (id, record) => `${id}${extensionFor(record.metadata.get("Content-Type"), options.mimeTypes)}`,
         now: new Date(),
       });
@@ -1465,6 +1476,14 @@ function clientLimit(raw: string | null, key: string): number | undefined {
     throw new HttpError(400, `Invalid ${key}: expected a non-negative integer`);
   }
   return Number(raw);
+}
+
+/** Parses a client flag: absent -> false; `true` or `false` (any case) -> that; anything else is HTTP 400. */
+function clientFlag(raw: string | null, key: string): boolean {
+  if (raw === null) return false;
+  const value = raw.toLowerCase();
+  if (value !== "true" && value !== "false") throw new HttpError(400, `Invalid ${key}: expected true or false`);
+  return value === "true";
 }
 
 function parseJsonBody(body: Uint8Array): unknown {

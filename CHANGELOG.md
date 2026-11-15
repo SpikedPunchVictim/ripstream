@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Server: segments on `/rmeta` and `/unpack` (`tikajs-5wd0`)
+
+Added: `PUT /rmeta?segments=true` (and `/rmeta/text`, `/rmeta/body`) writes `tk:segments` on each record that has segments, as
+`parse -r --segments` and the pipes engine do, and `/unpack?segments=true` writes it into the package's `rmeta.json`. A query
+parameter of `true` or `false`, read by those two routes only; a handler other than text or body (the path's, or a preset's) is
+a 400 before the document is read. Off by default, and then the answer is byte-identical. docs/segments.md.
+
 ### WordPerfect 4.2 parses as an empty document (`tikajs-5ur3`)
 
 Fixed: a WordPerfect 4.2 file (`CB 0A 01 .. CB`, no `WPC` header; media type `application/vnd.wordperfect; version=4.2`) failed with

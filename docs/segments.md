@@ -41,7 +41,7 @@ an allowance of their own (24 MiB + 0.75 bytes a character of `maxOutputChars`; 
 
 ## In the recursive output: `--segments`
 
-`ripstream parse -r --segments FILE` (and `-o jsonl`) and `ripstream pipes --segments` add one key to the object of each
+`ripstream parse -r --segments FILE` (and `-o jsonl`), `ripstream pipes --segments` and the server's `/rmeta?segments=true` add one key to the object of each
 record that has segments, `tk:segments`. Its value is a string, as every value in Tika's rmeta is (a reader written for
 Tika's list of metadata, which has no nested objects, still reads it): the JSON of an array of the segments in content
 order, each `{ "start", "end", "labels", "location" }`, with no `text`:
@@ -62,7 +62,11 @@ offsets stale, which is for whoever configured it to know.
 - **Modes:** pipes takes `--segments` for the parse modes RMETA and UNPACK, which write the list; another mode is refused
   (exit 2 for the CLI). `parse` takes it only with `-r`; any other command refuses it.
 - **Under workers and isolation:** the flag crosses to a worker thread and to an isolated child like any other option.
-- **Server:** not yet; `/rmeta` writes no segments.
+- **Server:** `PUT /rmeta?segments=true` (and `/rmeta/text`, `/rmeta/body`) writes the key as the CLI does, and
+  `/unpack?segments=true` writes it into the package's `rmeta.json`. It is a query parameter like `maxOutputChars` and `preset`,
+  and takes `true` or `false` (any case, once; anything else is a 400); the other routes refuse it as an unknown parameter. It
+  needs a text or body handler: `/rmeta/html`, `/xml`, `/markdown`, `/ignore`, or a preset whose handler is one of them, is a 400
+  before the document is read. Without it the answer is what it was.
 
 ## Coverage
 

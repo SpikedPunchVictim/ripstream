@@ -105,7 +105,7 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
   are the operator's, and an emitter still refuses a key that leaves its `basePath`.
 - A request can set only what its route reads, and anything else is a 400 that names it, not a 200 that drops it:
   an unknown or repeated query parameter (`/tika` reads `filename`, `preset`, `handler`, `maxOutputChars` and
-  `maxEmbeddedResources`; `/meta`, `/rmeta` and `/unpack` the same without `handler`; `/detect` and `/async` only
+  `maxEmbeddedResources`; `/meta` the same without `handler`, `/rmeta` and `/unpack` too and also `segments` (`true` or `false`); `/detect` and `/async` only
   `filename`; `/language` and `/mime-types` none), an unknown `?preset=` or `?handler=` (`meta`, `json`, or a content type: `text`,
   `txt`, `html`, `xml`, `body`, `markdown`, `md`, `ignore`), any `X-Tika-*` header, and a multipart part
   other than the one file (Tika's per-request parse context is not accepted).
