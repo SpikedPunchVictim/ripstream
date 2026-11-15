@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { getEventListeners } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -449,6 +451,90 @@ test("close rejects what is queued and running, stops stuck workers within its b
   await running;
   await queued;
   await assert.rejects(pool.parse(bytes("x")), /closed/);
+});
+
+// ---- descriptors -------------------------------------------------------------------------------------------------
+
+/**
+ * The descriptors this process has open. Worker threads share the process's table, so a worker that is terminated
+ * holding a file open leaks it here. /dev/fd lists them on Linux (a link to /proc/self/fd) and on macOS; the one the
+ * listing itself opens is in every count.
+ */
+const openDescriptors = (): number => readdirSync("/dev/fd").length;
+
+/** The handles and requests keeping the process alive, by type (timers are unref'd, so only what a leak would add shows). */
+function activeResources(): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const type of process.getActiveResourcesInfo()) counts[type] = (counts[type] ?? 0) + 1;
+  return counts;
+}
+
+/** The count settles a moment after a worker exits (its loop closes its handles), so it is read until it is not above the limit. */
+async function settledDescriptors(limit: number): Promise<number> {
+  let count = openDescriptors();
+  for (let attempt = 0; attempt < 50 && count > limit; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    count = openDescriptors();
+  }
+  return count;
+}
+
+const CYCLES = 6;
+const DESCRIPTOR_SLACK = 2;
+
+test("workers terminated by the watchdog or by an abort leave no descriptor, listener or handle behind", async () => {
+  const data = join(scratch, "big.bin");
+  await writeFile(data, new Uint8Array(3 * 1024 * 1024).fill(66));
+  const big = new Uint8Array(2 * 1024 * 1024).fill(65);
+  const root = await mkdtemp(join(scratch, "fd-"));
+
+  /** One way to end a worker; each runs a parse that has a file open, and ends with the worker terminated. */
+  const ways: readonly (readonly [string, (pool: WorkerParsePool) => Promise<unknown>])[] = [
+    ["the watchdog, with spooled input open", (pool) => assert.rejects(pool.parse(big, { filename: "spill", limits: { maxParseMillis: 100 } }), ParseTimeoutError)],
+    ["the watchdog, with a path open", (pool) => assert.rejects(pool.parse({ path: data }, { filename: "holdspin", limits: { maxParseMillis: 100 } }), ParseTimeoutError)],
+    [
+      "an abort the worker ignores, with a path open",
+      async (pool) => {
+        const controller = new AbortController();
+        const stuck = pool.parse({ path: data }, { filename: "holdspin", limits: { maxParseMillis: 0 }, signal: controller.signal });
+        setTimeout(() => controller.abort(), 100);
+        await assert.rejects(stuck, AbortError);
+        assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+      },
+    ],
+    [
+      "an abort the worker acts on, with a path open",
+      async (pool) => {
+        const controller = new AbortController();
+        const running = pool.parse({ path: data }, { filename: "hold", limits: { maxParseMillis: 0 }, signal: controller.signal });
+        setTimeout(() => controller.abort(), 100);
+        await assert.rejects(running, AbortError);
+        assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+      },
+    ],
+    ["a worker that exits under its parse", (pool) => assert.rejects(pool.parse(big, { filename: "exit:3" }), IsolationError)],
+  ];
+
+  const cycle = async (): Promise<void> => {
+    const pool = await WorkerParsePool.start({ spec: {}, size: 2, entry: SCRIPTED, tempRoot: root, ...FAST });
+    try {
+      for (const [, way] of ways) await way(pool);
+      // Every way above retires a worker (the cooperative abort excepted); the pool must be whole again.
+      await pool.parse(bytes("x"), { filename: "echo:x" });
+    } finally {
+      await pool.close();
+    }
+  };
+
+  // One cycle first, so what the runtime opens once (a kqueue, a signal pipe) is in the baseline.
+  await cycle();
+  const baseline = openDescriptors();
+  const resources = activeResources();
+  for (let index = 0; index < CYCLES; index += 1) await cycle();
+  const after = await settledDescriptors(baseline + DESCRIPTOR_SLACK);
+  assert.ok(after <= baseline + DESCRIPTOR_SLACK, `${CYCLES * ways.length} terminated workers left ${after - baseline} descriptors open (${baseline} before, ${after} after)`);
+  assert.deepEqual(activeResources(), resources);
+  assert.deepEqual(await walk(root), []);
 });
 
 test("an idle pool that is never closed does not keep the process alive", async () => {

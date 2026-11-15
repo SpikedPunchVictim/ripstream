@@ -68,6 +68,20 @@ async function parse(input: Uint8Array | { readonly path: string }, options: Par
       spin();
       break;
     }
+    case "hold": {
+      // Opens the input (a {path}) and reads its first chunk, then waits with the file open, honouring its signal.
+      const stream = await RipstreamInputStream.from(input, { signal: options.signal });
+      await stream.read();
+      await waitFor(Infinity, options.signal);
+      break;
+    }
+    case "holdspin": {
+      // The same, but stuck in synchronous code, so that only terminate() stops it.
+      const stream = await RipstreamInputStream.from(input);
+      await stream.read();
+      spin();
+      break;
+    }
     case "malformed":
       throw new MalformedDocumentError(`scripted: ${argument}`);
     case "exit":
