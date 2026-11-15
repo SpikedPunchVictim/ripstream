@@ -126,3 +126,14 @@ export function statusForParseError(error: unknown): PipesResultStatus {
   }
   return "UNSPECIFIED_CRASH";
 }
+
+/**
+ * A failure that ends the run rather than one input: `run()` rethrows it, where a parse's other errors are a status of
+ * the input. The parse pool rejects with it once it cannot start the workers it parses with.
+ */
+export class PipesFatalError extends Error {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super(message, options);
+    this.name = "PipesFatalError";
+  }
+}

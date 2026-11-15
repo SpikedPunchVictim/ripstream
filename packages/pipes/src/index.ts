@@ -74,6 +74,7 @@ export {
 export { componentIdIssue, parseFetchEmitTuple, type FetchContext, type FetchEmitTuple, type Fetcher, type PipesIterator } from "./tuple.ts";
 export {
   PIPES_RESULT_STATUSES,
+  PipesFatalError,
   httpResponseFor,
   isFailure,
   pipesResult,
