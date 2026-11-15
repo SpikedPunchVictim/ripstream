@@ -102,11 +102,24 @@ pptx, html) are each in one leaf, labelled by their column header, at the locati
 ### A short csv is text
 
 Tika reads a `.csv` as a table only when it is regular enough: at the default confidence a table with no quoted
-cells needs eleven rows (`docs/migration.md`, *Text and CSV*). A shorter one is `text/plain`, and its segments are lines
-(`line=4`) with no labels, the header line being a line like the rest. ripstream keeps that for parity. A caller that
-knows its files are tables sets `createRipstream({ csv: { delimiter: "," } })` (or a lower `csv.minConfidence`): every
-such document is then a table, with `row=3;col=2` locations and the header as the label, and the text is
-tab-separated as for any table. The CLI and the server do not set it.
+cells needs eleven rows (`docs/migration.md`, *Text and CSV*). A shorter one is `text/plain`, and ripstream keeps that for
+parity: its `content` is the lines as written, quotes and commas included. Its segments are still the cells
+(`tikajs-e0sm`): a document detected as `text/csv` (in practice a `.csv` name) gets a segment
+per non-blank cell, located `row=3;col=2` and labelled by the header cell of its column, as a table would, and no `line=`
+segments. The segments are all that changes: `content` and the metadata are the same with segments on or off.
+
+- The delimiter is the most confident of the sniffer's (comma, tab, semicolon, pipe), or a comma when none has any
+  confidence, so `a;b` rows are read by their semicolons. A document that is only `text/plain` (no csv name) is not declared to be a table, so it keeps its `line=` segments, however csv-like.
+- Rows are counted as a table counts them: a blank line is not a row, and a quoted cell may hold line breaks and stays one cell,
+  so the rows after it keep their numbers. The first row names the columns and has no labels itself.
+- A segment is `content.slice(start, end)` like any other, so a quoted cell is its characters between the quotes and a doubled
+  quote (`""`) stays doubled; the commas and quotes are in no segment, as a JSON document's punctuation is in none. Its label
+  is the header with doubled quotes undoubled. A row has no segment of its own, since it could not be made of its cells.
+- Cell locations count against the record's allowance for locations (below); a csv that would outgrow it gets `line=` segments
+  and `tk:segments-degraded: cell`.
+- A `.tsv` is `text/tab-separated-values`, which TextParser reads as lines of tab-separated cells and has had row and cell
+  segments all along. `createRipstream({ csv: { delimiter: "," } })` (or a lower `csv.minConfidence`) still reads every
+  document as a table, with tab-separated text.
 
 ### What labels there are not
 
@@ -114,8 +127,8 @@ Labels are names the document gives, so a format that names nothing has none. A 
 what the parser writes as a heading (the text a pdf writes as a row, such as `label  value`, is one paragraph
 `page=1;para=4`: the label is in the segment's text, not in `labels`). An archive's entries are records of their own, each with
 its own segments and `embeddedResourcePath`; the archive's record holds the entry names. A consumer that matches a
-detector's context (a keyword near the value) sees the header only in `labels` for a table, so a detector that looks
-at a segment's text alone does not see the header of a short csv, which is text.
+detector's context (a keyword near the value) sees the header only in `labels`, so a detector that looks at a segment's
+text alone does not see the header of a csv, short or not.
 
 ## Location grammar
 
@@ -145,6 +158,7 @@ only when segments are on, and a hint never touches the SAX stream:
 | hint | from |
 | --- | --- |
 | `layout("lines")` | TextParser and CSV read as text: a `p` per source line |
+| `delimited(delimiter)` | CsvParser, for a document declared `text/csv` that it reads as text: the lines are rows of cells |
 | `layout("table")` | CsvParser's table: the document is one table, so no `table=` |
 | `row(n)` | OOXML spreadsheet: `<row r>` |
 | `heading(level)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`), markdown `#` |
@@ -165,8 +179,9 @@ A record that would go over keeps its text and its segments, but coarser, and sa
 | --- | --- |
 | `ptr` | a JSON document gets one segment per line (`line=N`), as text does, instead of one per scalar |
 | `selector` | an HTML block after the allowance is spent is located by `para=N`, with no `selector=` |
+| `cell` | a csv read as text gets one segment per line (`line=N`) instead of one per cell |
 
-Both values can be present. The record is not failed, and `content` is the same. Under isolation the allowance is
+All values can be present. The record is not failed, and `content` is the same. Under isolation the allowance is
 checked in the child as well, so it comes first for a document whose locations are large; what the isolation's own
 allowance for segment frames (24 MiB + 0.75 bytes a character, docs/isolation.md) then refuses is the text, labels and
 encoding of a document with very many segments, and that is still a `LimitExceededError`.
@@ -184,4 +199,3 @@ encoding of a document with very many segments, and that is still a `LimitExceed
   the allowance above, as a pointer is. Only xlsx sheet names, which Excel limits to 31 characters, were considered.
 - Selectors are over Tika's XHTML, which drops some of the page's elements, so `nth-of-type` can differ from the page.
 - No XPath for XML, no setext (`===`) markdown headings, no JSON Lines `ptr` without the `line`.
-- A CSV with too few rows to be sniffed as a table is read as text, so it gets `line=` segments, not cells.

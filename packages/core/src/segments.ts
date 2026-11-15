@@ -36,6 +36,12 @@ export interface SegmentHints {
   layout(kind: "lines" | "table"): void;
   /** The block written next is a heading of this level (1 to 6), as if it were an `h1`-`h6`. */
   heading(level: number): void;
+  /**
+   * With layout "lines": the lines are rows of delimited cells (a csv that was not read as a table), the first row naming the
+   * columns. The segments are then the cells, located `row=R;col=C` and labelled by their column's header, and the
+   * lines are not segments. One character other than a quote or a line break; anything else is ignored.
+   */
+  delimited(delimiter: string): void;
   /** The block written next starts at this line (1-based) of the source. */
   line(number: number): void;
   /** The table row written next is this row (1-based) of the sheet: an `r` attribute, which may skip empty rows. */
@@ -230,6 +236,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #headingLabels: readonly string[] = NO_LABELS;
   #headingLabelsVersion = 0;
 
+  #delimiter: string | undefined;
   #nextHeading = 0;
   #nextLine = 0;
   #nextRow = 0;
@@ -246,7 +253,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   }
 
   /** Takes `chars` from the allowance, or says that it is spent, and notes on the metadata which kind of location went without. */
-  #afford(kind: "ptr" | "selector", chars: number): boolean {
+  #afford(kind: "ptr" | "selector" | "cell", chars: number): boolean {
     if (chars <= this.#allowance) {
       this.#allowance -= chars;
       return true;
@@ -262,6 +269,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
 
   layout(kind: "lines" | "table"): void {
     this.#layout = kind;
+  }
+
+  delimited(delimiter: string): void {
+    if (delimiter.length === 1 && delimiter !== '"' && delimiter !== "\n" && delimiter !== "\r") this.#delimiter = delimiter;
   }
 
   heading(level: number): void {
@@ -644,6 +655,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   finish(content: string): Segment[] {
     while (this.#frames.length > 0) this.#end();
     this.#closeShape();
+    if (this.#layout === "lines" && this.#delimiter !== undefined) {
+      const cells = delimitedSegments(content, this.#delimiter, (chars) => this.#afford("cell", chars));
+      if (cells !== undefined) return cells;
+    }
     if (this.#layout === "lines" && this.#textKind === "json") {
       const values = jsonSegments(content, this.#lineStarts, (chars) => this.#afford("ptr", chars));
       if (values !== undefined) return values;
@@ -797,6 +812,79 @@ function jsonSegments(content: string, lineStarts: readonly number[], afford: (c
     }
     return char === (open.array ? "]" : "}");
   }
+}
+
+/**
+ * A segment per non-blank cell of `content` read as delimited rows (csv, as `CsvScanner` reads a table: a quote opens a quoted
+ * cell only at its start, a doubled quote is one quote, a quoted cell may hold line breaks, a row that is one empty cell is
+ * blank and not counted). A quoted cell's segment is its characters between the quotes, so doubled quotes stay doubled; a label is
+ * the header with them undoubled. Undefined when the locations would not fit the allowance.
+ */
+function delimitedSegments(content: string, delimiter: string, afford: (chars: number) => boolean): Segment[] | undefined {
+  interface Cell { readonly start: number; readonly end: number; readonly quoted: boolean }
+  const segments: Segment[] = [];
+  const headers: string[] = [];
+  const labelsOfColumn: (readonly string[] | undefined)[] = [];
+  const length = content.length;
+  let index = 0;
+  let row = 0;
+  while (index < length) {
+    const cells: Cell[] = [];
+    for (;;) {
+      let start = index;
+      let end: number;
+      let quoted = false;
+      if (content[index] === '"') {
+        quoted = true;
+        start = ++index;
+        for (;;) {
+          const quote = content.indexOf('"', index);
+          if (quote < 0 || content[quote + 1] !== '"') {
+            end = quote < 0 ? length : quote;
+            index = quote < 0 ? length : quote + 1;
+            break;
+          }
+          index = quote + 2;
+        }
+        // Characters after the closing quote belong to the cell, as the scanner appends them.
+        const after = index;
+        while (index < length && content[index] !== delimiter && content[index] !== "\n" && content[index] !== "\r") index++;
+        if (index > after) end = index;
+      } else {
+        while (index < length && content[index] !== delimiter && content[index] !== "\n" && content[index] !== "\r") index++;
+        end = index;
+      }
+      cells.push({ start, end, quoted });
+      if (content[index] === delimiter) {
+        index++;
+        continue;
+      }
+      if (content[index] === "\r" && content[index + 1] === "\n") index++;
+      index++;
+      break;
+    }
+    if (cells.length === 1 && cells[0]!.end === cells[0]!.start) continue;
+    row++;
+    for (let col = 1; col <= cells.length; col++) {
+      const cell = cells[col - 1]!;
+      let start = cell.start;
+      let end = cell.end;
+      while (start < end && isSpace(content.charCodeAt(start))) start++;
+      while (end > start && isSpace(content.charCodeAt(end - 1))) end--;
+      if (row === 1) {
+        const header = content.slice(start, end);
+        headers[col - 1] = cell.quoted ? header.replace(/""/g, '"') : header;
+      }
+      if (start >= end) continue;
+      if (!afford(String(row).length + String(col).length + 9)) return undefined;
+      let labels = NO_LABELS;
+      if (row > 1 && (headers[col - 1] ?? "").length > 0) {
+        labels = labelsOfColumn[col - 1] ??= Object.freeze([headers[col - 1]!]);
+      }
+      segments.push(Object.freeze({ text: content.slice(start, end), start, end, labels, location: `row=${row};col=${col}` }));
+    }
+  }
+  return segments;
 }
 
 function lineOf(lineStarts: readonly number[], offset: number): number {

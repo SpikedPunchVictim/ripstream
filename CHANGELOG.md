@@ -4,6 +4,16 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments of a short csv are cells (`tikajs-e0sm`)
+
+Changed: a `.csv` read as text (under eleven rows at the default confidence, so `text/plain` as in Tika) had `line=N`
+segments with no labels, so a detector keyed on the header lost it. With segments on, a document detected as `text/csv`
+now gets a segment per cell, located `row=3;col=2` and labelled by its column's header, as a table does; a blank line is not
+a row and a quoted cell with line breaks is one cell. `content` and the metadata are byte-identical with segments on or
+off. The delimiter is the sniffer's most confident one, a comma when none has any. A csv whose locations would outgrow the
+allowance falls back to lines with `tk:segments-degraded: cell`. Plain `text/plain` keeps `line=`. New hint
+`SegmentHints.delimited(delimiter)`.
+
 ### Archive entries with unsafe names are parsed (`tikajs-bsv0`)
 
 Changed: a zip, tar or Unix dump entry whose name is absolute, contains `..` or starts with a drive letter was skipped

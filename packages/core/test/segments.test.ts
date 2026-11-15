@@ -307,6 +307,35 @@ test("html whose selectors would outgrow the allowance is located by paragraph a
   assert.equal(metadata.get("tk:segments-degraded"), "selector");
 });
 
+test("delimited lines whose cell locations would outgrow the allowance are line segments and flagged (tikajs-e0sm)", async () => {
+  const metadata = new Metadata();
+  const content = createOutputHandler("text");
+  const tap = new SegmentTap(content, metadata, { locationAllowance: 30 });
+  tap.layout("lines");
+  tap.delimited(",");
+  const xhtml = new XHTMLContentHandler(tap, metadata);
+  await xhtml.startDocument();
+  for (const line of ["a,b", "1,2", "3,4"]) await xhtml.element("p", line);
+  await xhtml.endDocument();
+  const found = tap.finish(content.toString());
+  assert.deepEqual(found.map((segment) => segment.location), ["line=1", "line=2", "line=3"]);
+  assert.equal(metadata.get("tk:segments-degraded"), "cell");
+});
+
+test("delimited ignores a delimiter that is a quote or a line break (tikajs-e0sm)", async () => {
+  const metadata = new Metadata();
+  const content = createOutputHandler("text");
+  const tap = new SegmentTap(content, metadata);
+  tap.layout("lines");
+  tap.delimited('"');
+  tap.delimited("ab");
+  const xhtml = new XHTMLContentHandler(tap, metadata);
+  await xhtml.startDocument();
+  await xhtml.element("p", "a,b");
+  await xhtml.endDocument();
+  assert.deepEqual(tap.finish(content.toString()).map((segment) => segment.location), ["line=1"]);
+});
+
 test("html is located by selector: nth-of-type from the body, an id where there is one", async () => {
   const html = script("html", "text/html", async (xhtml) => {
     await xhtml.element("p", "first");

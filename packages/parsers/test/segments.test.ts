@@ -117,12 +117,79 @@ test("leafSegments: no two overlap, together they hold every character, and a pl
   }
 });
 
-test("a short csv is text, as in Tika: lines without labels; csv.delimiter reads it as a table with the header as the label (tikajs-xlne)", async () => {
+test("a short csv is text, as in Tika, and its segments are still cells: row, col and the header as the label (tikajs-e0sm)", async () => {
   const csv = new TextEncoder().encode("id,cn passport,lt code\n0,n/a,n/a\n1,S5230,3880\n2,n/a,n/a\n");
   const asText = await ripstream.parseRecursive(csv, { filename: "short.csv", segments: true });
-  const line = asText[0]!.segments!.find((segment) => segment.text.includes("S5230"))!;
-  assert.deepEqual([line.location, line.labels], ["line=3", []]);
-  const asTable = await createRipstream({ csv: { delimiter: "," } }).parseRecursive(csv, { filename: "short.csv", segments: true });
-  const cell = leafSegments(asTable[0]!.segments!).find((segment) => segment.text === "S5230")!;
+  assert.equal(asText[0]!.mediaType.toString(), "text/plain");
+  const cell = leafSegments(asText[0]!.segments!).find((segment) => segment.text === "S5230")!;
   assert.deepEqual([cell.location, cell.labels], ["row=3;col=2", ["cn passport"]]);
+  assert.equal(asText[0]!.content.slice(cell.start, cell.end), "S5230");
+  // The table path of a csv.delimiter parser gives the same cell.
+  const asTable = await createRipstream({ csv: { delimiter: "," } }).parseRecursive(csv, { filename: "short.csv", segments: true });
+  const tableCell = leafSegments(asTable[0]!.segments!).find((segment) => segment.text === "S5230")!;
+  assert.deepEqual([tableCell.location, tableCell.labels], [cell.location, cell.labels]);
+});
+
+test("a short csv's text and metadata are the same with segments on and off (tikajs-e0sm)", async () => {
+  const csv = new TextEncoder().encode('a,b\n1,"x\ny"\n\n2,3\n');
+  const plain = await ripstream.parseRecursive(csv, { filename: "t.csv" });
+  const withSegments = await ripstream.parseRecursive(csv, { filename: "t.csv", segments: true });
+  assert.equal(withSegments[0]!.content, plain[0]!.content);
+  const keys = (record: ParseRecord): string => JSON.stringify([...record.metadata.names()].filter((name) => name !== "tk:parse-time-millis").sort());
+  assert.equal(keys(withSegments[0]!), keys(plain[0]!));
+});
+
+test("a short csv's quoted multiline cell is one cell, and the rows after it keep their numbers (tikajs-e0sm)", async () => {
+  const csv = new TextEncoder().encode('id,note\n1,"line one\nline two"\n\n2,"say ""hi"""\n3,plain\n');
+  const [record] = await ripstream.parseRecursive(csv, { filename: "q.csv", segments: true });
+  const cells = leafSegments(record!.segments!).map((segment) => [segment.location, segment.text, segment.labels.join("|")]);
+  assert.deepEqual(cells, [
+    ["row=1;col=1", "id", ""],
+    ["row=1;col=2", "note", ""],
+    ["row=2;col=1", "1", "id"],
+    ["row=2;col=2", "line one\nline two", "note"],
+    ["row=3;col=1", "2", "id"],
+    ["row=3;col=2", 'say ""hi""', "note"],
+    ["row=4;col=1", "3", "id"],
+    ["row=4;col=2", "plain", "note"],
+  ]);
+});
+
+test("a short csv declared text/csv uses the delimiter its columns have; a .tsv already had cells (tikajs-e0sm)", async () => {
+  const semicolons = new TextEncoder().encode("name;card\nann;4111\nbob;5500\n");
+  const [semi] = await ripstream.parseRecursive(semicolons, { filename: "s.csv", segments: true });
+  const card = leafSegments(semi!.segments!).find((segment) => segment.text === "5500")!;
+  assert.deepEqual([card.location, card.labels], ["row=3;col=2", ["card"]]);
+  const tabs = new TextEncoder().encode("name\tcard\nann\t4111\n");
+  const [tsv] = await ripstream.parseRecursive(tabs, { filename: "t.tsv", segments: true });
+  const tab = leafSegments(tsv!.segments!).find((segment) => segment.text === "4111")!;
+  assert.deepEqual([tab.location, tab.labels], ["row=2;col=2", ["card"]]);
+});
+
+test("text that is not declared csv keeps its line segments (tikajs-e0sm)", async () => {
+  const text = new TextEncoder().encode("id,card\n1,4111\n");
+  const [record] = await ripstream.parseRecursive(text, { filename: "notes.txt", segments: true });
+  assert.deepEqual(record!.segments!.map((segment) => segment.location), ["line=1", "line=2"]);
+});
+
+test("a csv read as text has the cells, rows, columns and labels of the same csv read as a table (tikajs-e0sm)", async () => {
+  const samples = [
+    "a,b,c\n1,2,3\n4,5,6\n",
+    'h1,h2\n"x, y",z\n"multi\nline","q ""uoted"""\n\n  7  ,8\n',
+    "only\nrows\nhere",
+    'id,note\r\n1,"a\r\nb"\r\n2,\r\n',
+    "a,b\n,\n1,\n,2\n",
+    "a,b,c\n1,2\n3,4,5,6\n",
+    '"a","b"\n"1","2"',
+  ];
+  const asTable = createRipstream({ csv: { delimiter: "," } });
+  const cells = (records: readonly ParseRecord[]): string[] =>
+    leafSegments(records[0]!.segments!).map((segment) => `${segment.location} ${segment.labels.join("|")} ${segment.text.replace(/""/g, '"').replace(/\r?\n/g, " ")}`);
+  for (const sample of samples) {
+    const bytes = new TextEncoder().encode(sample);
+    const text = await ripstream.parseRecursive(bytes, { filename: "t.csv", segments: true });
+    const table = await asTable.parseRecursive(bytes, { filename: "t.csv", segments: true });
+    // Tika's sniffer reads some of these as tables already; either way the cells agree.
+    assert.deepEqual(cells(text), cells(table), JSON.stringify(sample));
+  }
 });

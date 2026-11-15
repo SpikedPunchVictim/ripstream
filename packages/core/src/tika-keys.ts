@@ -42,7 +42,7 @@ export const TIKA_KEYS = {
   /**
    * Ripstream's own. Set on a record whose segments could not all be located as asked, within the allowance for
    * locations (docs/segments.md): "ptr" for a JSON document, whose segments are then its lines, "selector" for HTML, whose
-   * blocks are then located by paragraph.
+   * blocks are then located by paragraph, "cell" for a csv read as text, whose segments are then its lines.
    */
   SEGMENTS_DEGRADED: "tk:segments-degraded",
   IS_ENCRYPTED: "tk:encrypted",

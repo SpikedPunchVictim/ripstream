@@ -16,6 +16,7 @@ import {
   DEFAULT_CSV_MARK_LIMIT,
   DEFAULT_CSV_MIN_CONFIDENCE,
   bestCsvDelimiter,
+  sniffCsvDelimiters,
 } from "./csv-sniffer.ts";
 import { TextParser, writeText } from "./text.ts";
 
@@ -137,6 +138,18 @@ export class CsvParser implements Parser {
     return bestCsvDelimiter(window, { markLimit: this.#markLimit, minConfidence: this.#minConfidence });
   }
 
+  /**
+   * The delimiter of a document declared `text/csv` that the sniffer did not take for a table (a short one): the most
+   * confident of the sniffer's delimiters, or a comma when none has any. Null for the other types, which are not declared to be
+   * tables. (A `.tsv` is `text/tab-separated-values`, TextParser's, which already has cells; Content-Type `text/tsv` never reaches this parser.)
+   */
+  #declaredDelimiter(incoming: string | undefined, head: Uint8Array, charset: string): string | null {
+    if (incoming !== "text/csv") return null;
+    const window = createDecoder(charset).decoder.decode(head).slice(0, this.#markLimit);
+    const best = sniffCsvDelimiters(window, { markLimit: this.#markLimit })[0];
+    return best !== undefined && best.confidence > 0 ? best.delimiter : ",";
+  }
+
   async parse(
     stream: RipstreamInputStream,
     handler: ContentHandler,
@@ -161,7 +174,11 @@ export class CsvParser implements Parser {
     if (delimiter === null) {
       // Tika rebuilds the type from text/plain whatever came in: a text/csv that is not a table is text/plain.
       metadata.set("Content-Type", withCharset(null, "text/plain", charset));
-      await writeText(stream, handler, metadata, decoder, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
+      const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
+      // Segments only (tikajs-e0sm): a document declared csv is cells to whoever reads its segments, though its text stays text.
+      const declared = hints === undefined ? null : this.#declaredDelimiter(incoming, head, charset);
+      if (declared !== null) hints?.delimited(declared);
+      await writeText(stream, handler, metadata, decoder, hints);
       return;
     }
     // Tika names the delimiters it knows, and writes the code of any other in Content-Type (and no csv:delimiter).
