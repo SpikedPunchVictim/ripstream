@@ -4,6 +4,7 @@ import {
   MalformedDocumentError,
   MediaType,
   Metadata,
+  CONTEXT_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
   type ParseContext,
@@ -51,7 +52,7 @@ export class ExcelBinaryParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -96,6 +97,7 @@ export class ExcelBinaryParser implements Parser {
     // sheet's EOF is read as it is (Tika 4.2.0, an .xls whose Workbook size was declared 4096 past its chain: the whole text).
     const { bytes: workbook, truncated } = compound.readUpTo(name);
     const sheets = readWorkbook(workbook, truncated);
+    const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const sheet of sheets) {
@@ -104,7 +106,9 @@ export class ExcelBinaryParser implements Parser {
       await xhtml.characters(sheet.name);
       await xhtml.endElement("h1");
       await xhtml.startElement("table");
-      for (const row of sheet.rows) {
+      for (const [index, row] of sheet.rows.entries()) {
+        // Segments only: the row's number in the sheet, which skips the empty rows the table does not have.
+        hints?.row(sheet.rowNumbers[index]!);
         await xhtml.startElement("tr");
         for (const cell of row) {
           await xhtml.startElement("td");
@@ -123,6 +127,8 @@ export class ExcelBinaryParser implements Parser {
 interface Sheet {
   readonly name: string;
   readonly rows: readonly (readonly Cell[])[];
+  /** The sheet's own (1-based) number of each row: only rows that hold cells are in `rows`, so these skip the empty ones. */
+  readonly rowNumbers: readonly number[];
 }
 
 function readWorkbook(workbook: Uint8Array, truncated: boolean): Sheet[] {
@@ -195,12 +201,12 @@ function readWorkbook(workbook: Uint8Array, truncated: boolean): Sheet[] {
     .filter((s) => s !== -1)
     .sort((a, b) => a - b);
   const stopFor = new Map(starts.map((s, i) => [s, starts[i + 1] ?? records.length]));
-  const rowsByStart = new Map<number, Sheet["rows"]>();
+  const rowsByStart = new Map<number, Pick<Sheet, "rows" | "rowNumbers">>();
   for (const bound of boundSheets) {
     const start = firstRecordAt(records, bound.offset);
     if (start === -1) continue;
-    let rows = rowsByStart.get(start);
-    if (rows === undefined) {
+    let read = rowsByStart.get(start);
+    if (read === undefined) {
       const cells = readSheet(
         records,
         start,
@@ -211,10 +217,10 @@ function readWorkbook(workbook: Uint8Array, truncated: boolean): Sheet[] {
         xfFormats,
         sst,
       );
-      rows = toRows(cells, formats);
-      rowsByStart.set(start, rows);
+      read = toRows(cells, formats);
+      rowsByStart.set(start, read);
     }
-    sheets.push({ name: bound.name, rows });
+    sheets.push({ name: bound.name, ...read });
   }
   return sheets;
 }
@@ -455,7 +461,7 @@ export const MAX_BIFF_RECORDS = 2_000_000;
 function toRows(
   cells: Map<number, Map<number, Cell>>,
   formats: Map<number, string>,
-): Cell[][] {
+): Pick<Sheet, "rows" | "rowNumbers"> {
   const rows: Cell[][] = [];
   let totalCells = 0;
   const rowNumbers = [...cells.keys()].sort((a, b) => a - b);
@@ -481,7 +487,7 @@ function toRows(
     }
     rows.push(row);
   }
-  return rows;
+  return { rows, rowNumbers: rowNumbers.map((rowNumber) => rowNumber + 1) };
 }
 
 function formatCell(

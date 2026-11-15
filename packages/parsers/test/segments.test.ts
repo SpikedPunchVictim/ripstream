@@ -193,3 +193,17 @@ test("a csv read as text has the cells, rows, columns and labels of the same csv
     assert.deepEqual(cells(text), cells(table), JSON.stringify(sample));
   }
 });
+
+test("a markdown setext heading is a heading: it labels what follows, by its title without the underline (tikajs-57wb)", async () => {
+  const markdown = "Intro\n=====\n\nbody one\n\nPart two\n--------\n\nbody two\n\n---\nfront: matter\n---\n";
+  const [record] = await ripstream.parseRecursive(new TextEncoder().encode(markdown), { filename: "s.md", segments: true });
+  const found = record!.segments!.map((segment) => [segment.text, segment.labels.join(" > ")]);
+  assert.deepEqual(found.slice(0, 4), [
+    ["Intro =====", ""],
+    ["body one", "Intro"],
+    ["Part two --------", "Intro"],
+    ["body two", "Intro > Part two"],
+  ]);
+  // A rule and front matter are not underlines: they stay body text under the last heading.
+  assert.ok(found.slice(4).every(([, label]) => label === "Intro > Part two"), JSON.stringify(found));
+});

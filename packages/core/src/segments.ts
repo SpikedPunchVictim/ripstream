@@ -34,8 +34,11 @@ export interface Segment {
 export interface SegmentHints {
   /** How the document's XHTML maps onto its source: "lines", one `p` per source line; "table", the whole document is one table. */
   layout(kind: "lines" | "table"): void;
-  /** The block written next is a heading of this level (1 to 6), as if it were an `h1`-`h6`. */
-  heading(level: number): void;
+  /**
+   * The block written next is a heading of this level (1 to 6), as if it were an `h1`-`h6`. `title` is the heading's text when
+   * the block holds more than that (a markdown setext heading is written with its underline); labels are made of it.
+   */
+  heading(level: number, title?: string): void;
   /**
    * With layout "lines": the lines are rows of delimited cells (a csv that was not read as a table), the first row naming the
    * columns. The segments are then the cells, located `row=R;col=C` and labelled by their column's header, and the
@@ -157,6 +160,8 @@ interface Pending {
   /** The table it is in: a row's or a cell's. */
   readonly table: TableState | undefined;
   readonly heading: number;
+  /** A hint's own text for the heading, when the block's text is more than that. */
+  readonly headingTitle: string | undefined;
   /** The source line (lines layout, or a hint), 0 for none. */
   readonly line: number;
   readonly shape: string | undefined;
@@ -237,7 +242,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #headingLabelsVersion = 0;
 
   #delimiter: string | undefined;
+  /** The shape names a slide (or its notes) has used so far. */
+  readonly #shapeNames = new Map<string, Set<string>>();
   #nextHeading = 0;
+  #nextHeadingTitle: string | undefined;
   #nextLine = 0;
   #nextRow = 0;
 
@@ -275,8 +283,11 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     if (delimiter.length === 1 && delimiter !== '"' && delimiter !== "\n" && delimiter !== "\r") this.#delimiter = delimiter;
   }
 
-  heading(level: number): void {
-    if (Number.isInteger(level) && level >= 1 && level <= 6) this.#nextHeading = level;
+  heading(level: number, title?: string): void {
+    if (Number.isInteger(level) && level >= 1 && level <= 6) {
+      this.#nextHeading = level;
+      this.#nextHeadingTitle = title;
+    }
   }
 
   line(number: number): void {
@@ -291,7 +302,21 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     this.#closeShape();
     if (name === undefined) return;
     this.#closeImplicit();
-    this.#shape = this.#open("shape", this.#frames.length, { shape: name, title, capture: title });
+    this.#shape = this.#open("shape", this.#frames.length, { shape: this.#uniqueShapeName(name), title, capture: title });
+  }
+
+  /**
+   * The name a shape is located by: its own, and for a second shape of the slide with the same name `~2`, `~3` ..., so that
+   * `(path, location)` stays unique. A slide's notes are a part of their own, so they have their own names.
+   */
+  #uniqueShapeName(name: string): string {
+    const part = this.#part ?? "";
+    let used = this.#shapeNames.get(part);
+    if (used === undefined) this.#shapeNames.set(part, (used = new Set()));
+    let unique = name;
+    for (let n = 2; used.has(unique); n++) unique = `${name}~${n}`;
+    used.add(unique);
+    return unique;
   }
 
   // --- events --------------------------------------------------------------------------------------------------------
@@ -407,11 +432,13 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
         this.#lineStarts.push(this.#length());
         line = ++this.#lineCount;
       }
+      const headingTitle = heading === this.#nextHeading ? this.#nextHeadingTitle : undefined;
       this.#nextHeading = 0;
+      this.#nextHeadingTitle = undefined;
       this.#nextLine = 0;
       if (this.#block === undefined && this.#cell === undefined && this.#shape === undefined) {
         const capture = heading > 0 || (this.#layout === "lines" && this.#textKind === "tsv");
-        this.#block = this.#open("block", depth, { heading, line, capture });
+        this.#block = this.#open("block", depth, { heading, headingTitle, line, capture });
       }
     }
   }
@@ -445,6 +472,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     const count = (this.#containerCount.get(key) ?? 0) + 1;
     this.#containerCount.set(key, count);
     this.#container = { key, value: String(count), named: key !== "sheet" };
+    this.#shapeNames.clear();
     this.#para = 0;
     this.#tableCount = 0;
     this.#resetHeadings();
@@ -462,6 +490,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     fields: {
       readonly table?: TableState;
       readonly heading?: number;
+      readonly headingTitle?: string | undefined;
       readonly line?: number;
       readonly shape?: string;
       readonly title?: boolean;
@@ -475,6 +504,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       depth,
       table: fields.table,
       heading: fields.heading ?? 0,
+      headingTitle: fields.headingTitle,
       line: fields.line ?? 0,
       shape: fields.shape ?? this.#shape?.shape,
       title: fields.title ?? false,
@@ -495,7 +525,8 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       this.#tsvRow(block);
       return;
     }
-    if (block.heading === 1) this.#nameContainer(block.capture ?? "");
+    const title = block.headingTitle ?? block.capture ?? "";
+    if (block.heading === 1) this.#nameContainer(title);
     if (!block.hasText) return;
     if (block.kind !== "title" && block.line === 0) this.#para++;
     let location: string;
@@ -503,7 +534,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     else if (block.selector !== undefined) location = `selector=${escapeValue(block.selector)}`;
     else location = this.#prefix(block.shape) + (block.line > 0 ? `line=${block.line}` : `para=${this.#para}`);
     this.#push(block, location, this.#baseLabels());
-    if (block.heading > 0) this.#setHeading(block.heading, block.capture ?? "");
+    if (block.heading > 0) this.#setHeading(block.heading, title);
   }
 
   #closeCell(): void {

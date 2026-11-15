@@ -69,14 +69,14 @@ offsets stale, which is for whoever configured it to know.
 | format | segment | location | labels |
 | --- | --- | --- | --- |
 | xlsx | a row, and each cell | `sheet=Vendors;row=7`, `sheet=Vendors;cell=C7` (the sheet's own row numbers: empty rows are skipped in the text, not in the numbers) | the sheet name (its heading), the column header (row 1's cell) for a cell below row 1 |
-| xls | a row, and each cell | `sheet=Sheet1;row=3;col=2`, rows counted as written | as xlsx |
+| xls | a row, and each cell | `sheet=Sheet1;row=7`, `sheet=Sheet1;cell=C7` (the sheet's own row numbers, as xlsx) | as xlsx |
 | docx, odt, doc, rtf | a paragraph; a table row, and each cell | `para=14`; `table=2;row=3`, `table=2;row=3;col=1`; `part=footer;para=20` (header, footer, footnote, endnote, comment) | the heading chain (docx heading styles, odt native headings), the column header |
-| pptx | a shape (all its paragraphs) | `slide=3;shape=Title 1`, `slide=3;part=notes;shape=Notes Placeholder 2` | the slide's title, notes included |
+| pptx | a shape (all its paragraphs) | `slide=3;shape=Title 1`, `slide=3;part=notes;shape=Notes Placeholder 2`; a second shape of a slide with the same name is `Title 1~2` | the slide's title, notes included |
 | csv read as a table (see below) | a row, and each field | `row=3`, `row=3;col=2` (row 1 is the header row) | the header row's field |
 | tsv | a line as a row, and each tab-separated field | `row=3`, `row=3;col=2` | the first line's field |
 | json | each scalar value | `ptr=/customers/0/tax_id` (RFC 6901), with `line=N;` before it when the text holds several values | the object keys on the path |
 | text, log, csv read as text | a line | `line=120` | none |
-| markdown | a block | `line=7`, the source line the block starts on (fences counted) | the `#` heading chain |
+| markdown | a block | `line=7`, the source line the block starts on (fences counted) | the heading chain, `#` and setext (`Title` over `===` or `---`) |
 | html, xhtml | each block, row and cell | `selector=body > table:nth-of-type(1) tr:nth-of-type(2) > td:nth-of-type(2)`, `selector=#footer > span:nth-of-type(1)` | headings (`h1`-`h6`), the column header |
 | pdf and the rest | a paragraph | `page=2;para=5` where the parser writes pages, else `para=5` | headings the parser writes |
 | any title | the document title | `part=title` (the root record's content starts with it) | none |
@@ -160,8 +160,8 @@ only when segments are on, and a hint never touches the SAX stream:
 | `layout("lines")` | TextParser and CSV read as text: a `p` per source line |
 | `delimited(delimiter)` | CsvParser, for a document declared `text/csv` that it reads as text: the lines are rows of cells |
 | `layout("table")` | CsvParser's table: the document is one table, so no `table=` |
-| `row(n)` | OOXML spreadsheet: `<row r>` |
-| `heading(level)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`), markdown `#` |
+| `row(n)` | OOXML spreadsheet: `<row r>`; xls: the row's index |
+| `heading(level, title?)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`), markdown `#` and setext (`title` is the text without the underline) |
 | `line(n)` | markdown: a block's source line |
 | `shape(name, title)` | OOXML presentation: `cNvPr@name`, title placeholders |
 
@@ -191,11 +191,10 @@ encoding of a document with very many segments, and that is still a `LimitExceed
 - PDF page labels (`/PageLabels`, "iv" or "A-3"): pages are numbered from 1.
 - A docx `para` counts the paragraphs written, not Word's own count, which includes empty paragraphs.
 - Localized heading style ids (`berschrift1`, `Titre1`) are not recognized as headings.
-- Spreadsheets other than xlsx number rows as written, so an empty row is not counted. Only xlsx and xls were checked.
-  xlsb and ods get whatever their XHTML gives.
+- xlsb and ods number rows as written, so an empty row is not counted; xlsb also leaves empty cells out of its row, so its `col=` can be
+  short. Only xlsx and xls take the sheet's own numbers.
 - A table's column headers are its first row, even when that row is a title spanning the sheet.
-- Shape names are what the author left: two shapes can share a name, and then `(path, location)` is not unique.
 - A spreadsheet's `sheet=` (or a slide's title) is repeated in every location it holds; a very long name is not counted against
   the allowance above, as a pointer is. Only xlsx sheet names, which Excel limits to 31 characters, were considered.
 - Selectors are over Tika's XHTML, which drops some of the page's elements, so `nth-of-type` can differ from the page.
-- No XPath for XML, no setext (`===`) markdown headings, no JSON Lines `ptr` without the `line`.
+- No XPath for XML, no JSON Lines `ptr` without the `line`.

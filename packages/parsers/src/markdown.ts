@@ -43,7 +43,7 @@ export class MarkdownParser implements Parser {
     for (const block of blocks(stripped.text)) {
       if (hints !== undefined) {
         hints.line(lines!(block.offset));
-        if (block.heading > 0) hints.heading(block.heading);
+        if (block.heading > 0) hints.heading(block.heading, block.title);
       }
       await xhtml.startElement("p");
       await xhtml.characters(block.text);
@@ -59,6 +59,8 @@ interface Block {
   readonly offset: number;
   /** The level of a block that is one ATX heading line (`## Title`), 0 otherwise. */
   readonly heading: number;
+  /** The heading's text when the block is a setext heading (`Title` over `=====`), whose text also holds the underline. */
+  readonly title?: string;
 }
 
 function blocks(markdown: string): Block[] {
@@ -83,10 +85,24 @@ function blocks(markdown: string): Block[] {
       }
       lineStart += line.length + 1;
     }
-    if (cleaned.length > 0) result.push({ text: cleaned.join(" "), offset, heading: written === 1 ? heading : 0 });
+    if (cleaned.length > 0) {
+      const setext = setextHeading(cleaned);
+      if (setext !== undefined) result.push({ text: cleaned.join(" "), offset, heading: setext.level, title: setext.title });
+      else result.push({ text: cleaned.join(" "), offset, heading: written === 1 ? heading : 0 });
+    }
     if (separator !== null) start = separator.index + separator[0].length;
   }
   return result;
+}
+
+/** A block of lines that ends in `===` or `---` under text is a setext heading: level 1 for `=`, 2 for `-`. */
+function setextHeading(lines: readonly string[]): { readonly level: number; readonly title: string } | undefined {
+  if (lines.length < 2) return undefined;
+  const underline = /^\s{0,3}(=+|-+)\s*$/.exec(lines[lines.length - 1]!)?.[1];
+  const title = lines.slice(0, -1).join(" ").trim();
+  // A rule, or the rule that closes a front matter, is not the underline of a heading.
+  if (underline === undefined || /^[-=*_\s]*$/.test(title) || /^\s{0,3}(---|\+\+\+)\s*$/.test(lines[0]!)) return undefined;
+  return { level: underline.startsWith("=") ? 1 : 2, title };
 }
 
 /** A piece of the fence-stripped text: from `at` on, it is the source from `source` on. */

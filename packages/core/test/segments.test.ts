@@ -336,6 +336,30 @@ test("delimited ignores a delimiter that is a quote or a line break (tikajs-e0sm
   assert.deepEqual(tap.finish(content.toString()).map((segment) => segment.location), ["line=1"]);
 });
 
+test("two shapes of a slide with the same name are located apart; the next slide starts again (tikajs-57wb)", async () => {
+  const slides = script("same-shape-names", "application/x-slides", async (xhtml, hints) => {
+    for (let slide = 0; slide < 2; slide++) {
+      await xhtml.startElement("div", "class", "slide");
+      for (const [shape, text] of [["TextBox 1", "first"], ["TextBox 1", "second"], ["Other", "third"]] as const) {
+        hints?.shape(shape);
+        await xhtml.element("p", text);
+      }
+      hints?.shape(undefined);
+      await xhtml.endElement("div");
+    }
+  });
+  const [record] = await segmentsOf(slides);
+  const locations = record!.segments!.map((segment) => segment.location);
+  assert.deepEqual(locations, [
+    "slide=1;shape=TextBox 1",
+    "slide=1;shape=TextBox 1~2",
+    "slide=1;shape=Other",
+    "slide=2;shape=TextBox 1",
+    "slide=2;shape=TextBox 1~2",
+    "slide=2;shape=Other",
+  ]);
+});
+
 test("html is located by selector: nth-of-type from the body, an id where there is one", async () => {
   const html = script("html", "text/html", async (xhtml) => {
     await xhtml.element("p", "first");
