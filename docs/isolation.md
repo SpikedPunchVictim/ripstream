@@ -178,6 +178,27 @@ A PDF flate bomb is stopped by the RSS poll (L3), not by the heap cap: the infla
 At the default sizing a 2 GiB inflated bomb (2 MB on the wire) parsed to empty text in 13 s at 1.4 GiB RSS, under
 `perChildMb`; larger ones end at the RSS limit or the wall clock.
 
+### Text-heavy documents and the heap (`tikajs-m5ng`)
+
+A 50 MB text PDF (5,000 pages, 47 million characters) used to fail "Isolated parser ran out of memory" at
+`maxOutputChars` 52,428,800, though the container peaked at 884 MiB of 11 GiB and Docker reported no OOM kill. The limit
+that tripped was the child's V8 heap (`heapMb`, derived as 384 MiB plus 8 bytes per output character, capped at 512
+MiB), with the child's resident set at 773 MiB, under `perChildMb` (1536). The cause was pdf.js, not the text: it kept
+about 130 KiB of state for every page it had served (13 bytes per extracted character, 678 MiB live at the end, with the
+text itself dropped), so a long PDF filled the heap before it reached its cap. At a 15 million character cap the same file
+stopped early enough to pass. The PDF parser now calls `document.cleanup()` every 100 pages: the live heap for the same
+file is 125 MiB (the text buffer, one byte per character) and the child's resident set 671 MiB at the default sizing.
+Measured on Linux arm64, Node 24, records output, `truncate`, cap 52,428,800: the 47 MB PDF (47.1 million characters)
+completes with 671 MiB child RSS; 60 MB text documents that reach the cap (a DOCX, a DOCX of two-byte characters, a PDF)
+end as partial results with `tk:exception:write-limit-reached` at 754, 989 and 730 MiB child RSS, parent 379 to 443 MiB.
+
+When a child does run out of memory the error now says which limit it met and the measured numbers, for example
+`Isolated parser ran out of memory: the V8 heap limit was reached (heapMb 512 MiB; child resident set 773 MiB at most,
+of its perChildMb 1536 MiB). ... raise heapMb (it must stay below perChildMb) or lower maxOutputChars`. A failure outside
+the heap (a native allocation, the address-space cap) says so, and the RSS kill and an unexplained SIGKILL carry the same
+numbers: a peak far below `perChildMb` on a SIGKILL points at the container's own OOM killer. The resident set is the
+parent's last RSS poll (every 20 ms on Linux), so it can be a little under the true peak.
+
 ### Hazard probes: music-metadata, hyparquet, large archives
 
 Hostile inputs built in memory (`packages/bundle-standard/test/hazard-probes.test.ts`, about 30 s) go through the real

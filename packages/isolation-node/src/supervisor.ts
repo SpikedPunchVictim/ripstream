@@ -320,7 +320,7 @@ class Supervision {
   #fd3Bytes = 0;
   #stderrBytes = 0;
   // Markers seen in ANY stderr chunk (see ExitFacts.stderrMarkers); the carry is the end of the previous chunk.
-  #stderrMarkers = { memory: false, stringLength: false };
+  #stderrMarkers = { memory: false, stringLength: false, heap: false };
   #stderrCarry = "";
   #stderrClosed = false;
   #readyMs: number | null = null;
@@ -480,6 +480,7 @@ class Supervision {
     this.#stderrMarkers = {
       memory: this.#stderrMarkers.memory || seen.memory,
       stringLength: this.#stderrMarkers.stringLength || seen.stringLength,
+      heap: this.#stderrMarkers.heap || seen.heap === true,
     };
     this.#stderrCarry = text.slice(-MARKER_CARRY_CHARS);
     if (this.#stderrBytes >= this.#stderrBudget && !this.#stderrClosed) {
@@ -726,6 +727,15 @@ class Supervision {
       signal: this.#signal,
       stderrTail: this.#ring.text(),
       stderrMarkers: this.#stderrMarkers,
+      ...(this.#options.rssLimitMb === undefined
+        ? {}
+        : {
+            memory: {
+              heapMb: this.#options.heapMb,
+              rssLimitMb: this.#options.rssLimitMb,
+              peakRssMb: this.#poller?.stats().samples ? this.#poller.stats().peakMb : null,
+            },
+          }),
       ...(this.#killReason === "abort" ? { abortReason: this.#abortReason } : {}),
       ...(this.#protocolDetail === undefined ? {} : { protocolDetail: this.#protocolDetail }),
       ...(this.#killReason === "disk" && this.#options.maxDiskMb !== undefined

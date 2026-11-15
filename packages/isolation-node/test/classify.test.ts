@@ -338,3 +338,49 @@ test("an unsolicited SIGKILL says it was likely out of memory or a CPU hard limi
   const error = classifyExit(facts({ signal: "SIGKILL" }));
   assert.match(error?.message ?? "", /likely out of memory or CPU hard limit/);
 });
+
+// ---- memory failures name the limit and the numbers (tikajs-m5ng) ------------------------------------------------
+
+const MEMORY = { heapMb: 512, rssLimitMb: 1536, peakRssMb: 773.4 };
+
+test("a heap abort names the V8 heap limit, heapMb, and how far the resident set was from perChildMb", () => {
+  const error = classifyExit(
+    facts({ signal: "SIGABRT", stderrTail: "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory", memory: MEMORY }),
+  );
+  assert.ok(error instanceof LimitExceededError);
+  assert.match(error.message, /^Isolated parser ran out of memory: the V8 heap limit was reached \(heapMb 512 MiB; child resident set 773 MiB at most, of its perChildMb 1536 MiB\)/);
+  assert.match(error.message, /raise heapMb/);
+});
+
+test("a heap marker seen earlier in stderr (not in the tail) still names the heap", () => {
+  const error = classifyExit(
+    facts({ signal: "SIGABRT", stderrTail: "native frame 40", stderrMarkers: { memory: true, stringLength: false, heap: true }, memory: MEMORY }),
+  );
+  assert.match(error?.message ?? "", /V8 heap limit was reached/);
+});
+
+test("a native allocation failure says it was outside the V8 heap", () => {
+  const error = classifyExit(facts({ signal: "SIGABRT", stderrTail: "Array buffer allocation failed", memory: MEMORY }));
+  assert.match(error?.message ?? "", /ran out of memory outside the V8 heap/);
+  assert.match(error?.message ?? "", /heapMb 512 MiB; child resident set 773 MiB at most, of its perChildMb 1536 MiB/);
+});
+
+test("without measurements the message is the bare one", () => {
+  const error = classifyExit(facts({ signal: "SIGABRT", stderrTail: "JavaScript heap out of memory" }));
+  assert.equal(error?.message, "Isolated parser ran out of memory");
+});
+
+test("an RSS kill names the numbers and the way out", () => {
+  const error = classifyExit(facts({ killReason: "rss", signal: "SIGKILL", memory: { heapMb: 512, rssLimitMb: 1536, peakRssMb: 1601 } }));
+  assert.match(error?.message ?? "", /exceeded its memory limit \(resident set size, heapMb 512 MiB; child resident set 1601 MiB at most, of its perChildMb 1536 MiB\)/);
+});
+
+test("an unsolicited SIGKILL carries the measured peak, so a peak far below perChildMb points at the kernel", () => {
+  const error = classifyExit(facts({ signal: "SIGKILL", memory: { heapMb: 512, rssLimitMb: 1536, peakRssMb: 200 } }));
+  assert.match(error?.message ?? "", /likely out of memory or CPU hard limit\) \(heapMb 512 MiB; child resident set 200 MiB at most/);
+});
+
+test("a peak that was never sampled says so", () => {
+  const error = classifyExit(facts({ signal: "SIGABRT", stderrTail: "heap out of memory", memory: { ...MEMORY, peakRssMb: null } }));
+  assert.match(error?.message ?? "", /child resident set not sampled, of its perChildMb/);
+});

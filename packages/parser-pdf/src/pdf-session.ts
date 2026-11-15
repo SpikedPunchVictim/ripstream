@@ -136,6 +136,8 @@ interface PdfDocument {
     readonly content?: Uint8Array;
   }>>;
   getOutline?(): Promise<unknown>;
+  /** Drops what pdf.js keeps per page and per object (the page objects, the object cache). Absent on a stand-in. */
+  cleanup?(keepLoadedFonts?: boolean): Promise<void>;
 }
 
 export interface RangeTransport {
@@ -164,6 +166,15 @@ const CONTENT_SCAN_LIMIT = 64 * 1024 * 1024;
 
 /** pdf.js's range size for a file read through the range transport (its default is 65,536). */
 const RANGE_CHUNK_BYTES = 1024 * 1024;
+
+/**
+ * pdf.js keeps parsed state for every page it has served until the document is destroyed: measured on a 5,000-page,
+ * 50 MB text PDF, the heap grew by about 130 KiB per page (13 bytes per extracted character, 680 MiB live at the end)
+ * even though the text itself was dropped, so a long PDF ran a child out of its heap long before its output cap
+ * (tikajs-m5ng). `document.cleanup()` drops it; every this many pages keeps the live heap near 30 MiB at a cost of
+ * re-reading shared objects (fonts) once per interval.
+ */
+const DOCUMENT_CLEANUP_INTERVAL_PAGES = 100;
 
 interface PdfOutlineItem {
   readonly title?: unknown;
@@ -402,6 +413,16 @@ export class PdfSession {
     return loading.promise;
   }
 
+  /** Best effort: a failed cleanup costs memory, never the parse. */
+  async #releaseDocumentCaches(document: PdfDocument, index: number): Promise<void> {
+    if (index % DOCUMENT_CLEANUP_INTERVAL_PAGES !== 0) return;
+    try {
+      await document.cleanup?.(true);
+    } catch {
+      // The next interval tries again.
+    }
+  }
+
   async #extractPage(index: number): Promise<PdfResponse> {
     const document = this.#document;
     if (document === undefined) {
@@ -437,6 +458,7 @@ export class PdfSession {
       return { type: "page-error", index, ...describe(error) };
     } finally {
       page?.cleanup();
+      await this.#releaseDocumentCaches(document, index);
     }
   }
 

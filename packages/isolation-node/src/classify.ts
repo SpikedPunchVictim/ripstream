@@ -43,23 +43,33 @@ export interface ExitFacts {
   readonly protocolDetail?: string;
   /** The budget that was exceeded when killReason is "disk", and whether the walk's entry or depth bound tripped it. */
   readonly disk?: { readonly limitMb: number; readonly boundHit: boolean; readonly unreadable?: boolean };
+  /**
+   * The child's memory limits and the parent's own measurement, so a memory failure can say WHICH limit it met and
+   * how close the other was (tikajs-m5ng: a heap abort at 773 MiB of a 1536 MiB budget was reported as a bare
+   * "ran out of memory"). `peakRssMb` is the largest sample the RSS poll took, null when none was taken.
+   */
+  readonly memory?: { readonly heapMb: number; readonly rssLimitMb: number; readonly peakRssMb: number | null };
 }
 
 // Observed in the P0 chaos fixtures (b, e, f): "JavaScript heap out of memory",
 // "Failed to reserve virtual memory", "Array buffer allocation failed". Matching is case-insensitive.
 const MEMORY_MARKER = /out of memory|failed to reserve|allocation failed/i;
 const STRING_LENGTH_MARKER = /invalid string length/i;
+/** V8's own fatal lines for the heap limit ("Reached heap limit", "JavaScript heap out of memory"). */
+const HEAP_MARKER = /heap out of memory|reached heap limit/i;
 
 export interface StderrMarkers {
   readonly memory: boolean;
   readonly stringLength: boolean;
+  /** The V8 heap limit (heapMb) was the one hit. Omitted: unknown, treated as not seen. */
+  readonly heap?: boolean;
 }
 
 /** The longest marker is 21 characters, so a carry of this many characters catches one split across two chunks. */
 export const MARKER_CARRY_CHARS = 32;
 
 export function scanStderrMarkers(text: string): StderrMarkers {
-  return { memory: MEMORY_MARKER.test(text), stringLength: STRING_LENGTH_MARKER.test(text) };
+  return { memory: MEMORY_MARKER.test(text), stringLength: STRING_LENGTH_MARKER.test(text), heap: HEAP_MARKER.test(text) };
 }
 
 const MAX_DETAIL_CHARS = 200;
@@ -78,6 +88,24 @@ function describeExit(facts: ExitFacts): string {
 function stderrCause(facts: ExitFacts): { cause?: Error } {
   const tail = sanitizeText(facts.stderrTail, MAX_TAIL_CHARS);
   return tail.length === 0 ? {} : { cause: new Error(`child stderr (tail): ${tail}`) };
+}
+
+/** "heapMb 512 MiB, child resident set 773 MiB at most of its 1536 MiB perChildMb": the numbers of a memory failure. */
+function memoryNumbers(memory: NonNullable<ExitFacts["memory"]>): string {
+  const peak = memory.peakRssMb === null ? "not sampled" : `${Math.round(memory.peakRssMb)} MiB at most`;
+  return `heapMb ${memory.heapMb} MiB; child resident set ${peak}, of its perChildMb ${memory.rssLimitMb} MiB`;
+}
+
+/** The child hit a memory limit and died of it on its own: say which. */
+function memoryAbortMessage(facts: ExitFacts, heapHit: boolean): string {
+  const { memory } = facts;
+  if (memory === undefined) return "Isolated parser ran out of memory";
+  return heapHit
+    ? `Isolated parser ran out of memory: the V8 heap limit was reached (${memoryNumbers(memory)}). ` +
+        "The document needs more heap than the isolation allows it: raise heapMb (it must stay below perChildMb) " +
+        "or lower maxOutputChars"
+    : `Isolated parser ran out of memory outside the V8 heap, a native allocation or the address-space cap failed ` +
+        `(${memoryNumbers(memory)}). Raise perChildMb or lower maxOutputChars`;
 }
 
 function isTimeoutReason(reason: unknown): boolean {
@@ -104,7 +132,13 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
         ? new ParseTimeoutError("Parse timed out", { cause: facts.abortReason })
         : new AbortError();
     case "rss":
-      return new LimitExceededError("Isolated parser exceeded its memory limit (resident set size)", stderrCause(facts));
+      return new LimitExceededError(
+        facts.memory === undefined
+          ? "Isolated parser exceeded its memory limit (resident set size)"
+          : `Isolated parser exceeded its memory limit (resident set size, ${memoryNumbers(facts.memory)}). ` +
+              "Raise perChildMb (and heapMb with it) or lower maxOutputChars",
+        stderrCause(facts),
+      );
     case "result_cap":
       return new LimitExceededError("Isolated parser result exceeded the maximum result size", stderrCause(facts));
     case "frame_cap":
@@ -169,7 +203,8 @@ export function classifyExit(facts: ExitFacts): RipstreamError | null {
   const memoryAbort =
     (facts.signal === "SIGABRT" || facts.signal === "SIGTRAP" || facts.signal === "SIGSEGV") && sawMemory;
   if (memoryAbort) {
-    return new LimitExceededError("Isolated parser ran out of memory", stderrCause(facts));
+    const heapHit = tailMarkers.heap === true || facts.stderrMarkers?.heap === true;
+    return new LimitExceededError(memoryAbortMessage(facts, heapHit), stderrCause(facts));
   }
   if (sawStringLength) {
     return new LimitExceededError("Isolated parser exceeded the maximum string length", stderrCause(facts));
@@ -182,7 +217,8 @@ export function classifyExit(facts: ExitFacts): RipstreamError | null {
   if (facts.signal === "SIGKILL") {
     // Nobody here asked for this kill: the cgroup OOM killer, or the CPU hard limit (RLIMIT_CPU's hard limit
     // delivers SIGKILL once the soft limit's SIGXCPU was ignored). Either way the document caused it.
-    return new LimitExceededError("Isolated parser was killed (likely out of memory or CPU hard limit)", stderrCause(facts));
+    const numbers = facts.memory === undefined ? "" : ` (${memoryNumbers(facts.memory)})`;
+    return new LimitExceededError(`Isolated parser was killed (likely out of memory or CPU hard limit)${numbers}`, stderrCause(facts));
   }
   return new IsolationError(
     "crash",

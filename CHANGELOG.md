@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Text-heavy PDFs reach the output cap; memory failures name the limit (`tikajs-m5ng`)
+
+Fixed: a long text PDF ran an isolated child out of its 512 MiB heap before it reached `maxOutputChars` (a 5,000-page,
+47 million character PDF failed at the 52,428,800 cap; at a 15 million cap it passed). pdf.js kept about 130 KiB per page
+served; the PDF parser now releases it every 100 pages (child heap for that file: 678 MiB live before, 125 MiB after).
+Changed: an isolated child that dies of memory now says which limit it met and the numbers: the V8 heap limit (`heapMb`),
+a native allocation outside the heap, the resident-set kill, or an unexplained SIGKILL, each with `heapMb`, the child's
+resident set and `perChildMb`. The messages keep their old prefixes. Details: `docs/isolation.md`.
+
 ### Worker threads for pipes (`tikajs-ow39`)
 
 Added: `ripstream pipes --workers <n|auto|off>` (or `RIPSTREAM_WORKERS`) parses on a pool of worker threads in the same
