@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_03.md) text and Content-Type for test_documents/vendored/docling/md/right_to_left_03.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-right_to_left_03.md",
+    "filename": "right_to_left_03.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "اميدنامه پذيرش در بازار اصلی - کالای داخلی\n<!-- image -->\nشرکت بورس کالای ايران\n-2-5 استاندارد کالا\nنام استاندارد\nشمشه و شمشال توليد شده به روش ريخته گری پيوسته مورد مصرف در فولادهای سازه ای - مطابق آناليز پيوست\nشماره استاندارد ملی\n20300\nاستاندارد اجباری است؟\n\t[ ] بلی\n\n\t[x] خير\n\n\nمرجع صادرکننده استاندارد\nسازمان ملی استاندارد ايران\nآيا توليدکننده محصول، استاندارد مذکور را اخذ نموده است؟\n\t[x] بلی خير\n\n-3 پذيرش در بورس\nتاريخ ارائه مدارک\n1403/09/19\nتاريخ پذيرش\n1403/10/04\nشماره جلسه کميته عرضه\n436\nتاريخ درج اميدنامه\n1403/10/05\nمشاور پذيرش\nکارگزاری آرمون بورس\nنحوة تعيين قيمت پايه پس از پذيرش کالا در بورس\nبر اساس قيمت های جهانی\n\tحداقل درصد عرضه از توليد/ کل فروش/ فروش داخلی\n\nحداقل %50 از توليد ساليانه يا 47.500 تن\nخطای مجاز تحويل\n5% آخرين محموله قابل تحويل\n"
+    }
+  ]
+}

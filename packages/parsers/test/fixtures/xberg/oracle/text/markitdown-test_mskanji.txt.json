@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test_mskanji.txt) text and Content-Type for test_documents/vendored/markitdown/csv/test_mskanji.txt from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/markitdown-test_mskanji.txt",
+    "filename": "test_mskanji.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "名前 年齢 住所\n佐藤太郎 30 東京\n三木英子 25 大阪\n髙橋淳 35 名古屋\n\n"
+    }
+  ]
+}

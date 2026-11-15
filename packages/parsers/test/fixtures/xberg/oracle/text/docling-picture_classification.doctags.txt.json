@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename picture_classification.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/picture_classification.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-picture_classification.doctags.txt",
+    "filename": "picture_classification.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 4076
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 4076
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit a"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "page_footer>\n<page_break>\n<text><loc_109><loc_81><loc_390><l"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "sto duo dolores et ea rebum. Stet clita kasd gubergren, no s"
+    }
+  ]
+}

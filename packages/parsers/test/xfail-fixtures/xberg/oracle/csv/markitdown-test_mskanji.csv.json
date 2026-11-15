@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-9imn] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_mskanji.csv) text and Content-Type for test_documents/vendored/markitdown/csv/test_mskanji.csv from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "csv",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/markitdown-test_mskanji.csv",
+    "filename": "test_mskanji.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-31j"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "名前,年齢,住所\r\n佐藤太郎,30,東京\r\n三木英子,25,大阪\r\n髙橋淳,35,名古屋\r\n\n"
+    }
+  ]
+}

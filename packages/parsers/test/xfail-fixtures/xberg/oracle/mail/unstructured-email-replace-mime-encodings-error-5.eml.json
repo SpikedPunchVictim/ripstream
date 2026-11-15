@@ -1,0 +1,60 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename email-replace-mime-encodings-error-5.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-5.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-email-replace-mime-encodings-error-5.eml",
+    "filename": "email-replace-mime-encodings-error-5.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "To the attention of:\n\nMarketing department\n\nSales department\n\nEvents Sponsorship department\n\n \n\nI am contacting you regarding a sponsorship opportunity at our upcoming Bioprocessing Summit, which will take place on 21st – 22nd April, 2022 | Berlin, Germany.\n\n \n\nFind attached the agenda the of the event.\n\n \n\nOur exhibition/sponsorship packages offer a wide range of opportunities like:\n\n• Speaking slots to share your experience with a senior audience\n\n• Exhibition locations to develop relationships with your target market\n\n• Marketing visibility to improve your reputation within the industry etc.\n\n• Wish list of companies you want to meet can be provided to us so we can invite them for you\n\n• One-to-one meetings if you wish to meet some specific people on our participants list\n\n \n\nThe summit will bring together C-level decision makers from a range of industries such as Biotechnology, Pharmaceuticals, Machinery, Food Production, Food & Beverages etc\n\nExpected companies include ThermoFisher, Takeda, Sanofi, Abbvie, Novartis, Repligen, GSK, AstraZeneca, Merck serona etc. In terms of audience expectation, we anticipate around 150+ attendees based on previous events. \n\n \n\nPlease note that a limited number of sponsor slots are reserved in the agenda and will be considered on a first come first served basis. If this opportunity is something that you would like to explore, please let me know so I can send the sponsorship packages for your consideration. You can also request for the packages from our website www.randomworld.com \n\nIf you are not the responsible person, please share the information with the relevant persons. Thank you and I look forward to hearing from you.\n\n \n\nKind regards,\n\n \n\nSomeone| Project Manager\n\nRandom WorldLtd.\n\n\r\nEmail: email@domain.com\n\n \n\n\n\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "GLOBAL SPONSORSHIP OPPORTUNITY - BIOPROCESSING SUMMIT"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Someone <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "GLOBAL SPONSORSHIP OPPORTUNITY - BIOPROCESSING SUMMIT"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2022-03-01T16:19:03Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "Someone <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "email@domain.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "email@domain.com"
+    }
+  ]
+}

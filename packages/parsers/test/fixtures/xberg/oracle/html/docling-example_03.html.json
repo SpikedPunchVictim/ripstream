@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename example_03.html) text and Content-Type for test_documents/vendored/docling/html/example_03.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-example_03.html",
+    "filename": "example_03.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    Example Document\n\n    Introduction\n\n    This is the first paragraph of the introduction.\n\n    Background\n\n    Some background information here.\n\n    \n      \t\n        First item in unordered list\n        \n          \tNested item 1\n\n          \tNested item 2\n\n        \n\n      \n\n      \tSecond item in unordered list\n\n    \n\n    \n      \t\n        First item in ordered list\n        \n          \tNested ordered item 1\n\n          \tNested ordered item 2\n\n        \n\n      \n\n      \tSecond item in ordered list\n\n    \n\n    Data Table\n\n    \n      \n        \tHeader 1\n        \tHeader 2\n        \tHeader 3\n      \n\n      \n        \tRow 1, Col 1\n        \tRow 1, Col 2\n        \tRow 1, Col 3\n      \n\n      \n        \tRow 2, Col 1\n        \tRow 2, Col 2\n        \tRow 2, Col 3\n      \n\n      \n        \tRow 3, Col 1\n        \tRow 3, Col 2\n        \tRow 3, Col 3\n      \n\n    \n\n  "
+    }
+  ]
+}

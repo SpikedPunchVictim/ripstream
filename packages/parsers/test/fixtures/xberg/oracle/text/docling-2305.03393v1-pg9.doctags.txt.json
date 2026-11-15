@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1-pg9.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/2305.03393v1-pg9.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-2305.03393v1-pg9.doctags.txt",
+    "filename": "2305.03393v1-pg9.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 3211
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 3211
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ed from the same machine on a single core with AMD EPYC 7763"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": ">0.952 0.944<fcel>0.92 0.903<fcel>0.942 0.931<fcel>0.857 0.8"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "_393><loc_420>Additionally, the results show that OTSL has a"
+    }
+  ]
+}

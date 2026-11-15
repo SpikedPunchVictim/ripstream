@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename table_01.html) text and Content-Type for test_documents/vendored/docling/html/table_01.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-table_01.html",
+    "filename": "table_01.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    Header\n\n    This is the first paragraph.\n\n    \n      \n        \tA\n        \tB\n      \n\n      \n        \t1...\n        \t2...\n      \n\n    \n\n    After table\n  "
+    }
+  ]
+}

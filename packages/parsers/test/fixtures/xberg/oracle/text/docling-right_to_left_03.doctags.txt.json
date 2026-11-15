@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_03.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/right_to_left_03.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-right_to_left_03.doctags.txt",
+    "filename": "right_to_left_03.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 2664
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 2664
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "</section_header_level_1>\n<section_header_level_1><loc_308><"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "_level_1><loc_344><loc_209><loc_425><loc_219>-3 پذيرش در بور"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "داقل %50 از توليد ساليانه يا 47.500 تن</text>\n<text><loc_334"
+    }
+  ]
+}

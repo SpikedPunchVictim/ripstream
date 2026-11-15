@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test_notebook.ipynb) text and Content-Type for test_documents/vendored/markitdown/ipynb/test_notebook.ipynb from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "notebook"
+  ],
+  "input": {
+    "file": "../files/markitdown-test_notebook.ipynb",
+    "filename": "test_notebook.ipynb"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "{\n \"cells\": [\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"0f61db80\",\n   \"metadata\": {},\n   \"source\": [\n    \"# Test Notebook\"\n   ]\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 11,\n   \"id\": \"3f2a5bbd\",\n   \"metadata\": {},\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": [\n      \"markitdown\\n\"\n     ]\n    }\n   ],\n   \"source\": [\n    \"print(\\\"markitdown\\\")\"\n   ]\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"9b9c0468\",\n   \"metadata\": {},\n   \"source\": [\n    \"## Code Cell Below\"\n   ]\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 10,\n   \"id\": \"37d8088a\",\n   \"metadata\": {},\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": [\n      \"42\\n\"\n     ]\n    }\n   ],\n   \"source\": [\n    \"# comment in code\\n\",\n    \"print(42)\"\n   ]\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"2e3177bd\",\n   \"metadata\": {},\n   \"source\": [\n    \"End\\n\",\n    \"\\n\",\n    \"---\"\n   ]\n  }\n ],\n \"metadata\": {\n  \"kernelspec\": {\n   \"display_name\": \"Python 3\",\n   \"language\": \"python\",\n   \"name\": \"python3\"\n  },\n  \"language_info\": {\n   \"codemirror_mode\": {\n    \"name\": \"ipython\",\n    \"version\": 3\n   },\n   \"file_extension\": \".py\",\n   \"mimetype\": \"text/x-python\",\n   \"name\": \"python\",\n   \"nbconvert_exporter\": \"python\",\n   \"pygments_lexer\": \"ipython3\",\n   \"version\": \"3.12.8\"\n  },\n  \"title\": \"Test Notebook Title\"\n },\n \"nbformat\": 4,\n \"nbformat_minor\": 5\n}\n\n"
+    }
+  ]
+}

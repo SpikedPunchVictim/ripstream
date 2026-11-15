@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename unit_test_lists.docx.md) text and Content-Type for test_documents/vendored/docling/md/unit_test_lists.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-unit_test_lists.docx.md",
+    "filename": "unit_test_lists.docx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Test Document\nParagraph 2.1.1\nParagraph 2.1.2\nTest 1:\n\tList item 1\n\tList item 2\n\tList item 3\n\nTest 2:\n\tList item a\n\tList item b\n\tList item c\n\nTest 3:\n\tList item 1\n\tList item 2\tList item 1.1\n\tList item 1.2\n\tList item 1.3\n\n\n\tList item 3\n\nTest 4:\n\tList item 1\tList item 1.1\n\n\n\tList item 2\n\nTest 5:\n\tList item 1\tList item 1.1\tList item 1.1.1\n\n\n\n\n\tList item 3\n\nTest 6:\n\tList item 1\n\tList item 2\tList item 1.1\n\tList item 1.2\tList item 1.2.1\n\n\n\n\n\tList item 3\n\n"
+    }
+  ]
+}

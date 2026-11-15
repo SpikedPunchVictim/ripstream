@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/2305.03393v1.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-2305.03393v1.doctags.txt",
+    "filename": "2305.03393v1.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 39953
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 39953
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ate-of-the-art (SOTA) object detection methods provide an ac"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "must be either another \"X\" cell or a \"U\" cell, and the upper"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "npure, K.: Cascadetabnet: An approach for end to end table d"
+    }
+  ]
+}

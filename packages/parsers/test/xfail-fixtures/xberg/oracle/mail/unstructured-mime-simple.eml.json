@@ -1,0 +1,55 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename mime-simple.eml) text and Content-Type for test_documents/vendored/unstructured/eml/mime-simple.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-mime-simple.eml",
+    "filename": "mime-simple.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    This is a simple email message.\n\n\n  "
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Example Multipart/Alternative Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Example Multipart/Alternative Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "recipient@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "sender@example.com"
+    }
+  ]
+}

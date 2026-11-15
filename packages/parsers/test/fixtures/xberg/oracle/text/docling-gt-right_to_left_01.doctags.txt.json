@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_01.doctags.txt) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/right_to_left_01.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-gt-right_to_left_01.doctags.txt",
+    "filename": "right_to_left_01.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 2029
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 2029
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "_15><loc_80><loc_85><loc_87></location>Python و R ةغلب ةجمرب"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "نلا لثم ،ةمدقتم ةيليلحت تايلمع ةقد رثكأ تارارق ذاختا ىلإ ا ض"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ليلحت ةيلقع عم اهل نوكت نأ نكمي ةبسانملا ةيجمربلا بيلاسلأا ق"
+    }
+  ]
+}

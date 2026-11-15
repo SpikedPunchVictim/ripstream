@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename example_08.html) text and Content-Type for test_documents/vendored/docling/html/example_08.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-example_08.html",
+    "filename": "example_08.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    Pivot table with with 1 row header\n\n\n    \n      \n        \tYear\n        \tMonth\n        \tRevenue\n        \tCost\n      \n\n      \n        \t2025\n      \n\n      \n        \tJanuary\n        \t$134\n        \t$162\n      \n\n      \n        \tFebruary\n        \t$150\n        \t$155\n      \n\n      \n        \tMarch\n        \t$160\n        \t$143\n      \n\n      \n        \tApril\n        \t$210\n        \t$150\n      \n\n      \n        \tMay\n        \t$280\n        \t$120\n      \n\n    \n\n\n    Pivot table with 2 row headers\n\n\n    \n      \n        \tYear\n        \tQuarter\n        \tMonth\n        \tRevenue\n        \tCost\n      \n\n      \n        \t2025\n        \tQ1\n      \n\n      \n        \tJanuary\n        \t$134\n        \t$162\n      \n\n      \n        \tFebruary\n        \t$150\n        \t$155\n      \n\n      \n        \tMarch\n        \t$160\n        \t$143\n      \n\n      \n        \tQ2\n      \n\n      \n        \tApril\n        \t$210\n        \t$150\n      \n\n      \n        \tMay\n        \t$280\n        \t$120\n      \n\n    \n\n\n    Equivalent pivot table\n\n\n    \n      \n        \tYear\n        \tQuarter\n        \tMonth\n        \tRevenue\n        \tCost\n      \n\n      \n        \t2025\n        \tQ1\n      \n\n      \n        \tJanuary\n        \t$134\n        \t$162\n      \n\n      \n        \tFebruary\n        \t$150\n        \t$155\n      \n\n      \n        \tMarch\n        \t$160\n        \t$143\n      \n\n      \n        \tQ2\n      \n\n      \n        \tApril\n        \t$210\n        \t$150\n      \n\n      \n        \tMay\n        \t$280\n        \t$120\n      \n\n    \n\n  "
+    }
+  ]
+}

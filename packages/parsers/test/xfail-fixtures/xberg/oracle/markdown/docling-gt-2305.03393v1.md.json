@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/2305.03393v1.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-2305.03393v1.md",
+    "filename": "2305.03393v1.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 31101
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 31101
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ble to human observers [7,8,10,14,23]. On the other hand, th"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ucture encoding; E - explanation on cell encoding\n<!-- image"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "nd to end table detection and structure recognition from ima"
+    }
+  ]
+}

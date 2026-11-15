@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename pone.0234687.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/pone.0234687.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-pone.0234687.nxml.md",
+    "filename": "pone.0234687.nxml.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 57794
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 57794
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " footprint of annual tropical and temperate pastures in lact"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "uction on the C footprint was reported in a meta-analysis co"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": ".jclepro.2019.04.013\n\tWilliamsSRO, FisherPD, BerrisfordT, Mo"
+    }
+  ]
+}

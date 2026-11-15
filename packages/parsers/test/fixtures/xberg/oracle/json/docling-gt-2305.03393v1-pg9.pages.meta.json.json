@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1-pg9.pages.meta.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/2305.03393v1-pg9.pages.meta.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-2305.03393v1-pg9.pages.meta.json.input",
+    "filename": "2305.03393v1-pg9.pages.meta.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "[\n  {\n    \"num_cells\": 114\n  }\n]\n\n"
+    }
+  ]
+}

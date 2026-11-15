@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename hyperlink_03.html.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/hyperlink_03.html.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-hyperlink_03.html.json.input",
+    "filename": "hyperlink_03.html.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 6997
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 6997
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "  \"$ref\": \"#/texts/0\"\n        },\n        {\n          \"$ref\":"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   },\n    {\n      \"self_ref\": \"#/texts/2\",\n      \"parent\": {"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    },\n      \"children\": [],\n      \"content_layer\": \"body\",\n"
+    }
+  ]
+}

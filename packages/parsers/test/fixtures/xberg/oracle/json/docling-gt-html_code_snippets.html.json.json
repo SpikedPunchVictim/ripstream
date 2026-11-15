@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename html_code_snippets.html.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/html_code_snippets.html.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-html_code_snippets.html.json.input",
+    "filename": "html_code_snippets.html.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 14948
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 14948
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "/12\"\n        }\n      ],\n      \"content_layer\": \"body\",\n     "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": ": [],\n      \"footnotes\": [],\n      \"code_language\": \"unknown"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\"self_ref\": \"#/texts/28\",\n      \"parent\": {\n        \"$ref\": "
+    }
+  ]
+}

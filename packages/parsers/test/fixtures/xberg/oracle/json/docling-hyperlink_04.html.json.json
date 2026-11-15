@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename hyperlink_04.html.json) text and Content-Type for test_documents/vendored/docling/json/hyperlink_04.html.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-hyperlink_04.html.json.input",
+    "filename": "hyperlink_04.html.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "{\n  \"schema_name\": \"DoclingDocument\",\n  \"version\": \"1.8.0\",\n  \"name\": \"hyperlink_04\",\n  \"origin\": {\n    \"mimetype\": \"text/html\",\n    \"binary_hash\": 14205970924528394626,\n    \"filename\": \"hyperlink_04.html\"\n  },\n  \"furniture\": {\n    \"self_ref\": \"#/furniture\",\n    \"children\": [],\n    \"content_layer\": \"furniture\",\n    \"name\": \"_root_\",\n    \"label\": \"unspecified\"\n  },\n  \"body\": {\n    \"self_ref\": \"#/body\",\n    \"children\": [\n      {\n        \"$ref\": \"#/texts/0\"\n      }\n    ],\n    \"content_layer\": \"body\",\n    \"name\": \"_root_\",\n    \"label\": \"unspecified\"\n  },\n  \"groups\": [],\n  \"texts\": [\n    {\n      \"self_ref\": \"#/texts/0\",\n      \"parent\": {\n        \"$ref\": \"#/body\"\n      },\n      \"children\": [],\n      \"content_layer\": \"body\",\n      \"label\": \"text\",\n      \"prov\": [],\n      \"orig\": \"This is some text.\",\n      \"text\": \"This is some text.\",\n      \"hyperlink\": \"/start.html\"\n    }\n  ],\n  \"pictures\": [],\n  \"tables\": [],\n  \"key_value_items\": [],\n  \"form_items\": [],\n  \"pages\": {}\n}\n\n"
+    }
+  ]
+}

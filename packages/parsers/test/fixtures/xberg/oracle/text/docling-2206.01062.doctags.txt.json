@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2206.01062.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/2206.01062.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-2206.01062.doctags.txt",
+    "filename": "2206.01062.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 55971
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 55971
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "s high-quality layout segmentation remains to this day extre"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ning of a paragraph is not considered a Section-header , unl"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "i, Zhoujun Li, and Ming Zhou. Docbank: A benchmark dataset f"
+    }
+  ]
+}

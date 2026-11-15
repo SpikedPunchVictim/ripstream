@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename deepseek_example.md.md) text and Content-Type for test_documents/vendored/docling/md/deepseek_example.md.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-deepseek_example.md.md",
+    "filename": "deepseek_example.md.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 2205
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 2205
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "l spans). Results are presented in Table. It is evident that"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\t4\t4\tOTSL\t0.938\t0.904\t0.927\t0.853\t1.97\n\t4\t4\tHTML\t0.952\t0.909"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "en applied on a bigger data set like PubTables- 1M and achie"
+    }
+  ]
+}

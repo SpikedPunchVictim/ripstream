@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename tablecell.docx.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/tablecell.docx.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-tablecell.docx.json.input",
+    "filename": "tablecell.docx.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 11514
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 11514
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    \"name\": \"list\",\n      \"label\": \"list\"\n    }\n  ],\n  \"text"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   \"end_col_offset_idx\": 2,\n            \"text\": \"B\",\n       "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "et_idx\": 1,\n              \"text\": \"D\",\n              \"column"
+    }
+  ]
+}

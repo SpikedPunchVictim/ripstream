@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename unit_test_headers_numbered.docx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/unit_test_headers_numbered.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown"
+  ],
+  "input": {
+    "file": "../files/docling-gt-unit_test_headers_numbered.docx.md",
+    "filename": "unit_test_headers_numbered.docx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Test Document\n1 Section 1\nParagraph 1.1\nParagraph 1.2\n1.1 Section 1.1\nParagraph 1.1.1\nParagraph 1.1.2\n1.2 Section 1.2\nParagraph 1.1.1\nParagraph 1.1.2\n1.2.1 Section 1.2.3\nParagraph 1.2.3.1\nParagraph 1.2.3.1\n2 Section 2\nParagraph 2.1\nParagraph 2.2\n2.1.1 Section 2.1.1\nParagraph 2.1.1.1\nParagraph 2.1.1.1\n2.2 Section 2.1\nParagraph 2.1.1\nParagraph 2.1.2\n"
+    }
+  ]
+}

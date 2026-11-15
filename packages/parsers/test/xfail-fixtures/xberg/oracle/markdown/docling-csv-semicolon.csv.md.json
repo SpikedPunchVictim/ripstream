@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-semicolon.csv.md) text and Content-Type for test_documents/vendored/docling/md/csv-semicolon.csv.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-csv-semicolon.csv.md",
+    "filename": "csv-semicolon.csv.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\tIndex\tCustomer Id\tFirst Name\tLast Name\tCompany\tCity\tCountry\tPhone 1\tPhone 2\tEmail\tSubscription Date\tWebsite\n\t1\tDD37Cf93aecA6Dc\tSheryl\tBaxter\tRasmussen Group\tEast Leonard\tChile\t229.077.5154\t397.884.0519x718\tzunigavanessa@smith.info\t2020-08-24\thttp://www.stephenson.com/\n\t2\t1Ef7b82A4CAAD10\tPreston\tLozano\tVega-Gentry\tEast Jimmychester\tDjibouti\t5153435776\t686-620-1820x944\tvmata@colon.com\t2021-04-23\thttp://www.hobbs.com/\n\t3\t6F94879bDAfE5a6\tRoy\tBerry\tMurillo-Perry\tIsabelborough\tAntigua and Barbuda\t+1-539-402-0259\t(496)978-3969x58947\tbeckycarr@hogan.com\t2020-03-25\thttp://www.lawrence.com/\n\t4\t5Cef8BFA16c5e3c\tLinda\tOlsen\tDominguez;Mcmillan and Donovan\tBensonview\tDominican Republic\t001-808-617-6467x12895\t+1-813-324-8756\tstanleyblackwell@benson.org\t2020-06-02\thttp://www.good-lyons.com/\n\t5\t053d585Ab6b3159\tJoanna\tBender\tMartin;Lang and Andrade\tWest Priscilla\tSlovakia (Slovak Republic)\t001-234-203-0635x76146\t001-199-446-3860x3486\tcolinalvarado@miles.net\t2021-04-17\thttps://goodwin-ingram.com/\n\n"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_01.asciidoc.md) text and Content-Type for test_documents/vendored/docling/md/test_01.asciidoc.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-test_01.asciidoc.md",
+    "filename": "test_01.asciidoc.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Sample Document Title\nSection 1\nThis is some introductory text in section 1.\nSubsection 1.1\n\t\tFirst list item\n\n\n\t\tSecond list item\n\n\n\nThis is some introductory text in section 1.1.\n\t\tA dash list item\n\n\n\nSection 2\nThis is some text in section 2.\n\tHeader 1\tHeader 2\n\tValue 1\tValue 2\n\tValue 3\tValue 4\n\n"
+    }
+  ]
+}

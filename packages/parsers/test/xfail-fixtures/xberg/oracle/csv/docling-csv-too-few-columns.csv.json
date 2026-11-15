@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-d31m] Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-too-few-columns.csv) text and Content-Type for test_documents/vendored/docling/csv/csv-too-few-columns.csv from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "csv",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-csv-too-few-columns.csv",
+    "filename": "csv-too-few-columns.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "1,2,3,4\r\na,'b',c,d\r\na,b,c\r\na,b,c,d\r\na,b,c,d\n\n"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-inconsistent-header.csv.json) text and Content-Type for test_documents/vendored/docling/json/csv-inconsistent-header.csv.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-csv-inconsistent-header.csv.json.input",
+    "filename": "csv-inconsistent-header.csv.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 16928
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 16928
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "false\n          },\n          {\n            \"row_span\": 1,\n  "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "  \"col_span\": 1,\n              \"start_row_offset_idx\": 0,\n  "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ow_offset_idx\": 4,\n              \"end_row_offset_idx\": 5,\n  "
+    }
+  ]
+}

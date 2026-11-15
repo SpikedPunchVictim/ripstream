@@ -1,0 +1,50 @@
+{
+  "description": "[xfail tikajs-x1cd] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_blog.html) text and Content-Type for test_documents/vendored/markitdown/html/test_blog.html from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/markitdown-test_blog.html",
+    "filename": "test_blog.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 15751
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 15751
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "          \t\n                    Anny: Assisting AutoGen Devs"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "atement as the input and generating the solution as the outp"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   our\n                      Discord\n                      s"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Does Model and Inference Parameter Matter in LLM Applications? - A Case Study for MATH |\n      AutoGen"
+    }
+  ]
+}

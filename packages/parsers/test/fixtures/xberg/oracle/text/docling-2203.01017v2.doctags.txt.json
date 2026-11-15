@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2203.01017v2.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/2203.01017v2.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-2203.01017v2.doctags.txt",
+    "filename": "2203.01017v2.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 66429
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 66429
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "t SynthTabNet a synthetically generated dataset, with variou"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "eld poor predictions. We attribute this issue to the image r"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " of the prediction postprocessing:</text>\n<ordered_list><lis"
+    }
+  ]
+}

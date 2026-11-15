@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename escaped_characters.md.json) text and Content-Type for test_documents/vendored/docling/json/escaped_characters.md.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-escaped_characters.md.json.input",
+    "filename": "escaped_characters.md.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 19473
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 19473
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    \"orig\": \"Headers:\",\n      \"text\": \"Headers:\"\n    },\n    "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "        \"row_span\": 1,\n            \"col_span\": 1,\n          "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "w_header\": false,\n              \"row_section\": false,\n      "
+    }
+  ]
+}

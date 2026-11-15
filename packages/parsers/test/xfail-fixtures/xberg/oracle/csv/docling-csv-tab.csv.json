@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-d31m] Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-tab.csv) text and Content-Type for test_documents/vendored/docling/csv/csv-tab.csv from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "csv",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-csv-tab.csv",
+    "filename": "csv-tab.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Index\tCustomer Id\tFirst Name\tLast Name\tCompany\tCity\tCountry\tPhone 1\tPhone 2\tEmail\tSubscription Date\tWebsite\r\n1\tDD37Cf93aecA6Dc\tSheryl\tBaxter\tRasmussen Group\tEast Leonard\tChile\t229.077.5154\t397.884.0519x718\tzunigavanessa@smith.info\t2020-08-24\thttp://www.stephenson.com/\r\n2\t1Ef7b82A4CAAD10\tPreston\tLozano\tVega-Gentry\tEast Jimmychester\tDjibouti\t5153435776\t686-620-1820x944\tvmata@colon.com\t2021-04-23\thttp://www.hobbs.com/\r\n3\t6F94879bDAfE5a6\tRoy\tBerry\tMurillo-Perry\tIsabelborough\tAntigua and Barbuda\t+1-539-402-0259\t(496)978-3969x58947\tbeckycarr@hogan.com\t2020-03-25\thttp://www.lawrence.com/\r\n4\t5Cef8BFA16c5e3c\tLinda\tOlsen\t\"Dominguez\tMcmillan and Donovan\"\tBensonview\tDominican Republic\t001-808-617-6467x12895\t+1-813-324-8756\tstanleyblackwell@benson.org\t2020-06-02\thttp://www.good-lyons.com/\r\n5\t053d585Ab6b3159\tJoanna\tBender\t\"Martin\tLang and Andrade\"\tWest Priscilla\tSlovakia (Slovak Republic)\t001-234-203-0635x76146\t001-199-446-3860x3486\tcolinalvarado@miles.net\t2021-04-17\thttps://goodwin-ingram.com/\r\n\n"
+    }
+  ]
+}

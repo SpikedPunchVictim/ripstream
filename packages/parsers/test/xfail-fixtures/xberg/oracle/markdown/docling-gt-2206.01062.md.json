@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename 2206.01062.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/2206.01062.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-2206.01062.md",
+    "filename": "2206.01062.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 44365
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 44365
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ere are currently two large datasets available to the commun"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "hanging indentation. Bullet or enumeration symbols are not a"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "l Conference on Document Analysis and Recognition , ICDAR, p"
+    }
+  ]
+}

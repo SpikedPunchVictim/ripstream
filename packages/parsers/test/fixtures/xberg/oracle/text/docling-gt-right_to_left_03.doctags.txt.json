@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_03.doctags.txt) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/right_to_left_03.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-gt-right_to_left_03.doctags.txt",
+    "filename": "right_to_left_03.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 3102
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 3102
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "n>لااک درادناتسا -2-5</subtitle-level-1>\n<paragraph><locatio"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "4><loc_32><loc_56></location>1403/09/19</paragraph>\n<paragra"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "<loc_35><loc_40><loc_37></location>نت 47.500 اي هنايلاس ديلو"
+    }
+  ]
+}

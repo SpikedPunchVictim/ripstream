@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename picture_classification.json) text and Content-Type for test_documents/vendored/docling/json/picture_classification.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-picture_classification.json.input",
+    "filename": "picture_classification.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 13824
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 13824
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   \"charspan\": [0, 15]\n        }\n      ],\n      \"orig\": \"Fig"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ontent_layer\": \"body\",\n      \"label\": \"text\",\n      \"prov\": "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\"prov\": [\n        {\n          \"page_no\": 1,\n          \"bbox\""
+    }
+  ]
+}

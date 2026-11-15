@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename example_05.html.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/example_05.html.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-example_05.html.md",
+    "filename": "example_05.html.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Omitted html and body tags\n\tHeader 1\tHeader 2 & 3 (colspan)\tHeader 2 & 3 (colspan)\n\tRow 1 & 2, Col 1 (rowspan)\tRow 1, Col 2\tRow 1, Col 3\n\tRow 1 & 2, Col 1 (rowspan)\tRow 2, Col 2 & 3 (colspan)\tRow 2, Col 2 & 3 (colspan)\n\tRow 3, Col 1\tRow 3, Col 2\tRow 3, Col 3\n\n"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_02.asciidoc.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/test_02.asciidoc.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-test_02.asciidoc.md",
+    "filename": "test_02.asciidoc.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "2nd Sample Document Title\nThis is an abstract.\nSection 1: Testing nestedlists\n- First item\n- Nested item 1\n- Nested item 2\n- Second item\n- Nested ordered item 1\n- Nested ordered item 2\n- Deeper nested unordered item\n- Third item\n- Nested ordered item 1\n- Nested ordered item 2\n- Deeper nested unordered item\n- Nested ordered item 2\n\nSection 2\nbla bla\nbla bla bla\nSection 3: test image\nimage::images/example1.png[Example Image, width=200, height=150, align=center]\n.An example caption for the image\nimage::images/example2.png[Example Image, width=200, height=150, align=center]\nSection 4: test tables\n\tHeader 1\tHeader 2\n\tValue 1\tValue 2\n\tValue 3\tValue 4\n\n.Caption for the table 1\n|===\n\tHeader 1\tHeader 2\n\tValue 1\tValue 2\n\tValue 3\tValue 4\n\n.Caption for the table 2\n|===\n\tColumn 1 Heading\tColumn 2 Heading\tColumn 3 Heading\n\tCell 1\tCell 2\tCell 3\n\tCell 4\tCell 5 colspan=2\tCell spans two columns\n\n.Caption for the table 3\n|===\n\tColumn 1 Heading\tColumn 2 Heading\tColumn 3 Heading\n\tRowspan=2\tCell 2\tCell 3\n\tCell 5\tCell 6\t\n\n.Caption for the table 4\n|===\n\tCol 1\tCol 2\tCol 3\tCol 4\n\tRowspan=2.Colspan=2\tCell spanning 2 rows and 2 columns\tCol 3\tCol 4\n\tCol 3\tCol 4\t\t\n\tCol 1\tCol 2\tCol 3\tCol 4\n\nSubSubSection 2.1.1\n"
+    }
+  ]
+}

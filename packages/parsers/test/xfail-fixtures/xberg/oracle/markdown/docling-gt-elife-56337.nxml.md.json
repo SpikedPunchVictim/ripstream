@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename elife-56337.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/elife-56337.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-elife-56337.nxml.md",
+    "filename": "elife-56337.nxml.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 72742
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 72742
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " and ETnERV (also known as MusD) elements (Figure 1A). ETn e"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "rom Chr2-cl KO mice failed to produce viable knockout offspr"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ogy 15:550 (2014). DOI: 10.1186/s13059-014-0550-8, PMID: 255"
+    }
+  ]
+}

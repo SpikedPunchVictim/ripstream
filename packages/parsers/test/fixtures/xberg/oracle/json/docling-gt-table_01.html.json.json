@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename table_01.html.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/table_01.html.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-table_01.html.json.input",
+    "filename": "table_01.html.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 5308
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 5308
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "unspecified\"\n  },\n  \"groups\": [],\n  \"texts\": [\n    {\n      \""
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\": 1,\n            \"col_span\": 1,\n            \"start_row_offs"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "              \"row_span\": 1,\n              \"col_span\": 1,\n  "
+    }
+  ]
+}

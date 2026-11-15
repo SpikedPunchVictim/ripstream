@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test.json) text and Content-Type for test_documents/vendored/markitdown/json/test.json from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/markitdown-test.json.input",
+    "filename": "test.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "{\n  \"key1\": \"string_value\",\n  \"key2\": 1234,\n  \"key3\": [\"list_value1\", \"list_value2\"],\n  \"5b64c88c-b3c3-4510-bcb8-da0b200602d8\": \"uuid_key\",\n  \"uuid_value\": \"9700dc99-6685-40b4-9a3a-5e406dcb37f3\"\n}\n\n"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1-pg9.doctags.txt) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/2305.03393v1-pg9.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-gt-2305.03393v1-pg9.doctags.txt",
+    "filename": "2305.03393v1-pg9.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 4596
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 4596
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "on>We have chosen the PubTabNet data set to perform HPO, sin"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "><col_3><body>0.938 0.952</col_3><col_4><body>0.904 0.909</c"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ial tables (FinTabNet) that contain sparse and large tables."
+    }
+  ]
+}

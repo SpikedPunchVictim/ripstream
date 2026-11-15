@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename redp5110_sampled.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/redp5110_sampled.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-redp5110_sampled.md",
+    "filename": "redp5110_sampled.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 28279
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 28279
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "GLYPH<g3> GLYPH<g72>GLYPH<g91>GLYPH<g83>GLYPH<g72>GLYPH<g85>"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ROM\nfunction_usage\nWHERE\nfunction_id=’QIBM_DB_SECADM’\nORDER "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": ". CUSTOMER_DRIVERS_LICENSE_NUMBER WHEN QSYS2 . VERIFY_GROUP_"
+    }
+  ]
+}

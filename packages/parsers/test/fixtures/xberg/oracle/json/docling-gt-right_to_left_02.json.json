@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_02.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/right_to_left_02.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-right_to_left_02.json.input",
+    "filename": "right_to_left_02.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 10187
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 10187
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\": [\n        {\n          \"bbox\": [47.9520001778084, 23.78772"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " \\u062e\\u0648\\u0648\\u0648\\u0644\\u0628\\u0644\\u0627\\u0648 \\u06"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\\u0627 \\u060c\\u0629\\u0648\\u0648 \\u064a \\u0627 \\u0629\\u064a\\u"
+    }
+  ]
+}

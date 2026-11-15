@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename powerpoint_issue_2663.pptx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/powerpoint_issue_2663.pptx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-powerpoint_issue_2663.pptx.md",
+    "filename": "powerpoint_issue_2663.pptx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Open-Source Software\nKey Benefits:\n\tOpen-source software is cost-effective as it eliminates license fees, reducing overall expenses.\n\tEhnhances security and transparency by allowing public access to source code\n\tStrong global community improves and maintains open-source projects.\n\tOffers flexibility, allowing users to customize and adapt the software\n\t\n\nConsiderations When Using Open-Source Software:\n\tOpen-source projects often rely on community support, which may not be as reliable as dedicated customer service.\n\tSome open-source solutions may require advanced technical expertise for implementation and maintenance.\n\n"
+    }
+  ]
+}

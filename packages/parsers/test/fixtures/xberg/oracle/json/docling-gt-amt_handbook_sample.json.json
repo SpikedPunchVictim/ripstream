@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename amt_handbook_sample.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/amt_handbook_sample.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-amt_handbook_sample.json.input",
+    "filename": "amt_handbook_sample.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 10536
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 10536
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " [71.992126, 681.34637, 314.11212, 730.31635],\n          \"pa"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   \"bbox\": [72.0, 60.99040200000002, 184.14828, 71.802399000"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    \"name\": \"Caption\",\n      \"font\": null\n    }\n  ],\n  \"figu"
+    }
+  ]
+}

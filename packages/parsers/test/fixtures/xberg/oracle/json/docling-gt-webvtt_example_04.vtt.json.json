@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename webvtt_example_04.vtt.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/webvtt_example_04.vtt.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-webvtt_example_04.vtt.json.input",
+    "filename": "webvtt_example_04.vtt.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 7776
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 7776
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " [\n        {\n          \"$ref\": \"#/texts/1\"\n        },\n      "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\": \"#/groups/0\"\n      },\n      \"children\": [],\n      \"conten"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " \"orig\": \" of flavors\",\n      \"text\": \" of flavors\",\n      \""
+    }
+  ]
+}

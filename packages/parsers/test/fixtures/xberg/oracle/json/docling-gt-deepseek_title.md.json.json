@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename deepseek_title.md.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/deepseek_title.md.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-deepseek_title.md.json.input",
+    "filename": "deepseek_title.md.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 19248
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 19248
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " {\n        \"$ref\": \"#/body\"\n      },\n      \"children\": [],\n "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "  \"orig\": \"CCS CONCEPTS\",\n      \"text\": \"CCS CONCEPTS\",\n    "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "EsASCYJQAEswSAYJYAEMwSAIJZAkAwSwAIZgkAwSwBIJglAASzBIBglgAQzB"
+    }
+  ]
+}

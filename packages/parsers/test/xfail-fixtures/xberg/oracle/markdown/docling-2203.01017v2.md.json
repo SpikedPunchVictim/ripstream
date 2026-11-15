@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-9c7z] Tika 4.2.0 oracle (PUT /rmeta/body, filename 2203.01017v2.md) text and Content-Type for test_documents/vendored/docling/md/2203.01017v2.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-2203.01017v2.md",
+    "filename": "2203.01017v2.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 52569
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 52569
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "bNet [36], and TableBank [17] with generated ground-truth fo"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "w tag.\n5.2. Generalization\nTableFormer is evaluated on three"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "is not enough when a full reconstruction of the original tab"
+    }
+  ]
+}

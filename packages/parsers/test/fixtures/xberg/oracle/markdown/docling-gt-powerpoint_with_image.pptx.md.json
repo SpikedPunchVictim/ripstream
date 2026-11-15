@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename powerpoint_with_image.pptx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/powerpoint_with_image.pptx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown"
+  ],
+  "input": {
+    "file": "../files/docling-gt-powerpoint_with_image.pptx.md",
+    "filename": "powerpoint_with_image.pptx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Docling\nImage test\n<!-- image -->\nImage linked to file\n"
+    }
+  ]
+}

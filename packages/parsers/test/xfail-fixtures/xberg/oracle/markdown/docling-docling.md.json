@@ -1,0 +1,45 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename docling.md) text and Content-Type for test_documents/vendored/docling/md/docling.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-docling.md",
+    "filename": "docling.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 27737
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 27737
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " from PyPI. Documentation and examples are available in our "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "cture or references. For popular generative AI application p"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "DocLayNet dataset poses a worthwhile challenge for the resea"
+    }
+  ]
+}

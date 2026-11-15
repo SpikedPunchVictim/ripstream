@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename ending_with_table.md.md) text and Content-Type for test_documents/vendored/docling/md/ending_with_table.md.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-ending_with_table.md.md",
+    "filename": "ending_with_table.md.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\tCharacter\tName in German\tName in French\tName in Italian\n\tScrooge McDuck\tDagobert Duck\tBalthazar Picsou\tPaperone\n\tHuey\tTick\tRiri\tQui\n\tDewey\tTrick\tFifi\tQuo\n\tLouie\tTrack\tLoulou\tQua\n\n"
+    }
+  ]
+}

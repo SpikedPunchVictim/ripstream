@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename deepseek_simple.md.json) text and Content-Type for test_documents/vendored/docling/json/deepseek_simple.md.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-deepseek_simple.md.json.input",
+    "filename": "deepseek_simple.md.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 10193
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 10193
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "2.8,\n            \"t\": 165.53,\n            \"r\": 318.24,\n     "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "         \"b\": 663.7,\n            \"coord_origin\": \"TOPLEFT\"\n "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "WABDMEgCCWQJAMEsACGYJAMEsASCYJQAEswSAYJYAEMwSAIJZAkAwSwAIZgk"
+    }
+  ]
+}

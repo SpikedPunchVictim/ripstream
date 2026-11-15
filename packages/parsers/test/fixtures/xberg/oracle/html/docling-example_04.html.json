@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename example_04.html) text and Content-Type for test_documents/vendored/docling/html/example_04.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-example_04.html",
+    "filename": "example_04.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    Data Table with Rowspan and Colspan\n\n    \n      \n        \tHeader 1\n        \tHeader 2 & 3 (colspan)\n      \n\n      \n        \tRow 1 & 2, Col 1 (rowspan)\n        \tRow 1, Col 2\n        \tRow 1, Col 3\n      \n\n      \n        \tRow 2, Col 2 & 3 (colspan)\n      \n\n      \n        \tRow 3, Col 1\n        \tRow 3, Col 2\n        \tRow 3, Col 3\n      \n\n    \n\n  "
+    }
+  ]
+}

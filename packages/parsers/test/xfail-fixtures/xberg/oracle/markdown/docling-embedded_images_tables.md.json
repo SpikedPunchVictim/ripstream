@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-zms6] Tika 4.2.0 oracle (PUT /rmeta/body, filename embedded_images_tables.md) text and Content-Type for test_documents/vendored/docling/md/embedded_images_tables.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-embedded_images_tables.md",
+    "filename": "embedded_images_tables.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Fig. 4. Anodic and cathodic polarization curve of stainless steel in 0.5 M H2SO4 solution in the presence and absence of ES.\n<!-- image -->\nTable 1 Potentiodynamic polarization data for stainless steel in the absence and presence of ES in 0.5 M H2SO4 solution.\n\tInhibitor concentration (g)\tbc (V/dec)\tba (V/dec)\tEcorr (V)\ticorr (A/cm 2 )\tPolarization resistance ( Ω )\tCorrosion rate (mm/year)\n\t0\t0.0335\t0.0409\t� 0.9393\t0.0003\t24.091\t2.8163\n\t2\t1.946\t0.0596\t� 0.8276\t0.0002\t121.44\t1.5054\n\t4\t0.0163\t0.2369\t� 0.8825\t0.0001\t42.121\t0.9476\n\t6\t0.3233\t0.054\t� 0.8027\t5.39e-05\t373.18\t0.4318\n\t8\t0.124\t0.0556\t� 0.5896\t5.46e-05\t305.65\t0.3772\n\t10\t0.0382\t0.0086\t� 0.5356\t1.24e-05\t246.08\t0.0919\n\nThe plot of inhibitor concentration over degree of surface coverage versus inhibitor concentration gives a straight line as shown in Fig. 5. The strong correlation reveals that egg shell adsorption on stainless surface in 0.5 M H2SO4 follow Langmuir adsorption isotherm. Figs. 6 -8 show the SEM/EDX surface morphology analysis of stainless steel. Figs. 7 and 8 are the SEM/EDX images of the stainless steel specimens without and with inhibitor after weight loss experiment in sulphuric acid medium. The stainless steel surface corrosion product layer in the absence of inhibitor was porous and as a result gives no corrosion protection. With the presence of ES, corrosion damage was minimized, with an evidence of ES present on the metal surface as shown in Fig. 8.\nFig. 5. Langmuir adsorption isotherm of ES.\n<!-- image -->\n"
+    }
+  ]
+}

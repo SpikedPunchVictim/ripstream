@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename duck.md.md) text and Content-Type for test_documents/vendored/docling/md/duck.md.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-duck.md.md",
+    "filename": "duck.md.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Summer activities\nSwimming in the lake\nDuck\nFigure 1: This is a cute duckling\nLet’s swim!\nTo get started with swimming, first lay down in a water and try not to drown:\n\tYou can relax and look around\n\tPaddle about\n\tEnjoy summer warmth\n\nAlso, don’t forget:\n\tWear sunglasses\n\tDon’t forget to drink water\n\tUse sun cream\n\nHmm, what else…\nLet’s eat\nAfter we had a good day of swimming in the lake, it’s important to eat something nice\nI like to eat leaves\nHere are some interesting things a respectful duck could eat:\n\t\tFood\tCalories per portion\n\tLeaves\tAsh, Elm, Maple\t50\n\tBerries\tBlueberry, Strawberry, Cranberry\t150\n\tGrain\tCorn, Buckwheat, Barley\t200\n\nAnd let’s add another list in the end:\n\tLeaves\n\tBerries\n\tGrain\n\nAnd here my listing in code:\nLeaves\n\nBerries\nGrain\n\n"
+    }
+  ]
+}

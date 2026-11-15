@@ -1,0 +1,70 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename email-replace-mime-encodings-error-1.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-1.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-email-replace-mime-encodings-error-1.eml",
+    "filename": "email-replace-mime-encodings-error-1.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 5468
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 5468
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "                                 Copyright ©2022 Zoom Video "
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Someone has joined your meeting - Someone: 45 Minute Meeting"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Zoom <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Someone has joined your meeting - Someone: 45 Minute Meeting"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2022-10-28T08:59:12Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "Zoom <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "email@domain.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "email@domain.com"
+    }
+  ]
+}

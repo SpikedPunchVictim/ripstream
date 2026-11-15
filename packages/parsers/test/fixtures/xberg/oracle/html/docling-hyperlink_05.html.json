@@ -1,0 +1,29 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename hyperlink_05.html) text and Content-Type for test_documents/vendored/docling/html/hyperlink_05.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-hyperlink_05.html",
+    "filename": "hyperlink_05.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    \n    \n      \n    \n\n    \n    \n      \n      This is an example caption for the image.\n    \n\n    \n    \n      \n        \n      \n      This is an example caption for the image.\n    \n  "
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Image Hyperlink and Caption Example"
+    }
+  ]
+}

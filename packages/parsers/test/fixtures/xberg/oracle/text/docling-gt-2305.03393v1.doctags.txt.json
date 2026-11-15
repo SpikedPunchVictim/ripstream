@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename 2305.03393v1.doctags.txt) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/2305.03393v1.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-gt-2305.03393v1.doctags.txt",
+    "filename": "2305.03393v1.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 44870
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 44870
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ernal structure (variable token sequence length per row in H"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ry table cell corresponds to a \"C\"-cell token, which in case"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " - 18, 2022. pp. 3743-3751. ACM (2022). https://doi.org/10.1"
+    }
+  ]
+}

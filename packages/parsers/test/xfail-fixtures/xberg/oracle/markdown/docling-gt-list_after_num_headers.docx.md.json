@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename list_after_num_headers.docx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/list_after_num_headers.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-list_after_num_headers.docx.md",
+    "filename": "list_after_num_headers.docx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Chính sách bảo hành\n1 ĐỐI TƯỢNG ÁP DỤNG\n\tChính sách bảo hành và các điều k\n\tPin điện áp cao (sau đây gọi tắt là “\n\n"
+    }
+  ]
+}

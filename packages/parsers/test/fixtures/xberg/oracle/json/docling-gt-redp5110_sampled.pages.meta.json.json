@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename redp5110_sampled.pages.meta.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/redp5110_sampled.pages.meta.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-redp5110_sampled.pages.meta.json.input",
+    "filename": "redp5110_sampled.pages.meta.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "[\n  {\n    \"num_cells\": 21\n  },\n  {\n    \"num_cells\": 52\n  },\n  {\n    \"num_cells\": 50\n  },\n  {\n    \"num_cells\": 45\n  },\n  {\n    \"num_cells\": 31\n  },\n  {\n    \"num_cells\": 49\n  },\n  {\n    \"num_cells\": 25\n  },\n  {\n    \"num_cells\": 65\n  },\n  {\n    \"num_cells\": 81\n  },\n  {\n    \"num_cells\": 57\n  },\n  {\n    \"num_cells\": 52\n  },\n  {\n    \"num_cells\": 58\n  },\n  {\n    \"num_cells\": 49\n  },\n  {\n    \"num_cells\": 33\n  },\n  {\n    \"num_cells\": 14\n  },\n  {\n    \"num_cells\": 55\n  },\n  {\n    \"num_cells\": 0\n  },\n  {\n    \"num_cells\": 50\n  }\n]\n\n"
+    }
+  ]
+}

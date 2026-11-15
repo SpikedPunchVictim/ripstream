@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-z5j5] Tika 4.2.0 oracle (PUT /rmeta/body, filename fake-email-utf-16-be.eml) text and Content-Type for test_documents/vendored/unstructured/eml/fake-email-utf-16-be.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-fake-email-utf-16-be.eml",
+    "filename": "fake-email-utf-16-be.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    }
+  ]
+}

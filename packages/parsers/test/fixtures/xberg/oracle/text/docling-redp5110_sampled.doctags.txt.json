@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename redp5110_sampled.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/redp5110_sampled.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-redp5110_sampled.doctags.txt",
+    "filename": "redp5110_sampled.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 44732
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 44732
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "E behavior with RCAC . . . . . . . . . . . . . . . . . . .<f"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "><loc_115>For example, the following CHGFCNUSG command shows"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "_45><loc_409><loc_446><_unknown_>THEN C . CUSTOMER_TAX_ID WH"
+    }
+  ]
+}

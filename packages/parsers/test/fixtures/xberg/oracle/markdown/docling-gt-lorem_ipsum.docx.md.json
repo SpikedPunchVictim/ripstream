@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename lorem_ipsum.docx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/lorem_ipsum.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown"
+  ],
+  "input": {
+    "file": "../files/docling-gt-lorem_ipsum.docx.md",
+    "filename": "lorem_ipsum.docx.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 3483
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 3483
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "s, non scelerisque lectus. Praesent sollicitudin vulputate e"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " imperdiet non. Vestibulum tincidunt orci ac lorem consequat"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "scelerisque nisl lacinia at. Donec sodales interdum ipsum, a"
+    }
+  ]
+}

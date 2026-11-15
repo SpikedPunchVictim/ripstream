@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename mixed_without_h1.md.yaml) text and Content-Type for test_documents/vendored/docling/yaml/mixed_without_h1.md.yaml from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "yaml"
+  ],
+  "input": {
+    "file": "../files/docling-mixed_without_h1.md.yaml",
+    "filename": "mixed_without_h1.md.yaml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/x-yaml; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 2552
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 2552
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "f_ref: \"#/furniture\"\ngroups:\n  - children:\n      - $ref: \"#/"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   - $ref: \"#/texts/6\"\n    content_layer: body\n    label: se"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "roups/1\"\n    prov: []\n    self_ref: \"#/texts/5\"\n    text: 2 "
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename escaped_characters.md.md) text and Content-Type for test_documents/vendored/docling/md/escaped_characters.md.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-escaped_characters.md.md",
+    "filename": "escaped_characters.md.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Headers:\n& < > \" '\nText: 00:16.000 ----> 00:18.000 & < > \" '\nLists\n\t& < > \" '\n\n\t& < > \" '\n\nInline code\n& < > \" '\n\nCode block\n& < > \" '\n\nTable\n\tKey\tExample\n\tAmpersand\t&\n\tLess-than\t<\n\tGreater-than\t>\n\tQuotes\t\"\n\tApostrophes\t'\n\tPipe\t| | |\n\nThe pipe symbol (| or | ) only needs to be escaped in tables.\nRaw HTML\n& < > \" '/div>\nLink\n& < > \" '\n"
+    }
+  ]
+}

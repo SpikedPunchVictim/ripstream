@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename right_to_left_03.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/right_to_left_03.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown"
+  ],
+  "input": {
+    "file": "../files/docling-gt-right_to_left_03.md",
+    "filename": "right_to_left_03.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "یلخاد یلااک - یلصا رازاب رد شريذپ همانديما\n<!-- image -->\nلااک درادناتسا -2-5\nدرادناتسا مان\nیرگ هتخير شور هب هدش ديلوت لاشمش و هشمش فرصم دروم هتسويپ یا هزاس یاهدلاوف رد - قباطم تسويپ زيلانآ\nیلم درادناتسا هرامش\n20300\n؟تسا یرابجا درادناتسا\nدرادناتسا هدننکرداص عجرم\nناريا درادناتسا یلم نامزاس\nذخا ار روکذم درادناتسا ،لوصحم هدننکديلوت ايآ ؟تسا هدومن\nسروب رد شريذپ -3\nکرادم هئارا خيرات\n1403/09/19\nشريذپ خيرات\n1403/10/04\nهضرع هتيمک هسلج هرامش\n436\nهمانديما جرد خيرات\n1403/10/05\nشريذپ رواشم\nسروب نومرآ یرازگراک\nرد لااک شريذپ زا سپ هياپ تميق نييعت ةوحن سروب\nیناهج یاه تميق ساسا رب\nشورف /شورف لک /ديلوت زا هضرع دصرد لقادح یلخاد\nنت 47.500 اي هنايلاس ديلوت زا %50 لقادح\nليوحت زاجم یاطخ\nليوحت لباق هلومحم نيرخآ 5%\n"
+    }
+  ]
+}

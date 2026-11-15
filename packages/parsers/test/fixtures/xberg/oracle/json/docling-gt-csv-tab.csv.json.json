@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-tab.csv.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/csv-tab.csv.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-csv-tab.csv.json.input",
+    "filename": "csv-tab.csv.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 60851
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 60851
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "   \"col_span\": 1,\n            \"start_row_offset_idx\": 1,\n   "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\": 1,\n              \"start_col_offset_idx\": 1,\n             "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "et_idx\": 4,\n              \"end_row_offset_idx\": 5,\n         "
+    }
+  ]
+}

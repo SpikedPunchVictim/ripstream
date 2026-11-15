@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename code_and_formula.doctags.txt) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v1/code_and_formula.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-gt-code_and_formula.doctags.txt",
+    "filename": "code_and_formula.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 6622
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 6622
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ro eos et accusam et justo duo dolores et ea rebum. Stet cli"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "consetetur sadipscing elitr, sed diam nonumy eirmod tempor i"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "psum dolor sit amet, consectetuer adipiscing elit, sed diam "
+    }
+  ]
+}

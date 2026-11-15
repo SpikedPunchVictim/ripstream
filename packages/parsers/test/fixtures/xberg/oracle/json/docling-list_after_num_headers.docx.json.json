@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename list_after_num_headers.docx.json) text and Content-Type for test_documents/vendored/docling/json/list_after_num_headers.docx.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-list_after_num_headers.docx.json.input",
+    "filename": "list_after_num_headers.docx.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=UTF-8"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 3608
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 3608
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    \"content_layer\": \"furniture\",\n    \"name\": \"_root_\",\n    "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "     \"parent\": {\n        \"$ref\": \"#/groups/1\"\n      },\n     "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Pin điện áp cao (sau đây gọi tắt là “\",\n      \"formatting\": "
+    }
+  ]
+}

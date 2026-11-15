@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename example_01_images.html.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/example_01_images.html.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-gt-example_01_images.html.md",
+    "filename": "example_01_images.html.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Introduction\nThis is the first paragraph of the introduction.\nBackground\nSome background information here.\nExample image\n<!-- image -->\n\tFirst item in unordered list\n\tSecond item in unordered list\n\n\tFirst item in ordered list\n\n\tSecond item in ordered list\n\n\tFirst item in ordered list with start\n\n\tSecond item in ordered list with start\n\n\n"
+    }
+  ]
+}

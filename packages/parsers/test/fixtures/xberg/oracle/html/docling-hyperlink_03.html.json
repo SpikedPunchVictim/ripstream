@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename hyperlink_03.html) text and Content-Type for test_documents/vendored/docling/html/hyperlink_03.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-hyperlink_03.html",
+    "filename": "hyperlink_03.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    \n      \t\n         My Section\n        \n          \t\n            Some page\n            \n              \t\n                \n                  A sub page\n              \n\n            \n\n            \n              \t\n                This is my Homepage\n                \n                  \tList item inner\n\n                  \tMore text with some links and more text.\n\n                \n\n              \n\n              \tMain navigation\n\n            \n\n          \n\n        \n\n      \n\n      \t\n         My organisation\n      \n\n    \n\n  "
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename example_06.html.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/example_06.html.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown"
+  ],
+  "input": {
+    "file": "../files/docling-gt-example_06.html.md",
+    "filename": "example_06.html.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "This is a div with text.\nThis is another div with text.\nThis is a regular paragraph.\nThis is a third div\nwith a new line.\nHeading for the details element\nDescription of the details element.\nThis is a fourth div with a bold paragraph.\n"
+    }
+  ]
+}

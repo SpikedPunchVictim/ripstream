@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename code_and_formula.json) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/code_and_formula.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-gt-code_and_formula.json.input",
+    "filename": "code_and_formula.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 20503
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 20503
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "          \"t\": 642.22,\n            \"r\": 477.48,\n            "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "]\n        }\n      ],\n      \"orig\": \"1\",\n      \"text\": \"1\"\n  "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\"\n      },\n      \"children\": [],\n      \"content_layer\": \"bod"
+    }
+  ]
+}

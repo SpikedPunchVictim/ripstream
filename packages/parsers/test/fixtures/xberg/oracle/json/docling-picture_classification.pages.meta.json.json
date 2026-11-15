@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename picture_classification.pages.meta.json) text and Content-Type for test_documents/vendored/docling/json/picture_classification.pages.meta.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-picture_classification.pages.meta.json.input",
+    "filename": "picture_classification.pages.meta.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "[\n  {\n    \"num_cells\": 41\n  },\n  {\n    \"num_cells\": 46\n  }\n]\n\n"
+    }
+  ]
+}

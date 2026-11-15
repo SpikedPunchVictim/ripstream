@@ -1,0 +1,60 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename fake-email.eml) text and Content-Type for test_documents/vendored/unstructured/eml/fake-email.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-fake-email.eml",
+    "filename": "fake-email.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "This is a test email to use for unit tests.\n\n\nImportant points:\n\t\tRoses are red\n\n\t\tViolets are blue\n\n\n\n\n\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Test Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Matthew Robinson <mrobinson@unstructured.io>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Test Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2022-12-16T22:04:16Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "Matthew Robinson <mrobinson@unstructured.io>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "NotMatthew <NotMatthew@notunstructured.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "mrobinson@unstructured.io"
+    }
+  ]
+}

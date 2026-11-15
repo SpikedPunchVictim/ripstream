@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename deepseek_example.md.json) text and Content-Type for test_documents/vendored/docling/json/deepseek_example.md.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-deepseek_example.md.json.input",
+    "filename": "deepseek_example.md.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 71558
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 71558
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "the reduced sequence representation.\"\n    }\n  ],\n  \"pictures"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "set_idx\": 6,\n              \"text\": \"TEDs\",\n              \"co"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "          \"start_col_offset_idx\": 1,\n              \"end_col_"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename hide_cell_content.ipynb) text and Content-Type for test_documents/vendored/executablebooks-myst-nb/hide_cell_content.ipynb from the xberg corpus (myst-nb, BSD-3-Clause, Copyright (c) 2020 ExecutableBookProject); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "notebook"
+  ],
+  "input": {
+    "file": "../files/myst-nb-hide_cell_content.ipynb",
+    "filename": "hide_cell_content.ipynb"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 2031
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 2031
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "[\n     \"hide-input\"\n    ]\n   },\n   \"outputs\": [\n    {\n     \""
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "\n   \"cell_type\": \"code\",\n   \"execution_count\": 5,\n   \"metada"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": ": \"3.8.13\"\n  },\n  \"orig_nbformat\": 4,\n  \"vscode\": {\n   \"inte"
+    }
+  ]
+}

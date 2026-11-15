@@ -1,0 +1,55 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename rfc822-no-date.eml) text and Content-Type for test_documents/vendored/unstructured/eml/rfc822-no-date.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-rfc822-no-date.eml",
+    "filename": "rfc822-no-date.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "This is an example email message without a Date header. Note that this is non-standard and may be flagged or corrected by email servers.\n\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Example Email Without Date Header"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Example Email Without Date Header"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "recipient@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "sender@example.com"
+    }
+  ]
+}

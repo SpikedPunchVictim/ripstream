@@ -1,0 +1,60 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename mime-different-plain-html.eml) text and Content-Type for test_documents/vendored/unstructured/eml/mime-different-plain-html.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-mime-different-plain-html.eml",
+    "filename": "mime-different-plain-html.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    This is the text/html part.\n\n\n    Did you know that the first networked email was sent by Ray Tomlinson in 1971? He used the \"@\" symbol to separate the user's name from the computer name, a practice that is still in use today.\n\n\n    Another interesting fact is that the first known instance of email spam occurred in 1978. A marketing message was sent to 393 recipients on ARPANET, marking the beginning of what we now know as email spam.\n\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Example MIME Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Example MIME Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2024-10-01T17:34:56Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "sender@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "recipient@example.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "sender@example.com"
+    }
+  ]
+}

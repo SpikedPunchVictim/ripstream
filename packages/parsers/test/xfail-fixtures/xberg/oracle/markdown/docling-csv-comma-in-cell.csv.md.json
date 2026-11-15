@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-comma-in-cell.csv.md) text and Content-Type for test_documents/vendored/docling/md/csv-comma-in-cell.csv.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/docling-csv-comma-in-cell.csv.md",
+    "filename": "csv-comma-in-cell.csv.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\t1\t2\t3\t4\n\ta\tb\tc\td\n\ta\t,\tc\td\n\ta\tb\tc\td\n\ta\tb\tc\td\n\n"
+    }
+  ]
+}

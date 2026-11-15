@@ -1,0 +1,24 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename unit_test_01.html) text and Content-Type for test_documents/vendored/docling/html/unit_test_01.html from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "html"
+  ],
+  "input": {
+    "file": "../files/docling-unit_test_01.html",
+    "filename": "unit_test_01.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/html; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n    Title\n\n    section-1\n\n    section-1.1\n\n    section-2\n\n    section-2.0.1\n\n    section-2.2\n\n    section-2.3\n\n  "
+    }
+  ]
+}

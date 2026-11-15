@@ -1,0 +1,60 @@
+{
+  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename email-replace-mime-encodings-error-3.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-3.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "mail",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/unstructured-email-replace-mime-encodings-error-3.eml",
+    "filename": "email-replace-mime-encodings-error-3.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t\n\n\n\n\t\t\n\nLearn how the cloud is accelerating innovation in businesses of all sizes\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t\n\n \n\n\n\t\t\n\nhttps://innovate-emea.virtual.awsevents.com/register?trk=e8ccedb9-1d02-4887-bfa3-6d9c8699a6b0&sc_channel=em\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n\n\n\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\t\t \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t\n\n \n\n\n\t\t\n\n\n\n\n\t\t\n\nOctober 06, 2022 | 10:00 - 15:00 CEST | Online\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n Ready when you are. Last chance to sign up.\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n \n\n\n\n\t\tRegister Now!\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n Join us at AWS Innovate - Every Application Edition to learn how you can work with AWS to improve your application security, performance, and scalability.\n\n\nRegister now to take your applications to the next level.\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n Don't want to receive emails related to Innovate Every Application Edition? Click here to opt out.\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\t\t\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n\n\n\t\t\n\n\n\n\n\n\t\t                      \n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n\n\n\n\n\t\t\n\n\n\n\t\t\n\n\n\n\t\t My Account |  Getting Started |  Products |  Solutions |  Pricing |  Partners |  Documentation |  Training |  Events & Webinars |  AWS Activate | Marketplace |  What's New | Blog | Analyst Reports\n\nView Online\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\t\t\n\n \n\n\n\n\t\t\n\n\t\tIf you'd rather not receive future emails from Amazon Web Services, unsubscribe here.\n\n\n\t\tAmazon Web Services, Inc. is a subsidiary of Amazon.com, Inc. Amazon.com is a registered trademark of Amazon.com.\n\n\n\t\tThis message was produced and distributed by Amazon Web Services, Inc. or its affiliates, 410 Terry Ave. North, Seattle, WA 98109.\n\n\n\t\t© 2022, Amazon Web Services, Inc. or its affiliates. All rights reserved. Read our Privacy Notice.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\n\n \n\n\n\n\n\t\t \n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\n\n\n \n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "AWS Online Conference | Last chance to register for Innovate - Every Application Edition"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "'Amazon Web Services' via Engineering <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "AWS Online Conference | Last chance to register for Innovate - Every Application Edition"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2022-10-03T06:59:28Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from",
+      "value": "'Amazon Web Services' via Engineering <email@domain.com>"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:to",
+      "value": "email@domain.com"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.message:from-email",
+      "value": "email@domain.com"
+    }
+  ]
+}

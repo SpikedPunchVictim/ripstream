@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename word_comments.json) text and Content-Type for test_documents/vendored/docling/json/word_comments.json from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "json"
+  ],
+  "input": {
+    "file": "../files/docling-word_comments.json.input",
+    "filename": "word_comments.json"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/json; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 5687
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 5687
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "      },\n      {\n        \"$ref\": \"#/groups/1\"\n      },\n     "
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "    \"prov\": [],\n      \"comments\": [\n        {\n          \"$re"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ditor (JE), time: 2026-01-04T05:48:07+00:00]: Another commen"
+    }
+  ]
+}

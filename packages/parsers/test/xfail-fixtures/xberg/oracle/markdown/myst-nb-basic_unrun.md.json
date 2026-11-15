@@ -1,0 +1,25 @@
+{
+  "description": "[xfail tikajs-fhyw] Tika 4.2.0 oracle (PUT /rmeta/body, filename basic_unrun.md) text and Content-Type for test_documents/vendored/executablebooks-myst-nb/basic_unrun.md from the xberg corpus (myst-nb, BSD-3-Clause, Copyright (c) 2020 ExecutableBookProject); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "markdown",
+    "xfail"
+  ],
+  "input": {
+    "file": "../files/myst-nb-basic_unrun.md",
+    "filename": "basic_unrun.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=windows-1252"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\nfile_format: mystnb\nkernelspec:\ndisplay_name: Python 3\nlanguage: python\nname: python3\nauthor: Chris\na title\nthis was created using jupytext --to myst tests/notebooks/basic_unrun.ipynb\na = 1\nprint(a)\n\n"
+    }
+  ]
+}

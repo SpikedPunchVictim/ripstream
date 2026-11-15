@@ -1,0 +1,44 @@
+{
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename amt_handbook_sample.doctags.txt) text and Content-Type for test_documents/vendored/docling/txt/amt_handbook_sample.doctags.txt from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "tags": [
+    "xberg",
+    "oracle",
+    "text"
+  ],
+  "input": {
+    "file": "../files/docling-amt_handbook_sample.doctags.txt",
+    "filename": "amt_handbook_sample.doctags.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-1252"
+    },
+    {
+      "type": "min_length",
+      "field": "text",
+      "value": 4598
+    },
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 4598
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": " of simplicity, only three typical kinds of self-locking nut"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "<loc_59><loc_343><loc_261><loc_449><caption><loc_61><loc_455"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "loc_246>Elastic Stop Nut</section_header_level_1>\n<text><loc"
+    }
+  ]
+}
