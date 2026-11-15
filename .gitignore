@@ -17,3 +17,6 @@ coverage/
 # Generated supply-chain artifacts
 artifacts/
 sbom.cdx.json
+
+# CLI split bundle (pnpm build:bundle)
+packages/cli/bundle/

@@ -17,7 +17,8 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "bundle"
   ],
   "main": "./dist/main.js",
   "types": "./dist/main.d.ts",
@@ -30,9 +31,19 @@
     "@spikedpunch/ripstream-parsers": "workspace:*",
     "@spikedpunch/ripstream-language": "workspace:*",
     "@spikedpunch/ripstream-pipes": "workspace:*",
-    "@spikedpunch/ripstream-server": "workspace:*"
+    "@spikedpunch/ripstream-server": "workspace:*",
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "@spikedpunch/ripstream-isolation-node": "workspace:*"
+    "@spikedpunch/ripstream-isolation-node": "workspace:*",
+    "pdfjs-dist": "^4.10.38"
+  },
+  "peerDependencies": {
+    "pdfjs-dist": "^4.10.38"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    }
   }
 }

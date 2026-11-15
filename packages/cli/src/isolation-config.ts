@@ -22,6 +22,8 @@ const MODES: readonly IsolationMode[] = ["strict", "lenient", "off"];
 const MODE_VARIABLE = "RIPSTREAM_ISOLATION";
 const STRICT_CONTAINMENT_VARIABLE = "RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT";
 const MAX_OUTPUT_CHARS_VARIABLE = "RIPSTREAM_MAX_OUTPUT_CHARS";
+/** Read by `bin/ripstream.js` before the CLI loads, not by the CLI: any value but "" or "0" runs `dist` instead of the bundle. */
+const NO_BUNDLE_VARIABLE = "RIPSTREAM_NO_BUNDLE";
 
 const NUMBER_VARIABLES = [
   ["RIPSTREAM_ISOLATION_MEMORY_POOL_MB", "memoryPoolMb"],
@@ -39,6 +41,7 @@ const KNOWN_VARIABLES: readonly string[] = [
   STRICT_CONTAINMENT_VARIABLE,
   MAX_OUTPUT_CHARS_VARIABLE,
   WORKERS_VARIABLE,
+  NO_BUNDLE_VARIABLE,
   ...NUMBER_VARIABLES.map(([variable]) => variable),
 ];
 

@@ -9,8 +9,9 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "build:bundle": "node scripts/build-cli-bundle.ts",
     "build:clean": "pnpm run clean && tsc -b",
-    "clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo packages/*/tsconfig.tsbuildinfo",
+    "clean": "rm -rf packages/*/dist packages/cli/bundle packages/*/*.tsbuildinfo packages/*/tsconfig.tsbuildinfo",
     "typecheck": "tsc -b --pretty false",
     "test": "node --import @spikedpunch/cbd-node-test/register --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=@spikedpunch/cbd-node-test/reporter --test-reporter-destination=stderr \"packages/*/test/**/*.test.ts\"",
     "test:collect": "cbd collect -- pnpm test",
@@ -43,6 +44,7 @@
     "@spikedpunch/cbd-cli": "0.0.7",
     "@spikedpunch/cbd-node-test": "0.0.7",
     "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
     "typescript": "^5.9.3"
   }
 }

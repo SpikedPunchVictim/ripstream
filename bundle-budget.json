@@ -15,5 +15,6 @@
   "pipes": 550,
   "bundle-standard": 30,
   "isolation-node": 550,
-  "parser-db": 120
+  "parser-db": 120,
+  "cli-bundle": 4850
 }
