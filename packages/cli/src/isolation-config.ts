@@ -1,4 +1,5 @@
 import { validateConfig, type IsolationConfig, type IsolationMode } from "@spikedpunch/ripstream-core";
+import { WORKERS_VARIABLE } from "./workers-config.ts";
 
 /** Where the effective isolation mode came from (shown in the startup log). */
 export type IsolationSource = "default" | "config" | "env" | "flag";
@@ -37,6 +38,7 @@ const KNOWN_VARIABLES: readonly string[] = [
   MODE_VARIABLE,
   STRICT_CONTAINMENT_VARIABLE,
   MAX_OUTPUT_CHARS_VARIABLE,
+  WORKERS_VARIABLE,
   ...NUMBER_VARIABLES.map(([variable]) => variable),
 ];
 

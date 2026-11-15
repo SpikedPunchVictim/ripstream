@@ -457,3 +457,156 @@ test("pipes in UNPACK mode refuses an unpack-config key it cannot honor, naming 
     cleanup(paths);
   }
 });
+
+// `pipes --workers` (tikajs-ow39): the documents are parsed on worker threads. The pool itself is tested in
+// packages/pipes/test/parse-pool.test.ts; these are what the CLI decides around it.
+
+/** A pool that parses in this thread and records what it was asked for, and how many parses ran at once. */
+function recordingPool(): { log: { workers: number[]; closed: number; running: number; most: number }; createParsePool: NonNullable<CliDeps["createParsePool"]> } {
+  const log = { workers: [] as number[], closed: 0, running: 0, most: 0 };
+  const createParsePool = (async (options: { workers: number }) => {
+    log.workers.push(options.workers);
+    const parse = async () => {
+      log.most = Math.max(log.most, ++log.running);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      log.running--;
+      return { text: "from a worker", metadata: new Metadata() };
+    };
+    return {
+      size: options.workers,
+      parse,
+      parseRecursive: async () => [],
+      detect: async () => {
+        throw new Error("not used");
+      },
+      close: async () => void log.closed++,
+    };
+  }) as unknown as NonNullable<CliDeps["createParsePool"]>;
+  return { log, createParsePool };
+}
+
+const tenFiles = Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`${index}.txt`, `content of ${index}`]));
+
+test("pipes --workers parses on worker threads and writes what an in-process run writes", async () => {
+  const paths = workspace({ "a.txt": "content of a", "b.txt": "content of b" }, { pipes: { parseMode: "CONTENT_ONLY" } });
+  try {
+    const inProcess = io();
+    assert.equal(await main(["pipes", "--config", paths.config], inProcess, { env: {} }), 0, inProcess.err.join(""));
+    const expected = emitted(paths).map((name) => readFileSync(join(paths.output, name), "utf8"));
+    rmSync(paths.output, { recursive: true, force: true });
+
+    const sink = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers", "2"], sink, { env: {} }), 0, sink.err.join(""));
+    assert.match(sink.out.join(""), /pipes: fetched 2, resumed 0, emitted 2, failed 0/);
+    assert.deepEqual(emitted(paths), ["a.txt.json", "b.txt.json"]);
+    assert.deepEqual(emitted(paths).map((name) => readFileSync(join(paths.output, name), "utf8")), expected);
+  } finally {
+    cleanup(paths);
+  }
+});
+
+test("pipes --workers keeps two documents per worker in flight unless numClients says otherwise, and closes the pool", async () => {
+  const paths = workspace(tenFiles, { pipes: { parseMode: "CONTENT_ONLY", numClients: undefined } });
+  try {
+    let { log, createParsePool } = recordingPool();
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers", "3"], io(), { env: {}, createParsePool }), 0);
+    assert.deepEqual([log.workers, log.most, log.closed], [[3], 6, 1]);
+
+    ({ log, createParsePool } = recordingPool());
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers=1"], io(), { env: {}, createParsePool }), 0);
+    assert.deepEqual([log.workers, log.most], [[1], 4], "never fewer than the engine's own 4");
+
+    ({ log, createParsePool } = recordingPool());
+    assert.equal(await main(["pipes", "--config", paths.config], io(), { env: { RIPSTREAM_WORKERS: "2" }, createParsePool }), 0);
+    assert.deepEqual(log.workers, [2], "RIPSTREAM_WORKERS is the flag's default");
+
+    ({ log, createParsePool } = recordingPool());
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers", "off"], io(), { env: { RIPSTREAM_WORKERS: "2" }, createParsePool }), 0);
+    assert.deepEqual(log.workers, [], "the flag wins over the environment");
+  } finally {
+    cleanup(paths);
+  }
+
+  const capped = workspace(tenFiles, { pipes: { parseMode: "CONTENT_ONLY", numClients: 1 } });
+  try {
+    const { log, createParsePool } = recordingPool();
+    assert.equal(await main(["pipes", "--config", capped.config, "--workers", "4"], io(), { env: {}, createParsePool }), 0);
+    assert.deepEqual([log.workers, log.most], [[4], 1]);
+  } finally {
+    cleanup(capped);
+  }
+});
+
+test("pipes --workers auto sizes the pool from the machine, and parses in this process when there is no room for two", async () => {
+  const paths = workspace({ "a.txt": "content of a" }, { pipes: { parseMode: "CONTENT_ONLY" } });
+  try {
+    const { log, createParsePool } = recordingPool();
+    const sink = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers", "auto"], sink, { env: {}, createParsePool }), 0);
+    // What auto picks depends on the machine (autoWorkerCount is tested in packages/pipes); either way it is said.
+    if (log.workers.length === 0) assert.match(sink.err.join(""), /--workers auto: this machine has room for fewer than 2 workers/);
+    else assert.ok(log.workers[0]! >= 2 && log.workers[0]! <= 8, String(log.workers));
+  } finally {
+    cleanup(paths);
+  }
+});
+
+test("--workers takes a count from 1 to 64, auto or off, and only for pipes", async () => {
+  const paths = workspace({ "a.txt": "content of a" });
+  try {
+    for (const bad of ["0", "-1", "1.5", "two", "", " 3", "AUTO", "65"]) {
+      const sink = io();
+      assert.equal(await main(["pipes", "--config", paths.config, "--workers", bad], sink, { env: {} }), 2, JSON.stringify(bad));
+      assert.match(sink.err.join(""), /--workers/, JSON.stringify(bad));
+    }
+    const sink = io();
+    assert.equal(await main(["pipes", "--config", paths.config], sink, { env: { RIPSTREAM_WORKERS: "many" } }), 2);
+    assert.match(sink.err.join(""), /RIPSTREAM_WORKERS expects a positive whole number, auto or off, got "many"/);
+    assert.deepEqual(emitted(paths), [], "none of these ran anything");
+
+    for (const command of ["parse", "metadata", "detect", "serve"]) {
+      const refused = io();
+      assert.equal(await main([command, "--workers", "2"], refused, { env: {} }), 2, command);
+      assert.match(refused.err.join(""), new RegExp(`--workers applies to pipes, not ${command}`));
+    }
+  } finally {
+    cleanup(paths);
+  }
+});
+
+test("pipes refuses workers with isolation, from wherever either was set, with exit 2", async () => {
+  const paths = workspace({ "a.txt": "content of a" });
+  const isolated = join(paths.input, "..", "isolated.json");
+  writeFileSync(isolated, JSON.stringify({ ...JSON.parse(readFileSync(paths.config, "utf8")), isolation: { mode: "lenient" } }));
+  try {
+    const cases: [string[], Record<string, string>, RegExp][] = [
+      [["--config", paths.config, "--workers", "2", "--isolation", "strict"], {}, /workers 2 \(from --workers\) cannot be combined with isolation strict \(from --isolation\)/],
+      [["--config", paths.config, "--workers", "auto"], { RIPSTREAM_ISOLATION: "strict" }, /workers auto \(from --workers\) cannot be combined with isolation strict \(from RIPSTREAM_ISOLATION\)/],
+      [["--config", isolated], { RIPSTREAM_WORKERS: "4" }, /workers 4 \(from RIPSTREAM_WORKERS\) cannot be combined with isolation lenient \(from the configuration file\)/],
+    ];
+    for (const [args, env, message] of cases) {
+      const { log, createParsePool } = recordingPool();
+      const sink = io();
+      assert.equal(await main(["pipes", ...args], sink, { env, createParsePool }), 2, args.join(" "));
+      assert.match(sink.err.join(""), message);
+      assert.deepEqual(log.workers, []);
+    }
+    assert.deepEqual(emitted(paths), []);
+  } finally {
+    cleanup(paths);
+  }
+});
+
+test("pipes --workers fails with exit 2 when a worker cannot build its ripstream from the configuration", async () => {
+  // The configuration loads in this process, and the file it names is first read where the ripstream is built: in each
+  // worker. The worker's RipstreamConfigError must reach the CLI as one.
+  const paths = workspace({ "a.txt": "content of a" }, { extra: { "custom-mimetypes": "/nonexistent/types.xml" } });
+  try {
+    const sink = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--workers", "2"], sink, { env: {} }), 2, sink.err.join(""));
+    assert.match(sink.err.join(""), /custom-mimetypes: the file "\/nonexistent\/types\.xml" does not exist/);
+    assert.deepEqual(emitted(paths), []);
+  } finally {
+    cleanup(paths);
+  }
+});

@@ -26,6 +26,7 @@ import type { createStandardIsolation, StandardIsolation } from "@spikedpunch/ri
 import { createRipstream } from "@spikedpunch/ripstream-parsers";
 import type { CharSoupLanguageDetector } from "@spikedpunch/ripstream-language";
 import type { CheckpointStore, Reporter } from "@spikedpunch/ripstream-pipes";
+import type { createParsePool, ParsePool } from "@spikedpunch/ripstream-pipes/workers";
 import type { createRipstreamServer, ServerMimeType } from "@spikedpunch/ripstream-server";
 import { formatDoctor, runDoctor, type DoctorProbes } from "./doctor.ts";
 import {
@@ -35,6 +36,7 @@ import {
   resolveMaxOutputChars,
   type ResolvedIsolation,
 } from "./isolation-config.ts";
+import { resolveWorkers, WORKERS_VARIABLE, type ResolvedWorkers } from "./workers-config.ts";
 
 export interface CliIO {
   readonly stdout: (value: string) => void;
@@ -91,6 +93,8 @@ interface Options {
   readonly checkpoint: string | null;
   /** `--retry-attempts` as typed, pipes only; validated by retryAttempts. */
   readonly retryAttempts: string | null;
+  /** `--workers` as typed, pipes only; validated by resolveWorkers. */
+  readonly workers: string | null;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -132,6 +136,8 @@ export interface CliDeps {
   readonly createIsolation?: typeof createStandardIsolation;
   /** What `doctor` inspects; a test replaces it so the answer does not depend on the machine. */
   readonly doctorProbes?: DoctorProbes;
+  /** How `pipes --workers` builds its pool; a test replaces it to see what was asked for. */
+  readonly createParsePool?: typeof createParsePool;
 }
 
 export async function main(
@@ -403,6 +409,7 @@ const MAX_FAILURES_SHOWN = 100;
  */
 async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io: CliIO): Promise<number> {
   let isolation: StandardIsolation | null = null;
+  let pool: ParsePool | null = null;
   try {
     const pipesSettings = settings.config?.pipes;
     if (pipesSettings === null || pipesSettings === undefined) {
@@ -435,13 +442,17 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
       }
     }
     isolation = settings.isolation.config.mode !== "off" ? await openIsolation(settings, deps, io) : null;
+    pool = await openParsePool(settings, deps, io);
     const ripstream =
-      isolation === null
-        ? createRipstream({
-            ...(settings.config === null ? {} : { config: settings.config }),
-            ...(settings.limits === null ? {} : { limits: settings.limits }),
-          })
-        : isolation.ripstream;
+      isolation?.ripstream ??
+      pool ??
+      createRipstream({
+        ...(settings.config === null ? {} : { config: settings.config }),
+        ...(settings.limits === null ? {} : { limits: settings.limits }),
+      });
+    // Each worker parses one document at a time, so a run that names no numClients keeps every worker busy, with one
+    // document waiting for each while the other is being fetched and emitted.
+    const concurrency = pipesSettings.concurrency ?? (pool === null ? undefined : Math.max(4, 2 * pool.size));
     let shown = 0;
     const reporter: Reporter = {
       report: (result) => {
@@ -451,7 +462,7 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
     };
     // Read when a file is first named by its media type, once.
     let mimeTypes: ServerMimeType[] | undefined;
-    const engine = createEngineFromSettings(pipesSettings, {
+    const engine = createEngineFromSettings(concurrency === undefined ? pipesSettings : { ...pipesSettings, concurrency }, {
       ripstream,
       reporter,
       metadataFilterServices: await metadataFilterServices(),
@@ -475,7 +486,35 @@ async function pipes(options: Options, settings: CliSettings, deps: CliDeps, io:
     io.stderr(`ripstream: ${error instanceof Error ? error.message : String(error)}\n`);
     return exitCodeFor(error);
   } finally {
+    await pool?.close();
     await isolation?.isolator.dispose();
+  }
+}
+
+/**
+ * The worker pool of `pipes --workers`, or null when none was asked for or `auto` finds no room for two. The module is
+ * imported only here, so a run without workers loads none of it (cold-start.test.ts). A count the pool refuses (above
+ * its maximum) is a usage error; a worker that cannot build its ripstream rejects with why (a configuration error is
+ * a usage error too).
+ */
+async function openParsePool(settings: CliSettings, deps: CliDeps, io: CliIO): Promise<ParsePool | null> {
+  const wanted = settings.workers.setting;
+  if (wanted === "off") return null;
+  const workers = await import("@spikedpunch/ripstream-pipes/workers");
+  const count = wanted === "auto" ? workers.autoWorkerCount() : wanted;
+  if (count === 0) {
+    io.stderr("ripstream: NOTE: --workers auto: this machine has room for fewer than 2 workers, so documents are parsed in this process\n");
+    return null;
+  }
+  try {
+    return await (deps.createParsePool ?? workers.createParsePool)({
+      workers: count,
+      ...(settings.config === null ? {} : { config: settings.config }),
+      ...(settings.limits === null ? {} : { limits: settings.limits }),
+    });
+  } catch (error) {
+    if (error instanceof RangeError) throw new IsolationSettingsError(`--workers: ${error.message}`);
+    throw error;
   }
 }
 
@@ -533,6 +572,8 @@ interface CliSettings {
   readonly limits: Partial<ParseLimits> | null;
   /** `--retry-attempts` (tries in all, the first included), or null: no retry. */
   readonly retryAttempts: number | null;
+  /** `pipes --workers` / RIPSTREAM_WORKERS; off for every other command. */
+  readonly workers: ResolvedWorkers;
 }
 
 /** Digits only, at least 1: `--retry-attempts 1` is one try, so no retry. */
@@ -574,7 +615,11 @@ async function resolveSettings(
     // A flag that changes nothing for the command it is given to must not look as if it did.
     throw new Error(`ripstream: ${flagged.join(" and ")} applies to parse and metadata, not ${options.command}`);
   }
-  const pipesOnly = [...(options.checkpoint === null ? [] : ["--checkpoint"]), ...(options.retryAttempts === null ? [] : ["--retry-attempts"])];
+  const pipesOnly = [
+    ...(options.checkpoint === null ? [] : ["--checkpoint"]),
+    ...(options.retryAttempts === null ? [] : ["--retry-attempts"]),
+    ...(options.workers === null ? [] : ["--workers"]),
+  ];
   if (pipesOnly.length > 0 && options.command !== "pipes") {
     throw new Error(`ripstream: ${pipesOnly.join(" and ")} applies to pipes, not ${options.command}`);
   }
@@ -592,6 +637,7 @@ async function resolveSettings(
       maxOutputChars: null,
       limits: null,
       retryAttempts: null,
+      workers: OFF,
     };
   }
   try {
@@ -603,11 +649,15 @@ async function resolveSettings(
       env,
       fileIsolation,
     });
+    // RIPSTREAM_WORKERS, like the flag, is for pipes; another command parses one document and has no use for it.
+    const workers = options.command === "pipes" ? resolveWorkers({ flag: options.workers, env }) : OFF;
+    assertWorkersWithoutIsolation(workers, isolation);
     return {
       isolation,
       config,
       limits,
       retryAttempts: attempts,
+      workers,
       // Only the server has an output ceiling; a one-shot command ignores it.
       maxOutputChars: options.command === "serve" ? resolveMaxOutputChars({ flag: options.maxOutputChars, env }) : null,
     };
@@ -615,6 +665,22 @@ async function resolveSettings(
     if (error instanceof IsolationSettingsError) throw new Error(`ripstream: ${error.message}`);
     throw error;
   }
+}
+
+const OFF: ResolvedWorkers = { setting: "off", source: "default" };
+
+/**
+ * Workers and isolation are two ways to parse away from the run's own thread, and a worker cannot start a child: the
+ * operator chooses one. Isolation is the one that survives a crash or an out-of-memory; workers only spread the CPU.
+ */
+function assertWorkersWithoutIsolation(workers: ResolvedWorkers, isolation: ResolvedIsolation): void {
+  if (workers.setting === "off" || isolation.config.mode === "off") return;
+  const workersFrom = workers.source === "flag" ? "--workers" : WORKERS_VARIABLE;
+  const isolationFrom = { default: "the default", config: "the configuration file", env: "RIPSTREAM_ISOLATION", flag: "--isolation" }[isolation.modeSource];
+  throw new Error(
+    `ripstream: workers ${workers.setting} (from ${workersFrom}) cannot be combined with isolation ${isolation.config.mode} ` +
+      `(from ${isolationFrom}): choose one. Isolation survives a parser crash or an out-of-memory; workers only spread the parsing over CPUs`,
+  );
 }
 
 const COMMANDS: readonly string[] = ["parse", "detect", "metadata", "language", "formats", "doctor", "serve", "pipes", "help", "version"];
@@ -637,6 +703,7 @@ function parseArgs(argv: readonly string[]): Options {
   let maxEmbeddedCount: string | null = null;
   let checkpoint: string | null = null;
   let retryAttemptsFlag: string | null = null;
+  let workers: string | null = null;
 
   for (let index = 0; index < rest.length; index++) {
     const written = rest[index]!;
@@ -678,6 +745,7 @@ function parseArgs(argv: readonly string[]): Options {
     else if (argument === "--maxEmbeddedCount") maxEmbeddedCount = takeValue();
     else if (argument === "--checkpoint") checkpoint = takeValue();
     else if (argument === "--retry-attempts") retryAttemptsFlag = takeValue();
+    else if (argument === "--workers") workers = takeValue();
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
@@ -691,7 +759,7 @@ function parseArgs(argv: readonly string[]): Options {
   }
   return {
     command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars,
-    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag,
+    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers,
   };
 }
 
@@ -699,13 +767,13 @@ function parseArgs(argv: readonly string[]): Options {
 const FLAGS: ReadonlySet<string> = new Set([
   "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--help", "-h", "-?", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
 ]);
 
 /** The long options that take a value: the ones `--name=value` is for. */
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--output", "--config", "--password", "--port", "--host", "--isolation", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
 ]);
 
 /** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
@@ -739,6 +807,7 @@ function defaultOptions(): Options {
     maxEmbeddedCount: null,
     checkpoint: null,
     retryAttempts: null,
+    workers: null,
   };
 }
 
@@ -772,6 +841,9 @@ function usage(): string {
     "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",
     "      --checkpoint <file>     pipes: record the inputs that are done, and leave them out when the run is started again",
     "      --retry-attempts <n>    pipes: try a fetch or an emit that failed in a way that may not happen again up to n times",
+    "      --workers <n|auto|off>  pipes: parse on n worker threads (1 to 64; auto: one per CPU, at most 8, fewer when memory",
+    "                              is short; off: in this process, the default). Faster for CPU-bound documents; a crash or an",
+    "                              out-of-memory still ends the run, so it cannot be combined with --isolation (docs/workers.md)",
     "  -h, --help           Show help (serve: -h is the host; help is --help or -?)",
     "  -V, --version        Show version",
     "",
@@ -779,7 +851,7 @@ function usage(): string {
     "",
     "Environment (flags win): RIPSTREAM_ISOLATION, RIPSTREAM_ISOLATION_MEMORY_POOL_MB, _PER_CHILD_MB,",
     "  _MAX_INPUT_BYTES, _MAX_TASK_MILLIS, _HEAP_MB, _MAX_QUEUE, _MAX_DISK_MB, _REQUIRE_STRICT_CONTAINMENT,",
-    "  RIPSTREAM_MAX_OUTPUT_CHARS. Any other RIPSTREAM_* name is an error.",
+    "  RIPSTREAM_MAX_OUTPUT_CHARS, RIPSTREAM_WORKERS. Any other RIPSTREAM_* name is an error.",
     "",
     "Exit codes:",
     "  0  success",
