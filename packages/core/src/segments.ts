@@ -3,6 +3,7 @@ import { ContentHandlerDecorator, type MaybePromise } from "./content-handler.ts
 import type { OutputContentHandler } from "./handler-type.ts";
 import { MediaType } from "./media-type.ts";
 import type { Metadata } from "./metadata.ts";
+import { TIKA_KEYS } from "./tika-keys.ts";
 
 /**
  * A piece of a record's content and where it is in the document: a paragraph, a table cell or row, a slide's shape, a
@@ -97,6 +98,26 @@ function isMadeOfParts(segments: readonly Segment[], index: number): boolean {
 function escapeValue(value: string): string {
   return /[%;=\r\n]/.test(value) ? value.replace(/[%;=\r\n]/g, (char) => encodeURIComponent(char)) : value;
 }
+
+/**
+ * What the locations and labels of one record's segments may hold, in characters: a base for documents whose structure is
+ * dense (a spreadsheet's `sheet=...;cell=C7` per few characters of text) plus eight per output character (measured, a
+ * sheet needs about five). Without it a JSON pointer per scalar holds every key above it, so key length times scalar
+ * count is built whatever the output limit: a 98 KB document of one 30,000-character key above 34,000 scalars used over
+ * 1 GB. A record that would go over is given line segments instead (the text is kept), flagged `tk:segments-degraded`.
+ */
+export const SEGMENT_LOCATION_BASE_CHARS = 24 * 1024 * 1024;
+export const SEGMENT_LOCATION_CHARS_PER_OUTPUT_CHAR = 8;
+const SEGMENT_LOCATION_CEILING_CHARS = 256 * 1024 * 1024;
+
+/** Characters of location and label one record may hold when its output is limited to `maxOutputChars`. */
+export function segmentLocationAllowance(maxOutputChars: number): number {
+  const wanted = SEGMENT_LOCATION_BASE_CHARS + Math.max(0, maxOutputChars) * SEGMENT_LOCATION_CHARS_PER_OUTPUT_CHAR;
+  return Number.isFinite(wanted) ? Math.min(wanted, SEGMENT_LOCATION_CEILING_CHARS) : SEGMENT_LOCATION_CEILING_CHARS;
+}
+
+/** What a label slot costs against the allowance: a reference, not the key's characters, which are shared. */
+const LABEL_SLOT_CHARS = 8;
 
 function columnLetters(column: number): string {
   let letters = "";
@@ -213,10 +234,28 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #nextLine = 0;
   #nextRow = 0;
 
-  constructor(content: OutputContentHandler, metadata: Metadata) {
+  /** What is left of the record's location allowance; see `segmentLocationAllowance`. */
+  #allowance: number;
+  readonly #degraded = new Set<string>();
+
+  constructor(content: OutputContentHandler, metadata: Metadata, options: { readonly locationAllowance?: number } = {}) {
     super(content);
     this.#content = content;
     this.#metadata = metadata;
+    this.#allowance = options.locationAllowance ?? segmentLocationAllowance(100_000);
+  }
+
+  /** Takes `chars` from the allowance, or says that it is spent, and notes on the metadata which kind of location went without. */
+  #afford(kind: "ptr" | "selector", chars: number): boolean {
+    if (chars <= this.#allowance) {
+      this.#allowance -= chars;
+      return true;
+    }
+    if (!this.#degraded.has(kind)) {
+      this.#degraded.add(kind);
+      this.#metadata.add(TIKA_KEYS.SEGMENTS_DEGRADED, kind);
+    }
+    return false;
   }
 
   // --- hints ---------------------------------------------------------------------------------------------------------
@@ -575,17 +614,28 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     return labels;
   }
 
-  /** The element at `depth` as a CSS selector from the body: ids where they are plain, `:nth-of-type` elsewhere. */
-  #selector(depth: number): string {
-    let selector = "";
+  /**
+   * The element at `depth` as a CSS selector from the body: ids where they are plain, `:nth-of-type` elsewhere. Undefined
+   * when it would not fit the allowance (the segment is then located by its paragraph).
+   */
+  #selector(depth: number): string | undefined {
+    const parts: string[] = [];
+    let head = "body";
+    let length = 0;
     for (let index = depth - 1; index > this.#selectorRoot; index--) {
       const frame = this.#frames[index]!;
-      if (frame.id !== undefined && /^[A-Za-z][\w-]*$/.test(frame.id)) return `#${frame.id}${selector}`;
+      if (frame.id !== undefined && /^[A-Za-z][\w-]*$/.test(frame.id)) {
+        head = `#${frame.id}`;
+        break;
+      }
       // A browser puts table rows in a tbody the XHTML may not have, so a row is any descendant of its table.
       const combinator = frame.name === "tr" ? " " : " > ";
-      selector = `${combinator}${frame.name}:nth-of-type(${frame.nth})${selector}`;
+      const part = `${combinator}${frame.name}:nth-of-type(${frame.nth})`;
+      parts.push(part);
+      length += part.length;
     }
-    return `body${selector}`;
+    if (!this.#afford("selector", head.length + length)) return undefined;
+    return head + parts.reverse().join("");
   }
 
   // --- the end -------------------------------------------------------------------------------------------------------
@@ -595,7 +645,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     while (this.#frames.length > 0) this.#end();
     this.#closeShape();
     if (this.#layout === "lines" && this.#textKind === "json") {
-      const values = jsonSegments(content, this.#lineStarts);
+      const values = jsonSegments(content, this.#lineStarts, (chars) => this.#afford("ptr", chars));
       if (values !== undefined) return values;
     }
     const trimmed: Done[] = [];
@@ -621,7 +671,7 @@ function isSpace(code: number): boolean {
  * A segment per scalar of the JSON text `content`, located by its JSON Pointer and labelled with the keys above it;
  * several top-level values (JSON Lines) each get the `line=` their value starts on. Undefined when the text is not JSON.
  */
-function jsonSegments(content: string, lineStarts: readonly number[]): Segment[] | undefined {
+function jsonSegments(content: string, lineStarts: readonly number[], afford: (chars: number) => boolean): Segment[] | undefined {
   const segments: Segment[] = [];
   let index = 0;
   const skip = (): void => {
@@ -643,9 +693,21 @@ function jsonSegments(content: string, lineStarts: readonly number[]): Segment[]
   const pointer = (path: readonly (string | number)[]): string =>
     path.map((step) => `/${String(step).replace(/~/g, "~0").replace(/\//g, "~1")}`).join("");
   let topLevel = 0;
+  let refused = false;
   const scalar = (start: number, end: number): void => {
     if (end <= start) return;
     const path = stack.map((open) => open.key);
+    // Charged before the pointer is built: its length (escapes aside) is the keys and a slash each.
+    let cost = 0;
+    let named = 0;
+    for (const step of path) {
+      cost += 1 + String(step).length;
+      if (typeof step === "string") named++;
+    }
+    if (!afford(cost + named * LABEL_SLOT_CHARS)) {
+      refused = true;
+      return;
+    }
     segments.push({
       text: content.slice(start, end),
       start,
@@ -702,11 +764,13 @@ function jsonSegments(content: string, lineStarts: readonly number[]): Segment[]
       const end = stringEnd(index);
       if (end < 0) return undefined;
       scalar(index + 1, end - 1);
+      if (refused) return undefined;
       index = end;
     } else {
       const match = /^(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(content.slice(index, index + 64));
       if (match === null) return undefined;
       scalar(index, index + match[0].length);
+      if (refused) return undefined;
       index += match[0].length;
     }
     if (!afterValue()) return undefined;

@@ -39,6 +39,12 @@ export const TIKA_KEYS = {
   EMBEDDED_RESOURCE_LIMIT_SEEN: "tk:exception:embedded-resource-limit-seen",
   /** Resources or entries that were read, in archive order. */
   EMBEDDED_RESOURCE_LIMIT_READ: "tk:exception:embedded-resource-limit-read",
+  /**
+   * Ripstream's own. Set on a record whose segments could not all be located as asked, within the allowance for
+   * locations (docs/segments.md): "ptr" for a JSON document, whose segments are then its lines, "selector" for HTML, whose
+   * blocks are then located by paragraph.
+   */
+  SEGMENTS_DEGRADED: "tk:segments-degraded",
   IS_ENCRYPTED: "tk:encrypted",
 } as const;
 

@@ -20,7 +20,7 @@ import { ContentHandlerDecorator } from "./content-handler.ts";
 import { TeeContentHandler } from "./handlers/tee.ts";
 import { assertHandlerType, createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { markParseTiming } from "./rmeta.ts";
-import { SegmentTap, type Segment } from "./segments.ts";
+import { SegmentTap, segmentLocationAllowance, type Segment } from "./segments.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
 
 /**
@@ -177,7 +177,7 @@ export class RecursiveParserWrapper implements Parser {
     ctx.set(CONTEXT_KEYS.EMBEDDED_PATH_PARTS, pathParts);
 
     const content = createOutputHandler(this.handlerType);
-    const tap = this.segments ? new SegmentTap(content, metadata) : undefined;
+    const tap = this.segments ? new SegmentTap(content, metadata, { locationAllowance: segmentLocationAllowance(ctx.limits.maxOutputChars) }) : undefined;
     if (tap !== undefined) ctx.set(CONTEXT_KEYS.SEGMENT_HINTS, tap);
     const budgeted = new OutputBudgetHandler(
       new TeeContentHandler([handler, tap ?? content]),
@@ -317,7 +317,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     child.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, this);
 
     const body = createOutputHandler(this.handlerType === "text" ? "body" : this.handlerType);
-    const tap = this.segments ? new SegmentTap(body, metadata) : undefined;
+    const tap = this.segments ? new SegmentTap(body, metadata, { locationAllowance: segmentLocationAllowance(ctx.limits.maxOutputChars) }) : undefined;
     if (tap !== undefined) child.set(CONTEXT_KEYS.SEGMENT_HINTS, tap);
     const capture = new OutputBudgetHandler(tap ?? body, this.output, this.counted ? ctx.limits.maxDocumentOutputChars : undefined);
     let truncated = false;

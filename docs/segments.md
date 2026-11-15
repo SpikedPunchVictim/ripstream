@@ -151,6 +151,26 @@ only when segments are on, and a hint never touches the SAX stream:
 | `line(n)` | markdown: a block's source line |
 | `shape(name, title)` | OOXML presentation: `cNvPr@name`, title placeholders |
 
+## The allowance for locations (`tikajs-yub3`)
+
+A JSON pointer holds every key above its scalar, and a selector every ancestor of its block, so a document can make
+locations far larger than its text: one 30,000-character key above 34,000 scalars is 98 KB of input and a gigabyte of
+pointers, whatever `maxOutputChars` is. Each record therefore has an allowance of characters for locations and labels:
+24 Mi plus eight a character of `maxOutputChars` (a spreadsheet's `sheet=...;cell=C7` needs about five), at most 256 Mi,
+checked before a pointer or a selector is built (a label slot counts as 8).
+
+A record that would go over keeps its text and its segments, but coarser, and says so on its metadata:
+
+| `tk:segments-degraded` | what the record's segments are |
+| --- | --- |
+| `ptr` | a JSON document gets one segment per line (`line=N`), as text does, instead of one per scalar |
+| `selector` | an HTML block after the allowance is spent is located by `para=N`, with no `selector=` |
+
+Both values can be present. The record is not failed, and `content` is the same. Under isolation the allowance is
+checked in the child as well, so it comes first for a document whose locations are large; what the isolation's own
+allowance for segment frames (24 MiB + 0.75 bytes a character, docs/isolation.md) then refuses is the text, labels and
+encoding of a document with very many segments, and that is still a `LimitExceededError`.
+
 ## Not done
 
 - PDF page labels (`/PageLabels`, "iv" or "A-3"): pages are numbered from 1.
@@ -160,6 +180,8 @@ only when segments are on, and a hint never touches the SAX stream:
   xlsb and ods get whatever their XHTML gives.
 - A table's column headers are its first row, even when that row is a title spanning the sheet.
 - Shape names are what the author left: two shapes can share a name, and then `(path, location)` is not unique.
+- A spreadsheet's `sheet=` (or a slide's title) is repeated in every location it holds; a very long name is not counted against
+  the allowance above, as a pointer is. Only xlsx sheet names, which Excel limits to 31 characters, were considered.
 - Selectors are over Tika's XHTML, which drops some of the page's elements, so `nth-of-type` can differ from the page.
 - No XPath for XML, no setext (`===`) markdown headings, no JSON Lines `ptr` without the `line`.
 - A CSV with too few rows to be sniffed as a table is read as text, so it gets `line=` segments, not cells.

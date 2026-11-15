@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: segments allowance for locations (`tikajs-yub3`, F4)
+
+Fixed: with `segments: true`, every JSON scalar got a pointer holding all its keys and every HTML block a selector holding
+all its ancestors, with no cap in core, so a 98 KB JSON document (one 30,000-character key above 34,000 numbers) allocated
+over 1 GB and ended an in-process or pool run with out-of-memory. Each record now has an allowance of characters for
+its locations and labels (24 Mi plus eight a character of `maxOutputChars`). A record that would exceed it keeps its text
+and gets coarser segments (JSON: a segment per line; HTML: `para=N` for the blocks after the allowance), and
+`tk:segments-degraded` (`ptr` or `selector`) on its metadata. Decision recorded in docs/segments.md.
+
 ### Bug hunt at 9a828fc: ZIP entry order (`tikajs-0s94`, F10)
 
 Fixed: a ZIP with entries named by whole numbers (`1`, `2`) listed them before the others, so the text was out of

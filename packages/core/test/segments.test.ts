@@ -19,6 +19,8 @@ import {
   type Segment,
   type SegmentHints,
 } from "../src/index.ts";
+import { createOutputHandler } from "../src/handler-type.ts";
+import { SegmentTap } from "../src/segments.ts";
 
 /** A fake parser: the document's name picks a script, which writes XHTML (and hints) the way a real parser would. */
 type Script = (xhtml: XHTMLContentHandler, hints: SegmentHints | undefined, ctx: ParseContext, handler: ContentHandler) => Promise<void>;
@@ -272,6 +274,37 @@ test("json text gives a segment per scalar, by JSON Pointer; text that is not JS
   assert.deepEqual(lines(record!.segments), ["ptr=/a/0/b~0~1 | PLANTED | a > b~/", "ptr=/n | 1 | n"]);
   const [broken] = await segmentsOf(textLines("broken-json", "application/json", '{"a": [1,\n2'));
   assert.deepEqual(lines(broken!.segments), ['line=1 | {"a": [1, | ', "line=2 | 2 | "]);
+});
+
+test("json whose locations would outgrow the allowance gets line segments and a flag, not a gigabyte of pointers (tikajs-yub3)", async () => {
+  // One 2,000-character key above 20,000 scalars: a pointer of 2,000 characters each, 40 million in all (the allowance at the
+  // default maxOutputChars is about 25 million). 98 KB of this took over 1 GB when every pointer was built.
+  const json = `{"${"k".repeat(2000)}":[${Array(20_000).fill("1").join(",")}]}`;
+  const [record] = await segmentsOf(textLines("huge-key-json", "application/json", json));
+  const segments = record!.segments!;
+  assert.deepEqual(segments.map((segment) => segment.location), ["line=1"]);
+  assert.equal(segments[0]!.text, json.slice(0, record!.content.length).trim());
+  assert.equal(record!.metadata.get("tk:segments-degraded"), "ptr");
+  const [small] = await segmentsOf(textLines("small-json", "application/json", '{"a":[1,2]}'));
+  assert.deepEqual(lines(small!.segments), ["ptr=/a/0 | 1 | a", "ptr=/a/1 | 2 | a"]);
+  assert.equal(small!.metadata.get("tk:segments-degraded"), null);
+});
+
+test("html whose selectors would outgrow the allowance is located by paragraph and flagged (tikajs-yub3)", async () => {
+  const metadata = new Metadata();
+  metadata.set("Content-Type", "text/html");
+  const content = createOutputHandler("text");
+  const tap = new SegmentTap(content, metadata, { locationAllowance: 400 });
+  const xhtml = new XHTMLContentHandler(tap, metadata);
+  await xhtml.startDocument();
+  for (let depth = 0; depth < 40; depth++) await xhtml.startElement("div");
+  await xhtml.element("p", "deep one");
+  await xhtml.element("p", "deep two");
+  for (let depth = 0; depth < 40; depth++) await xhtml.endElement("div");
+  await xhtml.endDocument();
+  const found = tap.finish(content.toString());
+  assert.deepEqual(found.map((segment) => segment.location), ["para=1", "para=2"]);
+  assert.equal(metadata.get("tk:segments-degraded"), "selector");
 });
 
 test("html is located by selector: nth-of-type from the body, an id where there is one", async () => {
