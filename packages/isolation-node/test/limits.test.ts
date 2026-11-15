@@ -12,6 +12,7 @@ import {
   TEXT_METADATA_BYTES,
   deriveLimits,
 } from "../src/limits.ts";
+import { MAX_TEXT_CHUNK_CHARS } from "../src/frames.ts";
 
 const MIB = 1024 * 1024;
 const strict: IsolationConfig = { mode: "strict" };
@@ -135,12 +136,30 @@ test("text: the frame cap is the metadata allowance (12 MiB), whatever the resul
   assert.equal(deriveLimits(strict, { output: "text", maxOutputChars: 10 }).maxFrameBytes, TEXT_METADATA_BYTES);
 });
 
-test("records: a record is one frame, so the frame cap equals the result cap", () => {
-  for (const maxOutputChars of [0, 100_000, 5_000_000]) {
+test("records: a record frame holds metadata and at most one text chunk of content, so its cap is that plus the slack", () => {
+  const chunk = MAX_TEXT_CHUNK_CHARS * 6;
+  for (const maxOutputChars of [100_000, 5_000_000, 52_428_800]) {
     const limits = deriveLimits(strict, { output: "records", maxOutputChars });
-    assert.equal(limits.maxFrameBytes, limits.maxResultBytes, `${maxOutputChars}`);
+    // The default 10,000 embedded resources give the whole 16 MiB records metadata allowance.
+    assert.equal(limits.maxFrameBytes, MAX_RECORDS_METADATA_BYTES + chunk + RESULT_SLACK_BYTES, `${maxOutputChars}`);
+    assert.ok(limits.maxFrameBytes < limits.maxResultBytes);
     assert.equal(limits.output, "records");
   }
+});
+
+test("records: a result too small for that is its own frame cap", () => {
+  const limits = deriveLimits(strict, { output: "records", maxOutputChars: 0 });
+  assert.equal(limits.maxResultBytes, MAX_RECORDS_METADATA_BYTES + RESULT_SLACK_BYTES);
+  assert.equal(limits.maxFrameBytes, limits.maxResultBytes);
+});
+
+test("records with segments: their list is in the record frame, so the frame cap is the whole result", () => {
+  for (const maxOutputChars of [0, 100_000, 5_000_000]) {
+    const limits = deriveLimits(strict, { output: "records", maxOutputChars, segments: true });
+    assert.equal(limits.maxFrameBytes, limits.maxResultBytes, `${maxOutputChars}`);
+    assert.equal(limits.segments, true);
+  }
+  assert.throws(() => deriveLimits(strict, { output: "text", segments: true }), /segments needs a "records" request/);
 });
 
 test("records: the metadata allowance is 4 KiB per record, between the 12 MiB text allowance and 16 MiB", () => {
@@ -235,7 +254,7 @@ test("unpackBytes: the result cap grows by the bytes as base64 and their frames,
   const base64 = (30 * MIB) / 3 * 4;
   assert.ok((unpack.unpackWireBytes ?? 0) >= base64, "at least the base64 of the bytes");
   assert.ok((unpack.unpackWireBytes ?? 0) < base64 + 1 * MIB, "and not much more than the frame envelopes");
-  assert.equal(unpack.maxFrameBytes, unpack.maxResultBytes, "a record is still one frame, bounded by the whole result");
+  assert.equal(unpack.maxFrameBytes, MAX_RECORDS_METADATA_BYTES + MAX_TEXT_CHUNK_CHARS * 6 + RESULT_SLACK_BYTES, "the bytes travel in their own frames: a record frame is no larger");
   assert.equal(unpack.perChildMb, base.perChildMb);
   assert.equal(unpack.heapMb, base.heapMb);
 });

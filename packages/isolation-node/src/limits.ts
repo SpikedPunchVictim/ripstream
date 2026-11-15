@@ -1,5 +1,5 @@
 import { DEFAULT_LIMITS, LimitExceededError, type IsolationConfig } from "@spikedpunch/ripstream-core";
-import { MAX_BYTES_CHUNK } from "./frames.ts";
+import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
 
 /**
  * Everything the facade hands to the runner for one request, derived from the isolation config plus the request's
@@ -46,7 +46,7 @@ const HEAP_BYTES_PER_OUTPUT_CHAR = 8;
  * surrogate gives a 6-byte `\uXXXX`; every other character is at most 3 bytes (a non-BMP pair is 4 bytes for 2
  * characters). The design's `maxOutputChars * 6`.
  */
-const WIRE_BYTES_PER_OUTPUT_CHAR = 6;
+export const WIRE_BYTES_PER_OUTPUT_CHAR = 6;
 
 /** Room, in one meta frame, for what is not metadata: `{"t":"meta","metadata":{...}}`, the newline and an exception. */
 const META_FRAME_SLACK_BYTES = 64 * 1024;
@@ -59,7 +59,7 @@ const META_FRAME_SLACK_BYTES = 64 * 1024;
  * (JSON-escaping a control character or a lone surrogate; a name or value costs its length plus one, which covers
  * its quotes and separators), plus slack, rounded up to a whole MiB. With the default of 2,000,000 that is 12 MiB (the P3 review found
  * documents with ~10 MiB of metadata that parsed in-process and were refused here when the allowance was a
- * hand-picked 8 MiB). The parent reserves 6x the result cap for text, so this costs ~72 MiB of pool per child.
+ * hand-picked 8 MiB). The parent reserves 6x this for the meta frame (runner.ts), so it costs ~72 MiB of pool per child.
  */
 export const TEXT_METADATA_BYTES =
   Math.ceil((DEFAULT_LIMITS.maxMetadataTotalChars * WIRE_BYTES_PER_OUTPUT_CHAR + META_FRAME_SLACK_BYTES) / MIB) * MIB;
@@ -73,8 +73,8 @@ export const TEXT_METADATA_BYTES =
 export const RECORD_METADATA_BYTES = 4096;
 
 /**
- * Cap on the whole records metadata allowance. The parent reserves 24x the result cap in the pool for a "records"
- * result (runner.ts), so every MiB allowed here costs 24 MiB of pool: 16 MiB (= 4096 records at the allowance
+ * Cap on the whole records metadata allowance. The parent reserves 24x the non-text part of a "records" result in
+ * the pool (runner.ts), so every MiB allowed here costs 24 MiB of pool: 16 MiB (= 4096 records at the allowance
  * above) costs 384 MiB, which a pool of a few GiB can still hold next to a child. A document that really has more
  * metadata than this gets a LimitExceededError, the same answer as any other result cap.
  */
@@ -87,8 +87,8 @@ export const MAX_RECORDS_METADATA_BYTES = 16 * MIB;
 export const RESULT_SLACK_BYTES = 64 * 1024;
 
 /**
- * Hard ceiling on `maxResultBytes`, whatever the pool: below V8's maximum string length (a single frame can be as
- * large as the result in records mode) and far below the point where the arithmetic stops being exact. Requests
+ * Hard ceiling on `maxResultBytes`, whatever the pool: below V8's maximum string length (with segments a single
+ * frame can be as large as the result in records mode) and far below the point where the arithmetic stops being exact. Requests
  * beyond it have no meaningful bound to enforce.
  */
 export const MAX_RESULT_BYTES_CEILING = 512 * MIB;
@@ -129,6 +129,8 @@ export interface LimitsRequest {
   readonly maxParseMillis?: number;
   /** Bytes of embedded documents to bring back; records output only. */
   readonly unpackBytes?: number;
+  /** Segments are asked for (records output only): their list travels in the record frame, which has no cap of its own then. */
+  readonly segments?: boolean;
 }
 
 export interface DerivedLimits {
@@ -151,9 +153,15 @@ export interface DerivedLimits {
   readonly maxOutputChars: number;
   readonly maxEmbeddedResources: number;
   readonly output: "text" | "records";
+  /** Present when segments were asked for (records output): the parent's reservation covers the whole result as parsed JSON then. */
+  readonly segments?: true;
   /** Most bytes accepted over fd 3. */
   readonly maxResultBytes: number;
-  /** Longest single frame: the default for text (many small frames), the whole result for records (one frame each). */
+  /**
+   * Longest single frame: text mode's largest is its meta frame. Records mode's is a record frame, which holds its
+   * content only up to one text chunk (longer content follows in text frames): the metadata allowance, that chunk and
+   * the slack; with `segments` its list is in the frame and bounded only by the result.
+   */
   readonly maxFrameBytes: number;
   /** Most `unpackBytes` a request may ask for under this config: the smaller of MAX_UNPACK_BYTES_CEILING and a quarter of `perChildMb`. */
   readonly unpackCeiling: number;
@@ -218,6 +226,12 @@ function metadataAllowanceBytes(output: "text" | "records", maxEmbeddedResources
   return Math.min(MAX_RECORDS_METADATA_BYTES, Math.max(TEXT_METADATA_BYTES, records * RECORD_METADATA_BYTES));
 }
 
+function recordFrameCap(output: "text" | "records", segments: boolean, maxResultBytes: number, metadataBytes: number): number {
+  if (output === "text") return TEXT_METADATA_BYTES;
+  if (segments) return maxResultBytes;
+  return Math.min(maxResultBytes, metadataBytes + MAX_TEXT_CHUNK_CHARS * WIRE_BYTES_PER_OUTPUT_CHAR + RESULT_SLACK_BYTES);
+}
+
 /**
  * Derives the limits of one request. Throws RangeError for a config or request that cannot be honoured (the
  * message names the numbers) and LimitExceededError when the output cap asks for a result above
@@ -268,6 +282,8 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
       );
     }
   }
+  const segments = request.segments === true;
+  if (segments && output !== "records") throw new RangeError('segments needs a "records" request');
   const unpackWire = unpackBytes === undefined ? 0 : unpackWireBytes(unpackBytes, maxEmbeddedResources);
   const maxResultBytes =
     maxOutputChars * WIRE_BYTES_PER_OUTPUT_CHAR +
@@ -293,11 +309,12 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     maxOutputChars,
     maxEmbeddedResources,
     output,
+    ...(segments ? { segments: true as const } : {}),
     maxResultBytes,
-    // A record is ONE frame, so records mode needs a frame cap as large as the result. The parent's reservation for
-    // a records result (24x, runner.ts) already covers the line buffer that can grow that large. Text mode's largest
+    // A record frame carries no more than one text chunk of content (the rest follows in text frames), so its cap is
+    // the metadata allowance plus that chunk, unless segments make it as large as the result. Text mode's largest
     // frame is the meta frame (text chunks are 64 KiB), hence the metadata allowance.
-    maxFrameBytes: output === "records" ? maxResultBytes : TEXT_METADATA_BYTES,
+    maxFrameBytes: recordFrameCap(output, segments, maxResultBytes, metadataAllowanceBytes(output, maxEmbeddedResources)),
     unpackCeiling,
     ...(unpackBytes === undefined ? {} : { unpackBytes, unpackWireBytes: unpackWire }),
   };

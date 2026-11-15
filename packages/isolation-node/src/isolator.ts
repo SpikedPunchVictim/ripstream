@@ -33,7 +33,7 @@ import { deriveLimits, type DerivedLimits } from "./limits.ts";
 import { DEFAULT_OVERSHOOT_MB, MemoryPool, type PoolStats } from "./pool.ts";
 import { probeIsolation } from "./probe.ts";
 import { DEFAULT_IN_PROCESS_MAX_BYTES, DEFAULT_IN_PROCESS_TYPES, routeRequest } from "./routing.ts";
-import { ChildRunner, parentResultMb, type ChildRunnerOptions } from "./runner.ts";
+import { ChildRunner, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "./runner.ts";
 
 /**
  * The parent-side isolation facade (`ParseIsolator` from core) for Node: routes each request to an in-process parse
@@ -426,20 +426,14 @@ class NodeIsolatorImpl implements NodeIsolator {
     // caps), not an outage: refuse it as a limit rather than let the pool call it "unavailable" (503).
     const { overshootMb } = isolating.pool;
     const { poolMb } = isolating.pool.stats();
-    const needMb =
-      limits.perChildMb +
-      overshootMb +
-      parentResultMb(
-        limits.maxResultBytes,
-        limits.output,
-        limits.unpackBytes === undefined ? undefined : { bytes: limits.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-      );
+    const resultMb = parentResultMbFor(limits);
+    const needMb = limits.perChildMb + overshootMb + resultMb;
     if (needMb > poolMb) {
       throw new LimitExceededError(
         `A ${limits.output} request with maxOutputChars ${limits.maxOutputChars} and maxEmbeddedResources ` +
           `${limits.maxEmbeddedResources} (the defaults unless the caller set them) needs ${needMb} MiB ` +
-          `(${limits.perChildMb} per child + ${overshootMb} overshoot + the result), more than the whole memory ` +
-          `pool of ${poolMb} MiB. Lower the caps or enlarge the pool`,
+          `(${limits.perChildMb} per child + ${overshootMb} overshoot + ${resultMb} for the parent to hold the result), ` +
+          `more than the whole memory pool of ${poolMb} MiB. Lower the caps or enlarge the pool`,
       );
     }
     // The child is told the effective caps, not "unset", so what it enforces is what the result cap was sized for.
@@ -548,7 +542,7 @@ function defaultReservations(
       output,
       ...(defaultMaxOutputChars === undefined ? {} : { maxOutputChars: defaultMaxOutputChars }),
     });
-    return limits.perChildMb + overshootMb + parentResultMb(limits.maxResultBytes, output);
+    return limits.perChildMb + overshootMb + parentResultMbFor(limits);
   };
   return { text: reserve("text"), records: reserve("records") };
 }
@@ -570,7 +564,7 @@ type PoolChoice = { readonly pool: MemoryPool; readonly ownsPool: boolean } | { 
  * sized it (a small cgroup: unavailable) and a wiring bug when the caller gave it to us (RangeError).
  */
 function choosePool(options: NodeIsolatorOptions, config: IsolationConfig, defaults: DerivedLimits, log: NonNullable<NodeIsolatorOptions["log"]>): PoolChoice {
-  const resultMb = parentResultMb(defaults.maxResultBytes, "text");
+  const resultMb = parentResultMbFor(defaults);
   if (options.pool !== undefined) {
     if (config.memoryPoolMb !== undefined || config.maxQueue !== undefined) {
       log("warn", "config.memoryPoolMb and config.maxQueue are ignored: the isolator was given a shared memory pool");

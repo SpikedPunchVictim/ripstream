@@ -23,8 +23,9 @@ import {
  * rather than after the whole stream was buffered:
  *
  *   text:    ready, meta, text*, done      (an error frame may end it anywhere after ready)
- *   records: ready, (record bytes*)*, done  (a record that announces `byteLength` is followed by bytes frames that
- *            add up to exactly that; only when the request asked for `unpackBytes`)
+ *   records: ready, (record text* bytes*)*, done  (a record that announces `contentLength` is followed by text frames
+ *            that add up to exactly that many characters; one that announces `byteLength` then by bytes frames that
+ *            add up to exactly that, and only when the request asked for `unpackBytes`)
  */
 
 export const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
@@ -45,6 +46,13 @@ export const DEFAULT_MAX_FRAMES = 1_000_000;
 export const DEFAULT_MAX_METADATA_KEYS = DEFAULT_LIMITS.maxMetadataTotalChars / 2;
 /** Most strings, over all keys, in one metadata object: core's total cap, as a value costs at least 1 of it. */
 export const DEFAULT_MAX_METADATA_VALUES = DEFAULT_LIMITS.maxMetadataTotalChars;
+
+/**
+ * Text frames carry at most this many UTF-16 code units: ~384 KiB of JSON in the worst (all-escaped) case, far below
+ * the 1 MiB frame cap. A record whose content is longer is sent as a record frame without content and then text frames
+ * (`contentLength`); a shorter one carries its content inline.
+ */
+export const MAX_TEXT_CHUNK_CHARS = 64 * 1024;
 
 /** Raw bytes in one bytes frame, at most: the child cuts a document's bytes at this size. */
 export const MAX_BYTES_CHUNK = 192 * 1024;
@@ -83,8 +91,12 @@ export type Frame =
   | { readonly t: "ready"; readonly pid: number }
   | { readonly t: "meta"; readonly metadata: Record<string, string[]>; readonly exception?: IsolatedException }
   | { readonly t: "text"; readonly chunk: string }
-  /** `byteLength`: the embedded document's bytes follow in bytes frames (0: it is empty). Only with `unpackBytes`. */
-  | { readonly t: "record"; readonly record: IsolatedParseRecord; readonly byteLength?: number }
+  /**
+   * `contentLength`: the record's `content` (empty in `record`) follows in text frames of that many characters in
+   * all; segments are checked against it. `byteLength`: the embedded document's bytes follow in bytes frames (0: it
+   * is empty), after the text. Only with `unpackBytes`.
+   */
+  | { readonly t: "record"; readonly record: IsolatedParseRecord; readonly contentLength?: number; readonly byteLength?: number }
   | { readonly t: "bytes"; readonly data: Uint8Array }
   | { readonly t: "done" }
   | ErrorFrame;
@@ -167,6 +179,8 @@ export class FrameReader {
   #unpackAnnounced = 0;
   /** The record whose bytes are still arriving. */
   #owing: { readonly index: number; readonly parts: Uint8Array[]; remaining: number; readonly length: number } | null = null;
+  /** The record whose content is still arriving in text frames. */
+  #owingText: { readonly index: number; readonly parts: string[]; remaining: number } | null = null;
 
   constructor(options: FrameReaderOptions) {
     this.#maxFrameBytes = checkPositiveInteger(
@@ -317,6 +331,7 @@ export class FrameReader {
     this.#chunks = [];
     this.#records = [];
     this.#owing = null;
+    this.#owingText = null;
     events.push(violation);
   }
 
@@ -386,20 +401,23 @@ export class FrameReader {
         this.#exception = frame.exception ?? null;
         return null;
       case "text":
-        if (this.#output !== "text") return '"text" frame for records output';
+        if (this.#output === "records") return this.#acceptContent(frame.chunk);
         if (this.#metadata === null) return '"text" frame before "meta"';
         // An empty chunk adds nothing; not keeping it also keeps a flood of them free.
         if (frame.chunk.length > 0) this.#chunks.push(frame.chunk);
         return null;
       case "record":
         if (this.#output !== "records") return '"record" frame for text output';
+        if (this.#owingText !== null) return '"record" frame while the content of the last record is still owed';
         if (this.#owing !== null) return '"record" frame while the bytes of the last record are still owed';
-        return this.#acceptRecord(frame.record, frame.byteLength);
+        return this.#acceptRecord(frame.record, frame.contentLength, frame.byteLength);
       case "bytes":
         if (this.#output !== "records") return '"bytes" frame for text output';
+        if (this.#owingText !== null) return '"bytes" frame while the content of the last record is still owed';
         return this.#acceptBytes(frame.data);
       case "done":
         if (this.#output === "text" && this.#metadata === null) return '"done" frame before "meta" for text output';
+        if (this.#owingText !== null) return '"done" frame while the content of the last record is still owed';
         if (this.#owing !== null) return '"done" frame while the bytes of the last record are still owed';
         this.#terminal = "done";
         return null;
@@ -410,9 +428,12 @@ export class FrameReader {
     }
   }
 
-  /** A record, and the bytes it announces. The announced length is checked against the budget before any byte is kept. */
-  #acceptRecord(record: IsolatedParseRecord, byteLength: number | undefined): string | null {
+  /** A record, the content and the bytes it announces. The announced byte length is checked against the budget before any byte is kept. */
+  #acceptRecord(record: IsolatedParseRecord, contentLength: number | undefined, byteLength: number | undefined): string | null {
     this.#records.push(record);
+    if (contentLength !== undefined) {
+      this.#owingText = { index: this.#records.length - 1, parts: [], remaining: contentLength };
+    }
     if (byteLength === undefined) return null;
     if (this.#unpackBytes === 0 && byteLength > 0) return "record announces bytes, but none were asked for";
     if (this.#unpackAnnounced + byteLength > this.#unpackBytes) {
@@ -422,6 +443,20 @@ export class FrameReader {
     const index = this.#records.length - 1;
     if (byteLength === 0) this.#records[index] = { ...record, bytes: new Uint8Array(0) };
     else this.#owing = { index, parts: [], remaining: byteLength, length: byteLength };
+    return null;
+  }
+
+  /** A text frame of a records stream: the next piece of the content the last record announced. */
+  #acceptContent(chunk: string): string | null {
+    const owing = this.#owingText;
+    if (owing === null) return '"text" frame with no record waiting for content';
+    if (chunk.length === 0) return '"text" frame of a record\'s content must not be empty';
+    if (chunk.length > owing.remaining) return `"text" frame of ${chunk.length} characters, ${owing.remaining} were owed`;
+    owing.parts.push(chunk);
+    owing.remaining -= chunk.length;
+    if (owing.remaining > 0) return null;
+    this.#records[owing.index] = { ...this.#records[owing.index]!, content: owing.parts.join("") };
+    this.#owingText = null;
     return null;
   }
 
@@ -517,7 +552,8 @@ function validateMetadata(value: unknown, limits: MetadataLimits): Record<string
   return Object.fromEntries(entries);
 }
 
-function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRecord | string {
+/** `contentLength`: the record frame announced its content in text frames, so `content` must be empty and segments are checked against the announced length. */
+function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: number): IsolatedParseRecord | string {
   if (!isObject(value)) return "record must be an object";
   const extra = onlyKeys(value, [
     "metadata",
@@ -533,6 +569,7 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
   const metadata = validateMetadata(value.metadata, limits);
   if (typeof metadata === "string") return `record: ${metadata}`;
   if (typeof value.content !== "string") return "record.content must be a string";
+  if (contentLength !== undefined && value.content.length > 0) return "record.content must be empty when contentLength is announced";
   if (typeof value.embeddedResourcePath !== "string") return "record.embeddedResourcePath must be a string";
   const pathParts = value.pathParts === undefined ? undefined : validatePathParts(value.pathParts);
   if (typeof pathParts === "string") return pathParts;
@@ -542,7 +579,7 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
   }
   const exception = value.exception === null ? null : validateException(value.exception, "record.exception");
   if (typeof exception === "string") return exception;
-  const segments = value.segments === undefined ? undefined : validateSegments(value.segments, value.content.length);
+  const segments = value.segments === undefined ? undefined : validateSegments(value.segments, contentLength ?? value.content.length);
   if (typeof segments === "string") return segments;
   return {
     metadata,
@@ -646,15 +683,23 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return { t: "text", chunk: value.chunk };
     }
     case "record": {
-      const extra = onlyKeys(value, ["t", "record", "byteLength"]);
+      const extra = onlyKeys(value, ["t", "record", "contentLength", "byteLength"]);
       if (extra !== null) return `record frame: ${extra}`;
-      const record = validateRecord(value.record, limits);
-      if (typeof record === "string") return record;
-      if (value.byteLength === undefined) return { t: "record", record };
-      if (typeof value.byteLength !== "number" || !Number.isSafeInteger(value.byteLength) || value.byteLength < 0) {
+      const { contentLength, byteLength } = value;
+      if (contentLength !== undefined && (typeof contentLength !== "number" || !Number.isSafeInteger(contentLength) || contentLength < 1)) {
+        return "record frame: contentLength must be a positive integer";
+      }
+      if (byteLength !== undefined && (typeof byteLength !== "number" || !Number.isSafeInteger(byteLength) || byteLength < 0)) {
         return "record frame: byteLength must be a non-negative integer";
       }
-      return { t: "record", record, byteLength: value.byteLength };
+      const record = validateRecord(value.record, limits, contentLength as number | undefined);
+      if (typeof record === "string") return record;
+      return {
+        t: "record",
+        record,
+        ...(contentLength === undefined ? {} : { contentLength: contentLength as number }),
+        ...(byteLength === undefined ? {} : { byteLength: byteLength as number }),
+      };
     }
     case "bytes": {
       const extra = onlyKeys(value, ["t", "chunk"]);

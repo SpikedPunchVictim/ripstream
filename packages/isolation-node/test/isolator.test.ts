@@ -384,7 +384,7 @@ test("pool: a pool that fits the default text request but not the default record
 });
 
 test("pool: with 1024 MiB of overshoot per reservation, a records request that only overshoot makes too big is still a LimitExceededError", async () => {
-  // Defaults: text needs 2708 MiB and records 3056 MiB of this pool (both include the 1024 MiB overshoot). 2900 MiB
+  // Defaults: text needs 2729 MiB and records 3042 MiB of this pool (both include the 1024 MiB overshoot). 2900 MiB
   // fits the first only. If the isolator's own check forgot the overshoot it would let a records request through
   // to the pool, which can never satisfy it and would call it "unavailable" (503) instead of the caller's limit.
   const pool = new MemoryPool({ poolMb: 2900, overshootMb: 1024, maxQueue: 0 });
@@ -581,7 +581,8 @@ test("maxOutputChars -1 (unbounded) and absurd caps are refused as limits, for e
 });
 
 test("a cap that would never fit the memory pool is a limit error, not an outage", async () => {
-  const pool = new MemoryPool({ poolMb: 3000, overshootMb: 0, maxQueue: 0 });
+  // Text is reserved per character (tikajs-2cvh): 80 million characters need 1536 + 549 = 2085 MiB here, the default 1708.
+  const pool = new MemoryPool({ poolMb: 2000, overshootMb: 0, maxQueue: 0 });
   const h = setup({ pool, config: { mode: "strict" } });
   const isolator = await h.create();
   assert.doesNotThrow(() => deriveLimits({ mode: "strict" }, { maxOutputChars: 80_000_000 }));
@@ -616,8 +617,8 @@ test("defaultMaxOutputChars: a request without a cap that parses in-process gets
 });
 
 test("defaultMaxOutputChars: an output cap the pool cannot hold fails at construction, not on every request", async () => {
-  // 3000 MiB holds the default request (2708) but not one sized for 50 million characters.
-  const small: IsolationConfig = { mode: "strict", memoryPoolMb: 3000 };
+  // 2800 MiB holds the default request (2729) but not one sized for 50 million characters (2967).
+  const small: IsolationConfig = { mode: "strict", memoryPoolMb: 2800 };
   const strict = setup({ config: small, defaultMaxOutputChars: 50_000_000 });
   delete (strict.options as { pool?: MemoryPool }).pool;
   await assert.rejects(createNodeIsolator(strict.options), (error: unknown) => {
@@ -632,7 +633,7 @@ test("defaultMaxOutputChars: an output cap the pool cannot hold fails at constru
   created.push(isolator);
   assert.equal(isolator.status().degraded, true);
 
-  const wired = setup({ pool: new MemoryPool({ poolMb: 3000, overshootMb: 1024, maxQueue: 0 }), defaultMaxOutputChars: 50_000_000 });
+  const wired = setup({ pool: new MemoryPool({ poolMb: 1900, overshootMb: 1024, maxQueue: 0 }), defaultMaxOutputChars: 50_000_000 }); // STRICT has perChildMb 512: 512 + 1024 + 407 = 1943
   await assert.rejects(createNodeIsolator(wired.options), /cannot hold one child/);
 });
 
@@ -682,13 +683,13 @@ test("defaultMaxOutputChars is validated and applied when nothing is isolated, t
 });
 
 test("a pool that holds a text child but not a records child warns at construction", async () => {
-  // text 2708 MiB, records 3056 MiB: 2900 runs /tika but would refuse every recursive request sent to a child.
+  // text 2729 MiB, records 3042 MiB: 2900 runs /tika but would refuse every recursive request sent to a child.
   const between = setup({ config: { mode: "strict" }, pool: new MemoryPool({ poolMb: 2900, maxQueue: 0 }) });
   const isolator = await between.create();
   const warnings = between.logs.filter((entry) => entry.level === "warn");
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]?.message ?? "", /2900 MiB/);
-  assert.match(warnings[0]?.message ?? "", /3056 MiB/);
+  assert.match(warnings[0]?.message ?? "", /3042 MiB/);
   assert.match(warnings[0]?.message ?? "", /recursive/i);
   assert.equal(isolator.status().degraded, false); // still isolating; only recursive requests are affected
 
@@ -822,6 +823,25 @@ test("unpackBytes: a pool that fits the records request but not the bytes on top
     (error: unknown) => error instanceof LimitExceededError && /Lower the caps or enlarge the pool/.test(error.message),
   );
   assert.equal(h.runs(), 1, "only the request without bytes reached a child");
+});
+
+test("a pool too small for the request names every part of the reservation and what to change", async () => {
+  // 52,428,800 characters of records: 1536 per child + 1024 overshoot + 732 for the parent = 3292 MiB (10,000 embedded resources); a 4 GiB container's pool is 3584.
+  const small = new MemoryPool({ poolMb: 3200, overshootMb: 1024, maxQueue: 0 });
+  const h = setup({ pool: small, config: { mode: "strict" }, childArgs: ["records"] });
+  const isolator = await h.create();
+  await assert.rejects(
+    isolator.isolate({ input: bytes("a"), output: "records", maxOutputChars: 52_428_800 }),
+    (error: unknown) =>
+      error instanceof LimitExceededError &&
+      /needs 3292 MiB \(1536 per child \+ 1024 overshoot \+ 732 for the parent to hold the result\)/.test(error.message) &&
+      /memory pool of 3200 MiB\. Lower the caps or enlarge the pool/.test(error.message),
+  );
+  assert.equal(h.runs(), 0);
+
+  const fits = new MemoryPool({ poolMb: 3584, overshootMb: 1024, maxQueue: 0 });
+  const ok = setup({ pool: fits, config: { mode: "strict" }, childArgs: ["records"] });
+  assert.equal((await (await ok.create()).isolate({ input: bytes("a"), output: "records", maxOutputChars: 52_428_800 })).kind, "records");
 });
 
 test("components too large for the request header are refused when the isolator is built, not on every request", async () => {

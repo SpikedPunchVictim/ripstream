@@ -18,7 +18,7 @@ import {
   type InputHeader,
 } from "./child-io.ts";
 import { encodeChildError, encodeCrashError, oneLineText } from "./error-codec.ts";
-import { MAX_BYTES_CHUNK } from "./frames.ts";
+import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
 
 /**
  * The child side of the wire protocol: runs ONE whole parse in this process and answers over fd 3. The entry file
@@ -94,8 +94,7 @@ export interface ChildMainOptions {
   readonly io?: Partial<ChildMainIo>;
 }
 
-/** Text frames carry at most this many UTF-16 code units: ~384 KiB of JSON in the worst (all-escaped) case, far below the 1 MiB frame cap. */
-export const MAX_TEXT_CHUNK_CHARS = 64 * 1024;
+export { MAX_TEXT_CHUNK_CHARS };
 
 /** Longest exception name / message / code kept on a record (the parent still treats them as untrusted). */
 const MAX_EXCEPTION_FIELD_CHARS = 500;
@@ -142,10 +141,11 @@ function wireException(error: unknown): NonNullable<IsolatedParseRecord["excepti
   return typeof fields.code === "string" ? { name, message, code: text(fields.code) } : { name, message };
 }
 
-function toWireRecord(record: ParseRecord): IsolatedParseRecord {
+/** `withoutContent`: the content travels in text frames after the record. */
+function toWireRecord(record: ParseRecord, withoutContent = false): IsolatedParseRecord {
   return {
     metadata: metadataToRecord(record.metadata),
-    content: record.content,
+    content: withoutContent ? "" : record.content,
     embeddedResourcePath: record.embeddedResourcePath,
     ...(record.pathParts === undefined ? {} : { pathParts: record.pathParts }),
     depth: record.depth,
@@ -269,7 +269,16 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
         const records = await Promise.race([ripstream.parseRecursive(source, parseOptions), watchdog.expired]);
         for (const record of records) {
           const { bytes } = record;
-          send({ t: "record", record: toWireRecord(record), ...(bytes === undefined ? {} : { byteLength: bytes.length }) });
+          // Long content goes in text frames, as in text mode: the parent then folds it a chunk at a time instead of
+          // parsing it as one frame as large as the result (tikajs-2cvh).
+          const chunked = record.content.length > MAX_TEXT_CHUNK_CHARS;
+          send({
+            t: "record",
+            record: toWireRecord(record, chunked),
+            ...(chunked ? { contentLength: record.content.length } : {}),
+            ...(bytes === undefined ? {} : { byteLength: bytes.length }),
+          });
+          if (chunked) for (const chunk of textChunks(record.content)) send({ t: "text", chunk });
           if (bytes !== undefined) for (const chunk of byteChunks(bytes)) send({ t: "bytes", chunk });
         }
       } else {

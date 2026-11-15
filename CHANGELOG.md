@@ -4,6 +4,18 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Pool reservation for large results: 3.2 GiB, not 10 GiB, at 52,428,800 characters (`tikajs-2cvh`)
+
+Changed: a records result's content longer than 64 Ki characters now crosses the isolation boundary in `text` frames
+after its record (`record` has `contentLength`, an internal protocol detail), the way a text result always did, so the
+parent no longer parses one frame as large as the result. The parent's pool reservation follows: 5 bytes per output
+character plus the metadata allowance at 6x (text) or 24x (records), plus the fixed 96 MiB, instead of 24x the whole wire
+size. A records request at `maxOutputChars` 52,428,800 reserves 3196 MiB (was 10,146) and a text one 2979 (was 4529); a
+25 MB text PDF at that cap now parses in a 4 GiB container with a 534 MiB peak. The default requests are 2729 MiB (text,
+was 2732) and 3042 (records, was 3056). A request with `segments` keeps the old worst case. A request that does not fit
+the pool now says what each part of the reservation is. The record frame cap is now the metadata allowance plus one text
+chunk, not the whole result (unless `segments`). Formula, worked example and measurements: `docs/isolation.md`.
+
 ### Text-heavy PDFs reach the output cap; memory failures name the limit (`tikajs-m5ng`)
 
 Fixed: a long text PDF ran an isolated child out of its 512 MiB heap before it reached `maxOutputChars` (a 5,000-page,

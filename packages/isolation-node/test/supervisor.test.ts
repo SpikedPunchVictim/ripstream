@@ -188,7 +188,7 @@ test("sequence errors are caught at the offending frame, and the child is killed
   for (const [mode, output, pattern] of [
     ["second-meta", "text", /second "meta"/],
     ["record-in-text", "text", /"record" frame for text output/],
-    ["text-in-records", "records", /"text" frame for records output/],
+    ["text-in-records", "records", /"text" frame with no record waiting for content/],
   ] as const) {
     const { outcome, diag } = await supervised(mode, { request: { input: new Uint8Array(1), output }, deadlineMs: 5000 });
     const error = failure(outcome);

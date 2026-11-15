@@ -968,3 +968,77 @@ test("bytes: a bad unpackBytes option is refused", () => {
   for (const value of [-1, 1.5, Number.NaN]) assert.throws(() => recordsReader({ unpackBytes: value }), RangeError, String(value));
   assert.throws(() => reader({ unpackBytes: 5 }), TypeError);
 });
+
+// ---- record content in text frames (tikajs-2cvh) --------------------------------------------
+
+const noContent = { ...RECORD, content: "" };
+const chunked = (contentLength: number, extra: object = {}): object => ({ t: "record", record: noContent, contentLength, ...extra });
+
+test("content: a record that announces its length gets its content from the text frames after it, in pieces", () => {
+  const r = recordsReader();
+  const events = feedLines(r, [READY, chunked(11), textFrame("hello "), textFrame("world"), { t: "record", record: RECORD }, DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  const result = r.result();
+  const records = result.kind === "records" ? result.records : [];
+  assert.equal(records[0]?.content, "hello world");
+  assert.equal(records[1]?.content, "hello", "a record that announced nothing keeps its inline content");
+});
+
+test("content: the text comes before the bytes of the same record", () => {
+  const r = recordsReader({ unpackBytes: 100 });
+  const events = feedLines(r, [READY, chunked(3, { byteLength: 2 }), textFrame("abc"), chunkFrame(1, 2), DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  const result = r.result();
+  const first = result.kind === "records" ? result.records[0] : undefined;
+  assert.equal(first?.content, "abc");
+  assert.deepEqual([...(first?.bytes ?? [])], [1, 2]);
+});
+
+test("content: segments are checked against the announced length, not the empty inline content", () => {
+  const segment = { start: 2, end: 9, labels: ["p"], location: "line=1" };
+  const r = recordsReader();
+  feedLines(r, [READY, { t: "record", record: { ...noContent, segments: [segment] }, contentLength: 10 }, textFrame("0123456789"), DONE]);
+  const result = r.result();
+  assert.deepEqual(result.kind === "records" ? result.records[0]?.segments : null, [segment]);
+
+  const past = recordsReader();
+  const events = feedLines(past, [READY, { t: "record", record: { ...noContent, segments: [{ ...segment, end: 11 }] }, contentLength: 10 }]);
+  assert.deepEqual(violationKinds(events), ["protocol"]);
+});
+
+test("content: the same stream arrives byte by byte just the same", () => {
+  const r = recordsReader();
+  assert.deepEqual(violationKinds(feedByByte(r, bytes([READY, chunked(4), textFrame("ab"), textFrame("cd"), DONE].map(line).join("")))), []);
+  const result = r.result();
+  assert.equal(result.kind === "records" ? result.records[0]?.content : null, "abcd");
+});
+
+const BAD_CONTENT: ReadonlyArray<readonly [string, readonly object[], RegExp]> = [
+  ["a text frame with nothing announced", [READY, { t: "record", record: RECORD }, textFrame("x")], /no record waiting for content/],
+  ["a text frame before any record", [READY, textFrame("x")], /no record waiting for content/],
+  ["a text frame past the announced length", [READY, chunked(2), textFrame("abc")], /3 characters, 2 were owed/],
+  ["an empty text frame", [READY, chunked(2), textFrame("")], /must not be empty/],
+  ["a record while content is still owed", [READY, chunked(3), textFrame("a"), { t: "record", record: RECORD }], /content of the last record/],
+  ["done while content is still owed", [READY, chunked(3), textFrame("a"), DONE], /content of the last record/],
+  ["bytes before the content is complete", [READY, chunked(3, { byteLength: 1 }), textFrame("a"), chunkFrame(1)], /content of the last record/],
+  ["inline content next to an announced length", [READY, { t: "record", record: RECORD, contentLength: 5 }], /must be empty/],
+  ["a zero length", [READY, chunked(0)], /contentLength/],
+  ["a negative length", [READY, chunked(-1)], /contentLength/],
+  ["a fractional length", [READY, chunked(1.5)], /contentLength/],
+  ["a length that is not a number", [READY, chunked("5" as unknown as number)], /contentLength/],
+];
+
+for (const [label, frameList, message] of BAD_CONTENT) {
+  test(`content: ${label} is a violation`, () => {
+    const events = feedLines(recordsReader({ unpackBytes: 100 }), frameList);
+    assert.deepEqual(violationKinds(events), ["protocol"]);
+    const violation = events.find((event) => event.type === "violation");
+    assert.match(violation?.type === "violation" ? violation.message : "", message);
+  });
+}
+
+test("content: a violation drops what was folded, the owed content included", () => {
+  const r = recordsReader();
+  feedLines(r, [READY, chunked(5), textFrame("ab"), DONE]);
+  assert.equal(r.retainedPieces, 0);
+});

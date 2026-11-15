@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { test } from "node:test";
 import { AbortError, IsolationError, LimitExceededError, ParseTimeoutError } from "@spikedpunch/ripstream-core";
+import { deriveLimits } from "../src/limits.ts";
 import { MemoryPool } from "../src/pool.ts";
-import { ChildRunner, PARENT_RESULT_SLACK_MB, UNPACK_RESULT_FACTOR, parentResultMb, type ChildRunnerOptions } from "../src/runner.ts";
+import { ChildRunner, PARENT_RESULT_SLACK_MB, UNPACK_RESULT_FACTOR, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "../src/runner.ts";
 import { fakeSpawn } from "./fixtures/fake-child.ts";
 import { CHILD, expectGroupGone, TEST_TEMP_DIR } from "./fixtures/helpers.ts";
 import type { RunDiagnostics } from "../src/supervisor.ts";
@@ -208,7 +209,7 @@ test("parentResultMb: rounds up, adds the fixed slack, and is larger for records
   assert.equal(parentResultMb(1, "text"), 1 + 96);
   assert.equal(parentResultMb(1024 * 1024, "text"), 6 + 96);
   assert.equal(parentResultMb(1024 * 1024, undefined), 6 + 96);
-  assert.equal(parentResultMb(1024 * 1024, "records"), 24 + 96);
+  assert.equal(parentResultMb(1024 * 1024, "records"), 24 + 96); // no character count: the whole result at the records factor
   assert.equal(parentResultMb(1_500_000, "text"), 9 + 96); // 8.58 MiB
 });
 
@@ -218,6 +219,38 @@ test("parentResultMb: embedded bytes are reserved at their own factor, and their
   assert.equal(parentResultMb(100 * MiB, "records", { bytes: 45 * MiB, wireBytes: 60 * MiB }), 40 * 24 + 45 * UNPACK_RESULT_FACTOR + 96);
   // Asked for and none given: as before.
   assert.equal(parentResultMb(MiB, "records", { bytes: 0, wireBytes: 0 }), parentResultMb(MiB, "records"));
+});
+
+test("parentResultMb: record content is reserved per character, the rest of the result per wire byte", () => {
+  const MiB = 1024 * 1024;
+  // 10 MiB characters (6 wire bytes each = 60 MiB) in a result of 76 MiB: 10 MiB x 5 bytes, 16 MiB of metadata at 24x.
+  assert.equal(parentResultMb(76 * MiB, "records", undefined, 10 * MiB), 10 * 5 + 16 * 24 + 96);
+  // Far less than the same result at the records factor throughout.
+  assert.ok(parentResultMb(76 * MiB, "records", undefined, 10 * MiB) < parentResultMb(76 * MiB, "records") / 3);
+  // The embedded bytes' wire share comes off the rest, as before.
+  assert.equal(
+    parentResultMb(100 * MiB, "records", { bytes: 15 * MiB, wireBytes: 20 * MiB }, 10 * MiB),
+    10 * 5 + 15 * UNPACK_RESULT_FACTOR + 20 * 24 + 96,
+  );
+  // A text result: the characters at 5, the 12 MiB the meta frame may hold at 6x.
+  assert.equal(parentResultMb(72 * MiB, "text", undefined, 10 * MiB), 10 * 5 + 12 * 6 + 96);
+});
+
+test("parentResultMb: the worked example in docs/isolation.md, maxOutputChars 52,428,800 as records", () => {
+  const MiB = 1024 * 1024;
+  const grizzly = deriveLimits({ mode: "strict" }, { output: "records", maxOutputChars: 52_428_800, maxEmbeddedResources: 1000 });
+  assert.equal(grizzly.maxResultBytes, 327_221_248);
+  assert.equal(parentResultMbFor(grizzly), 636);
+  assert.equal(grizzly.perChildMb + 1024 + parentResultMbFor(grizzly), 3196);
+  assert.equal(Math.ceil((grizzly.maxResultBytes * 24) / MiB) + 96, 7586, "what it was");
+  const limits = deriveLimits({ mode: "strict" }, { output: "records", maxOutputChars: 52_428_800 });
+  assert.equal(parentResultMbFor(limits), 732);
+  assert.equal(limits.perChildMb + 1024 + parentResultMbFor(limits), 3292);
+  const text = deriveLimits({ mode: "strict" }, { output: "text", maxOutputChars: 52_428_800 });
+  assert.equal(parentResultMbFor(text), 419);
+  assert.equal(text.perChildMb + 1024 + parentResultMbFor(text), 2979);
+  // With segments the list is in the record frame and not bounded apart from the result: the whole result at 24x.
+  assert.equal(parentResultMbFor({ ...limits, segments: true }), Math.ceil((limits.maxResultBytes * 24) / MiB) + 96);
 });
 
 /** A runner whose spawn always throws, recording what the pool had reserved at that moment. */

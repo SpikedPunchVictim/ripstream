@@ -240,24 +240,101 @@ parser bug, not an isolation defect.
 
 ## Sizing and the deployment cliff
 
-Each request reserves `perChildMb` (1536) + 1024 MiB of overshoot + room for its result in the pool: **2708 MiB** for
-a default text request, 3056 MiB for a recursive one. The pool is sized from the smaller of the cgroup limit and host
+Each request reserves `perChildMb` (1536) + 1024 MiB of overshoot + room for its result in the pool: **2729 MiB** for
+a default text request, 3042 MiB for a recursive one. The pool is sized from the smaller of the cgroup limit and host
 memory, minus 512 MiB for the parent, unless `memoryPoolMb` is set.
 
-The consequence is a cliff: **a pool below 2708 MiB cannot run one child.** In practice a container needs about
-3.15 GiB of memory to isolate (2708 MiB plus the 512 MiB of parent headroom). Below that, `strict` refuses to start (exit 4, with the sum in the message) and
+The consequence is a cliff: **a pool below 2729 MiB cannot run one child.** In practice a container needs about
+3.2 GiB of memory to isolate (2729 MiB plus the 512 MiB of parent headroom). Below that, `strict` refuses to start (exit 4, with the sum in the message) and
 `lenient` parses everything in-process with a WARN, which is the behaviour isolation exists to prevent. Either
 raise the limit, or lower `perChildMb` and `heapMb` and accept a smaller budget per document.
 
-Between 2708 and 3056 MiB the pool runs text requests (`/tika`, `/meta`) but cannot hold a recursive one (`/rmeta`,
+Between 2729 and 3042 MiB the pool runs text requests (`/tika`, `/meta`) but cannot hold a recursive one (`/rmeta`,
 `/unpack`, `--recursive`): those that reach a child are refused with 422 ("more than the whole memory pool"), which
 describes the deployment and not the document. The isolator logs a WARN at startup when that is the case. Size the
-pool to at least 3056 MiB to serve recursive requests; `/unpack` reserves a little more for the bytes it carries
+pool to at least 3042 MiB to serve recursive requests; `/unpack` reserves a little more for the bytes it carries
 (see its budget, below).
 
 The number of requests that run at once is `floor(pool / reservation)`. The server's own gate is derived from it
 (below), and `/status` shows both: `isolation.pool.poolMb` against `isolation.defaultReservationMb`. Both reservations
 are computed for a request at the server's output ceiling.
+
+### What a request reserves (`tikajs-2cvh`)
+
+```
+reservation = perChildMb + overshootMb + parentMb
+
+parentMb    = ceil((maxOutputChars * 5  +  rest * f) / 1 MiB) + 96
+rest        = maxResultBytes - 6 * maxOutputChars - (wire form of unpackBytes, if any)
+f           = 6 for a text request, 24 for a records request
+```
+
+| term | value | what it pays for |
+|---|---|---|
+| `perChildMb` | 1536 (config) | the child's memory: V8 heap (derived 384 - 512 MiB) plus everything outside it. The parent kills the child above this. |
+| `overshootMb` | 1024 (pool option) | what a child can use beyond its budget between two RSS polls. Unchanged. |
+| `maxOutputChars * 5` | 5 bytes a character | the parent holding the text: the 64 KiB chunks and the string they are joined into (2 x 1 byte for Latin-1 text, 2 x 2 for text with a character above U+00FF). The same for text and records, and whatever the text costs on the wire. |
+| `rest * f` | metadata allowance (12 - 16 MiB) at 6x or 24x | metadata, paths and envelopes, which arrive as whole JSON values: a record frame with many short keys costs the parent 10 - 30x its wire size to parse. |
+| 96 | fixed | the parent's heap growing in steps and collecting parse garbage late. Does not scale with the result. |
+
+`maxResultBytes` is the cap on what the child may send: `6 * maxOutputChars` (the wire form of text at its worst, every
+character escaped as `\uXXXX`) + the metadata allowance + 64 KiB. The characters' wire size is NOT what the parent
+holds, which is why they are reserved per character. A request with `segments` also puts the list of segments in the
+record frame, and that list is not bounded apart from `maxResultBytes`, so such a request reserves its whole result at
+`f` (as every records request did before this): about 10 GiB at 52,428,800 characters.
+
+**Worked example**, `maxOutputChars` 52,428,800, records, default `perChildMb`, `maxEmbeddedResources` 1000 (the metadata
+allowance is then its floor of 12 MiB; the default of 10,000 makes it 16 MiB):
+
+```
+maxResultBytes = 6 * 52,428,800 + 12 MiB + 64 KiB       = 327,221,248 bytes
+rest           = 327,221,248 - 314,572,800              =  12,648,448 bytes (12 MiB + 64 KiB)
+parentMb       = ceil((52,428,800 * 5 + 12,648,448 * 24) / 1 MiB) + 96   = ceil(539.5) + 96 = 636 MiB
+reservation    = 1536 + 1024 + 636                      = 3196 MiB
+```
+
+A 4 GiB container has a pool of 4096 - 512 = 3584 MiB, so one such request runs. With `maxEmbeddedResources` 10,000 the
+parent part is 732 MiB and the reservation 3292 MiB. The same request as text is 1536 + 1024 + 419 = 2979 MiB. Before
+`tikajs-2cvh` the records request reserved 24 x `maxResultBytes` + 96 = 7586 MiB for the parent, 10,146 MiB in all.
+
+**Why the reservation came down.** A record's content used to travel inside its one record frame, so the parent had to
+read, decode and `JSON.parse` a line as long as the whole result: it held the line buffer, the decoded string and the
+parsed value at once, 3.5 - 4.6x the frame's wire bytes, and the wire is up to 6 bytes a character. The reservation
+was 24x the wire. Content longer than 64 Ki characters now follows its record in `text` frames, the way a text result
+does (`record` has `contentLength`, then `text` frames adding up to exactly that, then any `bytes` frames), so the
+largest frame the parent parses is the metadata, and a record frame is capped at the metadata allowance plus one
+chunk (17.2 MiB at the default 10,000 embedded resources). Segments are the exception, above.
+
+Measured, Linux arm64 container, Node 24, real isolated PDF and DOCX parse, `maxOutputChars` 52,428,800, records output,
+output cap not reached unless noted (the 50 MB-class inputs reach 47 - 52 million characters). Parent: peak RSS above
+its idle baseline. Child: peak RSS. Container: `memory.peak` (parent + child + page cache of the input):
+
+| input | characters | parent before / after (MiB) | child before / after | container before / after | reservation before / after |
+|---|---|---|---|---|---|
+| 10 MB text PDF | 9.4 M | 63 / 37 | 325 / 295 | 424 / 388 | 10,146 / 3196 |
+| 25 MB text PDF | 23.5 M | 90 / 64 | 467 / 400 | 617 / 534 | 10,146 / 3196 |
+| 50 MB text PDF | 47.1 M | 158 / 135 | 678 / 554 | 910 / 805 | 10,146 / 3196 |
+| 25 MB text DOCX | 26.0 M | 94 / 87 | 545 / 466 | 632 / 605 | 10,146 / 3196 |
+| 50 MB text DOCX | 51.9 M | 177 / 174 | 734 / 581 | 938 / 817 | 10,146 / 3196 |
+
+"Before" runs had a 16 GiB pool (the old reservation does not fit a 4 GiB container at all); "after" runs were in a 4 GiB
+container (`--memory 4g`, pool 3584 MiB, nothing configured), where the 25 MB PDF takes 534 MiB in all. The peaks are
+within 10% of run to run. The worst wire shapes, a scripted child sending 50 million characters of one shape (parent
+peak above baseline, before / after): ASCII 210 / 152 MiB, characters above U+00FF 290 / 229, quotes and backslashes
+306 / 171, control characters (6 wire bytes each) 903 / 168. After the change records and text cost the same, 2.9 - 5.2
+bytes a character, 5 is the factor.
+
+A request that does not fit the pool is a `LimitExceededError` (422 from the server) that gives each part:
+
+```
+A records request with maxOutputChars 52428800 and maxEmbeddedResources 1000 (the defaults unless the caller set them)
+needs 3196 MiB (1536 per child + 1024 overshoot + 636 for the parent to hold the result), more than the whole memory
+pool of 3200 MiB. Lower the caps or enlarge the pool
+```
+
+To fit a small container, lower `maxOutputChars` (each million characters costs about 5 MiB of reservation), or
+`perChildMb`, or enlarge the container: a records request at the cap needs
+about 3.7 GiB of container (3196 + 512 MiB of headroom).
 
 ## The server
 

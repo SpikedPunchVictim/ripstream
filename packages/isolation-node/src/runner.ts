@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { AbortError, IsolationError, LimitExceededError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { requireTempDir } from "./disk.ts";
-import { DEFAULT_MAX_DISK_MB } from "./limits.ts";
+import { DEFAULT_MAX_DISK_MB, WIRE_BYTES_PER_OUTPUT_CHAR } from "./limits.ts";
 import type { MemoryPool } from "./pool.ts";
 import { startChild, type RunChildOptions, type RunDiagnostics } from "./supervisor.ts";
 import { clampTimerMs } from "./timers.ts";
@@ -24,16 +24,21 @@ import { clampTimerMs } from "./timers.ts";
 const MIB = 1024 * 1024;
 
 /**
- * The PARENT's memory for holding one result: `ceil(maxResultBytes * factor / MiB) + PARENT_RESULT_SLACK_MB`.
- * The reader folds text into one string and parses each record as it arrives, so the parent holds the final
- * result plus transient parse garbage, never the raw frames. Measured on the real supervisor (peak RSS above the
- * idle baseline, one run in flight, worst shapes of each kind; the peak is a GC-timing high-water mark and moves
- * by about +-10% between runs). Peak delta in MiB (factor = delta / wire bytes):
+ * The PARENT's memory for holding one result, in MiB:
  *
- *   output "text"    4.1x - 6.5x at 1 - 40 MB of wire, worst shape = a flood of one-character chunks
- *                    (1 KiB, 1 MiB and CJK chunks are 1.0x - 3.6x); 34 MiB at 8 MB of wire.
- *   output "records" the worst shapes are records whose metadata is many short keys (V8 spends ~100 bytes per
- *                    JSON.parse'd property on a ~7 byte wire entry) or many unique keys:
+ *   ceil((chars * CONTENT_CHAR_FACTOR + rest * factor) / MiB) + PARENT_RESULT_SLACK_MB
+ *
+ * `chars` is `maxOutputChars` (the text, which travels in 64 KiB frames the reader joins as they arrive), `rest` is
+ * what is left of `maxResultBytes` once the text's worst-case wire form (6 bytes a character) is taken off: the
+ * metadata allowance and the envelopes, which are parsed as whole JSON values, at `factor` per wire byte (6 for text,
+ * 24 for records). The reader folds each frame into the result as it arrives, so the parent holds the final result
+ * plus transient parse garbage, never the raw frames. Measured on the real supervisor (peak RSS above the idle
+ * baseline, one run in flight; the peak is a GC-timing high-water mark and moves by about +-10% between runs).
+ *
+ * The text, per character: see CONTENT_CHAR_FACTOR.
+ *
+ * The rest, records, peak delta in MiB (factor = delta / wire bytes). The worst shapes are records whose metadata is
+ * many short keys (V8 spends ~100 bytes per JSON.parse'd property on a ~7 byte wire entry) or many unique keys:
  *
  *                      wire    macOS arm64 (node 24)      Linux arm64 (node 24, docker)
  *                      40 MB   9.3x - 13.5x (~360 - 515)  10.0x - 16.9x (381 - 645)
@@ -46,11 +51,13 @@ const MIB = 1024 * 1024;
  * The factor is NOT constant: the parent's heap grows in steps and parse garbage is collected late, a cost of
  * about 20 - 60 MiB that does not scale with the result and dominates when the result is small (the factors of
  * 25 - 45x at 1 MB of wire are that fixed cost, not a per-byte cost). So the reservation is a per-byte factor
- * for the large end (24x for records, 6x for text: the worst 40 MB figure plus 40%) plus a fixed 96 MiB. At the
- * measured worst point (about 8 MB of wire, many unique keys) the reservation (24x + 96 MiB = 288 MiB) is about
- * 20% above the observed peak of 237 MiB (a first version with 64 MiB had only 4 - 10% there); at 1, 2, 4, 16 and
- * 40 MB it is 20% or more above. Do not trim these
- * numbers without re-measuring.
+ * for the large end (24x for records, 6x for text) plus a fixed 96 MiB. At the measured worst point (about 8 MB of
+ * wire, many unique keys) the reservation (24x + 96 MiB = 288 MiB) is about 20% above the observed peak of 237 MiB;
+ * at 1, 2, 4, 16 and 40 MB it is 20% or more above. Do not trim these numbers without re-measuring.
+ *
+ * Before tikajs-2cvh a record's content was part of its ONE record frame, so the whole result, text included, had to
+ * be reserved at the records factor: 24 x 6 = 144 bytes per character at the worst, 10 GiB for a result of 52,428,800
+ * characters. Records now send long content in text frames, as text results do, and the text costs what it costs there.
  *
  * It is reserved up front at admission, through the pool's `parentMb`, instead of `pool.charge()` mid-run:
  * charging can fail halfway through a parse, and the pool must never admit more than the cgroup holds.
@@ -84,19 +91,58 @@ export const PARENT_RESULT_SLACK_MB = 96;
 export const UNPACK_RESULT_FACTOR = 2;
 
 /**
- * MiB of parent memory to reserve for a result of at most `maxResultBytes`. With embedded bytes, `wireBytes` of the
- * result (their base64 form) is for them: it is reserved as `bytes * UNPACK_RESULT_FACTOR`, not at the factor of the
- * rest.
+ * Parent bytes held per CHARACTER of text (a text result, or the content of a record), whatever the text looks like on
+ * the wire (tikajs-2cvh). Text travels in 64 KiB `text` frames, which the reader parses one at a time and joins at the
+ * end, so what the parent holds is the chunks plus the joined string (2 x 1 byte per character for Latin-1 text, 2 x 2
+ * for text with a character above U+00FF) and a little in flight: it does not depend on how many wire bytes a
+ * character took (an `\\u0001` costs 6 on the wire and still one or two here). Measured peak, parent RSS above its idle
+ * baseline, 10 - 50 million characters, text and records alike: 2.9 - 3.2 bytes per character for ASCII, 3.6 - 3.8
+ * with quotes and escapes, 3.5 - 5.4 for control characters, 4.6 - 5.2 for characters above U+00FF (the worst; the
+ * high end of each range is the 10-million-character run, where the fixed cost of the heap growing is a larger
+ * share). See docs/isolation.md for the table.
+ */
+const CONTENT_CHAR_FACTOR = 5;
+
+/**
+ * MiB of parent memory to reserve for a result of at most `maxResultBytes`.
+ *
+ * `textChars`: how many characters of it are text (`maxOutputChars`: the text of a "text" result, the content of the
+ * records of a "records" one). Those are reserved at CONTENT_CHAR_FACTOR per character; the rest of the result
+ * (metadata, paths, envelopes), at the factor of its output per wire byte. Omitted, the whole result is reserved at
+ * that factor: what a caller must pass when the rest is not bounded (a request with segments puts their list in the
+ * record frame) or unknown.
+ *
+ * With embedded bytes, `wireBytes` of the result (their base64 form) is for them: it is reserved as
+ * `bytes * UNPACK_RESULT_FACTOR`, not at the factor of the rest.
  */
 export function parentResultMb(
   maxResultBytes: number,
   output: "text" | "records" | undefined,
   unpack?: { readonly bytes: number; readonly wireBytes: number },
+  textChars?: number,
 ): number {
   const factor = output === "records" ? RECORDS_RESULT_FACTOR : TEXT_RESULT_FACTOR;
-  const rest = unpack === undefined ? maxResultBytes : Math.max(0, maxResultBytes - unpack.wireBytes);
-  const held = unpack === undefined ? 0 : unpack.bytes * UNPACK_RESULT_FACTOR;
+  const chars = textChars ?? 0;
+  const rest = Math.max(0, maxResultBytes - chars * WIRE_BYTES_PER_OUTPUT_CHAR - (unpack === undefined ? 0 : unpack.wireBytes));
+  const held = (unpack === undefined ? 0 : unpack.bytes * UNPACK_RESULT_FACTOR) + chars * CONTENT_CHAR_FACTOR;
   return Math.ceil((rest * factor + held) / MIB) + PARENT_RESULT_SLACK_MB;
+}
+
+/** `parentResultMb` of the limits of one request. */
+export function parentResultMbFor(limits: {
+  readonly maxResultBytes: number;
+  readonly output: "text" | "records";
+  readonly maxOutputChars: number;
+  readonly segments?: boolean;
+  readonly unpackBytes?: number;
+  readonly unpackWireBytes?: number;
+}): number {
+  return parentResultMb(
+    limits.maxResultBytes,
+    limits.output,
+    limits.unpackBytes === undefined ? undefined : { bytes: limits.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
+    limits.segments === true ? undefined : limits.maxOutputChars,
+  );
 }
 
 /** Default for `ChildRunnerOptions.disposeWaitMs`. */
@@ -298,6 +344,7 @@ export class ChildRunner {
         maxResultBytes,
         request.output,
         request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
+        request.segments === true ? undefined : request.maxOutputChars,
       ),
     });
     let run;

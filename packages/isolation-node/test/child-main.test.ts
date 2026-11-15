@@ -497,6 +497,34 @@ test("records: one record frame per record, in order, then done", async () => {
   assert.deepEqual(records[1]?.metadata, { "tk:resource-name": ["inner.bin"] });
 });
 
+test("records: content longer than a text chunk follows its record in text frames, the record carries none", async () => {
+  const long = "abc".repeat(MAX_TEXT_CHUNK_CHARS); // three chunks
+  const [outer, inner] = fakeRecords();
+  const ripstream: ChildRipstream = {
+    parse: async () => assert.fail("parse"),
+    parseRecursive: async () => [{ ...outer!, content: long }, inner!],
+  };
+  const r = run(ripstream, input(header({ output: "records" })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "text", "text", "text", "record", "done"]);
+  assert.equal(r.frames[1]?.contentLength, long.length);
+  assert.equal((r.frames[1]?.record as { content: string }).content, "", "the content is not in the record frame");
+  assert.equal("contentLength" in r.frames[5]!, false, "a short record keeps its content inline");
+  assert.equal((r.frames[5]?.record as { content: string }).content, "inner text");
+  assert.equal(r.frames.slice(2, 5).map((frame) => String(frame.chunk)).join(""), long);
+});
+
+test("records: content of exactly one text chunk stays inline", async () => {
+  const [outer] = fakeRecords();
+  const ripstream: ChildRipstream = {
+    parse: async () => assert.fail("parse"),
+    parseRecursive: async () => [{ ...outer!, content: "x".repeat(MAX_TEXT_CHUNK_CHARS) }],
+  };
+  const r = run(ripstream, input(header({ output: "records" })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "done"]);
+});
+
 // ---- embedded bytes ----
 
 function recordWithBytes(name: string, bytes: Uint8Array | undefined): ParseRecord {
