@@ -454,8 +454,9 @@ Reuse weakens the boundary *between documents of one child*; the boundary betwee
 A state audit of the parsers for what one document can leave for the next (n3, sql.js, xz-decompress, pdf.js, the
 media-type and parser caches, stderr) found three real carry-overs. The n3 blank-node counters made the same RDF
 document print different labels after earlier ones, and told it how many blank nodes those had: each parse now
-numbers its own (fixed in this change). sql.js keeps one WASM instance per process, and document bytes stay in its
-memory file system when a close fails (`tikajs-usub`); xz-decompress keeps a static instance and a mutex that a
+numbers its own (fixed in this change). sql.js kept one WASM instance per process, so document bytes stayed in its
+memory file system when a close failed and a trapped instance served the next file: each document now loads its own
+instance (`tikajs-usub`, about 6 ms a document); xz-decompress keeps a static instance and a mutex that a
 failing dispose never releases (`tikajs-3o6d`). Retiring a child after any fault bounds both. The rest is either
 independent of the document or is caches that never show in a later answer (the media-type parse cache, the
 composite parser's ranking cache, pdf.js's name caches, cleared on every document's destroy).

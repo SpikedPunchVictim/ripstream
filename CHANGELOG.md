@@ -4,6 +4,21 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### sql.js: a new WASM instance for every SQLite and GeoPackage document (`tikajs-usub`)
+
+Fixed: sql.js caches its first init in the module, so every SQLite or GeoPackage parse in a process shared one WASM
+instance: a trapped instance, a rejected init and the bytes of a document whose close failed (left in the memory file
+system as `dbfile_N`) were all there for the next document. `loadSqlJs` now takes the module out of the require cache
+for each document, which costs about 6 ms and gives each document an empty instance.
+
+### A pool refusal is its own error: `AdmissionRefusedError` (`tikajs-b3wp`)
+
+Changed: a request whose caps reserve more memory than the whole isolation pool is refused with `AdmissionRefusedError`
+(code `ADMISSION_REFUSED`), a subclass of `LimitExceededError` (exit code 3, HTTP 422 and the pipes status are
+unchanged). Its message keeps the per-part numbers (per child, overshoot, parent result) and no longer contains
+`maxOutputChars`, `maxEmbeddedResources` or the other limit names, which a consumer that matched messages read as an
+output or entry limit. A new code is part of `RipstreamErrorCode`.
+
 ### Opt-in reuse of isolation children: `reuse` (`tikajs-dasw`)
 
 Added: `createNodeIsolator({ reuse })` and the `createStandardIsolation` passthrough (default off; off changes nothing:

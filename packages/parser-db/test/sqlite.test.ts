@@ -15,6 +15,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import initSqlJs from "sql.js";
 import { SqliteParser } from "../src/index.ts";
+import { loadSqlJs } from "../src/sql-js.ts";
 
 /*
  * SQLite3Parser as Tika's SQLite3ParserTest, AbstractDBParser, SQLite3DBParser and JDBCTableReader have it, read from the
@@ -261,4 +262,37 @@ test("the stream of an embedded blob is closed once the extractor is done with i
   assert.ok(embedded);
   const rest = await embedded.readFully(16).catch(() => new Uint8Array(0));
   assert.equal(rest.length, 0);
+});
+
+test("each document gets its own sql.js instance: bytes one left in the WASM file system are not there for the next", async () => {
+  const first = await loadSqlJs();
+  const marker = buildDatabase(["CREATE TABLE marker (secret TEXT)", "INSERT INTO marker VALUES ('left-behind')"]);
+  // A document whose close failed leaves its bytes in the instance as /dbfile_N; sql.js names the file `filename`.
+  const leftover = new first.Database(marker) as unknown as { filename: string };
+  const second = await loadSqlJs();
+  assert.notEqual(second, first);
+  const next = new second.Database();
+  next.exec(`ATTACH DATABASE '${leftover.filename}' AS leftover`);
+  assert.throws(() => next.exec("SELECT secret FROM leftover.marker"), /no such table/);
+  // The first instance, which had them, still does: the attach reads what the instance holds.
+  const same = new first.Database();
+  same.exec(`ATTACH DATABASE '${leftover.filename}' AS leftover`);
+  assert.equal(same.exec("SELECT secret FROM leftover.marker")[0]?.values[0]?.[0], "left-behind");
+});
+
+test("a trapped sql.js instance is not the one the next document is parsed in", async () => {
+  const doomed = await loadSqlJs();
+  const trap = (doomed as unknown as { _sqlite3_exec(...args: number[]): number })._sqlite3_exec;
+  assert.throws(() => trap(0xfffffff0, 0xfffffff0, 0, 0, 0), /memory access out of bounds/);
+  const { text } = await parseSqlite(buildDatabase(["CREATE TABLE t (v TEXT)", "INSERT INTO t VALUES ('after-the-trap')"]));
+  assert.match(text, /after-the-trap/);
+  assert.notEqual(await loadSqlJs(), doomed);
+});
+
+test("a database that is not one SQLite can read fails as a document, and the next good one parses", async () => {
+  const corrupt = new Uint8Array(4096).fill(0xa5);
+  corrupt.set(new TextEncoder().encode("SQLite format 3\0"));
+  await assert.rejects(parseSqlite(corrupt), MalformedDocumentError);
+  const { text } = await parseSqlite(buildDatabase(["CREATE TABLE t (v TEXT)", "INSERT INTO t VALUES ('good')"]));
+  assert.match(text, /good/);
 });
