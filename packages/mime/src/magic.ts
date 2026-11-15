@@ -1,6 +1,7 @@
 import { MediaType } from "@spikedpunch/ripstream-core";
 import type { TikaMagic, TikaMatch, TikaMimeEntry } from "./registry-types.ts";
 import { TIKA_MIME_REGISTRY } from "./generated/registry.ts";
+import { latin1 } from "./latin1.ts";
 
 export interface MagicCandidate {
   readonly type: MediaType;
@@ -285,14 +286,6 @@ function decodeString(value: string, type: string): Uint8Array {
     return bytes;
   }
   return Uint8Array.from(chars, (code) => code & 0xff);
-}
-
-function latin1(data: Uint8Array): string {
-  let result = "";
-  for (let index = 0; index < data.length; index += 4096) {
-    result += String.fromCharCode(...data.subarray(index, index + 4096));
-  }
-  return result;
 }
 
 /**

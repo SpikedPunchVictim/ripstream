@@ -1,4 +1,6 @@
+import { isAscii } from "node:buffer";
 import { analyse } from "chardet";
+import { latin1 } from "./latin1.ts";
 
 export interface EncodingDetection {
   readonly charset: string;
@@ -82,6 +84,17 @@ export function detectEncoding(data: Uint8Array, declared?: string): EncodingDet
  */
 export function looksLikeText(data: Uint8Array): boolean {
   return !isBinary(data);
+}
+
+/**
+ * `detectEncoding(data).binary` without the charset work: the BOM and BOM-less UTF-16 checks answer text before the
+ * control-byte count does, so they run first, and the statistical detector never does. For a caller that only needs to
+ * know whether the bytes are text.
+ */
+export function isBinaryBytes(data: Uint8Array): boolean {
+  if (detectBom(data) !== null) return false;
+  if (detectUtf16WithoutBom(data) !== null) return false;
+  return isBinary(data);
 }
 
 export function decodeText(data: Uint8Array, charset: string): string {
@@ -263,7 +276,9 @@ function isBinary(data: Uint8Array): boolean {
 
   let control = 0;
   let nul = 0;
-  for (const byte of data) {
+  // Indexed: a for...of over a typed array goes through the iterator protocol, several times slower on a 64 KiB prefix.
+  for (let index = 0; index < data.length; index++) {
+    const byte = data[index]!;
     if (byte === 0) nul++;
     if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0c && byte !== 0x0d && byte !== 0x1b) control++;
   }
@@ -272,10 +287,7 @@ function isBinary(data: Uint8Array): boolean {
 }
 
 function isPureAscii(data: Uint8Array): boolean {
-  for (const byte of data) {
-    if (byte >= 0x80) return false;
-  }
-  return true;
+  return isAscii(data);
 }
 
 function isValidUtf8(data: Uint8Array): boolean {
@@ -286,14 +298,6 @@ function isValidUtf8(data: Uint8Array): boolean {
   } catch {
     return false;
   }
-}
-
-function latin1(data: Uint8Array): string {
-  let result = "";
-  for (let index = 0; index < data.length; index += 4096) {
-    result += String.fromCharCode(...data.subarray(index, index + 4096));
-  }
-  return result;
 }
 
 function normalizeCharset(charset: string): string {
