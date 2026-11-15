@@ -109,6 +109,12 @@ export interface RssPollerOptions {
   readonly onOverLimit: (rssMb: number) => void;
   /** @internal Test seam: replaces the /proc and `ps` measurement. */
   readonly sample?: (pid: number) => number | null | Promise<number | null>;
+  /**
+   * Take the first sample one interval after `start` instead of at once. For a reused child (warm.ts), whose memory
+   * the previous request already left within bounds: a request shorter than the interval then costs no sample (on
+   * macOS each one runs `ps` and `footprint`). Default false.
+   */
+  readonly delayFirstSample?: boolean;
 }
 
 export interface RssStats {
@@ -154,6 +160,11 @@ export class RssPoller {
     if (!this.#stopped) return;
     this.#stopped = false;
     this.#nextAt = performance.now();
+    if (this.#options.delayFirstSample === true) {
+      this.#nextAt += this.#intervalMs;
+      this.#timer = setTimeout(() => this.#tick(), this.#intervalMs);
+      return;
+    }
     this.#tick();
   }
 

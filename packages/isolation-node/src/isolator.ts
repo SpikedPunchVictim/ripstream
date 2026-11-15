@@ -32,8 +32,10 @@ import { requireTempDir } from "./disk.ts";
 import { deriveLimits, type DerivedLimits } from "./limits.ts";
 import { DEFAULT_OVERSHOOT_MB, MemoryPool, type PoolStats } from "./pool.ts";
 import { probeIsolation } from "./probe.ts";
+import { requireTrustDomain, resolveReuse, type ChildReuseOptions } from "./reuse.ts";
 import { DEFAULT_IN_PROCESS_MAX_BYTES, DEFAULT_IN_PROCESS_TYPES, routeRequest } from "./routing.ts";
 import { ChildRunner, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "./runner.ts";
+import { WarmRunner, type ChildReuseStats } from "./warm.ts";
 
 /**
  * The parent-side isolation facade (`ParseIsolator` from core) for Node: routes each request to an in-process parse
@@ -132,6 +134,23 @@ export interface NodeIsolatorOptions {
   /** Target platform for the probe and the strict-containment rule. Default process.platform. */
   readonly platform?: NodeJS.Platform;
   readonly runner?: IsolatorRunnerOptions;
+  /**
+   * Opt-in reuse of isolated children for requests of the same trust domain (reuse.ts, docs/isolation.md "Reusing
+   * children"). Default: off, and every request gets a fresh child. Checked at construction unless the mode is `off`;
+   * ignored when the mode is `off` or when a lenient isolator finds isolation unavailable. Library-only: the CLI and
+   * the server expose no such setting.
+   */
+  readonly reuse?: ChildReuseOptions;
+}
+
+export interface NodeIsolateOptions {
+  readonly signal?: AbortSignal;
+  /**
+   * With `reuse` enabled, the trust domain of this request: it only shares a child with requests of the same domain.
+   * Default: `reuse.trustDomain`. Without reuse it has no effect (each request has its own child anyway), but it is
+   * still checked: a non-empty string of at most 256 characters.
+   */
+  readonly trustDomain?: string;
 }
 
 /** Plain, JSON-serialisable: the shape the server shows on /status. */
@@ -161,9 +180,12 @@ export interface NodeIsolatorStatus {
   readonly maxInputBytes: number;
   readonly inProcessTypes: readonly string[];
   readonly inProcessMaxBytes: number;
+  /** Reused children; present only when `reuse` is enabled and the isolator isolates. */
+  readonly reuse?: ChildReuseStats;
 }
 
 export interface NodeIsolator extends ParseIsolator {
+  isolate(request: IsolatedParseRequest, options?: NodeIsolateOptions): Promise<IsolatedParseResult>;
   status(): NodeIsolatorStatus;
 }
 
@@ -320,7 +342,8 @@ function isolatedSegment({ start, end, labels, location }: Segment): IsolatedSeg
 }
 
 interface Isolating {
-  readonly runner: ChildRunner;
+  /** A WarmRunner only when `reuse` is enabled. */
+  readonly runner: ChildRunner | WarmRunner;
   readonly pool: MemoryPool;
   readonly ownsPool: boolean;
   readonly containment: Containment;
@@ -352,10 +375,11 @@ class NodeIsolatorImpl implements NodeIsolator {
     this.#maxTaskMillis = plan.config.maxTaskMillis ?? DEFAULT_LIMITS.maxTaskMillis;
   }
 
-  async isolate(request: IsolatedParseRequest, options: { readonly signal?: AbortSignal } = {}): Promise<IsolatedParseResult> {
+  async isolate(request: IsolatedParseRequest, options: NodeIsolateOptions = {}): Promise<IsolatedParseResult> {
     if (this.#disposing !== null) throw new IsolationError("unavailable", "The isolator was disposed");
     checkRequest(request);
-    const { signal } = options;
+    const { signal, trustDomain } = options;
+    if (trustDomain !== undefined) requireTrustDomain("isolate: trustDomain", trustDomain);
     throwIfAborted(signal);
 
     const size = await this.#measure(request);
@@ -377,7 +401,7 @@ class NodeIsolatorImpl implements NodeIsolator {
     throwIfAborted(signal);
     return route === "in-process"
       ? this.#parseInProcess(withDefaultCap(request, plan.defaultMaxOutputChars), signal)
-      : this.#runIsolated(plan.isolating, request, limits, signal);
+      : this.#runIsolated(plan.isolating, request, limits, signal, trustDomain);
   }
 
   async dispose(): Promise<void> {
@@ -388,6 +412,7 @@ class NodeIsolatorImpl implements NodeIsolator {
   status(): NodeIsolatorStatus {
     const plan = this.#plan;
     const isolating = plan.isolating;
+    const runner = isolating?.runner;
     return {
       mode: isolating === null ? "off" : plan.config.mode,
       configuredMode: plan.config.mode,
@@ -404,6 +429,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       maxInputBytes: this.#maxInputBytes,
       inProcessTypes: [...plan.inProcessTypes].sort(),
       inProcessMaxBytes: plan.inProcessMaxBytes,
+      ...(runner instanceof WarmRunner ? { reuse: runner.stats() } : {}),
     };
   }
 
@@ -429,6 +455,7 @@ class NodeIsolatorImpl implements NodeIsolator {
     request: IsolatedParseRequest,
     limits: DerivedLimits,
     signal: AbortSignal | undefined,
+    trustDomain: string | undefined,
   ): Promise<IsolatedParseResult> {
     // A request that could never fit the pool is the caller's (too large a cap, or a pool too small for the default
     // caps), not an outage: refuse it as a limit rather than let the pool call it "unavailable" (503).
@@ -460,7 +487,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
       ...(request.segments === true ? { segments: true } : {}),
     };
-    return isolating.runner.run(effective, {
+    const runOptions = {
       ...(signal === undefined ? {} : { signal }),
       limits: {
         heapMb: limits.heapMb,
@@ -469,7 +496,11 @@ class NodeIsolatorImpl implements NodeIsolator {
         maxParseMillis: limits.maxParseMillis,
         ...(limits.unpackWireBytes === undefined ? {} : { unpackWireBytes: limits.unpackWireBytes }),
       },
-    });
+    };
+    const { runner } = isolating;
+    return runner instanceof WarmRunner
+      ? runner.run(effective, { ...runOptions, ...(trustDomain === undefined ? {} : { trustDomain }) })
+      : runner.run(effective, runOptions);
   }
 
   async #parseInProcess(request: IsolatedParseRequest, signal: AbortSignal | undefined): Promise<IsolatedParseResult> {
@@ -639,6 +670,8 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   requireChildModule(options.childModule);
   if (options.tempDir !== undefined) requireTempDir(options.tempDir);
   const defaults = deriveDefaultLimits(config, options.defaultMaxOutputChars);
+  // Before the probe: a mistyped or impossible reuse setting fails construction whatever the platform shows.
+  const reuse = resolveReuse(options.reuse, { rssLimitMb: defaults.rssLimitMb, platform });
 
   // Isolation cannot be provided: strict refuses, lenient carries on without it, loudly, and says so in status().
   const unavailable = (reason: string): NodeIsolator => {
@@ -692,7 +725,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
       );
     }
   }
-  const runner = new ChildRunner({
+  const runnerOptions: ChildRunnerOptions = {
     pool: chosen.pool,
     childScript: options.childModule,
     perChildMb: defaults.perChildMb,
@@ -711,7 +744,8 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
     ...(options.components === undefined ? {} : { components: options.components }),
     ...options.runner,
-  });
+  };
+  const runner = reuse === null ? new ChildRunner(runnerOptions) : new WarmRunner({ ...runnerOptions, reuse });
   return new NodeIsolatorImpl({
     ...base,
     isolating: { runner, pool: chosen.pool, ownsPool: chosen.ownsPool, containment: { ...probed.containment }, defaultLimits: defaults },

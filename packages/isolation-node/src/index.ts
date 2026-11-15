@@ -6,6 +6,7 @@ export {
   type Lease,
   type MemoryPoolOptions,
   type PoolClock,
+  type PoolReclaimer,
   type PoolStats,
 } from "./pool.ts";
 export { probeIsolation, type ProbeOptions, type ProbeResult } from "./probe.ts";
@@ -34,6 +35,7 @@ export {
   type IsolatorLogLevel,
   type IsolatorRipstream,
   type IsolatorRunnerOptions,
+  type NodeIsolateOptions,
   type NodeIsolator,
   type NodeIsolatorOptions,
   type NodeIsolatorStatus,
@@ -55,4 +57,6 @@ export {
   type DerivedLimits,
   type LimitsRequest,
 } from "./limits.ts";
+export type { ChildReuseOptions } from "./reuse.ts";
+export type { ChildReuseStats, ChildRetireReason } from "./warm.ts";
 export { runChildMain, type ChildMainOptions, type ChildRipstream } from "./child-main.ts";
