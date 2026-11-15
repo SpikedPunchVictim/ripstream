@@ -4,6 +4,7 @@ import { Metadata } from "./metadata.ts";
 import type { IsolatedException, IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
 import type { HandlerType } from "./handler-type.ts";
 import type { ParseRecord } from "./recursive.ts";
+import type { Segment } from "./segments.ts";
 import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
 import type { MediaTypeResult, ParseOptions, ParseResult } from "./ripstream.ts";
 
@@ -91,6 +92,9 @@ function toRequest(
   if (options.contentType !== undefined) {
     throw new TypeError("ParseOptions.contentType cannot cross the isolation boundary; the child detects the type itself");
   }
+  if (options.segments !== undefined && typeof options.segments !== "boolean") {
+    throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
+  }
   const limits = { ...defaults, ...crossingLimits(options.limits) };
   return {
     input: toInput(source),
@@ -104,6 +108,7 @@ function toRequest(
     ...(options.handlerType === undefined ? {} : { handlerType: options.handlerType }),
     // Only a records answer has records to hang bytes on.
     ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),
+    ...(options.segments === true && output === "records" ? { segments: true } : {}),
     output,
   };
 }
@@ -143,7 +148,15 @@ function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | u
     mediaType: MediaType.parse(record.mediaType) ?? MediaType.OCTET_STREAM,
     exception: record.exception === null ? null : toException(record.exception),
     ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
+    ...(record.segments === undefined ? {} : { segments: toSegments(record) }),
   };
+}
+
+/** The segments of a record, their text cut from its content again (the frames checked the offsets against it). */
+function toSegments(record: IsolatedParseRecord): readonly Segment[] {
+  return (record.segments ?? []).map(({ start, end, labels, location }) =>
+    Object.freeze({ text: record.content.slice(start, end), start, end, labels, location }),
+  );
 }
 
 /**

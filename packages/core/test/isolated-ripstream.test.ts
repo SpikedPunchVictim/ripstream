@@ -147,6 +147,36 @@ test("parseRecursive: each record's pathParts come back as the child gave them",
   assert.deepEqual(records[1]?.pathParts, pathParts);
 });
 
+test("parseRecursive: segments cross in a records request only, and come back with their text cut from the content", async () => {
+  const answer: IsolatedParseResult = {
+    kind: "records",
+    records: [
+      {
+        metadata: {}, content: "Name\tPLANTED", embeddedResourcePath: "/a.csv", depth: 0, mediaType: "text/csv", exception: null,
+        segments: [{ start: 0, end: 12, labels: [], location: "row=1" }, { start: 5, end: 12, labels: ["Name"], location: "row=1;col=2" }],
+      },
+    ],
+  };
+  const records = fakeIsolator(answer);
+  const answered = await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { segments: true });
+  assert.equal(records.calls[0]?.request.segments, true);
+  assert.deepEqual(answered[0]?.segments, [
+    { text: "Name\tPLANTED", start: 0, end: 12, labels: [], location: "row=1" },
+    { text: "PLANTED", start: 5, end: 12, labels: ["Name"], location: "row=1;col=2" },
+  ]);
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { segments: true });
+  assert.equal("segments" in (text.calls[0]?.request ?? {}), false, "a text answer has no records to hang segments on");
+  const plain = fakeIsolator(RECORDS_ANSWER);
+  const unsegmented = await createIsolatedRipstream({ isolator: plain.isolator, detector }).parseRecursive(new Uint8Array(1));
+  assert.equal("segments" in (plain.calls[0]?.request ?? {}), false);
+  assert.equal("segments" in (unsegmented[0] ?? {}), false);
+  await assert.rejects(
+    createIsolatedRipstream({ isolator: plain.isolator, detector }).parseRecursive(new Uint8Array(1), { segments: 1 as unknown as boolean }),
+    TypeError,
+  );
+});
+
 test("parse: absent options add nothing to the request", async () => {
   const { isolator, calls } = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1));

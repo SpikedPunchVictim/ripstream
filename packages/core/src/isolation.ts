@@ -87,6 +87,16 @@ export interface IsolatedParseRecord {
   readonly exception: IsolatedException | null;
   /** The embedded document's own bytes; only for a request with `unpackBytes`, and only when the document fit its budget. */
   readonly bytes?: Uint8Array;
+  /** `ParseRecord.segments` without their text (it is `content.slice(start, end)`); only for a request with `segments`. */
+  readonly segments?: readonly IsolatedSegment[];
+}
+
+/** A `Segment` as it crosses the boundary: its text is left out, being a slice of the record's content. */
+export interface IsolatedSegment {
+  readonly start: number;
+  readonly end: number;
+  readonly labels: readonly string[];
+  readonly location: string;
 }
 
 export interface IsolatedParseRequest {
@@ -137,6 +147,12 @@ export interface IsolatedParseRequest {
    * result cap, its memory reservation and its own ceiling on this number all apply. Omitted: none.
    */
   readonly unpackBytes?: number;
+  /**
+   * `ParseOptions.segments`: label and locate the parts of each record, on `IsolatedParseRecord.segments`. Only for
+   * `output: "records"` and a `handlerType` of text or body. They cross like the rest of the result, so they count
+   * against the isolation's result cap. Omitted: false.
+   */
+  readonly segments?: boolean;
 }
 
 /** Narrow on `kind`; the arm always matches the request's `output`. */

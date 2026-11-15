@@ -161,6 +161,7 @@ export interface WireParseOptions {
   readonly onOutputLimit?: "throw" | "truncate";
   readonly handlerType?: HandlerType;
   readonly unpackBytes?: number;
+  readonly segments?: boolean;
 }
 
 /**
@@ -175,6 +176,7 @@ const PARSE_OPTION_FIELDS = {
   onOutputLimit: "copied",
   handlerType: "copied",
   unpackBytes: "copied",
+  segments: "copied",
   signal: "parent",
 } as const satisfies Record<keyof ParseOptions, "copied" | "parent">;
 

@@ -181,6 +181,7 @@ export {
   type IsolatedComponents,
   type IsolatedParseRequest,
   type IsolatedParseResult,
+  type IsolatedSegment,
   type IsolationConfig,
   type IsolationMode,
   type ParseIsolator,
@@ -316,6 +317,13 @@ export {
   type PathPart,
   type PathPartKind,
 } from "./recursive.ts";
+export {
+  parseSegmentLocation,
+  SEGMENT_LOCATION_KEYS,
+  type Segment,
+  type SegmentHints,
+  type SegmentLocationKey,
+} from "./segments.ts";
 export { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, digestBytes, digestKey, type DigestAlgorithm, type DigestDef, type DigestEncoding, type DigestSettings } from "./digest.ts";
 export { CONTENT_LENGTH, EMBEDDED_RESOURCE_TYPES, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";
 export {

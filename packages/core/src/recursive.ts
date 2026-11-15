@@ -18,6 +18,7 @@ import { ContentHandlerDecorator } from "./content-handler.ts";
 import { TeeContentHandler } from "./handlers/tee.ts";
 import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { markParseTiming } from "./rmeta.ts";
+import { SegmentTap, type Segment } from "./segments.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
 
 /**
@@ -60,6 +61,11 @@ export interface ParseRecord {
    * when `ParseOptions.unpackBytes` asked: a document that would take the total past that budget has none.
    */
   bytes?: Uint8Array;
+  /**
+   * The record's content in pieces, each with its labels and its location in the document; only when
+   * `ParseOptions.segments` asked. Each `text` is `content.slice(start, end)`. See docs/segments.md.
+   */
+  segments?: readonly Segment[];
 }
 
 /**
@@ -75,6 +81,7 @@ export class RecursiveParserWrapper implements Parser {
   private readonly truncateOutput: boolean;
   private readonly handlerType: HandlerType;
   private readonly unpackBytes: number | undefined;
+  private readonly segments: boolean;
 
   /**
    * `recordFailures`: a container with no parser to take it is an empty document, as with Tika's EmptyParser, not
@@ -88,6 +95,9 @@ export class RecursiveParserWrapper implements Parser {
    * `handlerType`: the shape each record's content is written in (default "text"). An embedded document's "text" is
    * the text of its body; the container's is every character it writes. "ignore" keeps no content and counts no
    * output: its budget is unlimited, as Tika's ignore handler has no write limit.
+   *
+   * `segments`: give each record its `segments`. Only with a `handlerType` of "text" or "body", whose content they
+   * index; a RangeError otherwise. Off, nothing is added to the parse.
    */
   constructor(
     delegate: Parser,
@@ -96,6 +106,7 @@ export class RecursiveParserWrapper implements Parser {
       readonly truncateOutput?: boolean;
       readonly handlerType?: HandlerType;
       readonly unpackBytes?: number;
+      readonly segments?: boolean;
     } = {},
   ) {
     this.delegate = delegate;
@@ -103,6 +114,10 @@ export class RecursiveParserWrapper implements Parser {
     this.truncateOutput = options.truncateOutput ?? false;
     this.handlerType = options.handlerType ?? "text";
     this.unpackBytes = options.unpackBytes;
+    this.segments = options.segments ?? false;
+    if (this.segments && this.handlerType !== "text" && this.handlerType !== "body") {
+      throw new RangeError(`segments need a handlerType of "text" or "body", got "${this.handlerType}"`);
+    }
   }
 
   getSupportedTypes(ctx: ParseContext): ReturnType<Parser["getSupportedTypes"]> {
@@ -144,14 +159,18 @@ export class RecursiveParserWrapper implements Parser {
       truncate: this.truncateOutput,
       reached: false,
     };
-    const extractor = new RecordExtractor(this.records, output, path, this.handlerType, counted, this.unpackBytes);
+    const extractor = new RecordExtractor(
+      this.records, output, path, this.handlerType, counted, this.unpackBytes, this.segments,
+    );
     ctx.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, extractor);
     ctx.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
     ctx.set(CONTEXT_KEYS.EMBEDDED_PATH_PARTS, pathParts);
 
     const content = createOutputHandler(this.handlerType);
+    const tap = this.segments ? new SegmentTap(content, metadata) : undefined;
+    if (tap !== undefined) ctx.set(CONTEXT_KEYS.SEGMENT_HINTS, tap);
     const budgeted = new OutputBudgetHandler(
-      new TeeContentHandler([handler, content]),
+      new TeeContentHandler([handler, tap ?? content]),
       output,
       counted ? ctx.limits.maxDocumentOutputChars : undefined,
     );
@@ -178,6 +197,7 @@ export class RecursiveParserWrapper implements Parser {
         metadata.set(CONTENT_LENGTH, String(stream.length));
       }
       record.content = content.toString();
+      if (tap !== undefined) record.segments = tap.finish(record.content);
       const type = metadata.get("Content-Type");
       if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
     }
@@ -205,6 +225,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
   private readonly counted: boolean;
   /** Bytes of embedded documents that may still be kept; undefined when none are. One budget for the whole tree. */
   private unpackRemaining: number | undefined;
+  private readonly segments: boolean;
   private nextId = 0;
 
   constructor(
@@ -214,6 +235,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     handlerType: HandlerType,
     counted: boolean,
     unpackBytes: number | undefined,
+    segments: boolean,
   ) {
     this.records = records;
     this.output = output;
@@ -221,6 +243,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     this.handlerType = handlerType;
     this.counted = counted;
     this.unpackRemaining = unpackBytes;
+    this.segments = segments;
   }
 
   shouldParseEmbedded(): boolean {
@@ -281,7 +304,9 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     child.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, this);
 
     const body = createOutputHandler(this.handlerType === "text" ? "body" : this.handlerType);
-    const capture = new OutputBudgetHandler(body, this.output, this.counted ? ctx.limits.maxDocumentOutputChars : undefined);
+    const tap = this.segments ? new SegmentTap(body, metadata) : undefined;
+    if (tap !== undefined) child.set(CONTEXT_KEYS.SEGMENT_HINTS, tap);
+    const capture = new OutputBudgetHandler(tap ?? body, this.output, this.counted ? ctx.limits.maxDocumentOutputChars : undefined);
     let truncated = false;
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
@@ -306,6 +331,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       if (source !== stream) await source.close();
       // What was extracted is kept even when the document failed or was cut short, as Tika's per-document handler is.
       record.content = body.toString();
+      if (tap !== undefined) record.segments = tap.finish(record.content);
       const type = metadata.get("Content-Type");
       if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
       if (truncated) metadata.set(TIKA_KEYS.WRITE_LIMIT_REACHED, "true");

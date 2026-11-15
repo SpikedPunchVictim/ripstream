@@ -85,6 +85,13 @@ export interface ParseOptions {
    * parsed all the same. Default: no bytes kept. This is what `/unpack` answers from.
    */
   readonly unpackBytes?: number;
+  /**
+   * `parseRecursive` only: give each record its `segments`, the content in pieces (paragraphs, table rows and cells,
+   * slides' shapes, lines, JSON values), each with its labels and its location in the document. Default false: no
+   * segments, and nothing about the parse changes. Needs a `handlerType` of "text" (the default) or "body". The
+   * content is the same either way. See docs/segments.md.
+   */
+  readonly segments?: boolean;
 }
 
 export interface ParseResult {
@@ -324,6 +331,13 @@ export class Ripstream {
     if (options.unpackBytes !== undefined && !(Number.isSafeInteger(options.unpackBytes) && options.unpackBytes >= 0)) {
       throw new RangeError(`unpackBytes must be a non-negative whole number, got ${String(options.unpackBytes)}`);
     }
+    if (options.segments !== undefined && typeof options.segments !== "boolean") {
+      throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
+    }
+    const handlerType = options.handlerType ?? "text";
+    if (options.segments === true && handlerType !== "text" && handlerType !== "body") {
+      throw new RangeError(`segments need a handlerType of "text" or "body", got "${handlerType}"`);
+    }
     return this.withStream(source, options, async (stream, metadata, ctx) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
@@ -333,6 +347,7 @@ export class Ripstream {
         truncateOutput: options.onOutputLimit === "truncate",
         handlerType: options.handlerType ?? "text",
         ...(options.unpackBytes === undefined ? {} : { unpackBytes: options.unpackBytes }),
+        segments: options.segments === true,
       });
       try {
         await wrapper.parse(stream, createOutputHandler("ignore"), metadata, ctx);

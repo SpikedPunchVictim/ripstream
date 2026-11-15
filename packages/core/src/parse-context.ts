@@ -4,6 +4,7 @@ import type { DigestSettings } from "./digest.ts";
 import { outputLimitIssue } from "./handlers/limits.ts";
 import type { Metadata } from "./metadata.ts";
 import type { PathPart } from "./recursive.ts";
+import type { SegmentHints } from "./segments.ts";
 
 /**
  * Typed context key. The optional phantom field gives TypeScript the value
@@ -273,6 +274,11 @@ export const CONTEXT_KEYS = {
    * document. The extractors do not pass it on to a member's own parse.
    */
   ARCHIVE_ENTRY: new ParseContextKey<boolean>("archive-entry"),
+  /**
+   * What a parser can tell the segments of its document (`ParseOptions.segments`) that its XHTML does not: present only
+   * when segments were asked for, so a parser reads it once and calls `hints?.row(n)` at no cost otherwise.
+   */
+  SEGMENT_HINTS: new ParseContextKey<SegmentHints>("segment-hints"),
   /** The digests to make (Tika's DigesterFactory in the ParseContext); AutoDetectParser reads it. Absent: none. */
   DIGESTS: new ParseContextKey<DigestSettings>("digests"),
   /** A password source for encrypted documents (Tika's PasswordProvider in the ParseContext). */
