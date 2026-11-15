@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-4hfu: a file cut inside its last object, the page, after /Contents and the font resource. The rebuild closes the cut dictionaries and puts the page in a new page tree, and its text reads.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [5 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Length 58 >>\nstream\nBT /F1 24 Tf 72 700 Td (Page cut after its contents) Tj ET\nendstream\nendobj\n4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n5 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 3 0 R /Resources << /Font << /F1 4 0 R",
+    "filename": "pdf-repair-page-cut-after-contents.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Page cut after its contents"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    }
+  ]
+}

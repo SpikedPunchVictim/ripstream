@@ -1,3 +1,6 @@
+import { streamDecryptor, type StreamDecryptor } from "./pdf-decrypt.ts";
+import { decodeStream, dictEntries, type DecodeBudget } from "./pdf-syntax.ts";
+
 /**
  * Cheap structural checks on in-memory PDF bytes that reject inputs known to
  * make pdf.js spin or exhaust memory, before pdf.js parses them. They only
@@ -11,6 +14,9 @@ export const MAX_OBJECT_NUMBER = 8_388_607;
 
 /** Largest embedded font program (`/Length1`..`/Length3`) accepted, in bytes. */
 export const MAX_FONT_PROGRAM_BYTES = 128 * 1024 * 1024;
+
+/** Cap on form XObject content decoded (decrypted and inflated) to see what it paints. */
+export const MAX_FORM_DECODED_BYTES = 16 * 1024 * 1024;
 
 export function preflightPdf(data: Uint8Array): void {
   const text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("latin1");
@@ -53,7 +59,8 @@ function rejectHugeObjectNumbers(text: string): void {
  */
 function rejectFormXObjectCycles(text: string): void {
   const edges = new Map<number, number[]>();
-  const objects = [...text.matchAll(/(?<![0-9])(\d+)\s+\d+\s+obj\b/g)];
+  const objects = [...text.matchAll(/(?<![0-9])(\d+)\s+(\d+)\s+obj\b/g)];
+  const content = formContentReader(text);
   const nextEndobj = nextOccurrence(text, "endobj");
   const nextStream = nextOccurrence(text, "stream");
   const nextEndstream = nextOccurrence(text, "endstream");
@@ -67,7 +74,7 @@ function rejectFormXObjectCycles(text: string): void {
     if (!/\/Subtype\s*\/Form\b/.test(dictionary)) continue;
     const xobjects = xobjectResources(dictionary);
     if (xobjects === null) continue;
-    const body = plainStreamBody(text, end, nextEndstream);
+    const body = content(Number(match[1]), Number(match[2]), dictionary, end, nextEndstream);
     const painted = body === null ? null : paintedNames(body);
     const targets: number[] = [];
     for (const ref of xobjects.matchAll(/\/([^\s/<>[\]()]+)\s+(\d+)\s+\d+\s+R\b/g)) {
@@ -145,14 +152,33 @@ function endOfObject(
   return stream !== -1 && stream < bound ? stream : bound;
 }
 
-/** Stream data of the object whose dictionary ends at `end`, or null if filtered or absent. */
-function plainStreamBody(text: string, end: number, nextEndstream: (from: number) => number): string | null {
-  if (!text.startsWith("stream", end)) return null;
-  const stop = nextEndstream(end);
-  if (stop === -1) return null;
-  const body = text.slice(end, stop);
-  const dictionaryStart = text.lastIndexOf("obj", end);
-  return /\/Filter\b/.test(text.slice(dictionaryStart, end)) ? null : body;
+/**
+ * Reads a form's content: decrypted when the file is encrypted (with the empty user password, as pdf.js opens it) and
+ * run through its filters. Null when the content cannot be read, so every resource it names counts as painted.
+ */
+function formContentReader(
+  text: string,
+): (num: number, gen: number, dictionary: string, end: number, nextEndstream: (from: number) => number) => string | null {
+  const budget: DecodeBudget = { left: MAX_FORM_DECODED_BYTES };
+  let encrypted: boolean | undefined;
+  let decrypt: StreamDecryptor | null | undefined;
+  return (num, gen, dictionary, end, nextEndstream) => {
+    if (!text.startsWith("stream", end)) return null;
+    const stop = nextEndstream(end);
+    if (stop === -1) return null;
+    let start = end + "stream".length;
+    if (text[start] === "\r") start++;
+    if (text[start] === "\n") start++;
+    let data = text.slice(start, Math.max(start, stop));
+    encrypted ??= /\/Encrypt\b/.test(text);
+    if (encrypted) {
+      decrypt ??= streamDecryptor(text);
+      const plain = decrypt === null ? null : decrypt(num, gen, data);
+      if (plain === null) return null;
+      data = plain;
+    }
+    return decodeStream(dictEntries(dictionary), data, budget);
+  };
 }
 
 /** The resource names the content paints with `Do`. */

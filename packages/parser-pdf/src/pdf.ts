@@ -19,6 +19,7 @@ import {
 } from "@spikedpunch/ripstream-core";
 import { InlineChannel } from "./pdf-channel.ts";
 import { extractXmp } from "./xmp.ts";
+import type { PageContent } from "./pdf-content.ts";
 import {
   PdfSession,
   type PdfAnnotation,
@@ -130,6 +131,10 @@ export class PdfParser implements Parser {
       applyXmp(metadata, ready.xmp);
       applyInfo(metadata, ready.info);
       metadata.set("xmpTPg:NPages", ready.numPages);
+      if (ready.repair !== undefined) {
+        metadata.set("tk:pdf:repaired", "true");
+        for (const step of ready.repair.steps) metadata.add("tk:pdf:repair-steps", step);
+      }
 
       const xhtml = new XHTMLContentHandler(handler, metadata);
       await xhtml.startDocument();
@@ -144,6 +149,7 @@ export class PdfParser implements Parser {
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
       const pages = Math.min(ready.numPages, MAX_PAGES);
+      const emptiness = new EmptyDocumentEvidence();
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
         channel.post({ type: "page", index });
@@ -153,6 +159,7 @@ export class PdfParser implements Parser {
           if (message.name === "LimitExceededError") throw mapSessionError(message);
           // Upstream PDFBox recovers individual pages; keep the pages that
           // did parse instead of failing the whole document.
+          emptiness.pageFailed();
           continue;
         }
         if (message.type !== "page") {
@@ -167,6 +174,8 @@ export class PdfParser implements Parser {
           await xhtml.endElement("p");
         }
         metadata.add("pdf:chars-per-page", String(characters));
+        const hasText = message.lines.some((line) => line.trim().length > 0);
+        emptiness.page(index, hasText, message.content);
         if (this.#extractAnnotationText) {
           let fieldIndex = 0;
           for (const annotation of message.annotations) {
@@ -183,6 +192,15 @@ export class PdfParser implements Parser {
 
       // A PDF cut off before its %%EOF, or with padding after it, that yields no text is an empty document, as in Tika 4.2.0:
       // PDFBox answers 200 with empty text for such files (oracle: a text-less PDF cut at 20-60% of its length, or padded with 3 KB after %%EOF; bughunt B32).
+      // That holds after a recovery only when every page is shown to be text-less (tikajs-4hfu); otherwise the damage is the answer.
+      if (ready.repair !== undefined) {
+        const unproven = emptiness.unproven(pages, ready.repair.steps.includes("page-tree-rebuilt"));
+        if (unproven.length > 0) {
+          throw new MalformedDocumentError(
+            `PDF is damaged and no text could be recovered (${[...ready.repair.causes, ...unproven].join("; ")})`,
+          );
+        }
+      }
 
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
 
@@ -271,6 +289,7 @@ function mapSessionError(message: {
   readonly name: string;
   readonly message: string;
   readonly code?: string;
+  readonly causes?: readonly string[];
 }): Error {
   if (message.code === "ERR_MODULE_NOT_FOUND") {
     return new MissingDependencyError("pdfjs-dist", "PDF parsing");
@@ -283,9 +302,50 @@ function mapSessionError(message: {
       cause: new Error(message.message),
     });
   }
-  return new MalformedDocumentError("Unable to read PDF", {
+  const causes = message.causes ?? [];
+  return new MalformedDocumentError(causes.length === 0 ? "Unable to read PDF" : `Unable to read PDF (${causes.join("; ")})`, {
     cause: new Error(message.message),
   });
+}
+
+/**
+ * Whether a recovered document that gave no text is text-less by design (a scan, an empty page) rather than damaged
+ * past reading: every page loaded, and each one's content streams were found and decoded and show no text.
+ */
+class EmptyDocumentEvidence {
+  #text = false;
+  #failed = 0;
+  #contentRead = false;
+  readonly #problems: string[] = [];
+
+  pageFailed(): void {
+    this.#failed++;
+  }
+
+  page(index: number, hasText: boolean, content: PageContent | undefined): void {
+    if (hasText) {
+      this.#text = true;
+      return;
+    }
+    if (this.#problems.length >= 4) return;
+    if (content === undefined) this.#problems.push(`page ${index} content could not be checked`);
+    else if (content.contents === "cut-off") this.#problems.push(`page ${index} is cut off`);
+    else if (content.contents === "missing") this.#problems.push(`page ${index} content is missing`);
+    else if (content.contents === "unreadable") this.#problems.push(`page ${index} content could not be decoded`);
+    else if (content.showsText) this.#problems.push(`page ${index} shows text that could not be extracted`);
+    if (content?.contents === "read") this.#contentRead = true;
+  }
+
+  /** Why an empty result is not shown to be text-less; empty when it is, or when there was text. */
+  unproven(pages: number, pageTreeRebuilt: boolean): string[] {
+    if (this.#text) return [];
+    const problems = [...this.#problems];
+    if (pages === 0) problems.push("no pages");
+    if (this.#failed > 0) problems.push(`${this.#failed} page${this.#failed === 1 ? "" : "s"} could not be read`);
+    // Pages found by scanning that name no content prove nothing about the document they came from.
+    if (pageTreeRebuilt && !this.#contentRead && problems.length === 0) problems.push("no page content found");
+    return problems;
+  }
 }
 
 function recordAnnotation(

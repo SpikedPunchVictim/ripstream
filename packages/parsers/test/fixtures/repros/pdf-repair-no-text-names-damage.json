@@ -1,0 +1,32 @@
+{
+  "description": "tikajs-4hfu: a file cut inside its page object, before the page names any content. A repair that yields no text it cannot show to be text-less is a MalformedDocumentError naming the damage, never an ok result with empty text.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R",
+    "filename": "pdf-repair-no-text-names-damage.pdf"
+  },
+  "options": {
+    "onDocumentFailure": "record"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "PDF is damaged and no text could be recovered"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "page tree object 3 is cut off"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "missing %%EOF"
+    }
+  ]
+}

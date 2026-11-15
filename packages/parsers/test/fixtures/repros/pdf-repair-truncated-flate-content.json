@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-4hfu: a Flate content stream cut part way (no endstream; the font and page follow, no xref or trailer). The readable start of the stream is kept (step stream-salvaged): the lines shown before the cut are recovered, the rest is lost.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFs1IDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL0xlbmd0aCAxNjkxIC9GaWx0ZXIgL0ZsYXRlRGVjb2RlID4+CnN0cmVhbQp4nHWYwc60Nw1G91zFu4QVsR3bybYSrFj+N1BBK4EESLRobh8fV+r3iia7kWY0jk+cx3783bfnj3+WR8bz7ccn9cmoT397fv+Xv//rh2c8//7x+f75639/fn76+T8/fP/P5zOeT27Zz8eXyfOxnPZ8JNyfz/ac9e1cUd/aXvWt1f9+RFXrW5n1+xxuf3i+/eP507fffff/oad+hZbfhp47KoquzPqfVUdYOSpIhFaQ6VZBdM46gnmdYGnWr0NW/XqOXT/XIXKNrfMrtv429t5G5quO+PF0gkRUFPGsI+y5OVOFIXOFixpcZMJlRP0+dsY1+oiv6HbIfK1F5oMzSB1hBfDDgT8n8NWijqAJFoF9COzngL1sm7fYUX/9a+x5yHx5BcmEvQfszYEvPoTMgZ8GfNeGL9CXEXWGtaEfa+9r9HyVm58yFyEtrTOE1RGWAz8m8KcBX3UPLhcsAvsYsLcNe1me19j+qrc4ZF5JV24Aqsxhbw58mVUsn0IKFwW+C/BtQH9vIXHgx1K9BrdXweUh8awffLQSrb93WE7Yh8F+GuxVhRpTqAzQ+wa9LdBLrnGNLa9yW4fEg+eSAXp30FeuwLRZR9gK+xTY+4C9jfHLA6+DLNhHTr8F9/2qt31IPJxC9th9+yQO+ir4ijEV9JU3t7+QIsD7Arwl5CXHVWB8vYpNDuK2g9eSDnqfoDeDvWiVaSUI+xTYV/FXnrobviVaBPvShHWNHm95O+kb5ysJ2yQ6gGld9gr7KbDX4V1isC8JHOQOe0vgS+hVYiqdV/STwjnvpS4OoAZ9U/BLiQe5gz8H+OcGv66+gGoXpUbwD99XeXV9VZycFM4HPKc4ceGp4A8B/xzgL1Wjyjb4c4HfE/wW8BefV5Hx8So5OWnc5Mmkwd8V/qZcgEi9lNJvLiA2FzAXF6CZ6Mwycod/uFwFdu531Z00bio8zRAzh6eAPwb4bYNf9qCRLPBngt8D/NXpIDPzqjP11Sv6SeWMZ5MGf9fmL1yADKOXbC4gFhcwkwvQAsHhaLEO/ygZvkb3d9WdZM4mPDX66cJzgL/UllaywS9LabEJ/upCtFgHv034i+2r1Ex7V91J6Ixnkwp/F/jb4AJKB5Ay+Fdp02MT/go0IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJveCBbMCAwIDYxMiA3OTJdIC9Db250ZW50cyAzIDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiA+PgplbmRvYmoK",
+    "filename": "pdf-repair-truncated-flate-content.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Line 0 of a cut stream w0 w7919"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Line 39 of a cut stream"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    }
+  ]
+}

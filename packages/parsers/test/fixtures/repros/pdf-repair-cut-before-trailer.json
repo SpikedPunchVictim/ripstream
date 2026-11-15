@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-4hfu: a PDF cut before its xref and trailer. With no startxref pdf.js indexes the objects itself, a recovery all the same: the text is read and the result says it was repaired (tk:pdf:repair-steps starts with rebuilt-xref).",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 59 >>\nstream\nBT /F1 24 Tf 72 700 Td (Recovered before the trailer) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+    "filename": "pdf-repair-cut-before-trailer.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Recovered before the trailer"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repair-steps",
+      "value": "rebuilt-xref"
+    }
+  ]
+}

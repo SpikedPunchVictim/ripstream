@@ -1,11 +1,14 @@
 import { blockPdfjsCanvas } from "./block-canvas.ts";
-import { repairPdf } from "./pdf-repair.ts";
 import { createRequire } from "node:module";
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { PageContentScanner, type PageContent } from "./pdf-content.ts";
+import { streamDecryptor } from "./pdf-decrypt.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
+import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
 import { preflightPdf } from "./pdf-preflight.ts";
-import { isMissingCatalogError, recoverDocument } from "./pdf-recover.ts";
+import { diagnosePdf, latin1, rebuildPdf, type RebuiltPdf, type RepairStep } from "./pdf-rebuild.ts";
+import { isMissingCatalogError, recoverDocumentDetailed } from "./pdf-recover.ts";
 
 // Before pdf.js is imported anywhere: it polyfills rendering objects by loading the native canvas at import time.
 blockPdfjsCanvas();
@@ -62,12 +65,16 @@ export type PdfResponse =
       readonly attachments: readonly PdfAttachment[];
       /** Outline (bookmark) titles in document order; Tika writes them as text. */
       readonly outline: readonly string[];
+      /** Set when the document only loaded after a recovery: what was done, and what was wrong with the file. */
+      readonly repair?: PdfRepair;
     }
   | {
       readonly type: "page";
       readonly index: number;
       readonly lines: string[];
       readonly annotations: readonly PdfAnnotation[];
+      /** For a page with no text: what its content streams do, when the file could be scanned. */
+      readonly content?: PageContent;
     }
   | {
       readonly type: "page-error";
@@ -81,7 +88,17 @@ export type PdfResponse =
       readonly name: string;
       readonly message: string;
       readonly code?: string;
+      /** What is wrong with a file no recovery could load. */
+      readonly causes?: readonly string[];
     };
+
+/** Repairs only the rebuild makes: a file that needs one is opened from the rebuild rather than by pdf.js's own reindex. */
+const REBUILD_FIRST_STEPS: ReadonlySet<RepairStep> = new Set(["page-tree-rebuilt", "font-repaired", "stream-salvaged"]);
+
+export interface PdfRepair {
+  readonly steps: readonly RepairStep[];
+  readonly causes: readonly string[];
+}
 
 interface PdfjsAnnotation {
   readonly id?: unknown;
@@ -99,6 +116,8 @@ interface PdfjsAnnotation {
 }
 
 interface PdfPage {
+  /** The page object's reference. */
+  readonly ref?: { readonly num: number; readonly gen: number } | null;
   streamTextContent(): ReadableStream<{ items: unknown[] }>;
   getAnnotations?(options?: { intent?: string }): Promise<PdfjsAnnotation[]>;
   cleanup(): void;
@@ -140,6 +159,9 @@ interface PdfModule {
 
 const PDF_DATA_LIMIT = 8 * 1024 * 1024;
 
+/** Largest file read whole to scan the content of a page with no text (image-only pages); a larger one is not scanned. */
+const CONTENT_SCAN_LIMIT = 64 * 1024 * 1024;
+
 /** pdf.js's range size for a file read through the range transport (its default is 65,536). */
 const RANGE_CHUNK_BYTES = 1024 * 1024;
 
@@ -167,6 +189,13 @@ export class PdfSession {
   #loading: LoadingTask | undefined;
   #document: PdfDocument | undefined;
   #disposal: Promise<void> | undefined;
+  /** The file's bytes as given (not a recovered copy), when they were read into memory. */
+  #bytes: Uint8Array | undefined;
+  /** The object index of #bytes, when loading built one. */
+  #index: ObjectIndex | undefined;
+  #repair: PdfRepair | undefined;
+  #failureCauses: readonly string[] | undefined;
+  #scanner: PageContentScanner | null | undefined;
 
   constructor(input: PdfSessionInput) {
     this.#input = input;
@@ -178,7 +207,11 @@ export class PdfSession {
     try {
       document = await this.#load();
     } catch (error) {
-      return { type: "error", ...describe(error) };
+      return {
+        type: "error",
+        ...describe(error),
+        ...(this.#failureCauses === undefined || this.#failureCauses.length === 0 ? {} : { causes: this.#failureCauses }),
+      };
     }
 
     try {
@@ -217,6 +250,7 @@ export class PdfSession {
         numPages: document.numPages,
         attachments,
         outline,
+        ...(this.#repair === undefined ? {} : { repair: this.#repair }),
       };
     } catch (error) {
       return { type: "error", ...describe(error) };
@@ -245,6 +279,9 @@ export class PdfSession {
     const loading = this.#loading;
     this.#loading = undefined;
     this.#document = undefined;
+    this.#bytes = undefined;
+    this.#index = undefined;
+    this.#scanner = null;
     try {
       await loading?.destroy();
     } catch {
@@ -284,33 +321,75 @@ export class PdfSession {
     }
     if (options.data instanceof Uint8Array) preflightPdf(options.data);
     const source = options.data instanceof Uint8Array ? options.data : undefined;
-    try {
-      // pdf.js transfers (detaches) the buffer it is given, so keep ours for recovery.
-      if (source !== undefined) options.data = source.slice();
-      return await this.#start(pdfjs, options);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      // A file cut before its trailer can still hold every object: rewrite the xref and retry; the older
-      // append-a-trailer recovery is the second candidate.
-      const candidates: Uint8Array[] = [];
-      if (source !== undefined) {
-        if (isMissingCatalogError(message)) {
-          const recovered = recoverDocument(source);
-          if (recovered !== null) candidates.push(recovered);
-        }
-        const repaired = repairPdf(source);
-        if (repaired !== null) candidates.push(repaired);
-      }
-      let lastError: unknown = error;
-      for (const candidate of candidates) {
-        await this.#loading?.destroy();
-        options.data = candidate;
+    if (source === undefined) return this.#start(pdfjs, options);
+
+    const text = latin1(source);
+    const diagnosis = diagnosePdf(text);
+    let sourceIndex: ObjectIndex | undefined;
+    const indexed = (): ObjectIndex => (sourceIndex ??= indexObjects(text));
+    let rebuilt: RebuiltPdf | null | undefined;
+    const rebuild = (): RebuiltPdf | null => (rebuilt === undefined ? (rebuilt = rebuildPdf(source, indexed())) : rebuilt);
+    const attempt = async (data: Uint8Array, steps: readonly RepairStep[] | undefined): Promise<PdfDocument> => {
+      await this.#loading?.destroy();
+      // pdf.js transfers (detaches) the buffer it is given, so keep ours for recovery and for scanning pages.
+      options.data = data.slice();
+      const document = await this.#start(pdfjs, options);
+      if (steps !== undefined) this.#repair = { steps, causes: diagnosePdf(text, indexed()).causes };
+      // Pages with no text are checked in the file as given, where a cut-off stream is still cut off (a rebuilt or
+      // salvaged copy would read as whole); recovery keeps every page's object number.
+      this.#bytes = source;
+      this.#index = sourceIndex;
+      return document;
+    };
+
+    // pdf.js reads an object the xref marks free as missing, even when the file holds it and the page tree needs it;
+    // PDFBox's lenient parser finds such objects by scanning, and the rebuild does the same. pdf.js also reads a broken
+    // page tree as it stands (a damaged root is a page with no content), drops the text of a font whose /Subtype or
+    // Identity CMap name is damaged, and fails a page whose content stream is cut off, all of which the rebuild repairs:
+    // when the xref has to be rebuilt anyway, a rebuild that repaired more than the xref goes first.
+    let rebuildTried = false;
+    if (diagnosis.freedReferenced.length > 0 || diagnosis.xrefUnusable) {
+      const first = rebuild();
+      const repairs = first !== null && first.steps.some((step) => REBUILD_FIRST_STEPS.has(step));
+      if (first !== null && (diagnosis.freedReferenced.length > 0 || repairs)) {
+        rebuildTried = true;
         try {
-          return await this.#start(pdfjs, options);
+          return await attempt(first.data, first.steps);
+        } catch {
+          // Fall back to the file as it is.
+        }
+      }
+    }
+    try {
+      // With no usable startxref pdf.js indexes every object itself: a recovery all the same.
+      return await attempt(source, diagnosis.xrefUnusable ? ["rebuilt-xref"] : undefined);
+    } catch (error) {
+      if (error instanceof Error && error.name === "PasswordException") throw error;
+      const message = error instanceof Error ? error.message : "";
+      // A file cut before its trailer can still hold every object. The append-a-trailer recovery goes first when pdf.js
+      // found no catalog; the brute-force rebuild (new xref, trailer and, if need be, page tree) follows.
+      const candidates: Array<() => { data: Uint8Array; steps: readonly RepairStep[] } | null> = [];
+      if (isMissingCatalogError(message)) {
+        candidates.push(() => {
+          const recovered = recoverDocumentDetailed(source);
+          if (recovered === null) return null;
+          const steps: RepairStep[] = ["rebuilt-xref", "synthetic-trailer"];
+          if (recovered.inlined) steps.push("objstm-inlined");
+          return { data: recovered.data, steps };
+        });
+      }
+      if (!rebuildTried) candidates.push(rebuild);
+      let lastError: unknown = error;
+      for (const make of candidates) {
+        const candidate = make();
+        if (candidate === null) continue;
+        try {
+          return await attempt(candidate.data, candidate.steps);
         } catch (retryError) {
           lastError = retryError;
         }
       }
+      this.#failureCauses = diagnosePdf(text, indexed()).causes;
       throw lastError;
     }
   }
@@ -333,6 +412,7 @@ export class PdfSession {
       page = await document.getPage(index);
       const items = await this.#readTextItems(page);
       const pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
+      const content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
       let annotations: PdfAnnotation[] = [];
       try {
         const values = (await page.getAnnotations?.({ intent: "display" })) ?? [];
@@ -352,12 +432,37 @@ export class PdfSession {
       } catch {
         annotations = [];
       }
-      return { type: "page", index, lines: pageLines, annotations };
+      return { type: "page", index, lines: pageLines, annotations, ...(content === undefined ? {} : { content }) };
     } catch (error) {
       return { type: "page-error", index, ...describe(error) };
     } finally {
       page?.cleanup();
     }
+  }
+
+  /** What a page with no text paints, read from the file's objects; undefined when the file cannot be scanned. */
+  async #pageContent(page: PdfPage): Promise<PageContent | undefined> {
+    const ref = page.ref;
+    if (ref === undefined || ref === null) return undefined;
+    try {
+      return (await this.#contentScanner())?.page(ref.num) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async #contentScanner(): Promise<PageContentScanner | null> {
+    if (this.#scanner !== undefined) return this.#scanner;
+    let bytes = this.#bytes;
+    const path = this.#input.path;
+    if (bytes === undefined && path !== undefined && (await stat(path)).size <= CONTENT_SCAN_LIMIT) {
+      bytes = new Uint8Array(await readFile(path));
+    }
+    if (bytes === undefined) return (this.#scanner = null);
+    const index = this.#index ?? indexObjects(latin1(bytes));
+    const decrypt = /\/Encrypt\b/.test(index.text) ? streamDecryptor(index.text, this.#input.password ?? "") : null;
+    this.#scanner = new PageContentScanner(index, decrypt);
+    return this.#scanner;
   }
 
   /**

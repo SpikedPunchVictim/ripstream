@@ -26,6 +26,11 @@ const OBJECT = /(?<![0-9])(\d{1,7})\s+(\d{1,5})\s+obj\b/g;
  * decrypting first).
  */
 export function recoverDocument(data: Uint8Array): Uint8Array | null {
+  return recoverDocumentDetailed(data)?.data ?? null;
+}
+
+/** As recoverDocument, also saying whether object-stream members were appended. */
+export function recoverDocumentDetailed(data: Uint8Array): { readonly data: Uint8Array; readonly inlined: boolean } | null {
   const text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("latin1");
   if (/\/Encrypt\b/.test(text)) return null;
   const extra = inlineObjectStreams(text);
@@ -38,7 +43,7 @@ export function recoverDocument(data: Uint8Array): Uint8Array | null {
   const result = new Uint8Array(data.byteLength + tail.byteLength);
   result.set(data);
   result.set(tail, data.byteLength);
-  return result;
+  return { data: result, inlined: extra.length > 0 };
 }
 
 function lastCatalog(text: string): { num: string; gen: string } | null {

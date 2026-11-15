@@ -181,3 +181,36 @@ export function xmpPacket(body: string, attributes = ""): string {
     `</rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>`
   );
 }
+
+/**
+ * A PDF holding `objects` (numbered from 1, the first the catalog) with a correct classic xref table, as latin1 text so
+ * a test can damage it. `trailer` adds entries to the trailer dictionary.
+ */
+export function classicPdf(objects: readonly string[], trailer = ""): string {
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(out.length);
+    out += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R${trailer} >>\nstartxref\n${xref}\n%%EOF\n`;
+  return out;
+}
+
+/** A content stream object for `content`, uncompressed. */
+export function streamObject(content: string, dictionary = ""): string {
+  return `<< /Length ${content.length}${dictionary} >>\nstream\n${content}\nendstream`;
+}
+
+/** Objects 1-5 of a one-page document showing `text` in Helvetica: catalog, pages, page, content, font. */
+export function onePageObjects(text: string): string[] {
+  return [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    streamObject(`BT /F1 24 Tf 72 700 Td (${text}) Tj ET`),
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+}
