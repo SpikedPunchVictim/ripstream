@@ -159,6 +159,7 @@ export interface WireParseOptions {
   readonly limits?: Partial<ParseLimits>;
   readonly onDocumentFailure?: "throw" | "record";
   readonly onOutputLimit?: "throw" | "truncate";
+  readonly onEmbeddedLimit?: "throw" | "truncate";
   readonly handlerType?: HandlerType;
   readonly unpackBytes?: number;
   readonly segments?: boolean;
@@ -174,6 +175,7 @@ const PARSE_OPTION_FIELDS = {
   limits: "copied",
   onDocumentFailure: "copied",
   onOutputLimit: "copied",
+  onEmbeddedLimit: "copied",
   handlerType: "copied",
   unpackBytes: "copied",
   segments: "copied",
