@@ -1,4 +1,5 @@
 import {
+  EncryptedDocumentError,
   LimitExceededError,
   MalformedDocumentError,
   MediaType,
@@ -19,7 +20,7 @@ import {
   readDouble,
   readUInt16,
   readUInt32,
-} from "./excel-binary.ts";
+} from "./biff-bytes.ts";
 import { javaDoubleString } from "@spikedpunch/ripstream-core";
 
 const TYPES = [
@@ -30,7 +31,7 @@ const TYPES = [
   "application/vnd.ms-excel.workspace.4",
 ];
 
-type Biff = 2 | 3 | 4;
+type Biff = 2 | 3 | 4 | 5;
 
 /** The BOF record id that opens a stream of each BIFF version. */
 const BOF_IDS = new Map<number, Biff>([
@@ -39,13 +40,25 @@ const BOF_IDS = new Map<number, Biff>([
   [0x0409, 4],
 ]);
 
-type CellKind = "integer" | "number" | "label" | "formula" | "string" | "rk" | "codepage";
+type CellKind = "integer" | "number" | "label" | "formula" | "string" | "rk" | "codepage" | "sheet" | "filepass";
 
 /*
  * Record ids per version. BIFF2 numbers its records from 0x0001; BIFF3 and BIFF4 add 0x0200 (and BIFF4 moves FORMULA to
  * 0x0406). A record of another version's id in the stream is not text and is passed over.
  */
 const CELL_IDS: Record<Biff, ReadonlyMap<number, CellKind>> = {
+  // BIFF5 and BIFF7 (Excel 5 and 95, a stream named Book in an OLE2 container): BIFF4's ids but for the formula's own, and a
+  // BOUNDSHEET for each sheet, which OldExcelExtractor writes as a "Sheet:" line.
+  5: new Map([
+    [0x0203, "number"],
+    [0x0204, "label"],
+    [0x0006, "formula"],
+    [0x0207, "string"],
+    [0x027e, "rk"],
+    [0x0042, "codepage"],
+    [0x0085, "sheet"],
+    [0x002f, "filepass"],
+  ]),
   2: new Map([
     [0x0002, "integer"],
     [0x0003, "number"],
@@ -126,27 +139,49 @@ export class OldExcelParser implements Parser {
     const version = biffVersion(data);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    for (const text of this.#cellTexts(data, version, ctx)) {
-      for (const line of linesOf(text)) await writeParagraph(xhtml, line);
-    }
+    await writeCellLines(xhtml, cellTexts(data, version, ctx, this.#maxCells, this.#maxRecords));
     await xhtml.endDocument();
   }
+}
 
-  /** The text of each cell, in file order, bounded by the bytes present, the record cap and the cell cap. */
-  *#cellTexts(data: Uint8Array, version: Biff, ctx: ParseContext): Generator<string> {
-    const tick = signalCheckpoint(ctx, 256);
-    const kinds = CELL_IDS[version];
-    const state: ReadState = { codepage: DEFAULT_CODEPAGE, stringPending: false };
-    let cells = 0;
-    for (const record of readRecords(data, this.#maxRecords)) {
-      tick();
-      const kind = kinds.get(record.id);
-      if (kind === undefined) continue;
-      const text = textOf(kind, version, record, state);
-      if (text === undefined) continue;
-      if (++cells > this.#maxCells) throw new LimitExceededError(`Excel sheet exceeds ${this.#maxCells} cells`);
-      yield text;
-    }
+/**
+ * What OldExcelExtractor writes for the Book stream of a BIFF5 or BIFF7 workbook in an OLE2 container (Tika's OfficeParser
+ * reads a container that has Book and no Workbook that way): a line for each sheet name, then a line for each cell.
+ */
+export async function writeBiff5Text(
+  xhtml: XHTMLContentHandler,
+  book: Uint8Array,
+  ctx: ParseContext,
+): Promise<void> {
+  await writeCellLines(xhtml, cellTexts(book, 5, ctx, MAX_SHEET_CELLS, MAX_BIFF_RECORDS));
+}
+
+async function writeCellLines(xhtml: XHTMLContentHandler, texts: Iterable<string>): Promise<void> {
+  for (const text of texts) {
+    for (const line of linesOf(text)) await writeParagraph(xhtml, line);
+  }
+}
+
+/** The text of each cell, in file order, bounded by the bytes present, the record cap and the cell cap. */
+function* cellTexts(
+  data: Uint8Array,
+  version: Biff,
+  ctx: ParseContext,
+  maxCells: number,
+  maxRecords: number,
+): Generator<string> {
+  const tick = signalCheckpoint(ctx, 256);
+  const kinds = CELL_IDS[version];
+  const state: ReadState = { codepage: DEFAULT_CODEPAGE, stringPending: false };
+  let cells = 0;
+  for (const record of readRecords(data, maxRecords, version === 5)) {
+    tick();
+    const kind = kinds.get(record.id);
+    if (kind === undefined) continue;
+    const text = textOf(kind, version, record, state);
+    if (text === undefined) continue;
+    if (++cells > maxCells) throw new LimitExceededError(`Excel sheet exceeds ${maxCells} cells`);
+    yield text;
   }
 }
 
@@ -158,10 +193,12 @@ function biffVersion(data: Uint8Array): Biff {
 }
 
 /** The records of a stream, each taken from the bytes present: one that runs past the end is malformed. */
-function* readRecords(data: Uint8Array, maxRecords: number): Generator<BiffRecord> {
+function* readRecords(data: Uint8Array, maxRecords: number, padded: boolean): Generator<BiffRecord> {
   let offset = 0;
   let count = 0;
   while (offset < data.byteLength) {
+    // A stream of an OLE2 container ends in the padding of its last sector, which may be too short for a header.
+    if (padded && offset + 4 > data.byteLength) return;
     if (offset + 4 > data.byteLength) throw new MalformedDocumentError(`BIFF record header cut short at byte ${offset}`);
     const id = readUInt16(data, offset);
     const end = offset + 4 + readUInt16(data, offset + 2);
@@ -179,6 +216,15 @@ function textOf(kind: CellKind, version: Biff, record: BiffRecord, state: ReadSt
   // The value follows the cell's row and column and, in BIFF2, three attribute bytes, in BIFF3 and 4, a two-byte XF index.
   const valueAt = version === 2 ? 7 : 6;
   switch (kind) {
+    case "filepass":
+      throw new EncryptedDocumentError("Unable to process: document is encrypted");
+    case "sheet": {
+      // Offset of the sheet's records (4 bytes), visibility and type (1 each), then a one-byte length and the name.
+      requireBytes(record, 7);
+      const length = record.data[6]!;
+      requireBytes(record, 7 + length);
+      return `Sheet: ${readAnsi(record.data, 7, length, state.codepage)}`;
+    }
     case "codepage":
       requireBytes(record, 2);
       state.codepage = readUInt16(record.data, 0);

@@ -11,7 +11,9 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
+import { MAX_BIFF_RECORDS, MAX_SHEET_CELLS, decodeRk, readAnsi, readDouble, readUInt16, readUInt32 } from "./biff-bytes.ts";
 import { CompoundFile, hasSignature, isEncryptedCompound } from "./cfb.ts";
+import { writeBiff5Text } from "./old-excel.ts";
 import {
   BUILTIN_NUMBER_FORMATS,
   formatExcelDate,
@@ -96,9 +98,18 @@ export class ExcelBinaryParser implements Parser {
     // HSSF's event stream fails only when it needs bytes the sector chain does not have, so a chain cut short after the last
     // sheet's EOF is read as it is (Tika 4.2.0, an .xls whose Workbook size was declared 4096 past its chain: the whole text).
     const { bytes: workbook, truncated } = compound.readUpTo(name);
+    const xhtml = new XHTMLContentHandler(handler, metadata);
+    // Tika's OfficeParser reads a container that has Book and no Workbook with POI's OldExcelExtractor, which writes the
+    // sheet names and then a line for each cell, numbers as Java writes a double. A BIFF8 stream under that name is read
+    // as BIFF8 here: Tika's text for it is mostly garbled (it reads the 16-bit names and strings as 8-bit).
+    if (name === "Book" && !isBiff8(workbook)) {
+      await xhtml.startDocument();
+      await writeBiff5Text(xhtml, workbook, ctx);
+      await xhtml.endDocument();
+      return;
+    }
     const sheets = readWorkbook(workbook, truncated);
     const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
-    const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const sheet of sheets) {
       await xhtml.startElement("div", "class", "sheet");
@@ -131,13 +142,14 @@ interface Sheet {
   readonly rowNumbers: readonly number[];
 }
 
+/** Whether the stream opens with the BOF of a BIFF8 workbook: BOF 0x0809, version 0x0600. */
+function isBiff8(workbook: Uint8Array): boolean {
+  return readUInt16(workbook, 0) === 0x0809 && readUInt16(workbook, 4) >= 0x0600;
+}
+
 function readWorkbook(workbook: Uint8Array, truncated: boolean): Sheet[] {
   const records = readRecords(workbook);
-  const first = records[0];
-  const biff8 =
-    first !== undefined &&
-    first.type === 0x0809 &&
-    readUInt16(first.data, 0) >= 0x0600;
+  const biff8 = isBiff8(workbook);
 
   let codepage = 1252;
   const boundSheets: BoundSheet[] = [];
@@ -453,11 +465,6 @@ function readSheet(
 }
 
 const MAX_COLUMNS = 16_384;
-/** Cap on materialized (real plus padding) cells per sheet. */
-export const MAX_SHEET_CELLS = 1_000_000;
-/** Cap on the BIFF records of one stream; OldExcelParser shares it. */
-export const MAX_BIFF_RECORDS = 2_000_000;
-
 function toRows(
   cells: Map<number, Map<number, Cell>>,
   formats: Map<number, string>,
@@ -521,18 +528,6 @@ function dateFmt(
   return custom !== undefined && isDateFormat(custom);
 }
 
-export function decodeRk(rk: number): number {
-  let value: number;
-  if ((rk & 0x02) !== 0) {
-    value = rk >> 2;
-  } else {
-    const buffer = new ArrayBuffer(8);
-    new DataView(buffer).setUint32(4, (rk & 0xfffffffc) >>> 0, true);
-    value = new DataView(buffer).getFloat64(0, true);
-  }
-  return (rk & 0x01) !== 0 ? value / 100 : value;
-}
-
 function readBiff8String(
   data: Uint8Array,
   offset: number,
@@ -549,35 +544,6 @@ function readBiff8String(
     );
   }
   return readAnsi(data, position, length, codepage);
-}
-
-export function readAnsi(
-  data: Uint8Array,
-  offset: number,
-  length: number,
-  codepage: number,
-): string {
-  const bytes = data.subarray(offset, offset + length);
-  try {
-    return new TextDecoder(encodingFor(codepage)).decode(bytes);
-  } catch {
-    return new TextDecoder("windows-1252").decode(bytes);
-  }
-}
-
-function encodingFor(codepage: number): string {
-  if (codepage === 65001) return "utf-8";
-  // CODEPAGE 1200 (UTF-16) is what every Excel 97+ file declares. It describes the
-  // uncompressed strings, which carry their own flag; an 8-bit ("compressed") string
-  // is Latin-1, never UTF-16 (POI: StringUtil.getFromCompressedUnicode).
-  if (codepage === 1200) return "windows-1252";
-  if (codepage === 932) return "shift_jis";
-  if (codepage === 936) return "gbk";
-  if (codepage === 949) return "euc-kr";
-  if (codepage === 950) return "big5";
-  return codepage >= 1250 && codepage <= 1258
-    ? `windows-${codepage}`
-    : "windows-1252";
 }
 
 // ---------------------------------------------------------------------------
@@ -700,26 +666,6 @@ class ChunkCursor {
     }
     return this.#chunk < this.#chunks.length;
   }
-}
-
-export function readDouble(data: Uint8Array, offset: number): number {
-  return new DataView(data.buffer, data.byteOffset + offset, 8).getFloat64(
-    0,
-    true,
-  );
-}
-
-export function readUInt16(data: Uint8Array, offset: number): number {
-  return (data[offset] ?? 0) | ((data[offset + 1] ?? 0) << 8);
-}
-
-export function readUInt32(data: Uint8Array, offset: number): number {
-  return (
-    (data[offset] ?? 0) |
-    ((data[offset + 1] ?? 0) << 8) |
-    ((data[offset + 2] ?? 0) << 16) |
-    ((data[offset + 3] ?? 0) << 24)
-  ) >>> 0;
 }
 
 function legacyBiffText(data: Uint8Array): string {

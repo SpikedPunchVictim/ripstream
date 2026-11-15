@@ -74,7 +74,7 @@ export class OleContainerParser implements Parser {
         ? defaultOfficePasswords()
         : [supplied, ...defaultOfficePasswords()];
       const decrypted = decryptOoxmlPackage(compound.read("EncryptionInfo"), encrypted, passwords);
-      if (decrypted === null) throw new EncryptedDocumentError("Password-protected OOXML package: wrong password");
+      if (decrypted === null) throw new EncryptedDocumentError("Unable to process: document is encrypted");
       if (decrypted.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
         throw new LimitExceededError(`Decrypted package is ${decrypted.byteLength} bytes, exceeding the per-document limit`);
       }

@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Excel 5/95 workbooks read as Tika reads them (`tikajs-cigc`)
+
+Changed: an `.xls` in an OLE2 container whose workbook stream is named `Book` (BIFF5 and BIFF7, Excel 5 and 95) is no longer
+read as a BIFF8 table. Tika's OfficeParser reads it with POI's OldExcelExtractor, and so does ripstream now: a `Sheet: name`
+line for each sheet, then a line for each cell, numbers as Java writes a double (`1.0`), one paragraph for each line. A
+BIFF8 stream under the name `Book` is still read as BIFF8 (Tika's text for it is garbled), and a BIFF5 stream named `Workbook`
+still is read (Tika fails on it). An OOXML package in an OLE2 container that cannot be decrypted now fails with Tika's message,
+`Unable to process: document is encrypted`.
+
 ### PDF segments: page labels and form fields (`tikajs-ex78`)
 
 Added: with `segments` on, a PDF page's `/PageLabels` label ("iv", "A-3") is an additive first label of the segments on that page

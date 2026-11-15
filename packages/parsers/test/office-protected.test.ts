@@ -24,6 +24,7 @@ test("an encrypted OOXML package with the wrong password fails as encrypted", as
   const bytes = new Uint8Array(await readFile(new URL(FILES[0]!, FIXTURES)));
   await assert.rejects(
     createRipstream().parse(bytes, { filename: FILES[0]!, password: "not-the-password" }),
-    EncryptedDocumentError,
+    // Tika 4.2.0 (no password): EncryptedDocumentException "Unable to process: document is encrypted" (tikajs-cigc).
+    (error) => error instanceof EncryptedDocumentError && error.message === "Unable to process: document is encrypted",
   );
 });
