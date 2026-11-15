@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-8c0w (F21): a valid incremental update deleting page 2 and its annotation (they still name each other in the file) was reported as damaged (tk:pdf:repaired) and sent through the rebuild; only objects that live objects refer to count as freed-but-referenced.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 40 >>\nstream\nBT /F1 24 Tf 72 700 Td (Kept page) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> /Annots [8 0 R] >>\nendobj\n7 0 obj\n<< /Length 43 >>\nstream\nBT /F1 24 Tf 72 700 Td (Deleted page) Tj ET\nendstream\nendobj\n8 0 obj\n<< /Type /Annot /Subtype /Text /Rect [0 0 1 1] /P 6 0 R /Contents (note) >>\nendobj\nxref\n0 9\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000121 00000 n \n0000000247 00000 n \n0000000337 00000 n \n0000000434 00000 n \n0000000576 00000 n \n0000000669 00000 n \ntrailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n760\n%%EOF\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\nxref\n0 1\n0000000006 65535 f \n2 1\n0000001003 00000 n \n6 3\n0000000007 00001 f \n0000000008 00001 f \n0000000000 00001 f \ntrailer\n<< /Size 9 /Root 1 0 R /Prev 760 >>\nstartxref\n1060\n%%EOF\n",
+    "filename": "pdf-incremental-delete-is-not-damage.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Kept page"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Deleted page"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:repaired"
+    }
+  ]
+}

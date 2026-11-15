@@ -209,3 +209,61 @@ test("rebuildPdf closes the dictionaries and arrays of an object that is cut off
   const rebuilt = latin1(rebuildPdf(bytes(whole.slice(0, whole.indexOf(" % note") + " % note".length)))!.data);
   assert.match(rebuilt, /3 0 obj\n<< \/Type \/Page \/Parent 2 0 R \/Resources << \/Font << \/F1 4 0 R >> >> \/Annots \[ 9 0 R \] >>\nendobj/);
 });
+
+test("indexObjects reads the stream keyword after the dictionary, not the word inside a name or a string (tikajs-8c0w)", () => {
+  const text =
+    "1 0 obj\n<< /BaseFont /BitstreamVeraSans /Title (a stream of text) >>\nendobj\n" +
+    "2 0 obj\n<< /Length 5 >>\nstream\nhello\nendstream\nendobj\n" +
+    "3 0 obj\n<< /Type /Page >>\nendobj\n";
+  const index = indexObjects(text);
+  assert.equal(index.objects.get(1)!.stream, null);
+  assert.ok(index.objects.get(1)!.closed);
+  assert.match(index.objects.get(1)!.body, /BitstreamVeraSans/);
+  const data = index.objects.get(2)!.stream!;
+  assert.equal(text.slice(data.start, data.end), "hello");
+  assert.ok(index.objects.has(3), "the object after a font named with the word is still indexed");
+});
+
+test("indexObjects still finds the stream of an object whose dictionary is cut off before it", () => {
+  const text = "1 0 obj\n<< /Length 5 /Filter /X \nstream\nhello\nendstream\nendobj\n2 0 obj\n<< >>\nendobj\n";
+  const index = indexObjects(text);
+  const data = index.objects.get(1)!.stream!;
+  assert.equal(text.slice(data.start, data.end), "hello");
+  assert.ok(index.objects.has(2));
+});
+
+test("indexObjects takes time linear in the objects when the word stream is rare", () => {
+  const text = "1 0 obj\n<< /Length 5 >>\nstream\nhello\nendstream\nendobj\n" + "9 0 obj\nendobj\n".repeat(300_000);
+  const started = performance.now();
+  const index = indexObjects(text);
+  assert.ok(index.objects.has(1));
+  // Quadratic (a scan to the end of the text from every object) takes minutes here; linear takes well under a second.
+  assert.ok(performance.now() - started < 20_000, "indexing took too long");
+});
+
+test("diagnosePdf does not call a deleted page damage: freed objects that only name each other are not referenced (tikajs-8c0w)", () => {
+  const page = (contents: number, extra = ""): string =>
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contents} 0 R${extra} >>`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>",
+    page(4),
+    streamObject("q Q"),
+    "<< /Type /Font >>",
+    page(7, " /Annots [8 0 R]"),
+    streamObject("q Q"),
+    "<< /Type /Annot /P 6 0 R >>",
+  ];
+  const update = (kids: string): string => {
+    let text = classicPdf(objects);
+    const previous = Number(/startxref\n(\d+)/.exec(text)![1]);
+    const at = text.length;
+    text += `2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count 1 >>\nendobj\n`;
+    const xref = text.length;
+    const entry = (offset: number): string => `${String(offset).padStart(10, "0")} 00000 n \n`;
+    return `${text}xref\n0 1\n0000000006 65535 f \n2 1\n${entry(at)}6 3\n0000000007 00001 f \n0000000008 00001 f \n0000000000 00001 f \ntrailer\n<< /Size 9 /Root 1 0 R /Prev ${previous} >>\nstartxref\n${xref}\n%%EOF\n`;
+  };
+  assert.deepEqual(diagnosePdf(update("3 0 R")).freedReferenced, []);
+  // A live page tree that still names the freed page is damage.
+  assert.deepEqual(diagnosePdf(update("3 0 R 6 0 R")).freedReferenced, [6]);
+});

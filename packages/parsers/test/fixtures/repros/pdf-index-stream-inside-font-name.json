@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-8c0w (F13): the object index took the word `stream` inside /BaseFont /BitstreamVeraSans for the stream keyword, so the font object's data ran on to the next endstream and swallowed the objects between (page 2 was lost). The keyword is now read where the syntax puts it, after the object's dictionary. startxref removed so the file goes through the brute-force index.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 48 >>\nstream\nBT /F1 24 Tf 72 700 Td (First page secret) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /BitstreamVeraSans /Encoding /WinAnsiEncoding >>\nendobj\n6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n7 0 obj\n<< /Length 49 >>\nstream\nBT /F1 24 Tf 72 700 Td (Second page secret) Tj ET\nendstream\nendobj\nxref\n0 8\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000121 00000 n \n0000000247 00000 n \n0000000345 00000 n \n0000000450 00000 n \n0000000576 00000 n \ntrailer\n<< /Size 8 /Root 1 0 R >>\n",
+    "filename": "pdf-index-stream-inside-font-name.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "First page secret"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Second page secret"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.xmpTPg:NPages",
+      "value": "2"
+    }
+  ]
+}

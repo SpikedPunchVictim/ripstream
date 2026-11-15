@@ -221,10 +221,7 @@ export function diagnosePdf(text: string, given?: ObjectIndex): PdfDiagnosis {
   let freedReferenced: number[] = [];
   if (freed.size > 0) {
     index ??= indexObjects(text);
-    const referenced = new Set<number>();
-    for (const object of index.objects.values()) {
-      for (const ref of referencesIn(object.body)) if (ref.num !== object.num) referenced.add(ref.num);
-    }
+    const referenced = referencedObjects(index, freed);
     freedReferenced = [...freed].filter((num) => index!.objects.has(num) && referenced.has(num)).sort((a, b) => a - b);
     if (freedReferenced.length > 0) {
       causes.push(`xref marks referenced objects free (${freedReferenced.slice(0, 8).join(", ")}${freedReferenced.length > 8 ? ", ..." : ""})`);
@@ -243,6 +240,32 @@ export function diagnosePdf(text: string, given?: ObjectIndex): PdfDiagnosis {
     }
   }
   return { causes, freedReferenced, xrefUnusable };
+}
+
+/**
+ * The object numbers a reader would ask for: the catalog, and what the objects reachable from it refer to. An object the
+ * xref marks free is not followed (a page an incremental update deleted still names its annotation, and the annotation the
+ * page), so freed objects that only refer to each other are not "referenced". Without a catalog, every object that is not
+ * free counts as reachable.
+ */
+function referencedObjects(index: ObjectIndex, freed: ReadonlySet<number>): Set<number> {
+  const referenced = new Set<number>();
+  const catalog = findCatalog(index);
+  const pending: number[] = catalog === null ? [...index.objects.keys()] : [catalog.num];
+  if (catalog !== null) referenced.add(catalog.num);
+  const visited = new Set<number>();
+  for (let num = pending.pop(); num !== undefined; num = pending.pop()) {
+    if (visited.has(num) || freed.has(num)) continue;
+    visited.add(num);
+    const object = index.objects.get(num);
+    if (object === undefined) continue;
+    for (const ref of referencesIn(object.body)) {
+      if (ref.num === num) continue;
+      referenced.add(ref.num);
+      pending.push(ref.num);
+    }
+  }
+  return referenced;
 }
 
 /** Where the xref that `startxref` names starts (an `xref` table or an xref stream object), or -1. */

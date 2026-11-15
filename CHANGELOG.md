@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: PDF object index and freed objects (`tikajs-8c0w`, F13 F15 F21)
+
+Fixed: the PDF object index (used by the rebuild) took the word `stream` anywhere between `obj` and `endobj` for the stream
+keyword, including inside a name (`/BaseFont /BitstreamVeraSans`) or a string, so that object's data ran on to the next
+`endstream` over the objects between (a page was lost, or a deleted one came back). The keyword is now read after the
+object's dictionary; a dictionary that is cut off before it falls back to the first standalone `stream`. This also makes
+indexing linear in the object count (the unbounded search per object was quadratic when the word is rare). A valid
+incremental update that deletes objects was reported as damaged (`tk:pdf:repaired`, steps brute-force-scan...) because a
+deleted page and its annotation named each other; only objects reachable from the catalog through live objects now count
+as freed-but-referenced.
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

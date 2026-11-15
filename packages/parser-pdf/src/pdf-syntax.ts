@@ -17,7 +17,7 @@ function isDelimiter(char: string | undefined): boolean {
   return char !== undefined && "()<>[]{}/%".includes(char);
 }
 
-function skipSpace(text: string, at: number, end: number): number {
+export function skipSpace(text: string, at: number, end: number): number {
   while (at < end) {
     const code = text.charCodeAt(at);
     if (code === 0x25) {
@@ -32,7 +32,7 @@ function skipSpace(text: string, at: number, end: number): number {
 }
 
 /** The index just past the value starting at `at`, or `end` when the value is cut off. */
-function skipValue(text: string, at: number, end: number, depth: number): number {
+export function skipValue(text: string, at: number, end: number, depth: number): number {
   if (depth > MAX_DEPTH) return end;
   const char = text[at];
   if (char === "<" && text[at + 1] === "<") {

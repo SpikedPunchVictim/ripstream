@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-8c0w (F13+F21): a valid file whose update deletes page 3 (objects 8-10 freed), with a font named BitstreamVeraSans: the update was reported as damage, the rebuild swallowed page 2 at the word in the font name and the deleted page came back.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 6 0 R 8 0 R] /Count 3 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 41 >>\nstream\nBT /F1 24 Tf 72 700 Td (First page) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /BitstreamVeraSans /Encoding /WinAnsiEncoding >>\nendobj\n6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n7 0 obj\n<< /Length 49 >>\nstream\nBT /F1 24 Tf 72 700 Td (Second page secret) Tj ET\nendstream\nendobj\n8 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 5 0 R >> >> /Annots [10 0 R] >>\nendobj\n9 0 obj\n<< /Length 43 >>\nstream\nBT /F1 24 Tf 72 700 Td (Deleted page) Tj ET\nendstream\nendobj\n10 0 obj\n<< /Type /Annot /Subtype /Text /Rect [0 0 1 1] /P 8 0 R /Contents (note) >>\nendobj\nxref\n0 11\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000127 00000 n \n0000000253 00000 n \n0000000344 00000 n \n0000000449 00000 n \n0000000575 00000 n \n0000000674 00000 n \n0000000817 00000 n \n0000000910 00000 n \ntrailer\n<< /Size 11 /Root 1 0 R >>\nstartxref\n1002\n%%EOF\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>\nendobj\nxref\n0 1\n0000000008 65535 f \n2 1\n0000001288 00000 n \n8 3\n0000000009 00001 f \n0000000010 00001 f \n0000000000 00001 f \ntrailer\n<< /Size 11 /Root 1 0 R /Prev 1002 >>\nstartxref\n1351\n%%EOF\n",
+    "filename": "pdf-incremental-delete-font-name-stream.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Second page secret"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Deleted page"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:repaired"
+    }
+  ]
+}

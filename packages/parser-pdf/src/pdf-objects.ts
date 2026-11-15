@@ -1,5 +1,5 @@
 import { nextOccurrence } from "./pdf-preflight.ts";
-import { decodeStream, dictEntries, type DecodeBudget } from "./pdf-syntax.ts";
+import { decodeStream, dictEntries, skipSpace, skipValue, type DecodeBudget } from "./pdf-syntax.ts";
 
 /**
  * A brute-force index of a PDF's objects, found by scanning for `N G obj` the way PDFBox's lenient parser does, without
@@ -44,6 +44,7 @@ export function indexObjects(text: string, budget: DecodeBudget = { left: MAX_IN
   const objects = new Map<number, PdfObject>();
   const nextEndobj = nextOccurrence(text, "endobj");
   const nextEndstream = nextOccurrence(text, "endstream");
+  const nextStream = nextOccurrence(text, "stream");
   const headers = new RegExp(HEADER.source, "g");
   const peek = new RegExp(HEADER.source, "g");
   let match: RegExpExecArray | null;
@@ -54,7 +55,7 @@ export function indexObjects(text: string, budget: DecodeBudget = { left: MAX_IN
     const bound = following?.index ?? text.length;
     const endobj = nextEndobj(start);
     const close = endobj !== -1 && endobj < bound ? endobj : -1;
-    const streamAt = streamKeyword(text, start, close === -1 ? bound : close);
+    const streamAt = streamKeyword(text, start, close === -1 ? bound : close, nextStream);
     let object: PdfObject;
     if (streamAt === -1) {
       object = {
@@ -121,11 +122,33 @@ export function indexObjects(text: string, budget: DecodeBudget = { left: MAX_IN
   return { text, headerAt: head, objects, badObjectStreams, inlined };
 }
 
-/** The `stream` keyword that starts an object's data, searched for between `from` and `to`, or -1. */
-function streamKeyword(text: string, from: number, to: number): number {
-  for (let at = text.indexOf("stream", from); at !== -1 && at < to; at = text.indexOf("stream", at + 1)) {
-    if (text.startsWith("endstream", at - 3)) continue;
-    return at;
+/** True for a character that cannot be part of a PDF regular token: white space, a delimiter, or the end of the text. */
+function endsToken(char: string | undefined): boolean {
+  return char === undefined || /[\s\0()<>[\]{}/%]/.test(char);
+}
+
+/**
+ * The `stream` keyword that starts an object's data, searched for between `from` and `to`, or -1.
+ *
+ * The keyword is where the syntax puts it: right after the object's first value, its dictionary. The word inside a name
+ * or a string (`/BaseFont /BitstreamVeraSans`, `(a stream of text)`) is not the keyword, and taking it for one made the
+ * data run on to the next `endstream`, over the objects in between. Only when the dictionary is cut off (it never
+ * closes before `to`) is there no syntax to follow, and the first standalone `stream` is taken, as before.
+ */
+function streamKeyword(text: string, from: number, to: number, nextStream: (from: number) => number): number {
+  const at = skipSpace(text, from, to);
+  if (at >= to) return -1;
+  // One character past `to` tells a value that ends exactly at `to` from one that is cut off there.
+  const probe = Math.min(text.length, to + 1);
+  const end = skipValue(text, at, to, 0);
+  const cutOff = end >= to && probe > to && skipValue(text, at, probe, 0) > to;
+  if (!cutOff) {
+    const keyword = skipSpace(text, end, to);
+    return text.startsWith("stream", keyword) && keyword < to ? keyword : -1;
+  }
+  for (let found = nextStream(at); found !== -1 && found < to; found = nextStream(found + 1)) {
+    if (text.startsWith("endstream", found - 3)) continue;
+    if (endsToken(text[found - 1]) && endsToken(text[found + "stream".length])) return found;
   }
   return -1;
 }
