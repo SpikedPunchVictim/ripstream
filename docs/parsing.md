@@ -28,6 +28,48 @@ const records = await ripstream.parseRecursive(bytes);
 const json = serializeRmeta(records, { typedMetadata: true });
 ```
 
+### Paths of embedded documents
+
+Each record names where its document is twice:
+
+- `embeddedResourcePath`: a string, the names from the root down joined with `/`, runs of `/` collapsed
+  (`/zip-000.zip/data/export-0.csv`). The rmeta JSON carries it below the root as `tk:embedded-resource-path`
+  (`X-TIKA:embedded_resource_path`), byte for byte as Tika writes it. Because an archive entry's name may itself contain
+  `/`, the string cannot be split back into documents: `/a.zip/data/b.csv` is one entry `data/b.csv`, or an entry
+  `data` holding `b.csv`.
+- `pathParts`: the same path as a list, one `{ kind, name }` per document from the root down, each name whole.
+
+```ts
+records[1].pathParts;
+// [{ kind: "root", name: "zip-000.zip" }, { kind: "entry", name: "data/export-0.csv" }]
+```
+
+The grammar is closed:
+
+| kind       | where                         | name                                                                         |
+| ---------- | ----------------------------- | ---------------------------------------------------------------------------- |
+| `root`     | first part, and only there    | the filename the parse was given (`ParseOptions.filename`), else `document`  |
+| `entry`    | a member of an archive        | the member's name in the archive as written there (may contain `/`)           |
+| `embedded` | a resource inside a document  | the resource's `tk:resource-name` (an image, an attachment, an OLE object), else `embedded` |
+
+An archive is any parser that hands out members: zip, tar, gzip and the other compressors, cpio, ar, ISO 9660, Unix dump,
+AppleSingle, WARC and WACZ. A nested archive is an `entry` whose own children are `entry` parts; a document inside an
+archive is an `entry` whose children are `embedded`:
+
+```text
+/bundle.zip/docs/report.docx/image1.png
+[{ root, "bundle.zip" }, { entry, "docs/report.docx" }, { embedded, "image1.png" }]
+
+/zip-000.zip/nested/inner.zip/data/export-0.csv
+[{ root, "zip-000.zip" }, { entry, "nested/inner.zip" }, { entry, "data/export-0.csv" }]
+```
+
+Joining the names with `/` and collapsing runs of `/` gives `embeddedResourcePath`; the parts after the root, joined the
+same way, are `tk:embedded-resource-path`. `pathParts` crosses the isolation boundary (`IsolatedParseRecord.pathParts`)
+and is on the records the pipes engine hands its emitters. It is not written into the rmeta JSON, which stays
+Tika-shaped. A parser that calls the embedded document extractor marks its members as archive entries by setting
+`CONTEXT_KEYS.ARCHIVE_ENTRY` on its context first (`markArchiveEntries` of `@spikedpunch/ripstream-parser-archive`).
+
 ## Limits and cancellation
 
 ```ts

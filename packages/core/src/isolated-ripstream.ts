@@ -138,6 +138,7 @@ function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | u
     metadata: toMetadata(record.metadata),
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
+    ...(record.pathParts === undefined ? {} : { pathParts: record.pathParts }),
     depth: record.depth,
     mediaType: MediaType.parse(record.mediaType) ?? MediaType.OCTET_STREAM,
     exception: record.exception === null ? null : toException(record.exception),

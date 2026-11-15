@@ -165,6 +165,7 @@ function comparable(record: ParseRecord): unknown {
     metadata,
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
+    pathParts: record.pathParts,
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : { name: record.exception.name, message: record.exception.message },

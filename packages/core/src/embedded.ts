@@ -158,6 +158,7 @@ export class ParsingEmbeddedDocumentExtractor
     // each document's metadata and digests it in its own extractor.
     child.remove(CONTEXT_KEYS.DIGESTS);
     child.remove(CONTEXT_KEYS.CHARSET_HINT);
+    child.remove(CONTEXT_KEYS.ARCHIVE_ENTRY);
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);

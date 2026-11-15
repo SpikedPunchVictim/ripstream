@@ -3,6 +3,7 @@ import { AbortError, ParseTimeoutError } from "./errors.ts";
 import type { DigestSettings } from "./digest.ts";
 import { outputLimitIssue } from "./handlers/limits.ts";
 import type { Metadata } from "./metadata.ts";
+import type { PathPart } from "./recursive.ts";
 
 /**
  * Typed context key. The optional phantom field gives TypeScript the value
@@ -264,6 +265,14 @@ export const CONTEXT_KEYS = {
   EMBEDDED_COUNT: new ParseContextKey<number>("embedded-count"),
   /** The `tk:embedded-id-path` of the document being parsed ("" for the container). */
   EMBEDDED_ID_PATH: new ParseContextKey<string>("embedded-id-path"),
+  /** The `ParseRecord.pathParts` of the document being parsed (a recursive parse only). */
+  EMBEDDED_PATH_PARTS: new ParseContextKey<readonly PathPart[]>("embedded-path-parts"),
+  /**
+   * Set by an archive parser on its own context before it hands members to the embedded document extractor: what it
+   * extracts are entries of an archive (`kind: "entry"` in `ParseRecord.pathParts`), not resources embedded in a
+   * document. The extractors do not pass it on to a member's own parse.
+   */
+  ARCHIVE_ENTRY: new ParseContextKey<boolean>("archive-entry"),
   /** The digests to make (Tika's DigesterFactory in the ParseContext); AutoDetectParser reads it. Absent: none. */
   DIGESTS: new ParseContextKey<DigestSettings>("digests"),
   /** A password source for encrypted documents (Tika's PasswordProvider in the ParseContext). */

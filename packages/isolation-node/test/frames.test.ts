@@ -82,6 +82,16 @@ test("a record with an exception and code is accepted", () => {
   assert.deepEqual(frames(events)[1], { t: "record", record: { ...RECORD, exception } });
 });
 
+test("a record's pathParts are accepted, each name whole", () => {
+  const pathParts = [
+    { kind: "root", name: "zip-000.zip" },
+    { kind: "entry", name: "data/export-0.csv" },
+    { kind: "embedded", name: "image1.png" },
+  ];
+  const events = feedAll(recordsReader(), line(READY) + line({ t: "record", record: { ...RECORD, pathParts } }));
+  assert.deepEqual(frames(events)[1], { t: "record", record: { ...RECORD, pathParts } });
+});
+
 test("multiple frames in one chunk are all returned", () => {
   assert.equal(frames(feedAll(reader(), line(READY) + line(META) + line(DONE))).length, 3);
 });
@@ -286,6 +296,10 @@ const afterReady: [string, unknown][] = [
   ["record with extra record field", { t: "record", record: { ...RECORD, x: 1 } }],
   ["record with non-string content", { t: "record", record: { ...RECORD, content: 1 } }],
   ["record with non-string path", { t: "record", record: { ...RECORD, embeddedResourcePath: null } }],
+  ["record with pathParts not a list", { t: "record", record: { ...RECORD, pathParts: "/a.txt" } }],
+  ["record with a pathParts kind outside the set", { t: "record", record: { ...RECORD, pathParts: [{ kind: "folder", name: "a" }] } }],
+  ["record with a non-string pathParts name", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: 1 }] } }],
+  ["record with an extra pathParts field", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: "a", x: 1 }] } }],
   ["record with non-string mediaType", { t: "record", record: { ...RECORD, mediaType: 1 } }],
   ["record with negative depth", { t: "record", record: { ...RECORD, depth: -1 } }],
   ["record with float depth", { t: "record", record: { ...RECORD, depth: 0.5 } }],

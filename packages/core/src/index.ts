@@ -313,6 +313,8 @@ export {
 export {
   RecursiveParserWrapper,
   type ParseRecord,
+  type PathPart,
+  type PathPartKind,
 } from "./recursive.ts";
 export { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, digestBytes, digestKey, type DigestAlgorithm, type DigestDef, type DigestEncoding, type DigestSettings } from "./digest.ts";
 export { CONTENT_LENGTH, EMBEDDED_RESOURCE_TYPES, TEXT_HANDLER_TYPE, TIKA_KEYS } from "./tika-keys.ts";

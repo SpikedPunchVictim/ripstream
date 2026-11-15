@@ -1,0 +1,12 @@
+{
+  "description": "tikajs-0rze: a zip entry named data/export-0.csv is one entry part, not a folder and a file; the string path is unchanged",
+  "operation": "parseRecursive",
+  "input": { "file": "files/zip-000.zip", "filename": "zip-000.zip" },
+  "assertions": [
+    { "type": "equals", "field": "records.0.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"zip-000.zip\"}]" },
+    { "type": "equals", "field": "records.1.path", "value": "/zip-000.zip/data/export-0.csv" },
+    { "type": "equals", "field": "records.1.metadata.tk:embedded-resource-path", "value": "/data/export-0.csv" },
+    { "type": "equals", "field": "records.1.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"zip-000.zip\"},{\"kind\":\"entry\",\"name\":\"data/export-0.csv\"}]" },
+    { "type": "contains", "field": "records.1.text", "value": "PLANTED-ZIP-0001" }
+  ]
+}

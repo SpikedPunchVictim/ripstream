@@ -96,6 +96,7 @@ export async function parseEntry(
       (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as
         | EmbeddedDocumentExtractor
         | undefined) ?? new ParsingEmbeddedDocumentExtractor();
+    markArchiveEntries(ctx);
     await extractor.parseEmbedded(stream, handler, childMetadata, ctx);
   } catch (error) {
     if (error instanceof LimitExceededError || ctx.signal.aborted) throw error;
@@ -107,6 +108,16 @@ export async function parseEntry(
   } finally {
     await stream.close();
   }
+}
+
+/**
+ * Marks the context of an archive's parse: what it hands the embedded document extractor are entries of the archive
+ * (`kind: "entry"` in `ParseRecord.pathParts`). The mark is on the archive's own context, so it is set once for all of
+ * its members (and the shared embedded budget a plain parse creates on that context stays one); the extractor does not
+ * pass it on to a member's own parse.
+ */
+export function markArchiveEntries(ctx: ParseContext): void {
+  ctx.set(CONTEXT_KEYS.ARCHIVE_ENTRY, true);
 }
 
 export async function withXhtml(

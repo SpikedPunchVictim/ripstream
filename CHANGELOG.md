@@ -4,6 +4,18 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Structured paths for embedded documents (`tikajs-0rze`)
+
+Added, in `@spikedpunch/ripstream-core`: `ParseRecord.pathParts`, the record's path as a list of `{ kind, name }` from the
+root down (`kind` is `root`, `entry` for a member of an archive, or `embedded` for a resource inside a document), each name
+whole. `embeddedResourcePath` (`/zip-000.zip/data/export-0.csv`) cannot be split back into documents when an entry's name
+contains `/`; the parts can. The string, `tk:embedded-resource-path` and the rmeta JSON are unchanged. The parts cross the
+isolation boundary (`IsolatedParseRecord.pathParts`, validated by the frame reader) and ride on the records pipes emitters
+get. `CONTEXT_KEYS.ARCHIVE_ENTRY` and `CONTEXT_KEYS.EMBEDDED_PATH_PARTS` carry them through a parse; in
+`@spikedpunch/ripstream-parser-archive`, `markArchiveEntries(ctx)` is how an archive parser marks its members (zip, tar,
+gzip and the compressors, cpio, ar, ISO 9660, dump, AppleSingle, WARC and WACZ do). The fixture runner gains
+`operation: "parseRecursive"` with `records.<i>.<field>`. Grammar: `docs/parsing.md`, "Paths of embedded documents".
+
 ### Failed embedded children are marked, total metadata is capped, RTF writes lazily (`tikajs-4iu3`, `vaak`, `68os.73`)
 
 Fixed: mail, HTTP, archive entries, SQLite blobs, universal executables, TSD, OOXML parts and PDF attachments caught a failed

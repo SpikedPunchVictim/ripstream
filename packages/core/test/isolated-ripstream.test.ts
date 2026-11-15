@@ -132,6 +132,21 @@ test("parseRecursive: unpackBytes crosses in a records request only, and each re
   assert.equal("unpackBytes" in (plain.calls[0]?.request ?? {}), false);
 });
 
+test("parseRecursive: each record's pathParts come back as the child gave them", async () => {
+  const pathParts = [{ kind: "root", name: "a.zip" }, { kind: "entry", name: "data/b.csv" }] as const;
+  const answer: IsolatedParseResult = {
+    kind: "records",
+    records: [
+      { metadata: {}, content: "", embeddedResourcePath: "/a.zip", depth: 0, mediaType: "application/zip", exception: null },
+      { metadata: {}, content: "", embeddedResourcePath: "/a.zip/data/b.csv", pathParts, depth: 1, mediaType: "text/csv", exception: null },
+    ],
+  };
+  const { isolator } = fakeIsolator(answer);
+  const records = await createIsolatedRipstream({ isolator, detector }).parseRecursive(new Uint8Array(1));
+  assert.equal("pathParts" in (records[0] ?? {}), false, "a record the child sent without parts has none");
+  assert.deepEqual(records[1]?.pathParts, pathParts);
+});
+
 test("parse: absent options add nothing to the request", async () => {
   const { isolator, calls } = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1));

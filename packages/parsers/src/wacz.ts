@@ -18,6 +18,7 @@ import {
   type ParseContext,
   type Parser,
 } from "@spikedpunch/ripstream-core";
+import { markArchiveEntries } from "@spikedpunch/ripstream-parser-archive";
 import { boundedUnzip } from "@spikedpunch/ripstream-parser-office";
 import { readAll } from "./bytes.ts";
 
@@ -89,6 +90,7 @@ export class WACZParser implements Parser {
       if (!extractor.shouldParseEmbedded(embedded)) continue;
       const embeddedStream = await RipstreamInputStream.from(bytes, { context: ctx });
       try {
+        markArchiveEntries(ctx);
         await extractor.parseEmbedded(embeddedStream, xhtml, embedded, ctx);
       } catch (error) {
         if (isFatalParseError(error, ctx)) throw error;

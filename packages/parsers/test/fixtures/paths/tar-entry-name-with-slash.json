@@ -1,0 +1,10 @@
+{
+  "description": "tikajs-0rze: a tar member named data/export-0.csv is one entry part",
+  "operation": "parseRecursive",
+  "input": { "file": "files/tar-000.tar", "filename": "tar-000.tar" },
+  "assertions": [
+    { "type": "equals", "field": "records.1.path", "value": "/tar-000.tar/data/export-0.csv" },
+    { "type": "equals", "field": "records.1.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"tar-000.tar\"},{\"kind\":\"entry\",\"name\":\"data/export-0.csv\"}]" },
+    { "type": "contains", "field": "records.1.text", "value": "PLANTED-TAR-0003" }
+  ]
+}

@@ -147,6 +147,7 @@ function toWireRecord(record: ParseRecord): IsolatedParseRecord {
     metadata: metadataToRecord(record.metadata),
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
+    ...(record.pathParts === undefined ? {} : { pathParts: record.pathParts }),
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : wireException(record.exception),

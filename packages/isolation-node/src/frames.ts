@@ -4,6 +4,8 @@ import {
   type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedParseResult,
+  type PathPart,
+  type PathPartKind,
 } from "@spikedpunch/ripstream-core";
 
 /**
@@ -519,6 +521,7 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
     "metadata",
     "content",
     "embeddedResourcePath",
+    "pathParts",
     "depth",
     "mediaType",
     "exception",
@@ -528,6 +531,8 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
   if (typeof metadata === "string") return `record: ${metadata}`;
   if (typeof value.content !== "string") return "record.content must be a string";
   if (typeof value.embeddedResourcePath !== "string") return "record.embeddedResourcePath must be a string";
+  const pathParts = value.pathParts === undefined ? undefined : validatePathParts(value.pathParts);
+  if (typeof pathParts === "string") return pathParts;
   if (typeof value.mediaType !== "string") return "record.mediaType must be a string";
   if (typeof value.depth !== "number" || !Number.isSafeInteger(value.depth) || value.depth < 0) {
     return "record.depth must be a non-negative integer";
@@ -538,10 +543,30 @@ function validateRecord(value: unknown, limits: MetadataLimits): IsolatedParseRe
     metadata,
     content: value.content,
     embeddedResourcePath: value.embeddedResourcePath,
+    ...(pathParts === undefined ? {} : { pathParts }),
     depth: value.depth,
     mediaType: value.mediaType,
     exception,
   };
+}
+
+const PATH_PART_KINDS: readonly string[] = ["root", "entry", "embedded"] satisfies readonly PathPartKind[];
+
+/** `record.pathParts`: a list of `{ kind, name }`, the kind one of the closed set, the name a string. */
+function validatePathParts(value: unknown): PathPart[] | string {
+  if (!Array.isArray(value)) return "record.pathParts must be an array";
+  const parts: PathPart[] = [];
+  for (const part of value as unknown[]) {
+    if (!isObject(part)) return "record.pathParts[] must be objects";
+    const extra = onlyKeys(part, ["kind", "name"]);
+    if (extra !== null) return `record.pathParts[]: ${extra}`;
+    if (typeof part.kind !== "string" || !PATH_PART_KINDS.includes(part.kind)) {
+      return `record.pathParts[].kind must be one of ${PATH_PART_KINDS.join(", ")}`;
+    }
+    if (typeof part.name !== "string") return "record.pathParts[].name must be a string";
+    parts.push({ kind: part.kind as PathPartKind, name: part.name });
+  }
+  return parts;
 }
 
 /** A failure as the child describes it: three plain strings, nothing else. */

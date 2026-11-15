@@ -20,10 +20,36 @@ import { createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { markParseTiming } from "./rmeta.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
 
+/**
+ * How a document of a recursive parse is reached from the one that holds it:
+ *
+ * - "root": the document that was parsed (always the first part, and only the first).
+ * - "entry": a member of an archive (zip, tar, gzip, cpio, ar, ISO image, WARC ...). Its name is the member's name
+ *   in the archive, as it is written there, and may contain "/".
+ * - "embedded": a resource inside a document (an image of a docx, an attachment of a mail or a PDF, an OLE object).
+ */
+export type PathPartKind = "root" | "entry" | "embedded";
+
+/** One step of `ParseRecord.pathParts`. `name` is the whole name: a "/" in it is part of the name, not a separator. */
+export interface PathPart {
+  readonly kind: PathPartKind;
+  readonly name: string;
+}
+
 export interface ParseRecord {
   readonly metadata: Metadata;
   content: string;
+  /**
+   * The document's path by names, "/" between them (and runs of "/" collapsed), from the root down. An archive entry
+   * named "data/x.csv" makes this string ambiguous: `pathParts` is the same path, unambiguous.
+   */
   readonly embeddedResourcePath: string;
+  /**
+   * `embeddedResourcePath` as a list, one part per document from the root down to this one, each name whole. Every
+   * record of `parseRecursive` has it; a record built elsewhere may not. Joining the names with "/" and collapsing runs
+   * of "/" gives `embeddedResourcePath`; the parts after the first are `tk:embedded-resource-path`.
+   */
+  readonly pathParts?: readonly PathPart[];
   readonly depth: number;
   mediaType: MediaType;
   exception: RipstreamError | Error | null;
@@ -97,10 +123,12 @@ export class RecursiveParserWrapper implements Parser {
     const name = metadata.get(TIKA_KEYS.RESOURCE_NAME) ?? "document";
     // Slashes collapsed, as an embedded document's path is: a root named by a URL must still be the start of its children's.
     const path = `/${name}`.replace(/\/+/g, "/");
+    const pathParts: readonly PathPart[] = Object.freeze([Object.freeze({ kind: "root", name })]);
     const record: ParseRecord = {
       metadata,
       content: "",
       embeddedResourcePath: path,
+      pathParts,
       depth: 0,
       mediaType: MediaType.OCTET_STREAM,
       exception: null,
@@ -119,6 +147,7 @@ export class RecursiveParserWrapper implements Parser {
     const extractor = new RecordExtractor(this.records, output, path, this.handlerType, counted, this.unpackBytes);
     ctx.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, extractor);
     ctx.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
+    ctx.set(CONTEXT_KEYS.EMBEDDED_PATH_PARTS, pathParts);
 
     const content = createOutputHandler(this.handlerType);
     const budgeted = new OutputBudgetHandler(
@@ -209,6 +238,11 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     const parent = ctx.get(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH) ?? "";
     const name = metadata.get(TIKA_KEYS.RESOURCE_NAME) ?? "embedded";
     const path = `${parent}/${name}`.replace(/\/+/g, "/");
+    const kind: PathPartKind = ctx.get(CONTEXT_KEYS.ARCHIVE_ENTRY) === true ? "entry" : "embedded";
+    const pathParts: readonly PathPart[] = Object.freeze([
+      ...(ctx.get(CONTEXT_KEYS.EMBEDDED_PATH_PARTS) ?? []),
+      Object.freeze({ kind, name }),
+    ]);
     const id = ++this.nextId;
     const idPath = `${ctx.get(CONTEXT_KEYS.EMBEDDED_ID_PATH) ?? ""}/${id}`;
 
@@ -216,6 +250,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       metadata,
       content: "",
       embeddedResourcePath: path,
+      pathParts,
       depth,
       mediaType: MediaType.OCTET_STREAM,
       exception: null,
@@ -239,6 +274,9 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     child.remove(CONTEXT_KEYS.CHARSET_HINT);
     child.set(CONTEXT_KEYS.EMBEDDED_DEPTH, depth);
     child.set(CONTEXT_KEYS.EMBEDDED_RESOURCE_PATH, path);
+    child.set(CONTEXT_KEYS.EMBEDDED_PATH_PARTS, pathParts);
+    // Whether this document's own children are archive entries is for its parser to say, not its container's.
+    child.remove(CONTEXT_KEYS.ARCHIVE_ENTRY);
     child.set(CONTEXT_KEYS.EMBEDDED_ID_PATH, idPath);
     child.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, this);
 

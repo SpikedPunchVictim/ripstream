@@ -29,7 +29,7 @@ import {
   isOnTape,
   type Segment,
 } from "./dump-records.ts";
-import { safeEntryName, withXhtml } from "./util.ts";
+import { markArchiveEntries, safeEntryName, withXhtml } from "./util.ts";
 
 /*
  * Unix dump volumes (application/x-tika-unix-dump), which Tika 4.2.0's PackageParser reads through commons-compress's
@@ -302,6 +302,7 @@ class Volume {
     await this.xhtml.startElement("div", "class", "package-entry");
     await this.xhtml.element("h1", name);
     try {
+      markArchiveEntries(this.ctx);
       await this.extractor.parseEmbedded(stream, this.xhtml, embedded, this.ctx);
     } catch (error) {
       if (isFatalParseError(error, this.ctx)) throw error;

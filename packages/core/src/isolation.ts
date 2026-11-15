@@ -8,6 +8,7 @@
 import type { ComponentEntry } from "./component-config.ts";
 import type { DigestSettings } from "./digest.ts";
 import type { HandlerType } from "./handler-type.ts";
+import type { PathPart } from "./recursive.ts";
 
 /**
  * What a configuration sets that the isolation child must apply too (plain data, so it crosses a process boundary as
@@ -77,6 +78,8 @@ export interface IsolatedParseRecord {
   readonly metadata: Record<string, readonly string[]>;
   readonly content: string;
   readonly embeddedResourcePath: string;
+  /** `ParseRecord.pathParts`: the path as a list of whole names. */
+  readonly pathParts?: readonly PathPart[];
   readonly depth: number;
   /** Media type as a string, e.g. "application/pdf". */
   readonly mediaType: string;

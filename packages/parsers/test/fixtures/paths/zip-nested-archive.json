@@ -1,0 +1,12 @@
+{
+  "description": "tikajs-0rze: an entry of a zip inside a zip is an entry of an entry, each name whole",
+  "operation": "parseRecursive",
+  "input": { "file": "files/zip-000.zip", "filename": "zip-000.zip" },
+  "assertions": [
+    { "type": "equals", "field": "records.2.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"zip-000.zip\"},{\"kind\":\"entry\",\"name\":\"nested/inner.zip\"}]" },
+    { "type": "equals", "field": "records.3.path", "value": "/zip-000.zip/nested/inner.zip/data/export-0.csv" },
+    { "type": "equals", "field": "records.3.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"zip-000.zip\"},{\"kind\":\"entry\",\"name\":\"nested/inner.zip\"},{\"kind\":\"entry\",\"name\":\"data/export-0.csv\"}]" },
+    { "type": "contains", "field": "records.3.text", "value": "PLANTED-INNER-0002" },
+    { "type": "absent", "field": "records.4.path" }
+  ]
+}

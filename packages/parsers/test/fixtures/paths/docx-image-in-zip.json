@@ -1,0 +1,12 @@
+{
+  "description": "tikajs-0rze: an image of a docx that is a zip entry is embedded in an entry: entry for the zip member, embedded for the docx part",
+  "operation": "parseRecursive",
+  "input": { "file": "files/bundle-docx.zip", "filename": "bundle-docx.zip" },
+  "assertions": [
+    { "type": "equals", "field": "records.1.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"bundle-docx.zip\"},{\"kind\":\"entry\",\"name\":\"docs/report.docx\"}]" },
+    { "type": "equals", "field": "records.1.mediaType", "value": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    { "type": "equals", "field": "records.2.path", "value": "/bundle-docx.zip/docs/report.docx/image1.png" },
+    { "type": "equals", "field": "records.2.pathParts", "value": "[{\"kind\":\"root\",\"name\":\"bundle-docx.zip\"},{\"kind\":\"entry\",\"name\":\"docs/report.docx\"},{\"kind\":\"embedded\",\"name\":\"image1.png\"}]" },
+    { "type": "equals", "field": "records.2.mediaType", "value": "image/png" }
+  ]
+}

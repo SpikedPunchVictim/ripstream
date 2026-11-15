@@ -163,6 +163,7 @@ function wireRecord(record: ParseRecord): IsolatedParseRecord {
     metadata: wireMetadata(record.metadata),
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
+    ...(record.pathParts === undefined ? {} : { pathParts: record.pathParts }),
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception:
@@ -265,6 +266,11 @@ test("records parity: a container with embedded documents gives the same records
   for (const record of records) assert.match(String(record.metadata[TIMING_KEY]?.[0]), /^\d+$/, `${record.embeddedResourcePath} has a timing`);
   assert.deepEqual(records.map(withoutTiming), reference.map(withoutTiming));
   assert.ok(records.some((r) => /Embedded DOCX paragraph/.test(r.content)), "the nested document's text is in its record");
+  // The entry name keeps its "/" whole across the boundary: one part, not two.
+  assert.deepEqual(records.find((r) => r.embeddedResourcePath === "/bundle.zip/inner/report.docx")?.pathParts, [
+    { kind: "root", name: "bundle.zip" },
+    { kind: "entry", name: "inner/report.docx" },
+  ]);
 });
 
 // ---- output cap parity and streaming ---------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { Metadata, ParseOptions } from "@spikedpunch/ripstream-core";
+import type { Metadata, ParseOptions, ParseRecord } from "@spikedpunch/ripstream-core";
 import type { createRipstream } from "../src/index.ts";
 
 /**
@@ -9,6 +9,11 @@ import type { createRipstream } from "../src/index.ts";
  *
  * Fields an assertion can read: `text` (parse), `mediaType` (detect), `metadata.<key>` (parse; everything after the
  * first "metadata." is the key, so keys with dots or colons work). A metadata key that is not set reads as absent.
+ *
+ * `operation: "parseRecursive"` reads one record of `parseRecursive` by its index, the container first:
+ * `records.<i>.text`, `records.<i>.path` (embeddedResourcePath), `records.<i>.pathParts` (the parts as JSON, e.g.
+ * `[{"kind":"root","name":"a.zip"},{"kind":"entry","name":"data/b.csv"}]`), `records.<i>.mediaType` and
+ * `records.<i>.metadata.<key>`. A record past the end reads as absent.
  */
 export type Assertion =
   | { readonly type: "equals" | "contains" | "not_contains" | "matches"; readonly field: string; readonly value: string }
@@ -26,7 +31,7 @@ export interface FixtureInput {
 export interface Fixture {
   readonly description: string;
   readonly tags?: readonly string[];
-  readonly operation?: "parse" | "detect";
+  readonly operation?: "parse" | "detect" | "parseRecursive";
   readonly input: FixtureInput;
   readonly options?: Pick<ParseOptions, "contentType" | "onDocumentFailure" | "onOutputLimit" | "limits">;
   readonly assertions: readonly Assertion[];
@@ -43,6 +48,7 @@ export interface FieldView {
   readonly text?: string;
   readonly mediaType?: string;
   readonly metadata?: Metadata;
+  readonly records?: readonly ParseRecord[];
 }
 
 const STRING_TYPES = ["equals", "contains", "not_contains", "matches"];
@@ -57,8 +63,8 @@ export function validateFixture(raw: unknown, path: string): Fixture {
   const f = raw as Partial<Fixture> | null;
   if (typeof f !== "object" || f === null) return fail(path, "must be a JSON object");
   if (typeof f.description !== "string" || f.description === "") fail(path, "description is required");
-  if (f.operation !== undefined && f.operation !== "parse" && f.operation !== "detect") {
-    fail(path, `operation must be "parse" or "detect", got ${JSON.stringify(f.operation)}`);
+  if (f.operation !== undefined && f.operation !== "parse" && f.operation !== "detect" && f.operation !== "parseRecursive") {
+    fail(path, `operation must be "parse", "detect" or "parseRecursive", got ${JSON.stringify(f.operation)}`);
   }
   const input = f.input;
   if (typeof input !== "object" || input === null) return fail(path, "input is required");
@@ -79,6 +85,7 @@ export function validateFixture(raw: unknown, path: string): Fixture {
 }
 
 function read(view: FieldView, field: string): string | undefined {
+  if (field.startsWith("records.")) return readRecord(view, field);
   if (field === "text" || field === "mediaType") {
     const value = view[field];
     if (value === undefined) throw new Error(`field ${field} is not available for this operation`);
@@ -88,7 +95,25 @@ function read(view: FieldView, field: string): string | undefined {
     if (view.metadata === undefined) throw new Error(`field ${field} is not available for this operation`);
     return view.metadata.get(field.slice("metadata.".length)) ?? undefined;
   }
-  throw new Error(`unknown field ${JSON.stringify(field)}: use text, mediaType or metadata.<key>`);
+  throw new Error(`unknown field ${JSON.stringify(field)}: use text, mediaType, metadata.<key> or records.<i>.<field>`);
+}
+
+/** `records.<i>.<field>` of a parseRecursive view. */
+function readRecord(view: FieldView, field: string): string | undefined {
+  if (view.records === undefined) throw new Error(`field ${field} is not available for this operation`);
+  const match = /^records\.(\d+)\.(.+)$/.exec(field);
+  if (match === null) throw new Error(`field ${field}: expected records.<index>.<field>`);
+  const record = view.records[Number(match[1])];
+  if (record === undefined) return undefined;
+  const rest = match[2]!;
+  if (rest.startsWith("metadata.")) return record.metadata.get(rest.slice("metadata.".length)) ?? undefined;
+  switch (rest) {
+    case "text": return record.content;
+    case "path": return record.embeddedResourcePath;
+    case "pathParts": return record.pathParts === undefined ? undefined : JSON.stringify(record.pathParts);
+    case "mediaType": return record.mediaType.toString();
+    default: throw new Error(`field ${field}: use text, path, pathParts, mediaType or metadata.<key> of a record`);
+  }
 }
 
 /** Throws an AssertionError naming the field and assertion when it does not hold. */
@@ -128,6 +153,8 @@ export async function runFixture(ripstream: ReturnType<typeof createRipstream>, 
   let view: FieldView;
   if (fixture.operation === "detect") {
     view = { mediaType: (await ripstream.detect(bytes, options)).toString() };
+  } else if (fixture.operation === "parseRecursive") {
+    view = { records: await ripstream.parseRecursive(bytes, options) };
   } else {
     const result = await ripstream.parse(bytes, options);
     view = { text: result.text, metadata: result.metadata };
