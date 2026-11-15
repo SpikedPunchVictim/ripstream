@@ -1,0 +1,38 @@
+{
+  "description": "tikajs-bs8q: three pages, text / an image only / text and an image. Only page 2 is image-only: tk:pdf:image-only-pages is [2] and the count 1 (a page with text and an image is not image-only).",
+  "tags": [
+    "smoke",
+    "pdf"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R] /Count 3 /Resources << /Font << /F1 9 0 R >> /XObject << /Im1 10 0 R >> >> >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R >>\nendobj\n5 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R >>\nendobj\n6 0 obj\n<< /Length 48 >>\nstream\nBT /F1 12 Tf 72 700 Td (Page one has text) Tj ET\nendstream\nendobj\n7 0 obj\n<< /Length 30 >>\nstream\nq 612 0 0 792 0 0 cm /Im1 Do Q\nendstream\nendobj\n8 0 obj\n<< /Length 84 >>\nstream\nBT /F1 12 Tf 72 700 Td (Page three has text) Tj ET q 100 0 0 100 72 500 cm /Im1 Do Q\nendstream\nendobj\n9 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n10 0 obj\n<< /Length 9 /Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 8 /ColorSpace /DeviceGray /Filter /ASCIIHexDecode >>\nstream\n00ff00ff>\nendstream\nendobj\nxref\n0 11\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000193 00000 n \n0000000280 00000 n \n0000000367 00000 n \n0000000454 00000 n \n0000000552 00000 n \n0000000632 00000 n \n0000000766 00000 n \n0000000836 00000 n \ntrailer\n<< /Size 11 /Root 1 0 R >>\nstartxref\n1013\n%%EOF\n",
+    "filename": "pdf-image-only-mixed-pages.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Page one has text"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Page three has text"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:image-only-page-count",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:image-only-pages",
+      "value": "2"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.xmpTPg:NPages",
+      "value": "3"
+    }
+  ]
+}

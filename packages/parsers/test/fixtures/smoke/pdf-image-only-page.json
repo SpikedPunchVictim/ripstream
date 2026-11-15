@@ -1,0 +1,37 @@
+{
+  "description": "tikajs-bs8q: a one-page PDF whose page paints an image and shows no text, as a scan does. The result is ok with no text; tk:pdf:image-only-page-count and tk:pdf:image-only-pages (1-based) let the caller decide it needs OCR. Not repaired.",
+  "tags": [
+    "smoke",
+    "pdf"
+  ],
+  "input": {
+    "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvWE9iamVjdCA8PCAvSW0xIDUgMCBSID4+ID4+ID4+CmVuZG9iago0IDAgb2JqCjw8IC9MZW5ndGggMzAgPj4Kc3RyZWFtCnEgNjEyIDAgMCA3OTIgMCAwIGNtIC9JbTEgRG8gUQplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL1hPYmplY3QgL1N1YnR5cGUgL0ltYWdlIC9XaWR0aCAxNiAvSGVpZ2h0IDE2IC9CaXRzUGVyQ29tcG9uZW50IDggL0NvbG9yU3BhY2UgL0RldmljZUdyYXkgL0ZpbHRlciAvRmxhdGVEZWNvZGUgL0xlbmd0aCAyNjcgPj4Kc3RyZWFtCnicAQAB//4AJUpvlLneAyhNcpe84QYrUHWav+QJLlN4ncLnDDFWe6DF6g80WX6jyO0SN1yBpsvwFTpfhKnO8xg9Yoes0fYbQGWKr9T5HkNojbLX/CFGa5C12v8kSW6TuN0CJ0xxlrvgBSpPdJm+4wgtUnecweYLMFV6n8TpDjNYfaLH7BE2W4Clyu8UOV6DqM3yFzxhhqvQ9Ro/ZImu0/gdQmeMsdb7IEVqj7TZ/iNIbZK33AEmS3CVut8EKU5zmL3iByxRdpvA5QovVHmew+gNMld8ocbrEDVaf6TJ7hM4XYKnzPEWO2CFqs/0GT5jiK3S9xxBZouw1fofRGmOs9j9IkdskbbbsyJ/gQplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0NSAwMDAwMCBuIAowMDAwMDAwMzI1IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNzYwCiUlRU9GCg==",
+    "filename": "pdf-image-only-page.pdf"
+  },
+  "assertions": [
+    {
+      "type": "max_length",
+      "field": "text",
+      "value": 4
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:image-only-page-count",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:image-only-pages",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.pdf:chars-per-page",
+      "value": "0"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:repaired"
+    }
+  ]
+}

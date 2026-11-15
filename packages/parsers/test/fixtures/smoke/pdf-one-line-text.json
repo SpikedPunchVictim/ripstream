@@ -1,0 +1,39 @@
+{
+  "description": "tikajs-bs8q: a sound one-line text PDF writes neither the image-only keys nor the repair keys.",
+  "tags": [
+    "smoke",
+    "pdf"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 52 >>\nstream\nBT /F1 24 Tf 72 700 Td (Just one line of text) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000241 00000 n \n0000000343 00000 n \ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n413\n%%EOF\n",
+    "filename": "pdf-one-line-text.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Just one line of text"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.pdf:chars-per-page",
+      "value": "21"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:image-only-page-count"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:image-only-pages"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:repaired"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.tk:pdf:repair-steps"
+    }
+  ]
+}

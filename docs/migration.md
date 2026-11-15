@@ -60,6 +60,30 @@ tabs), `csv:delimiter`, `csv:num-columns` and `csv:num-rows`; anything else is `
 0.2); `csv: { delimiter }` is ripstream's: it reads every such document as a table. Not ported: the `tk:content-type-override` path,
 custom delimiters and the colon rule. Read from Tika source, not run against a Tika.
 
+**PDF.** `pdf:chars-per-page` is Tika's: one value per page, in page order. ripstream adds keys of its own, written only
+when they apply:
+
+- `tk:pdf:image-only-page-count` and `tk:pdf:image-only-pages` (`tikajs-bs8q`): the pages with no extracted text whose
+  content paints an image (an image XObject, directly or through a form, or an inline image). The pages are 1-based and
+  the list key has one value per page. A page with text and an image is not image-only. ripstream never reports an
+  "unsupported" or "needs OCR" status: a caller that wants one derives it from these keys, for example image-only page
+  count equal to `xmpTPg:NPages`. Content streams are read for this check only when the file is 64 MiB or smaller, and
+  only on pages with no text.
+- `tk:pdf:repaired` (`true`) and `tk:pdf:repair-steps` (`tikajs-4hfu`): the file was damaged and was read after a
+  recovery. The steps, in order: `brute-force-scan` (every `N G obj` found by scanning, as PDFBox's lenient parser
+  does), `rebuilt-xref`, `synthetic-trailer`, `objstm-inlined` (object stream members read out), `page-tree-rebuilt`
+  (orphan pages gathered into a new page tree), `font-repaired` (a damaged font `/Subtype` or Identity CMap name),
+  `stream-salvaged` (the readable start of a cut Flate stream kept). `rebuilt-xref` alone means pdf.js indexed the
+  objects itself because `startxref` was missing or pointed nowhere.
+
+A repaired file that yields no text is an empty success only when every page is shown to have none: the page's content
+was read whole, in the file as given, and shows no text. A page or content stream that is cut off proves nothing.
+Otherwise it is a `MalformedDocumentError` that names the damage, for example
+`PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 is cut off)`. A
+file no recovery can open names its damage the same way (`Unable to read PDF (...)`). The recovery's text is not
+byte-for-byte what Tika's PDFBox recovers. The text of a PDF with no text of its own still holds its document title (a
+scanner's `untitled`, say) and blank lines, as Tika 4.2.0's does (oracle: the scanned test files).
+
 ## Digests
 
 A `parse-context` digester factory makes the digests Tika makes, under Tika's keys (`tikajs-68os.9.1`). Before this a

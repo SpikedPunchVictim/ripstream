@@ -66,7 +66,7 @@ test("a font with a damaged /Subtype is repaired when the file needs a rebuilt x
   assert.ok(metadata.getAll("tk:pdf:repair-steps").includes("font-repaired"));
 });
 
-test("a repaired file whose only page paints an image is an empty result, not a failure", async () => {
+test("a repaired file whose only page paints an image is an empty, image-only result, not a failure", async () => {
   const objects = onePageObjects("unused");
   objects[2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R >> >> >>";
   objects[3] = streamObject("q 612 0 0 792 0 0 cm /Im1 Do Q");
@@ -74,6 +74,8 @@ test("a repaired file whose only page paints an image is an empty result, not a 
   const { text, metadata } = await parse(classicPdf(objects).replace(/startxref\n\d+/, "startxref\n12"));
   assert.equal(text.trim(), "");
   assert.equal(metadata.get("tk:pdf:repaired"), "true");
+  assert.equal(metadata.get("tk:pdf:image-only-page-count"), "1");
+  assert.deepEqual(metadata.getAll("tk:pdf:image-only-pages"), ["1"]);
 });
 
 test("a repaired file with no text that cannot be shown text-less fails and names the damage", async () => {
@@ -154,6 +156,7 @@ test("a cut-off content stream whose readable start shows no text fails and name
 test("an empty page in a sound file stays an empty result", async () => {
   const objects = onePageObjects("unused");
   objects[3] = streamObject("");
-  const { text } = await parse(classicPdf(objects));
+  const { text, metadata } = await parse(classicPdf(objects));
   assert.equal(text.trim(), "");
+  assert.equal(metadata.get("tk:pdf:image-only-page-count"), null);
 });

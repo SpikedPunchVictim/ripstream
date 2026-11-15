@@ -149,6 +149,7 @@ export class PdfParser implements Parser {
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
       const pages = Math.min(ready.numPages, MAX_PAGES);
+      const imageOnlyPages: number[] = [];
       const emptiness = new EmptyDocumentEvidence();
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
@@ -176,6 +177,7 @@ export class PdfParser implements Parser {
         metadata.add("pdf:chars-per-page", String(characters));
         const hasText = message.lines.some((line) => line.trim().length > 0);
         emptiness.page(index, hasText, message.content);
+        if (!hasText && message.content?.paintsImage === true) imageOnlyPages.push(index);
         if (this.#extractAnnotationText) {
           let fieldIndex = 0;
           for (const annotation of message.annotations) {
@@ -200,6 +202,10 @@ export class PdfParser implements Parser {
             `PDF is damaged and no text could be recovered (${[...ready.repair.causes, ...unproven].join("; ")})`,
           );
         }
+      }
+      if (imageOnlyPages.length > 0) {
+        metadata.set("tk:pdf:image-only-page-count", String(imageOnlyPages.length));
+        for (const page of imageOnlyPages) metadata.add("tk:pdf:image-only-pages", String(page));
       }
 
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
