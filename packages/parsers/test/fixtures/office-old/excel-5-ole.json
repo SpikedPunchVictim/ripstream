@@ -1,5 +1,5 @@
 {
-  "description": "Tika 4.2.0 on testEXCEL_5.xls (tikajs-cigc): a BIFF5 workbook in an OLE2 container (stream Book) is read by OfficeParser through POI OldExcelExtractor: a Sheet: line for each sheet name, then one line per cell with numbers as Java writes a double (1.0). Checked against the oracle, body text.",
+  "description": "Tika 4.2.0 on testEXCEL_5.xls (tikajs-cigc): a BIFF5 workbook in an OLE2 container (stream Book) is read by OfficeParser through POI OldExcelExtractor: a Sheet: line for each sheet name, then one line per cell with numbers as Java writes a double (1.0). Checked against the oracle, body text. The SummaryInformation stream is metadata as for every OLE2 file (tikajs-n83j).",
   "tags": [
     "office",
     "excel",
@@ -23,6 +23,36 @@
       "type": "equals",
       "field": "text",
       "value": "Sheet: Feuil1\nSheet: Feuil2\nSheet: Feuil3\nSample Excel Worksheet - Numbers and their Squares\nNumber\nSquare\n1.0\n1.0\n2.0\n4.0\n3.0\n9.0\n4.0\n16.0\n5.0\n25.0\n6.0\n36.0\n7.0\n49.0\n8.0\n64.0\n9.0\n81.0\n10.0\n100.0\n11.0\n121.0\n12.0\n144.0\n13.0\n169.0\n14.0\n196.0\n15.0\n225.0\nWritten and saved in Microsoft Excel X for Mac Service Release 1.\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Simple Excel document"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Keith Bennett"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:last-author",
+      "value": "RIBEN9"
+    },
+    {
+      "type": "matches",
+      "field": "metadata.dcterms:created",
+      "value": "^2007-10-01T16:13:56(\\.000)?Z$"
+    },
+    {
+      "type": "matches",
+      "field": "metadata.dcterms:modified",
+      "value": "^2007-10-01T16:31:43(\\.000)?Z$"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.cp:revision",
+      "value": "0"
     }
   ]
 }

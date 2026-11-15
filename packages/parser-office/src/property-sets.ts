@@ -1,4 +1,7 @@
 import { MalformedDocumentError, type Metadata } from "@spikedpunch/ripstream-core";
+import type { CompoundFile } from "./cfb.ts";
+
+const SUMMARY_STREAMS = ["\u0005SummaryInformation", "\u0005DocumentSummaryInformation"];
 
 const SUMMARY_INFORMATION = "F29F85E0-4FF9-1068-AB91-08002B27B3D9";
 const DOCUMENT_SUMMARY_INFORMATION = "D5CDD502-2E9C-101B-9397-08002B2CF9AE";
@@ -348,4 +351,19 @@ function readUInt64(data: Uint8Array, offset: number): bigint {
     BigInt(readUInt32(data, offset)) |
     (BigInt(readUInt32(data, offset + 4)) << 32n)
   );
+}
+
+/**
+ * The summary streams, as `SummaryExtractor.parseSummaries` reads them. A stream that is not a property set is left out of
+ * the metadata and the container is still read (Tika ignores NoPropertySetStreamException); a limit or abort is not.
+ */
+export function applySummaries(compound: CompoundFile, metadata: Metadata): void {
+  for (const name of SUMMARY_STREAMS) {
+    if (!compound.has(name)) continue;
+    try {
+      applyPropertySetMetadata(metadata, parsePropertySets(compound.read(name)));
+    } catch (error) {
+      if (!(error instanceof MalformedDocumentError)) throw error;
+    }
+  }
 }

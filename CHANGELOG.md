@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Excel: the SummaryInformation stream is metadata (`tikajs-n83j`)
+
+Fixed: an `.xls` gave none of the properties its OLE2 container holds (`dc:title`, `dc:creator`, `meta:last-author`,
+`dcterms:created`, `dcterms:modified`, `cp:revision`), which Word and PowerPoint files already gave and Tika's OfficeParser gives
+for all of them. Not yet the same as Tika's: it also sets `extended-properties:TotalTime`, `meta:print-date` and the
+`custom:*` keys of the document summary, and writes the dates without milliseconds (`2007-10-01T16:13:56Z`, where the OLE
+property-set reader here, shared with Word and PowerPoint, writes `.000Z`).
+
 ### Excel 5/95 workbooks read as Tika reads them (`tikajs-cigc`)
 
 Changed: an `.xls` in an OLE2 container whose workbook stream is named `Book` (BIFF5 and BIFF7, Excel 5 and 95) is no longer

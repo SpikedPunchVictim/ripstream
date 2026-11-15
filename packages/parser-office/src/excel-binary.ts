@@ -14,6 +14,7 @@ import {
 import { MAX_BIFF_RECORDS, MAX_SHEET_CELLS, decodeRk, readAnsi, readDouble, readUInt16, readUInt32 } from "./biff-bytes.ts";
 import { CompoundFile, hasSignature, isEncryptedCompound } from "./cfb.ts";
 import { writeBiff5Text } from "./old-excel.ts";
+import { applySummaries } from "./property-sets.ts";
 import {
   BUILTIN_NUMBER_FORMATS,
   formatExcelDate,
@@ -86,6 +87,8 @@ export class ExcelBinaryParser implements Parser {
     if (isEncryptedCompound(compound)) {
       throw new EncryptedDocumentError("Excel document is encrypted");
     }
+    // As OfficeParser does for every OLE2 file: the summary streams are metadata before the workbook is read.
+    applySummaries(compound, metadata);
     const name = compound.has("Workbook")
       ? "Workbook"
       : compound.has("Book")

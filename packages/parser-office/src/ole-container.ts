@@ -16,7 +16,7 @@ import { OoxmlParser } from "./ooxml.ts";
 import { decryptOoxmlPackage, defaultOfficePasswords } from "./office-crypto.ts";
 import { readAll } from "./bytes.ts";
 import { CompoundFile, hasSignature } from "./cfb.ts";
-import { applyPropertySetMetadata, parsePropertySets } from "./property-sets.ts";
+import { applySummaries } from "./property-sets.ts";
 
 const GENERIC = "application/x-tika-msoffice";
 const EMBEDDED = "application/x-tika-msoffice-embedded";
@@ -28,8 +28,6 @@ const SOLIDWORKS = "application/sldworks";
 // Tika names it with; a composite parser matches on the base type, so the comp_obj container reaches this parser as it
 // reaches OfficeParser.
 const TYPES = [GENERIC, `${EMBEDDED}; format=ole10_native`, `${EMBEDDED}; format=comp_obj`, DRM_ENCRYPTED, OOXML_PROTECTED, SOLIDWORKS];
-
-const SUMMARY_STREAMS = ["\u0005SummaryInformation", "\u0005DocumentSummaryInformation"];
 
 /**
  * The part of Tika's OfficeParser that handles the OLE2 containers no format parser here reads: the generic container
@@ -96,21 +94,6 @@ export class OleContainerParser implements Parser {
 
 function baseTypeOf(metadata: Metadata): string {
   return MediaType.parse(metadata.get("Content-Type"))?.getBaseType().toString() ?? "";
-}
-
-/**
- * The summary streams, as `SummaryExtractor.parseSummaries` reads them. A stream that is not a property set is left out of
- * the metadata and the container is still read (Tika ignores NoPropertySetStreamException); a limit or abort is not.
- */
-function applySummaries(compound: CompoundFile, metadata: Metadata): void {
-  for (const name of SUMMARY_STREAMS) {
-    if (!compound.has(name)) continue;
-    try {
-      applyPropertySetMetadata(metadata, parsePropertySets(compound.read(name)));
-    } catch (error) {
-      if (!(error instanceof MalformedDocumentError)) throw error;
-    }
-  }
 }
 
 /** Why the container cannot be read, where OfficeParser throws EncryptedDocumentException; undefined when it can. */

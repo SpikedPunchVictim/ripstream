@@ -12,7 +12,7 @@ import {
   type SegmentHints,
 } from "@spikedpunch/ripstream-core";
 import { ExcelBinaryParser } from "../src/index.ts";
-import { buildCompound as buildOle } from "./ole-builder.ts";
+import { buildCompound as buildOle, summaryInformation } from "./ole-builder.ts";
 
 const SECTOR = 512;
 
@@ -267,15 +267,18 @@ test("an xls's rows are told to the segments by their own numbers, so empty rows
 
 // Oracle (Tika 4.2.0 /rmeta/body, testEXCEL_5.xls: BIFF5, a stream named Book): OfficeParser reads it with OldExcelExtractor, a
 // "Sheet: name" line for each BOUNDSHEET and a line for each cell, numbers as Java writes a double (tikajs-cigc).
-function buildBiff5Book(extra: number[] = []): Uint8Array {
+function biff5BookBytes(extra: number[] = []): Uint8Array {
   const bof = record(0x0809, [...u16(0x0500), ...u16(0x0005), ...new Array(4).fill(0)]);
   const name = new TextEncoder().encode("Feuil1");
   const boundsheet = record(0x0085, [...u32(0), 0, 0, name.length, ...name]);
   const label = record(0x0204, [...u16(0), ...u16(0), ...u16(0), ...u16(5), ...new TextEncoder().encode("hello")]);
   const number = record(0x0203, [...u16(1), ...u16(0), ...u16(0), ...new Uint8Array(new Float64Array([3]).buffer)]);
   const rk = record(0x027e, [...u16(2), ...u16(0), ...u16(0), ...u32((7 << 2) | 0x02)]);
-  const book = new Uint8Array([...bof, ...extra, ...boundsheet, ...label, ...number, ...rk, ...record(0x000a, [])]);
-  return buildOle([{ name: "Book", data: book }]);
+  return new Uint8Array([...bof, ...extra, ...boundsheet, ...label, ...number, ...rk, ...record(0x000a, [])]);
+}
+
+function buildBiff5Book(extra: number[] = []): Uint8Array {
+  return buildOle([{ name: "Book", data: biff5BookBytes(extra) }]);
 }
 
 test("a BIFF5 workbook in a Book stream is read as OldExcelExtractor reads it", async () => {
@@ -287,4 +290,17 @@ test("a BIFF5 workbook with a FILEPASS record is an encrypted document", async (
     parse(buildBiff5Book(record(0x002f, [...u16(0), ...u16(0x1234), ...u16(0x5678)]))),
     (error) => error instanceof EncryptedDocumentError && /document is encrypted/.test(error.message),
   );
+});
+
+test("an .xls's SummaryInformation stream is metadata, as OfficeParser makes it for every OLE2 file (tikajs-n83j)", async () => {
+  const stream = await RipstreamInputStream.from(
+    buildOle([
+      { name: "Book", data: biff5BookBytes() },
+      { name: "\u0005SummaryInformation", data: summaryInformation("Quarterly") },
+    ]),
+  );
+  const metadata = new Metadata();
+  await new ExcelBinaryParser().parse(stream, new BodyContentHandler(), metadata, new ParseContext());
+  await stream.close();
+  assert.equal(metadata.get("dc:title"), "Quarterly");
 });
