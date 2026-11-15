@@ -6,6 +6,7 @@ import {
   DEFAULT_MAX_METADATA_KEYS,
   DEFAULT_MAX_METADATA_VALUES,
   FrameReader,
+  MAX_SEGMENTS_PER_FRAME,
   type Frame,
   type FrameEvent,
   type FrameReaderOptions,
@@ -92,13 +93,17 @@ test("a record's pathParts are accepted, each name whole", () => {
   assert.deepEqual(frames(events)[1], { t: "record", record: { ...RECORD, pathParts } });
 });
 
-test("a record's segments are accepted when each is a slice of its content with a location in the grammar", () => {
-  const record = { ...RECORD, content: "Name\tPLANTED", segments: [
+test("a record's segments arrive in segments frames, each a slice of its content with a location in the grammar", () => {
+  const segments = [
     { start: 0, end: 12, labels: [], location: "row=1" },
     { start: 5, end: 12, labels: ["Sheet;1", "Name"], location: "sheet=Sheet%3B1;cell=B1" },
-  ] };
-  const events = feedAll(recordsReader(), line(READY) + line({ t: "record", record }));
-  assert.deepEqual(frames(events)[1], { t: "record", record });
+  ];
+  const record = { ...RECORD, content: "Name\tPLANTED" };
+  const r = recordsReader({ maxSegmentBytes: 10_000 });
+  const events = feedAll(r, line(READY) + line({ t: "record", record, segmentCount: 2 }) + line({ t: "segments", segments }) + line(DONE));
+  assert.deepEqual(violationKinds(events), []);
+  const result = r.result();
+  assert.deepEqual(result.kind === "records" ? result.records[0] : null, { ...record, segments });
 });
 
 test("multiple frames in one chunk are all returned", () => {
@@ -309,14 +314,6 @@ const afterReady: [string, unknown][] = [
   ["record with a pathParts kind outside the set", { t: "record", record: { ...RECORD, pathParts: [{ kind: "folder", name: "a" }] } }],
   ["record with a non-string pathParts name", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: 1 }] } }],
   ["record with an extra pathParts field", { t: "record", record: { ...RECORD, pathParts: [{ kind: "root", name: "a", x: 1 }] } }],
-  ["record with segments not a list", { t: "record", record: { ...RECORD, segments: {} } }],
-  ["record with a segment past its content", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 3, labels: [], location: "line=1" }] } }],
-  ["record with an empty segment", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 1, end: 1, labels: [], location: "line=1" }] } }],
-  ["record with a negative segment start", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: -1, end: 1, labels: [], location: "line=1" }] } }],
-  ["record with a fractional segment end", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1.5, labels: [], location: "line=1" }] } }],
-  ["record with a non-string segment label", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [1], location: "line=1" }] } }],
-  ["record with a segment location outside the grammar", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [], location: "x=1" }] } }],
-  ["record with an extra segment field", { t: "record", record: { ...RECORD, content: "ab", segments: [{ start: 0, end: 1, labels: [], location: "line=1", text: "a" }] } }],
   ["record with non-string mediaType", { t: "record", record: { ...RECORD, mediaType: 1 } }],
   ["record with negative depth", { t: "record", record: { ...RECORD, depth: -1 } }],
   ["record with float depth", { t: "record", record: { ...RECORD, depth: 0.5 } }],
@@ -1023,13 +1020,15 @@ test("content: the text comes before the bytes of the same record", () => {
 
 test("content: segments are checked against the announced length, not the empty inline content", () => {
   const segment = { start: 2, end: 9, labels: ["p"], location: "line=1" };
-  const r = recordsReader();
-  feedLines(r, [READY, { t: "record", record: { ...noContent, segments: [segment] }, contentLength: 10 }, textFrame("0123456789"), DONE]);
+  const r = recordsReader({ maxSegmentBytes: 10_000 });
+  feedLines(r, [READY, chunked(10, { segmentCount: 1 }), textFrame("0123456789"), segmentsFrame([segment]), DONE]);
   const result = r.result();
-  assert.deepEqual(result.kind === "records" ? result.records[0]?.segments : null, [segment]);
+  const first = result.kind === "records" ? result.records[0] : undefined;
+  assert.deepEqual(first?.segments, [segment]);
+  assert.equal(first?.content, "0123456789", "the segments did not displace the content");
 
-  const past = recordsReader();
-  const events = feedLines(past, [READY, { t: "record", record: { ...noContent, segments: [{ ...segment, end: 11 }] }, contentLength: 10 }]);
+  const past = recordsReader({ maxSegmentBytes: 10_000 });
+  const events = feedLines(past, [READY, chunked(10, { segmentCount: 1 }), textFrame("0123456789"), segmentsFrame([{ ...segment, end: 11 }])]);
   assert.deepEqual(violationKinds(events), ["protocol"]);
 });
 
@@ -1068,4 +1067,117 @@ test("content: a violation drops what was folded, the owed content included", ()
   const r = recordsReader();
   feedLines(r, [READY, chunked(5), textFrame("ab"), DONE]);
   assert.equal(r.retainedPieces, 0);
+});
+
+// ---- segments in segments frames (tikajs-9ztw) -------------------------------------------------------------------
+
+const INLINE = { ...RECORD, content: "0123456789" };
+const SEG = { start: 0, end: 4, labels: ["h"], location: "para=1" };
+const segmentsFrame = (segments: readonly object[]): object => ({ t: "segments", segments });
+const withSegments = (count: number, extra: object = {}): object => ({ t: "record", record: INLINE, segmentCount: count, ...extra });
+const segmentsOf = (r: FrameReader): unknown => {
+  const result = r.result();
+  return result.kind === "records" ? result.records.map((record) => record.segments) : null;
+};
+
+test("segments: a record that announces its count gets its segments from the frames after it, in lists", () => {
+  const r = recordsReader({ maxSegmentBytes: 10_000 });
+  const second = { ...SEG, start: 4, end: 8, location: "para=2" };
+  const events = feedLines(r, [READY, withSegments(3), segmentsFrame([SEG, second]), segmentsFrame([{ ...SEG, start: 8, end: 10, location: "para=3" }]), DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  assert.deepEqual(segmentsOf(r), [[SEG, second, { ...SEG, start: 8, end: 10, location: "para=3" }]]);
+});
+
+test("segments: a count of 0 is a record with an empty list, and a record that says nothing has none", () => {
+  const r = recordsReader({ maxSegmentBytes: 10_000 });
+  assert.deepEqual(violationKinds(feedLines(r, [READY, withSegments(0), { t: "record", record: INLINE }, DONE])), []);
+  assert.deepEqual(segmentsOf(r), [[], undefined]);
+});
+
+test("segments: the text comes before the segments, and the segments before the bytes", () => {
+  const r = recordsReader({ unpackBytes: 100, maxSegmentBytes: 10_000 });
+  const events = feedLines(r, [READY, chunked(3, { segmentCount: 1, byteLength: 2 }), textFrame("abc"), segmentsFrame([{ ...SEG, end: 3 }]), chunkFrame(1, 2), DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  const result = r.result();
+  const first = result.kind === "records" ? result.records[0] : undefined;
+  assert.equal(first?.content, "abc");
+  assert.deepEqual(first?.segments, [{ ...SEG, end: 3 }]);
+  assert.deepEqual([...(first?.bytes ?? [])], [1, 2]);
+});
+
+test("segments: the same stream arrives byte by byte just the same", () => {
+  const r = recordsReader({ maxSegmentBytes: 10_000 });
+  const stream = [READY, chunked(4, { segmentCount: 1 }), textFrame("ab"), textFrame("cd"), segmentsFrame([{ ...SEG, end: 4 }]), DONE];
+  assert.deepEqual(violationKinds(feedByByte(r, bytes(stream.map(line).join("")))), []);
+  assert.deepEqual(segmentsOf(r), [[{ ...SEG, end: 4 }]]);
+});
+
+const BAD_SEGMENTS: ReadonlyArray<readonly [string, readonly object[], RegExp]> = [
+  ["a segments frame with no record waiting", [READY, { t: "record", record: INLINE }, segmentsFrame([SEG])], /no record waiting for segments/],
+  ["a segments frame before any record", [READY, segmentsFrame([SEG])], /no record waiting for segments/],
+  ["more segments than announced", [READY, withSegments(1), segmentsFrame([SEG, SEG])], /2 segments, 1 were owed/],
+  ["an empty segments frame", [READY, withSegments(1), segmentsFrame([])], /must not be empty/],
+  ["a record while segments are still owed", [READY, withSegments(2), segmentsFrame([SEG]), { t: "record", record: INLINE }], /segments of the last record/],
+  ["done while segments are still owed", [READY, withSegments(2), segmentsFrame([SEG]), DONE], /segments of the last record/],
+  ["text while segments are still owed", [READY, chunked(4, { segmentCount: 1 }), textFrame("ab"), textFrame("cd"), textFrame("x")], /no record waiting for content|segments of the last record/],
+  ["bytes before the segments are complete", [READY, withSegments(2, { byteLength: 1 }), segmentsFrame([SEG]), chunkFrame(1)], /segments of the last record/],
+  ["segments before the content is complete", [READY, chunked(4, { segmentCount: 1 }), textFrame("ab"), segmentsFrame([SEG])], /content of the last record/],
+  ["a segment past its content", [READY, withSegments(1), segmentsFrame([{ ...SEG, end: 11 }])], /past the record's content/],
+  ["a segment past its announced content", [READY, chunked(4, { segmentCount: 1 }), textFrame("abcd"), segmentsFrame([{ ...SEG, end: 5 }])], /past the record's content/],
+  ["segments not a list", [READY, withSegments(1), { t: "segments", segments: {} }], /must be an array/],
+  ["an empty segment", [READY, withSegments(1), segmentsFrame([{ ...SEG, end: 0 }])], /offsets/],
+  ["a negative start", [READY, withSegments(1), segmentsFrame([{ ...SEG, start: -1 }])], /offsets/],
+  ["a fractional end", [READY, withSegments(1), segmentsFrame([{ ...SEG, end: 1.5 }])], /offsets/],
+  ["a non-string label", [READY, withSegments(1), segmentsFrame([{ ...SEG, labels: [1] }])], /labels/],
+  ["a location outside the grammar", [READY, withSegments(1), segmentsFrame([{ ...SEG, location: "x=1" }])], /not a segment location/],
+  ["a non-string location", [READY, withSegments(1), segmentsFrame([{ ...SEG, location: 5 }])], /location must be a string/],
+  ["an extra segment field", [READY, withSegments(1), segmentsFrame([{ ...SEG, text: "a" }])], /unexpected field/],
+  ["an extra field on the frame", [READY, withSegments(1), { t: "segments", segments: [SEG], x: 1 }], /unexpected field/],
+  ["a negative count", [READY, withSegments(-1)], /segmentCount/],
+  ["a fractional count", [READY, withSegments(1.5)], /segmentCount/],
+  ["a count that is not a number", [READY, withSegments("1" as unknown as number)], /segmentCount/],
+  ["segments inline in the record, as the protocol had them before", [READY, { t: "record", record: { ...INLINE, segments: [SEG] } }], /unexpected field "segments"/],
+  [
+    "more than one frame's worth of segments in one frame",
+    [READY, withSegments(2000), segmentsFrame(Array.from({ length: MAX_SEGMENTS_PER_FRAME + 1 }, () => SEG))],
+    /more than 1024 segments/,
+  ],
+];
+
+for (const [label, frameList, message] of BAD_SEGMENTS) {
+  test(`segments: ${label} is a violation`, () => {
+    const events = feedLines(recordsReader({ unpackBytes: 100, maxSegmentBytes: 1_000_000 }), frameList);
+    assert.deepEqual(violationKinds(events), ["protocol"]);
+    const violation = events.find((event) => event.type === "violation");
+    assert.match(violation?.type === "violation" ? violation.message : "", message);
+  });
+}
+
+test("segments: a request that asked for none refuses a record that announces them", () => {
+  const events = feedLines(recordsReader(), [READY, withSegments(1)]);
+  assert.deepEqual(violationKinds(events), ["protocol"]);
+  assert.deepEqual(violationKinds(feedLines(recordsReader(), [READY, withSegments(0)])), ["protocol"]);
+});
+
+test("segments: the frames' bytes over the budget are a size limit, not a protocol fault", () => {
+  const frameBytes = (list: readonly object[]): number => line(segmentsFrame(list)).length;
+  const budget = frameBytes([SEG]) + frameBytes([SEG, SEG]) - 1;
+  const r = recordsReader({ maxSegmentBytes: budget });
+  const events = feedLines(r, [READY, withSegments(3), segmentsFrame([SEG]), segmentsFrame([SEG, SEG])]);
+  assert.deepEqual(violationKinds(events), ["segment_cap"]);
+  assert.equal(r.retainedPieces, 0, "nothing is kept for a failed stream");
+  const exact = recordsReader({ maxSegmentBytes: budget + 1 });
+  assert.deepEqual(violationKinds(feedLines(exact, [READY, withSegments(3), segmentsFrame([SEG]), segmentsFrame([SEG, SEG]), DONE])), []);
+});
+
+test("segments: the budget counts all records together", () => {
+  const one = line(segmentsFrame([SEG])).length;
+  const r = recordsReader({ maxSegmentBytes: one * 2 - 1 });
+  const events = feedLines(r, [READY, withSegments(1), segmentsFrame([SEG]), withSegments(1), segmentsFrame([SEG])]);
+  assert.deepEqual(violationKinds(events), ["segment_cap"]);
+});
+
+test("segments: a bad maxSegmentBytes option is refused", () => {
+  for (const value of [-1, 1.5, Number.NaN]) assert.throws(() => recordsReader({ maxSegmentBytes: value }), RangeError, String(value));
+  assert.throws(() => reader({ maxSegmentBytes: 5 }), TypeError);
 });

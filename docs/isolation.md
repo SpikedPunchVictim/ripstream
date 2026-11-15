@@ -264,9 +264,10 @@ are computed for a request at the server's output ceiling.
 ```
 reservation = perChildMb + overshootMb + parentMb
 
-parentMb    = ceil((maxOutputChars * 5  +  rest * f) / 1 MiB) + 96
-rest        = maxResultBytes - 6 * maxOutputChars - (wire form of unpackBytes, if any)
+parentMb    = ceil((maxOutputChars * 5  +  rest * f  +  segmentBytes * 4) / 1 MiB) + 96
+rest        = maxResultBytes - 6 * maxOutputChars - (wire form of unpackBytes, if any) - segmentBytes
 f           = 6 for a text request, 24 for a records request
+segmentBytes = 0 without segments; with them, 24 MiB + 0.75 * maxOutputChars
 ```
 
 | term | value | what it pays for |
@@ -275,13 +276,13 @@ f           = 6 for a text request, 24 for a records request
 | `overshootMb` | 1024 (pool option) | what a child can use beyond its budget between two RSS polls. Unchanged. |
 | `maxOutputChars * 5` | 5 bytes a character | the parent holding the text: the 64 KiB chunks and the string they are joined into (2 x 1 byte for Latin-1 text, 2 x 2 for text with a character above U+00FF). The same for text and records, and whatever the text costs on the wire. |
 | `rest * f` | metadata allowance (12 - 16 MiB) at 6x or 24x | metadata, paths and envelopes, which arrive as whole JSON values: a record frame with many short keys costs the parent 10 - 30x its wire size to parse. |
+| `segmentBytes * 4` | with `segments`: 24 MiB + 0.75 bytes a character, at 4x | the segments (see "Segments", below). |
 | 96 | fixed | the parent's heap growing in steps and collecting parse garbage late. Does not scale with the result. |
 
 `maxResultBytes` is the cap on what the child may send: `6 * maxOutputChars` (the wire form of text at its worst, every
 character escaped as `\uXXXX`) + the metadata allowance + 64 KiB. The characters' wire size is NOT what the parent
-holds, which is why they are reserved per character. A request with `segments` also puts the list of segments in the
-record frame, and that list is not bounded apart from `maxResultBytes`, so such a request reserves its whole result at
-`f` (as every records request did before this): about 10 GiB at 52,428,800 characters.
+holds, which is why they are reserved per character. A request with `segments` adds the segments' own allowance to
+`maxResultBytes` and reserves it apart, see "Segments", below.
 
 **Worked example**, `maxOutputChars` 52,428,800, records, default `perChildMb`, `maxEmbeddedResources` 1000 (the metadata
 allowance is then its floor of 12 MiB; the default of 10,000 makes it 16 MiB):
@@ -303,26 +304,36 @@ parsed value at once, 3.5 - 4.6x the frame's wire bytes, and the wire is up to 6
 was 24x the wire. Content longer than 64 Ki characters now follows its record in `text` frames, the way a text result
 does (`record` has `contentLength`, then `text` frames adding up to exactly that, then any `bytes` frames), so the
 largest frame the parent parses is the metadata, and a record frame is capped at the metadata allowance plus one
-chunk (17.2 MiB at the default 10,000 embedded resources). Segments are the exception, above.
+chunk (17.2 MiB at the default 10,000 embedded resources). Segments cross in frames of their own, below.
 
-Measured, Linux arm64 container, Node 24, real isolated PDF and DOCX parse, `maxOutputChars` 52,428,800, records output,
-output cap not reached unless noted (the 50 MB-class inputs reach 47 - 52 million characters). Parent: peak RSS above
-its idle baseline. Child: peak RSS. Container: `memory.peak` (parent + child + page cache of the input):
+Measured in Docker (Linux arm64, Node 24, the standard child, `maxOutputChars` 52,428,800, one run each; the generator
+and driver are scratch scripts, not in the repository). The documents are synthetic: a text-heavy DOCX (paragraphs of
+about 80 characters, a heading every so often), a DOCX of a million tiny paragraphs, and two XLSX of inline-string
+cells. Parent: peak RSS above its idle baseline, with segments and without them; "frames" is the size of the
+`segments` frames on the wire.
 
-| input | characters | parent before / after (MiB) | child before / after | container before / after | reservation before / after |
-|---|---|---|---|---|---|
-| 10 MB text PDF | 9.4 M | 63 / 37 | 325 / 295 | 424 / 388 | 10,146 / 3196 |
-| 25 MB text PDF | 23.5 M | 90 / 64 | 467 / 400 | 617 / 534 | 10,146 / 3196 |
-| 50 MB text PDF | 47.1 M | 158 / 135 | 678 / 554 | 910 / 805 | 10,146 / 3196 |
-| 25 MB text DOCX | 26.0 M | 94 / 87 | 545 / 466 | 632 / 605 | 10,146 / 3196 |
-| 50 MB text DOCX | 51.9 M | 177 / 174 | 734 / 581 | 938 / 817 | 10,146 / 3196 |
+| input | segments | frames | parent without / with (MiB) | extra / frame bytes |
+|---|---|---|---|---|
+| DOCX, 48 M characters | 597,831 | 40.1 MiB | 136 - 151 / 286 - 293 | 3.5x |
+| DOCX, tiny paragraphs | 997,633 | 65.2 MiB | 35 / 249 | 3.3x |
+| XLSX, 8 columns | 537,499 | | 23 / 200 | |
+| XLSX, 16 columns | 944,436 | 81.5 MiB | 31 / 278 | 3.0x |
 
-"Before" runs had a 16 GiB pool (the old reservation does not fit a 4 GiB container at all); "after" runs were in a 4 GiB
-container (`--memory 4g`, pool 3584 MiB, nothing configured), where the 25 MB PDF takes 534 MiB in all. The peaks are
-within 10% of run to run. The worst wire shapes, a scripted child sending 50 million characters of one shape (parent
-peak above baseline, before / after): ASCII 210 / 152 MiB, characters above U+00FF 290 / 229, quotes and backslashes
-306 / 171, control characters (6 wire bytes each) 903 / 168. After the change records and text cost the same, 2.9 - 5.2
-bytes a character, 5 is the factor.
+The extra is about 220 - 250 bytes a segment (the parent keeps the list and rebuilds each entry as a `Segment` with its
+`text`), so per wire byte it is highest for the smallest segments. The worst measured is 3.5x; the 4 in the formula adds
+about 15%. The text-heavy DOCX at the full cap in a `--memory 4g` container (pool 3584 MiB) is admitted and completes:
+container peak 967 MiB. The segments, labels and locations are identical to the in-process parse (a digest over the
+content, `start`, `end`, labels and location of every segment agrees, checked on a DOCX and an XLSX).
+
+The reservation at the full cap, default `maxEmbeddedResources`: 1536 + 1024 + 978 = 3538 MiB, which fits the 3584 MiB
+pool of a 4 GiB container. Before, the parent term alone was over 9 GiB (24 x 331 MB of result). A request without
+segments is unchanged (3292 MiB).
+
+What it gives up. The allowance is a fixed 24 MiB plus 0.75 bytes a character, where the result cap used to let the
+segments take whatever the text left. A document whose segments are denser than that is refused with a
+`LimitExceededError` ("segments exceeded the maximum size allowed for segments") where it used to pass. The
+tiny-paragraph DOCX above (65 MiB of frames, 11 bytes a character) is one at the full cap. Raise `maxOutputChars` to buy
+more allowance, or read such a document without `segments`.
 
 A request that does not fit the pool is an `AdmissionRefusedError` (code `ADMISSION_REFUSED`, 422 from the server, exit
 3 from the CLI, `PAYLOAD_LIMIT_EXCEEDED` in pipes). It extends `LimitExceededError`, so code that catches that keeps

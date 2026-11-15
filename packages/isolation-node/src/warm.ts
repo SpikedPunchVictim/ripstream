@@ -25,6 +25,7 @@ import {
   parentResultMb,
   requireMemoryOrder,
   requirePositiveInteger,
+  segmentBytesFor,
   type ChildRunnerOptions,
   type RunLimits,
 } from "./runner.ts";
@@ -149,6 +150,8 @@ interface RequestSpec {
   readonly signal: AbortSignal;
   readonly maxResultBytes: number;
   readonly maxFrameBytes: number | undefined;
+  /** Bytes of segments frames the request may carry; undefined: none. */
+  readonly maxSegmentBytes: number | undefined;
 }
 
 interface Verdict {
@@ -289,6 +292,7 @@ class WarmChild {
           ...(spec.maxFrameBytes === undefined ? {} : { maxFrameBytes: spec.maxFrameBytes }),
           ...(this.#config.options.maxFrames === undefined ? {} : { maxFrames: this.#config.options.maxFrames }),
           ...(spec.request.unpackBytes === undefined ? {} : { unpackBytes: spec.request.unpackBytes }),
+          ...(spec.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: spec.maxSegmentBytes }),
         }),
         resolve,
         fresh,
@@ -953,15 +957,17 @@ export class WarmRunner {
     requireMemoryOrder(heapMb, o.rssLimitMb, o.perChildMb);
     await this.#checkInputSize(request);
     const prefix = encodeInputPrefix(inputHeaderFor(request, o.components, limits.maxParseMillis));
+    const segmentBytes = segmentBytesFor(request, limits);
     const parentMb = parentResultMb(
       maxResultBytes,
       request.output,
       request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-      request.segments === true ? undefined : request.maxOutputChars,
+      request.maxOutputChars,
+      segmentBytes,
     );
     // Heap first: the domain is the caller's string and may contain anything.
     const key = `${heapMb}:${domain}`;
-    const spec: RequestSpec = { request, prefix, deadlineAt, signal, maxResultBytes, maxFrameBytes };
+    const spec: RequestSpec = { request, prefix, deadlineAt, signal, maxResultBytes, maxFrameBytes, maxSegmentBytes: segmentBytes };
 
     let child = this.#reuseIdle(key, parentMb);
     let fresh = false;

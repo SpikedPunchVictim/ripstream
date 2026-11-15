@@ -20,7 +20,7 @@ import {
   type InputHeader,
 } from "./child-io.ts";
 import { encodeChildError, encodeCrashError, oneLineText } from "./error-codec.ts";
-import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
+import { MAX_BYTES_CHUNK, MAX_SEGMENTS_PER_FRAME, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
 
 /**
  * The child side of the wire protocol: runs ONE whole parse in this process and answers over fd 3. The entry file
@@ -125,6 +125,31 @@ function isLowSurrogate(unit: number): boolean {
   return unit >= 0xdc00 && unit <= 0xdfff;
 }
 
+/**
+ * `segments` in lists of at most MAX_SEGMENTS_PER_FRAME, cut earlier once the labels and locations in a list come to
+ * `maxChars` characters: a frame stays small however long the strings are, as a text frame does (tikajs-9ztw).
+ * A single segment longer than that is a list of its own.
+ */
+export function* segmentChunks(
+  segments: readonly { start: number; end: number; labels: readonly string[]; location: string }[],
+  maxChars: number = MAX_TEXT_CHUNK_CHARS,
+): Generator<{ start: number; end: number; labels: string[]; location: string }[]> {
+  let list: { start: number; end: number; labels: string[]; location: string }[] = [];
+  let chars = 0;
+  for (const { start, end, labels, location } of segments) {
+    let size = location.length;
+    for (const label of labels) size += label.length;
+    if (list.length > 0 && (list.length >= MAX_SEGMENTS_PER_FRAME || chars + size > maxChars)) {
+      yield list;
+      list = [];
+      chars = 0;
+    }
+    list.push({ start, end, labels: [...labels], location });
+    chars += size;
+  }
+  if (list.length > 0) yield list;
+}
+
 /** `text` in pieces of at most `maxChars` UTF-16 code units, never cutting a surrogate pair in two. */
 export function* textChunks(text: string, maxChars: number = MAX_TEXT_CHUNK_CHARS): Generator<string> {
   if (!Number.isSafeInteger(maxChars) || maxChars < 2) {
@@ -169,9 +194,6 @@ function toWireRecord(record: ParseRecord, withoutContent = false): IsolatedPars
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : wireException(record.exception),
-    ...(record.segments === undefined
-      ? {}
-      : { segments: record.segments.map(({ start, end, labels, location }) => ({ start, end, labels, location })) }),
   };
 }
 
@@ -305,9 +327,11 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
             t: "record",
             record: toWireRecord(record, chunked),
             ...(chunked ? { contentLength: record.content.length } : {}),
+            ...(record.segments === undefined ? {} : { segmentCount: record.segments.length }),
             ...(bytes === undefined ? {} : { byteLength: bytes.length }),
           });
           if (chunked) for (const chunk of textChunks(record.content)) send({ t: "text", chunk });
+          if (record.segments !== undefined) for (const list of segmentChunks(record.segments)) send({ t: "segments", segments: list });
           if (bytes !== undefined) for (const chunk of byteChunks(bytes)) send({ t: "bytes", chunk });
         }
       } else {

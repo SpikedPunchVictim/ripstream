@@ -28,6 +28,7 @@ import { buildWrapperCommand } from "./wrapper.ts";
 /** How a frame-reader objection is recorded as the reason the child was killed. */
 export const KILL_REASON_BY_VIOLATION: Readonly<Record<FrameViolationKind, KillReason>> = {
   total_too_large: "result_cap",
+  segment_cap: "segment_cap",
   frame_too_large: "frame_cap",
   metadata_cap: "metadata_cap",
   protocol: "protocol",
@@ -148,6 +149,8 @@ export interface RunChildOptions {
   readonly maxResultBytes: number;
   /** Longest single frame in bytes. Default 1 MiB. */
   readonly maxFrameBytes?: number;
+  /** Most bytes of segments frames accepted (records output). Omitted: the child may send none. */
+  readonly maxSegmentBytes?: number;
   /** The child's own parse timer, sent in the input header (InputHeader.maxParseMillis). Omitted: the child's default. */
   readonly maxParseMillis?: number;
   /** Most frames accepted over fd 3. Default 1,000,000 (see DEFAULT_MAX_FRAMES). */
@@ -389,6 +392,7 @@ class Supervision {
       ...(options.maxFrameBytes === undefined ? {} : { maxFrameBytes: options.maxFrameBytes }),
       ...(options.maxFrames === undefined ? {} : { maxFrames: options.maxFrames }),
       ...(options.request.unpackBytes === undefined ? {} : { unpackBytes: options.request.unpackBytes }),
+      ...(options.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: options.maxSegmentBytes }),
     });
   }
 

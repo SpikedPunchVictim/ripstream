@@ -868,6 +868,15 @@ test("a pool refusal is its own class and its message names none of the words ot
   }
 });
 
+test("a records request with segments at the full cap fits the pool of a 4 GiB container (tikajs-9ztw)", async () => {
+  // The pool of a 4 GiB container is 3584 MiB. Segments used to reserve the whole result at 24x (10,146 MiB).
+  const fits = new MemoryPool({ poolMb: 3584, overshootMb: 1024, maxQueue: 0 });
+  const h = setup({ pool: fits, config: { mode: "strict" }, childArgs: ["records"] });
+  const answer = await (await h.create()).isolate({ input: bytes("a"), output: "records", maxOutputChars: 52_428_800, segments: true });
+  assert.equal(answer.kind, "records");
+  assert.equal(h.runs(), 1);
+});
+
 test("components too large for the request header are refused when the isolator is built, not on every request", async () => {
   const huge = { parsers: [{ name: "default-parser", marker: true, exclude: [], mimeInclude: Array.from({ length: 2000 }, (_, i) => `application/x-type-${i}`), mimeExclude: [] }] };
   await assert.rejects(

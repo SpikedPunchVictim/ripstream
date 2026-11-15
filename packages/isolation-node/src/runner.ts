@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
-import { AbortError, IsolationError, LimitExceededError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
+import { AbortError, DEFAULT_LIMITS, IsolationError, LimitExceededError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { requireTempDir } from "./disk.ts";
-import { DEFAULT_MAX_DISK_MB, WIRE_BYTES_PER_OUTPUT_CHAR } from "./limits.ts";
+import { DEFAULT_MAX_DISK_MB, segmentAllowanceBytes, WIRE_BYTES_PER_OUTPUT_CHAR } from "./limits.ts";
 import type { MemoryPool } from "./pool.ts";
 import { startChild, type RunChildOptions, type RunDiagnostics } from "./supervisor.ts";
 import { clampTimerMs } from "./timers.ts";
@@ -104,13 +104,28 @@ export const UNPACK_RESULT_FACTOR = 2;
 const CONTENT_CHAR_FACTOR = 5;
 
 /**
+ * Parent bytes held per byte of segments frames (tikajs-9ztw). Segments are many small objects (`start`, `end`, a
+ * label list, a location, and the `text` slice the facade adds), so they cost more heap than wire, whatever the text
+ * looks like: measured as the peak of the parent's RSS above its idle baseline with segments, less the same parse
+ * without, in a 12 GiB container, node 24, linux arm64, one run each: a DOCX of 48 million characters, 598,000
+ * segments of about 70 bytes, 40 MiB of frames: +142 MiB (3.5x); a DOCX of 6 million characters in a million
+ * five-character paragraphs, 65 MiB: +214 MiB (3.3x); an XLSX of 8 million characters, 944,000 segments, 81.5 MiB:
+ * +247 MiB (3.0x); another XLSX, 537,000 segments: +177 MiB. The factor is highest for the smallest segments, which
+ * are the densest per byte; 4 is the worst of those and 15% over, and the allowance for segments (limits.ts) bounds
+ * how many bytes it applies to. Re-measure if the way segments cross or are rebuilt changes.
+ */
+export const SEGMENT_RESULT_FACTOR = 4;
+
+/**
  * MiB of parent memory to reserve for a result of at most `maxResultBytes`.
  *
  * `textChars`: how many characters of it are text (`maxOutputChars`: the text of a "text" result, the content of the
  * records of a "records" one). Those are reserved at CONTENT_CHAR_FACTOR per character; the rest of the result
  * (metadata, paths, envelopes), at the factor of its output per wire byte. Omitted, the whole result is reserved at
- * that factor: what a caller must pass when the rest is not bounded (a request with segments puts their list in the
- * record frame) or unknown.
+ * that factor: what a caller must pass when the text is unknown.
+ *
+ * `segmentBytes`: the wire bytes of segments frames the request may carry (a part of `maxResultBytes`), reserved at
+ * SEGMENT_RESULT_FACTOR each, not at the factor of the rest.
  *
  * With embedded bytes, `wireBytes` of the result (their base64 form) is for them: it is reserved as
  * `bytes * UNPACK_RESULT_FACTOR`, not at the factor of the rest.
@@ -120,11 +135,19 @@ export function parentResultMb(
   output: "text" | "records" | undefined,
   unpack?: { readonly bytes: number; readonly wireBytes: number },
   textChars?: number,
+  segmentBytes?: number,
 ): number {
   const factor = output === "records" ? RECORDS_RESULT_FACTOR : TEXT_RESULT_FACTOR;
   const chars = textChars ?? 0;
-  const rest = Math.max(0, maxResultBytes - chars * WIRE_BYTES_PER_OUTPUT_CHAR - (unpack === undefined ? 0 : unpack.wireBytes));
-  const held = (unpack === undefined ? 0 : unpack.bytes * UNPACK_RESULT_FACTOR) + chars * CONTENT_CHAR_FACTOR;
+  const segments = segmentBytes ?? 0;
+  const rest = Math.max(
+    0,
+    maxResultBytes - chars * WIRE_BYTES_PER_OUTPUT_CHAR - (unpack === undefined ? 0 : unpack.wireBytes) - segments,
+  );
+  const held =
+    (unpack === undefined ? 0 : unpack.bytes * UNPACK_RESULT_FACTOR) +
+    chars * CONTENT_CHAR_FACTOR +
+    segments * SEGMENT_RESULT_FACTOR;
   return Math.ceil((rest * factor + held) / MIB) + PARENT_RESULT_SLACK_MB;
 }
 
@@ -134,6 +157,7 @@ export function parentResultMbFor(limits: {
   readonly output: "text" | "records";
   readonly maxOutputChars: number;
   readonly segments?: boolean;
+  readonly maxSegmentBytes?: number;
   readonly unpackBytes?: number;
   readonly unpackWireBytes?: number;
 }): number {
@@ -141,7 +165,8 @@ export function parentResultMbFor(limits: {
     limits.maxResultBytes,
     limits.output,
     limits.unpackBytes === undefined ? undefined : { bytes: limits.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-    limits.segments === true ? undefined : limits.maxOutputChars,
+    limits.maxOutputChars,
+    limits.segments === true ? segmentBytesFor({ segments: true, maxOutputChars: limits.maxOutputChars }, limits) : undefined,
   );
 }
 
@@ -226,6 +251,21 @@ export interface RunLimits {
   readonly maxParseMillis?: number;
   /** The part of `maxResultBytes` that is for the bytes of embedded documents (`request.unpackBytes`); see parentResultMb. */
   readonly unpackWireBytes?: number;
+  /** The part of `maxResultBytes` that is for segments (`request.segments`); see segmentBytesFor. */
+  readonly maxSegmentBytes?: number;
+}
+
+/**
+ * The most bytes of segments frames a request may carry: what the reader enforces and what parentResultMb reserves
+ * for. None for a request without segments (the reader then refuses any). The limits of the request say; a caller that
+ * gave none gets the allowance for the request's own `maxOutputChars`.
+ */
+export function segmentBytesFor(
+  request: { readonly segments?: boolean; readonly maxOutputChars?: number },
+  limits: { readonly maxSegmentBytes?: number },
+): number | undefined {
+  if (request.segments !== true) return undefined;
+  return limits.maxSegmentBytes ?? segmentAllowanceBytes(request.maxOutputChars ?? DEFAULT_LIMITS.maxOutputChars);
 }
 
 export function requirePositiveInteger(name: string, value: number): void {
@@ -344,7 +384,8 @@ export class ChildRunner {
         maxResultBytes,
         request.output,
         request.unpackBytes === undefined ? undefined : { bytes: request.unpackBytes, wireBytes: limits.unpackWireBytes ?? 0 },
-        request.segments === true ? undefined : request.maxOutputChars,
+        request.maxOutputChars,
+        segmentBytesFor(request, limits),
       ),
     });
     let run;
@@ -359,6 +400,7 @@ export class ChildRunner {
         ...(o.readyTimeoutMs === undefined ? {} : { readyTimeoutMs: o.readyTimeoutMs }),
         ...(o.graceMs === undefined ? {} : { graceMs: o.graceMs }),
         ...(maxFrameBytes === undefined ? {} : { maxFrameBytes }),
+        ...(segmentBytesFor(request, limits) === undefined ? {} : { maxSegmentBytes: segmentBytesFor(request, limits) as number }),
         ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
         ...(o.maxFrames === undefined ? {} : { maxFrames: o.maxFrames }),
         ...(o.stderrBudgetBytes === undefined ? {} : { stderrBudgetBytes: o.stderrBudgetBytes }),

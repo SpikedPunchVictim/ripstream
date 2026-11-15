@@ -23,9 +23,11 @@ import {
  * rather than after the whole stream was buffered:
  *
  *   text:    ready, meta, text*, done      (an error frame may end it anywhere after ready)
- *   records: ready, (record text* bytes*)*, done  (a record that announces `contentLength` is followed by text frames
- *            that add up to exactly that many characters; one that announces `byteLength` then by bytes frames that
- *            add up to exactly that, and only when the request asked for `unpackBytes`)
+ *   records: ready, (record text* segments* bytes*)*, done  (a record that announces `contentLength` is followed by
+ *            text frames that add up to exactly that many characters; one that announces `segmentCount` then by
+ *            segments frames that add up to exactly that many segments, and only when the request asked for
+ *            segments; one that announces `byteLength` then by bytes frames that add up to exactly that, and only
+ *            when the request asked for `unpackBytes`)
  */
 
 export const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
@@ -53,6 +55,14 @@ export const DEFAULT_MAX_METADATA_VALUES = DEFAULT_LIMITS.maxMetadataTotalChars;
  * (`contentLength`); a shorter one carries its content inline.
  */
 export const MAX_TEXT_CHUNK_CHARS = 64 * 1024;
+
+/**
+ * Most segments in one `segments` frame (tikajs-9ztw). The child also cuts a frame once the strings in it come to
+ * MAX_TEXT_CHUNK_CHARS characters, so one frame is at most about 1024 x 100 bytes of structure plus 6 x that many
+ * characters of strings on the wire, far below the frame cap; the parent parses one frame at a time and keeps only
+ * the segments.
+ */
+export const MAX_SEGMENTS_PER_FRAME = 1024;
 
 /** Raw bytes in one bytes frame, at most: the child cuts a document's bytes at this size. */
 export const MAX_BYTES_CHUNK = 192 * 1024;
@@ -93,19 +103,28 @@ export type Frame =
   | { readonly t: "text"; readonly chunk: string }
   /**
    * `contentLength`: the record's `content` (empty in `record`) follows in text frames of that many characters in
-   * all; segments are checked against it. `byteLength`: the embedded document's bytes follow in bytes frames (0: it
-   * is empty), after the text. Only with `unpackBytes`.
+   * all; segments are checked against it. `segmentCount`: the record's segments (`record.segments` is never set by
+   * the child) follow in segments frames, that many in all, after the text; 0 is a record with an empty list. Only
+   * when segments were asked for. `byteLength`: the embedded document's bytes follow in bytes frames (0: it is
+   * empty), after the segments. Only with `unpackBytes`.
    */
-  | { readonly t: "record"; readonly record: IsolatedParseRecord; readonly contentLength?: number; readonly byteLength?: number }
+  | {
+      readonly t: "record";
+      readonly record: IsolatedParseRecord;
+      readonly contentLength?: number;
+      readonly segmentCount?: number;
+      readonly byteLength?: number;
+    }
+  | { readonly t: "segments"; readonly segments: IsolatedSegment[] }
   | { readonly t: "bytes"; readonly data: Uint8Array }
   | { readonly t: "done" }
   | ErrorFrame;
 
 /**
- * "frame_too_large", "total_too_large" and "metadata_cap" are size limits (the parent reports a LimitExceededError);
+ * "frame_too_large", "total_too_large", "segment_cap" and "metadata_cap" are size limits (the parent reports a LimitExceededError);
  * "protocol" is a malformed or out-of-order stream (an IsolationError crash).
  */
-export type FrameViolationKind = "frame_too_large" | "total_too_large" | "metadata_cap" | "protocol";
+export type FrameViolationKind = "frame_too_large" | "total_too_large" | "segment_cap" | "metadata_cap" | "protocol";
 
 export type FrameEvent =
   | { readonly type: "frame"; readonly frame: Frame }
@@ -129,6 +148,11 @@ export interface FrameReaderOptions {
    * `unpackBytes`). Omitted: the child may send none.
    */
   readonly unpackBytes?: number;
+  /**
+   * Records output only: the most bytes of `segments` frames (newlines included) accepted over the stream, which is
+   * also what the parent reserves memory for (runner.ts). Omitted: the child may send no segments.
+   */
+  readonly maxSegmentBytes?: number;
 }
 
 interface MetadataLimits {
@@ -182,6 +206,13 @@ export class FrameReader {
   #owing: { readonly index: number; readonly parts: Uint8Array[]; remaining: number; readonly length: number } | null = null;
   /** The record whose content is still arriving in text frames. */
   #owingText: { readonly index: number; readonly parts: string[]; remaining: number } | null = null;
+  readonly #maxSegmentBytes: number;
+  /** Bytes of segments frames so far, over all records. */
+  #segmentBytes = 0;
+  /** The record whose segments follow its content: they are owed once the content is complete. */
+  #pendingSegments: { readonly index: number; readonly parts: IsolatedSegment[]; remaining: number; readonly contentLength: number } | null = null;
+  /** The record whose segments are still arriving in segments frames. */
+  #owingSegments: { readonly index: number; readonly parts: IsolatedSegment[]; remaining: number; readonly contentLength: number } | null = null;
 
   constructor(options: FrameReaderOptions) {
     this.#maxFrameBytes = checkPositiveInteger(
@@ -211,6 +242,13 @@ export class FrameReader {
       }
     }
     this.#unpackBytes = options.unpackBytes ?? 0;
+    if (options.maxSegmentBytes !== undefined) {
+      if (options.output !== "records") throw new TypeError('maxSegmentBytes needs output "records"');
+      if (!Number.isSafeInteger(options.maxSegmentBytes) || options.maxSegmentBytes < 0) {
+        throw new RangeError(`maxSegmentBytes must be a non-negative safe integer, got ${String(options.maxSegmentBytes)}`);
+      }
+    }
+    this.#maxSegmentBytes = options.maxSegmentBytes ?? -1;
   }
 
   /** Frames accepted so far, of every kind. */
@@ -347,6 +385,8 @@ export class FrameReader {
     this.#records = [];
     this.#owing = null;
     this.#owingText = null;
+    this.#owingSegments = null;
+    this.#pendingSegments = null;
     events.push(violation);
   }
 
@@ -383,8 +423,12 @@ export class FrameReader {
     }
     let orderError: string | null;
     try {
-      orderError = this.#checkOrder(parsed);
+      orderError = this.#checkOrder(parsed, line.length + 1);
     } catch (error) {
+      if (error instanceof SegmentBudgetError) {
+        this.#fail(events, "segment_cap", error.message);
+        return false;
+      }
       if (!(error instanceof UnpackBudgetError)) throw error;
       this.#fail(events, "total_too_large", error.message);
       return false;
@@ -399,7 +443,7 @@ export class FrameReader {
   }
 
   /** Checks `frame` against the sequence rules and folds it into the result. Returns what is wrong, or null. */
-  #checkOrder(frame: Frame): string | null {
+  #checkOrder(frame: Frame, wireBytes: number): string | null {
     if (this.#terminal !== null) return `"${frame.t}" frame after "${this.#terminal}"`;
     if (frame.t === "ready") {
       if (this.#sawReady) return 'second "ready" frame';
@@ -416,7 +460,10 @@ export class FrameReader {
         this.#exception = frame.exception ?? null;
         return null;
       case "text":
-        if (this.#output === "records") return this.#acceptContent(frame.chunk);
+        if (this.#output === "records") {
+          if (this.#owingSegments !== null) return '"text" frame while the segments of the last record are still owed';
+          return this.#acceptContent(frame.chunk);
+        }
         if (this.#metadata === null) return '"text" frame before "meta"';
         // An empty chunk adds nothing; not keeping it also keeps a flood of them free.
         if (frame.chunk.length > 0) this.#chunks.push(frame.chunk);
@@ -424,15 +471,22 @@ export class FrameReader {
       case "record":
         if (this.#output !== "records") return '"record" frame for text output';
         if (this.#owingText !== null) return '"record" frame while the content of the last record is still owed';
+        if (this.#owingSegments !== null) return '"record" frame while the segments of the last record are still owed';
         if (this.#owing !== null) return '"record" frame while the bytes of the last record are still owed';
-        return this.#acceptRecord(frame.record, frame.contentLength, frame.byteLength);
+        return this.#acceptRecord(frame.record, frame.contentLength, frame.segmentCount, frame.byteLength);
+      case "segments":
+        if (this.#output !== "records") return '"segments" frame for text output';
+        if (this.#owingText !== null) return '"segments" frame while the content of the last record is still owed';
+        return this.#acceptSegments(frame.segments, wireBytes);
       case "bytes":
         if (this.#output !== "records") return '"bytes" frame for text output';
         if (this.#owingText !== null) return '"bytes" frame while the content of the last record is still owed';
+        if (this.#owingSegments !== null) return '"bytes" frame while the segments of the last record are still owed';
         return this.#acceptBytes(frame.data);
       case "done":
         if (this.#output === "text" && this.#metadata === null) return '"done" frame before "meta" for text output';
         if (this.#owingText !== null) return '"done" frame while the content of the last record is still owed';
+        if (this.#owingSegments !== null) return '"done" frame while the segments of the last record are still owed';
         if (this.#owing !== null) return '"done" frame while the bytes of the last record are still owed';
         this.#terminal = "done";
         return null;
@@ -444,10 +498,23 @@ export class FrameReader {
   }
 
   /** A record, the content and the bytes it announces. The announced byte length is checked against the budget before any byte is kept. */
-  #acceptRecord(record: IsolatedParseRecord, contentLength: number | undefined, byteLength: number | undefined): string | null {
+  #acceptRecord(
+    record: IsolatedParseRecord,
+    contentLength: number | undefined,
+    segmentCount: number | undefined,
+    byteLength: number | undefined,
+  ): string | null {
+    if (segmentCount !== undefined && this.#maxSegmentBytes < 0) return "record announces segments, but none were asked for";
     this.#records.push(record);
+    const index = this.#records.length - 1;
     if (contentLength !== undefined) {
-      this.#owingText = { index: this.#records.length - 1, parts: [], remaining: contentLength };
+      this.#owingText = { index, parts: [], remaining: contentLength };
+    }
+    if (segmentCount === 0) this.#records[index] = { ...record, segments: [] };
+    else if (segmentCount !== undefined) {
+      const owed = { index, parts: [], remaining: segmentCount, contentLength: contentLength ?? record.content.length };
+      if (this.#owingText === null) this.#owingSegments = owed;
+      else this.#pendingSegments = owed;
     }
     if (byteLength === undefined) return null;
     if (this.#unpackBytes === 0 && byteLength > 0) return "record announces bytes, but none were asked for";
@@ -455,7 +522,6 @@ export class FrameReader {
       throw new UnpackBudgetError(`embedded bytes exceed the unpackBytes budget of ${this.#unpackBytes}`);
     }
     this.#unpackAnnounced += byteLength;
-    const index = this.#records.length - 1;
     if (byteLength === 0) this.#records[index] = { ...record, bytes: new Uint8Array(0) };
     else this.#owing = { index, parts: [], remaining: byteLength, length: byteLength };
     return null;
@@ -472,6 +538,29 @@ export class FrameReader {
     if (owing.remaining > 0) return null;
     this.#records[owing.index] = { ...this.#records[owing.index]!, content: owing.parts.join("") };
     this.#owingText = null;
+    this.#owingSegments = this.#pendingSegments;
+    this.#pendingSegments = null;
+    return null;
+  }
+
+  /** A segments frame: the next segments of the last record, checked against its content and the segment budget. */
+  #acceptSegments(segments: IsolatedSegment[], wireBytes: number): string | null {
+    const owing = this.#owingSegments;
+    if (owing === null) return '"segments" frame with no record waiting for segments';
+    if (segments.length === 0) return '"segments" frame must not be empty';
+    if (segments.length > owing.remaining) return `"segments" frame of ${segments.length} segments, ${owing.remaining} were owed`;
+    this.#segmentBytes += wireBytes;
+    if (this.#segmentBytes > this.#maxSegmentBytes) {
+      throw new SegmentBudgetError(`segments exceed ${this.#maxSegmentBytes} bytes`);
+    }
+    for (const segment of segments) {
+      if (segment.end > owing.contentLength) return "segment end is past the record's content";
+      owing.parts.push(segment);
+    }
+    owing.remaining -= segments.length;
+    if (owing.remaining > 0) return null;
+    this.#records[owing.index] = { ...this.#records[owing.index]!, segments: owing.parts };
+    this.#owingSegments = null;
     return null;
   }
 
@@ -550,6 +639,9 @@ class MetadataCapError extends Error {}
 /** Thrown by `#acceptRecord` when a record announces more bytes than the request's budget allows: a size limit, not a protocol fault. */
 class UnpackBudgetError extends Error {}
 
+/** Thrown by `#acceptSegments` when the segments frames add up to more than the request's segment budget: a size limit. */
+class SegmentBudgetError extends Error {}
+
 function validateMetadata(value: unknown, limits: MetadataLimits): Record<string, string[]> | string {
   if (!isObject(value)) return "metadata must be an object";
   const keys = Object.keys(value);
@@ -567,7 +659,7 @@ function validateMetadata(value: unknown, limits: MetadataLimits): Record<string
   return Object.fromEntries(entries);
 }
 
-/** `contentLength`: the record frame announced its content in text frames, so `content` must be empty and segments are checked against the announced length. */
+/** `contentLength`: the record frame announced its content in text frames, so `content` must be empty. */
 function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: number): IsolatedParseRecord | string {
   if (!isObject(value)) return "record must be an object";
   const extra = onlyKeys(value, [
@@ -578,7 +670,6 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
     "depth",
     "mediaType",
     "exception",
-    "segments",
   ]);
   if (extra !== null) return `record: ${extra}`;
   const metadata = validateMetadata(value.metadata, limits);
@@ -594,8 +685,6 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
   }
   const exception = value.exception === null ? null : validateException(value.exception, "record.exception");
   if (typeof exception === "string") return exception;
-  const segments = value.segments === undefined ? undefined : validateSegments(value.segments, contentLength ?? value.content.length);
-  if (typeof segments === "string") return segments;
   return {
     metadata,
     content: value.content,
@@ -604,34 +693,34 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
     depth: value.depth,
     mediaType: value.mediaType,
     exception,
-    ...(segments === undefined ? {} : { segments }),
   };
 }
 
 /**
- * `record.segments`: a list of `{ start, end, labels, location }`, each a slice of the record's content (offsets in
- * order, within it) with string labels and a location in the closed grammar.
+ * `segments.segments`: a list of `{ start, end, labels, location }`, each a slice of the record's content with string
+ * labels and a location in the closed grammar. The reader checks `end` against the record's content length, which a
+ * frame does not know.
  */
-function validateSegments(value: unknown, contentLength: number): IsolatedSegment[] | string {
-  if (!Array.isArray(value)) return "record.segments must be an array";
+function validateSegments(value: unknown): IsolatedSegment[] | string {
+  if (!Array.isArray(value)) return "segments.segments must be an array";
+  if (value.length > MAX_SEGMENTS_PER_FRAME) return `segments frame has more than ${MAX_SEGMENTS_PER_FRAME} segments`;
   const segments: IsolatedSegment[] = [];
   for (const segment of value as unknown[]) {
-    if (!isObject(segment)) return "record.segments[] must be objects";
+    if (!isObject(segment)) return "segments[] must be objects";
     const extra = onlyKeys(segment, ["start", "end", "labels", "location"]);
-    if (extra !== null) return `record.segments[]: ${extra}`;
+    if (extra !== null) return `segments[]: ${extra}`;
     const { start, end, labels, location } = segment;
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || (start as number) < 0 ||
-      (end as number) <= (start as number) || (end as number) > contentLength) {
-      return "record.segments[] must have integer offsets with 0 <= start < end <= the content's length";
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || (start as number) < 0 || (end as number) <= (start as number)) {
+      return "segments[] must have integer offsets with 0 <= start < end";
     }
     if (!Array.isArray(labels) || !labels.every((label) => typeof label === "string")) {
-      return "record.segments[].labels must be an array of strings";
+      return "segments[].labels must be an array of strings";
     }
-    if (typeof location !== "string") return "record.segments[].location must be a string";
+    if (typeof location !== "string") return "segments[].location must be a string";
     try {
       parseSegmentLocation(location);
     } catch {
-      return "record.segments[].location is not a segment location";
+      return "segments[].location is not a segment location";
     }
     segments.push({ start: start as number, end: end as number, labels: labels as string[], location });
   }
@@ -698,9 +787,12 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return { t: "text", chunk: value.chunk };
     }
     case "record": {
-      const extra = onlyKeys(value, ["t", "record", "contentLength", "byteLength"]);
+      const extra = onlyKeys(value, ["t", "record", "contentLength", "segmentCount", "byteLength"]);
       if (extra !== null) return `record frame: ${extra}`;
-      const { contentLength, byteLength } = value;
+      const { contentLength, segmentCount, byteLength } = value;
+      if (segmentCount !== undefined && (typeof segmentCount !== "number" || !Number.isSafeInteger(segmentCount) || segmentCount < 0)) {
+        return "record frame: segmentCount must be a non-negative integer";
+      }
       if (contentLength !== undefined && (typeof contentLength !== "number" || !Number.isSafeInteger(contentLength) || contentLength < 1)) {
         return "record frame: contentLength must be a positive integer";
       }
@@ -713,8 +805,15 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
         t: "record",
         record,
         ...(contentLength === undefined ? {} : { contentLength: contentLength as number }),
+        ...(segmentCount === undefined ? {} : { segmentCount: segmentCount as number }),
         ...(byteLength === undefined ? {} : { byteLength: byteLength as number }),
       };
+    }
+    case "segments": {
+      const extra = onlyKeys(value, ["t", "segments"]);
+      if (extra !== null) return `segments: ${extra}`;
+      const segments = validateSegments(value.segments);
+      return typeof segments === "string" ? segments : { t: "segments", segments };
     }
     case "bytes": {
       const extra = onlyKeys(value, ["t", "chunk"]);

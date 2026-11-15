@@ -15,6 +15,7 @@ export type KillReason =
   | "abort"
   | "rss"
   | "result_cap"
+  | "segment_cap"
   | "frame_cap"
   | "metadata_cap"
   | "disk"
@@ -143,6 +144,8 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
       );
     case "result_cap":
       return new LimitExceededError("Isolated parser result exceeded the maximum result size", stderrCause(facts));
+    case "segment_cap":
+      return new LimitExceededError("Isolated parser result's segments exceeded the maximum size allowed for segments", stderrCause(facts));
     case "frame_cap":
       return new LimitExceededError("Isolated parser result frame exceeded the maximum frame size", stderrCause(facts));
     case "metadata_cap":
@@ -171,7 +174,7 @@ function fromErrorFrame(frame: ErrorFrame, facts: ExitFacts): RipstreamError {
  *  1. terminal "done" frame: success, whatever happened afterwards.
  *  2. terminal "error" frame: class chosen by its `code` from a closed table (unknown code: crash), else by its
  *     `kind` enum (error-codec.ts).
- *  3. a kill we recorded: timeout/abort always; rss/result_cap/frame_cap/metadata_cap/disk/
+ *  3. a kill we recorded: timeout/abort always; rss/result_cap/segment_cap/frame_cap/metadata_cap/disk/
  *     protocol/cpu only after "ready" (before it, the child is infrastructure, see 4).
  *  4. before "ready": IsolationError "unavailable" (the exit shape varies by
  *     libc/emulation, so only the missing ready frame is reliable).

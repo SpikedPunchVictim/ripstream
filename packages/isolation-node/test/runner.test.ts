@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { AbortError, IsolationError, LimitExceededError, ParseTimeoutError } from "@spikedpunch/ripstream-core";
 import { deriveLimits } from "../src/limits.ts";
 import { MemoryPool } from "../src/pool.ts";
-import { ChildRunner, PARENT_RESULT_SLACK_MB, UNPACK_RESULT_FACTOR, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "../src/runner.ts";
+import { ChildRunner, PARENT_RESULT_SLACK_MB, SEGMENT_RESULT_FACTOR, UNPACK_RESULT_FACTOR, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "../src/runner.ts";
 import { fakeSpawn } from "./fixtures/fake-child.ts";
 import { CHILD, expectGroupGone, TEST_TEMP_DIR } from "./fixtures/helpers.ts";
 import type { RunDiagnostics } from "../src/supervisor.ts";
@@ -249,8 +249,13 @@ test("parentResultMb: the worked example in docs/isolation.md, maxOutputChars 52
   const text = deriveLimits({ mode: "strict" }, { output: "text", maxOutputChars: 52_428_800 });
   assert.equal(parentResultMbFor(text), 419);
   assert.equal(text.perChildMb + 1024 + parentResultMbFor(text), 2979);
-  // With segments the list is in the record frame and not bounded apart from the result: the whole result at 24x.
-  assert.equal(parentResultMbFor({ ...limits, segments: true }), Math.ceil((limits.maxResultBytes * 24) / MiB) + 96);
+  // Segments are reserved apart from the text, at their own factor, and what the pool needs fits the pool of a 4 GiB
+  // container (3584 MiB) at the cap: it was 3,000 MiB more (the whole result at 24x) when their list was in the record frame.
+  const segmented = deriveLimits({ mode: "strict" }, { output: "records", maxOutputChars: 52_428_800, segments: true });
+  const segmentMb = Math.ceil(((segmented.maxSegmentBytes as number) * SEGMENT_RESULT_FACTOR) / MiB);
+  assert.equal(parentResultMbFor(segmented), parentResultMbFor(limits) + segmentMb);
+  assert.equal(parentResultMbFor(segmented), 978);
+  assert.ok(segmented.perChildMb + 1024 + parentResultMbFor(segmented) <= 3584);
 });
 
 /** A runner whose spawn always throws, recording what the pool had reserved at that moment. */

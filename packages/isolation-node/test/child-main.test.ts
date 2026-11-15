@@ -21,6 +21,7 @@ import type { ChildInput, InputHeader } from "../src/child-io.ts";
 import {
   MAX_TEXT_CHUNK_CHARS,
   runChildMain,
+  segmentChunks,
   textChunks,
   type ChildMainIo,
   type ChildMainOptions,
@@ -873,4 +874,45 @@ test("a parse that finishes in time never calls exit", async () => {
   await r.outcome;
   assert.equal(r.frames.at(-1)?.t, "done");
   assert.deepEqual(r.exits, []);
+});
+
+// ---- segments in frames of their own (tikajs-9ztw) ----------------------------------------------------------
+
+const segment = (index: number, extra: Partial<{ labels: string[]; location: string }> = {}) => ({
+  start: index,
+  end: index + 1,
+  labels: extra.labels ?? [],
+  location: extra.location ?? `para=${index + 1}`,
+});
+
+test("segmentChunks: lists of at most 1024, cut earlier when the strings come to maxChars, never empty", () => {
+  assert.deepEqual([...segmentChunks([])], []);
+  const many = Array.from({ length: 2500 }, (_unused, index) => segment(index));
+  assert.deepEqual([...segmentChunks(many)].map((list) => list.length), [1024, 1024, 452]);
+  const wide = Array.from({ length: 5 }, (_unused, index) => segment(index, { labels: ["x".repeat(60)] }));
+  assert.deepEqual([...segmentChunks(wide, 100)].map((list) => list.length), [1, 1, 1, 1, 1], "each is over half of maxChars");
+  assert.deepEqual([...segmentChunks(wide, 200)].map((list) => list.length), [3, 2]);
+  const lone = [segment(0, { labels: ["y".repeat(500)] })];
+  assert.deepEqual([...segmentChunks(lone, 100)].map((list) => list.length), [1], "a segment longer than maxChars is a list of its own");
+  assert.deepEqual([...segmentChunks(many)].flat(), many, "nothing is lost or reordered");
+});
+
+test("records with segments: the record announces their count and they follow its text in segments frames, not inside it", async () => {
+  const content = "x".repeat(MAX_TEXT_CHUNK_CHARS + 10);
+  const segments = Array.from({ length: 1500 }, (_unused, index) => ({ ...segment(index), text: "x" }));
+  const records: ParseRecord[] = [
+    { metadata: new Metadata(), content, embeddedResourcePath: "/a", depth: 0, mediaType: MediaType.TEXT_PLAIN, exception: null, segments },
+    { metadata: new Metadata(), content: "ab", embeddedResourcePath: "/b", depth: 1, mediaType: MediaType.TEXT_PLAIN, exception: null, segments: [] },
+    { metadata: new Metadata(), content: "cd", embeddedResourcePath: "/c", depth: 1, mediaType: MediaType.TEXT_PLAIN, exception: null },
+  ];
+  const ripstream: ChildRipstream = { parse: async () => assert.fail("parse"), parseRecursive: async () => records };
+  const r = run(ripstream, input(header({ output: "records", segments: true })));
+  await r.outcome;
+  assert.deepEqual(types(r.frames), ["ready", "record", "text", "text", "segments", "segments", "record", "record", "done"]);
+  assert.equal(r.frames[1]?.segmentCount, 1500);
+  assert.equal("segments" in (r.frames[1]?.record as object), false, "the record itself carries no segments");
+  assert.equal(r.frames[6]?.segmentCount, 0, "an empty list is announced as 0 and sends no frame");
+  assert.equal(r.frames[7]?.segmentCount, undefined, "a record without segments announces none");
+  const sent = [r.frames[4], r.frames[5]].flatMap((frame) => frame?.segments as unknown[]);
+  assert.deepEqual(sent, segments.map(({ start, end, labels, location }) => ({ start, end, labels, location })), "no text on the wire");
 });

@@ -35,7 +35,9 @@ interface Segment {
 Segments need a `handlerType` of `text` (the default) or `body`, because their offsets index plain text. Any other
 handlerType, or a `segments` that is not a boolean, is refused (RangeError, TypeError). Under isolation the flag crosses
 on `IsolatedParseRequest.segments` (records only). The segments come back without their text, which is rebuilt from the
-content, and the frame reader checks every offset and location. Segments count against the isolation's result cap.
+content, and the frame reader checks every offset and location. Segments cross in `segments` frames of their own, with
+an allowance of their own (24 MiB + 0.75 bytes a character of `maxOutputChars`; a denser document fails with a
+`LimitExceededError`), see docs/isolation.md.
 
 ## In the recursive output: `--segments`
 

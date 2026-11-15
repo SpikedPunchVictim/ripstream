@@ -290,6 +290,21 @@ test("records parity with segments: every record's segments cross, the same as i
   assert.ok((plain as { records: readonly IsolatedParseRecord[] }).records.every((r) => r.segments === undefined), "off unless asked");
 });
 
+test("a record with thousands of segments crosses a child in several frames, content and segments as in-process (tikajs-9ztw)", async () => {
+  // 3,000 lines of a long-enough text file: 3,000 `line=N` segments, so three segments frames, after a content that is
+  // itself longer than one text frame.
+  const lines = Array.from({ length: 3000 }, (_unused, index) => `row ${index} ${"lorem ipsum ".repeat(8)}PLANTED-${index}`);
+  const input = new TextEncoder().encode(`${lines.join("\n")}\n`);
+  const reference = (await inProcess.parseRecursive(input, { filename: "many.txt", segments: true, limits: { maxOutputChars: 5_000_000 } })).map(wireRecord);
+  assert.ok((reference[0]?.segments?.length ?? 0) >= 3000, "the reference has the segments");
+  const result = await isolated({ input, filename: "many.txt", output: "records", segments: true, maxOutputChars: 5_000_000 });
+  const records = (result as { records: readonly IsolatedParseRecord[] }).records;
+  assert.deepEqual(records.map(withoutTiming), reference.map(withoutTiming));
+  const record = records[0]!;
+  const last = record.segments?.find((s) => record.content.slice(s.start, s.end).includes("PLANTED-2999"));
+  assert.equal(last?.location, "line=3000");
+});
+
 test("facade: segments cross a child and the in-process route alike, and need a records request", async () => {
   const input = docx(["PLANTED-FACADE paragraph"]);
   const reference = (await inProcess.parseRecursive(input, { filename: "f.docx", segments: true })).map(wireRecord);

@@ -81,14 +81,33 @@ export const RECORD_METADATA_BYTES = 4096;
 export const MAX_RECORDS_METADATA_BYTES = 16 * MIB;
 
 /**
+ * Allowance for the segments of a request that asked for them (tikajs-9ztw), in bytes of `segments` frames: a base
+ * for the documents whose structure is dense (a spreadsheet gives a row and a cell per few characters: 120,000
+ * segments, 18 MB of frames, for 1.08 million characters) plus three quarters of a byte per output character. It is on top of the text
+ * allowance, so segments no longer take room from the content, and the parent reserves memory for exactly this much
+ * (runner.ts, SEGMENT_RESULT_FACTOR): a document with more segments than this is a LimitExceededError, like any
+ * other cap. Measured (docs/isolation.md, "Segments"): a text-heavy DOCX of 48 million characters, one paragraph of
+ * about 80 per segment, sends 40 MiB of segments frames (0.9 bytes a character); a spreadsheet of 8 million
+ * characters in 16 columns sends 81 MiB (10 bytes a character; this allowance covers a sheet like it up to about 2
+ * million characters). It is sized so that a request at 52,428,800 characters (the allowance is then 61.5 MiB) still
+ * fits the pool of a 4 GiB container (3584 MiB) next to a child: the parent's reservation for it is then 978 MiB.
+ */
+export const SEGMENT_BASE_BYTES = 24 * MIB;
+export const SEGMENT_BYTES_PER_OUTPUT_CHAR = 0.75;
+
+/** Most bytes of `segments` frames a request with `maxOutputChars` may carry. */
+export function segmentAllowanceBytes(maxOutputChars: number): number {
+  return SEGMENT_BASE_BYTES + Math.ceil(maxOutputChars * SEGMENT_BYTES_PER_OUTPUT_CHAR);
+}
+
+/**
  * Room for what is neither text nor metadata: the ready and done frames (about 50 bytes) and the 24-byte envelope
  * of every text frame (a 64 KiB frame costs 0.04%; 64 KiB covers 2,700 frames, a result of 170 MB of text).
  */
 export const RESULT_SLACK_BYTES = 64 * 1024;
 
 /**
- * Hard ceiling on `maxResultBytes`, whatever the pool: below V8's maximum string length (with segments a single
- * frame can be as large as the result in records mode) and far below the point where the arithmetic stops being exact. Requests
+ * Hard ceiling on `maxResultBytes`, whatever the pool: below V8's maximum string length and far below the point where the arithmetic stops being exact. Requests
  * beyond it have no meaningful bound to enforce.
  */
 export const MAX_RESULT_BYTES_CEILING = 512 * MIB;
@@ -153,14 +172,16 @@ export interface DerivedLimits {
   readonly maxOutputChars: number;
   readonly maxEmbeddedResources: number;
   readonly output: "text" | "records";
-  /** Present when segments were asked for (records output): the parent's reservation covers the whole result as parsed JSON then. */
+  /** Present when segments were asked for (records output). */
   readonly segments?: true;
+  /** With `segments`: the most bytes of segments frames the parent accepts, and reserves memory for. It is part of `maxResultBytes`. */
+  readonly maxSegmentBytes?: number;
   /** Most bytes accepted over fd 3. */
   readonly maxResultBytes: number;
   /**
    * Longest single frame: text mode's largest is its meta frame. Records mode's is a record frame, which holds its
    * content only up to one text chunk (longer content follows in text frames): the metadata allowance, that chunk and
-   * the slack; with `segments` its list is in the frame and bounded only by the result.
+   * the slack. Segments follow in frames of their own, a few hundred KiB each.
    */
   readonly maxFrameBytes: number;
   /** Most `unpackBytes` a request may ask for under this config: the smaller of MAX_UNPACK_BYTES_CEILING and a quarter of `perChildMb`. */
@@ -226,9 +247,8 @@ function metadataAllowanceBytes(output: "text" | "records", maxEmbeddedResources
   return Math.min(MAX_RECORDS_METADATA_BYTES, Math.max(TEXT_METADATA_BYTES, records * RECORD_METADATA_BYTES));
 }
 
-function recordFrameCap(output: "text" | "records", segments: boolean, maxResultBytes: number, metadataBytes: number): number {
+function recordFrameCap(output: "text" | "records", maxResultBytes: number, metadataBytes: number): number {
   if (output === "text") return TEXT_METADATA_BYTES;
-  if (segments) return maxResultBytes;
   return Math.min(maxResultBytes, metadataBytes + MAX_TEXT_CHUNK_CHARS * WIRE_BYTES_PER_OUTPUT_CHAR + RESULT_SLACK_BYTES);
 }
 
@@ -285,10 +305,12 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
   const segments = request.segments === true;
   if (segments && output !== "records") throw new RangeError('segments needs a "records" request');
   const unpackWire = unpackBytes === undefined ? 0 : unpackWireBytes(unpackBytes, maxEmbeddedResources);
+  const maxSegmentBytes = segments ? segmentAllowanceBytes(maxOutputChars) : undefined;
   const maxResultBytes =
     maxOutputChars * WIRE_BYTES_PER_OUTPUT_CHAR +
     metadataAllowanceBytes(output, maxEmbeddedResources) +
     unpackWire +
+    (maxSegmentBytes ?? 0) +
     RESULT_SLACK_BYTES;
   if (maxResultBytes > MAX_RESULT_BYTES_CEILING) {
     throw new LimitExceededError(
@@ -309,12 +331,12 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     maxOutputChars,
     maxEmbeddedResources,
     output,
-    ...(segments ? { segments: true as const } : {}),
+    ...(segments ? { segments: true as const, maxSegmentBytes: maxSegmentBytes as number } : {}),
     maxResultBytes,
-    // A record frame carries no more than one text chunk of content (the rest follows in text frames), so its cap is
-    // the metadata allowance plus that chunk, unless segments make it as large as the result. Text mode's largest
-    // frame is the meta frame (text chunks are 64 KiB), hence the metadata allowance.
-    maxFrameBytes: recordFrameCap(output, segments, maxResultBytes, metadataAllowanceBytes(output, maxEmbeddedResources)),
+    // A record frame carries no more than one text chunk of content (the rest follows in text frames, and the segments
+    // in segments frames), so its cap is the metadata allowance plus that chunk. Text mode's largest frame is the
+    // meta frame (text chunks are 64 KiB), hence the metadata allowance.
+    maxFrameBytes: recordFrameCap(output, maxResultBytes, metadataAllowanceBytes(output, maxEmbeddedResources)),
     unpackCeiling,
     ...(unpackBytes === undefined ? {} : { unpackBytes, unpackWireBytes: unpackWire }),
   };

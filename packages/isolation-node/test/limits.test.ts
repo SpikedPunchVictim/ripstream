@@ -9,8 +9,10 @@ import {
   MAX_RESULT_BYTES_CEILING,
   MAX_UNPACK_BYTES_CEILING,
   RESULT_SLACK_BYTES,
+  SEGMENT_BASE_BYTES,
   TEXT_METADATA_BYTES,
   deriveLimits,
+  segmentAllowanceBytes,
 } from "../src/limits.ts";
 import { MAX_TEXT_CHUNK_CHARS } from "../src/frames.ts";
 
@@ -153,12 +155,18 @@ test("records: a result too small for that is its own frame cap", () => {
   assert.equal(limits.maxFrameBytes, limits.maxResultBytes);
 });
 
-test("records with segments: their list is in the record frame, so the frame cap is the whole result", () => {
-  for (const maxOutputChars of [0, 100_000, 5_000_000]) {
+test("records with segments: the segments have a budget of their own on top of the result, and the frame cap does not grow", () => {
+  for (const maxOutputChars of [100_000, 5_000_000, 52_428_800]) {
+    const plain = deriveLimits(strict, { output: "records", maxOutputChars });
     const limits = deriveLimits(strict, { output: "records", maxOutputChars, segments: true });
-    assert.equal(limits.maxFrameBytes, limits.maxResultBytes, `${maxOutputChars}`);
     assert.equal(limits.segments, true);
+    assert.equal(limits.maxSegmentBytes, segmentAllowanceBytes(maxOutputChars), `${maxOutputChars}`);
+    assert.equal(limits.maxResultBytes, plain.maxResultBytes + (limits.maxSegmentBytes as number), `${maxOutputChars}`);
+    assert.equal(limits.maxFrameBytes, plain.maxFrameBytes, "a segments frame is a few hundred KiB, not the result");
+    assert.equal(plain.maxSegmentBytes, undefined);
   }
+  assert.equal(segmentAllowanceBytes(0), SEGMENT_BASE_BYTES);
+  assert.ok(segmentAllowanceBytes(52_428_800) < 64 * MIB, "62 MiB at the largest cap the pool of a 4 GiB container admits");
   assert.throws(() => deriveLimits(strict, { output: "text", segments: true }), /segments needs a "records" request/);
 });
 

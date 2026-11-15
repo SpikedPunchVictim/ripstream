@@ -4,6 +4,16 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments in frames of their own: a 4 GiB pool admits the full cap (`tikajs-9ztw`)
+
+Changed: an isolated request with `segments: true` reserved its whole result at 24x (10,146 MiB at 52,428,800
+characters), so no container under about 12 GiB could admit it. The segments now follow the record's text in `segments`
+frames (at most 1024 segments each), the frame reader checks them against the content, and they have a budget of their
+own, 24 MiB + 0.75 bytes a character, reserved at a measured 4x. At the full cap the reservation is 3538 MiB, which a
+4 GiB container's pool holds; results are identical to the in-process parse. A document whose segments are denser than
+the allowance now fails with a `LimitExceededError` where it used to pass (docs/isolation.md, "Segments"). The wire
+protocol changed (`record.segmentCount`, the `segments` frame); parent and child ship together.
+
 ### Child reuse in the CLI and the server (`tikajs-py9u`)
 
 Added: `ripstream serve` and `ripstream pipes` can let an isolation child answer several requests: `--isolation-reuse
