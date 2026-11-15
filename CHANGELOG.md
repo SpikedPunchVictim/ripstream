@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### pdf.js warnings no longer reach stdout (`tikajs-08ld`)
+
+Fixed: pdf.js reports with `console.log`, so `ripstream parse file.pdf` (and an eml with a PDF attachment) printed
+`Warning: Cannot load "@napi-rs/canvas"`, `Cannot polyfill DOMMatrix/ImageData/Path2D` and, per document, `Indexing all PDF
+objects` into the extracted text. The document warnings are off (`verbosity: 0` in `getDocument`); the ones written as
+pdf.js loads are dropped while the module loads (new `pdfjs-import.ts`, which forwards every other `console.log`). No CLI
+change. The CLI bundle (`pnpm build:bundle`, not committed) carries the fix when it is rebuilt.
+
 ### PDF: what 00237's letter-per-line was, and the test gaps (`tikajs-f301`)
 
 Not a width problem: lost font widths (`/DW 0`, no `/W`) cost only the spaces between pieces of text ("Hoe" for "H oe"),

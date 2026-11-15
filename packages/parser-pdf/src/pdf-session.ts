@@ -1,4 +1,5 @@
 import { blockPdfjsCanvas } from "./block-canvas.ts";
+import { importWithoutPdfjsWarnings } from "./pdfjs-import.ts";
 import { createRequire } from "node:module";
 import { open, readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -302,12 +303,14 @@ export class PdfSession {
 
   async #load(): Promise<PdfDocument> {
     const input = this.#input;
-    const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as PdfModule;
+    const pdfjs = (await importWithoutPdfjsWarnings(() => import("pdfjs-dist/legacy/build/pdf.mjs"))) as unknown as PdfModule;
     const options: Record<string, unknown> = {
       isEvalSupported: false,
       useWorkerFetch: false,
       disableFontFace: true,
       useSystemFonts: false,
+      // Errors only: pdf.js's warnings go to stdout through console.log, into the output of a command line tool.
+      verbosity: 0,
       standardFontDataUrl: standardFontsUrl(),
       password: input.password ?? "",
     };
