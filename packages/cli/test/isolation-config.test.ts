@@ -197,6 +197,14 @@ test("every setting the CLI reads is accepted; so are names that do not start wi
     RIPSTREAM_ISOLATION_MAX_QUEUE: "1",
     RIPSTREAM_ISOLATION_MAX_DISK_MB: "1",
     RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT: "true",
+    RIPSTREAM_ISOLATION_REUSE: "true",
+    RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN: "tenant",
+    RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS: "1",
+    RIPSTREAM_ISOLATION_REUSE_RSS_CEILING_MB: "1",
+    RIPSTREAM_ISOLATION_REUSE_RSS_SAMPLE_EVERY: "1",
+    RIPSTREAM_ISOLATION_REUSE_IDLE_TIMEOUT_MS: "1",
+    RIPSTREAM_ISOLATION_REUSE_MAX_IDLE_CHILDREN: "1",
+    RIPSTREAM_ISOLATION_REUSE_MAX_TRUST_DOMAINS: "1",
     RIPSTREAM_MAX_OUTPUT_CHARS: "1",
     PATH: "/bin",
     ripstream_lowercase: "x",
@@ -224,4 +232,105 @@ test("the variables the CLI reads are exactly the ones accepted", () => {
   };
   assertKnownVariables(every);
   assert.equal(resolveIsolationConfig({ ...none, defaultMode: "off", env: every }).config.maxQueue, 4);
+});
+
+const strictNone = { ...none, defaultMode: "strict" as const, reuseApplies: true };
+
+test("reuse is off by default: no reuse in the result and none in the isolator's config", () => {
+  const resolved = resolveIsolationConfig(strictNone);
+  assert.equal(resolved.reuse, undefined);
+  assert.equal(resolved.reuseSource, undefined);
+  assert.equal("reuse" in resolved.config, false);
+});
+
+test("--isolation-reuse names the trust domain and switches reuse on", () => {
+  const resolved = resolveIsolationConfig({ ...strictNone, flagReuseTrustDomain: "tenant-a" });
+  assert.deepEqual(resolved.reuse, { enabled: true, trustDomain: "tenant-a" });
+  assert.equal(resolved.reuseSource, "flag");
+  assert.equal("reuse" in resolved.config, false);
+});
+
+test("--isolation-reuse-max-requests sets a detail of reuse that the flag switched on", () => {
+  const resolved = resolveIsolationConfig({ ...strictNone, flagReuseTrustDomain: "t", flagReuseMaxRequests: "50" });
+  assert.deepEqual(resolved.reuse, { enabled: true, trustDomain: "t", maxRequests: 50 });
+});
+
+test("reuse from the environment needs RIPSTREAM_ISOLATION_REUSE=true and a trust domain", () => {
+  const env = { RIPSTREAM_ISOLATION_REUSE: "true", RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN: "d", RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS: "7" };
+  const resolved = resolveIsolationConfig({ ...strictNone, env });
+  assert.deepEqual(resolved.reuse, { enabled: true, trustDomain: "d", maxRequests: 7 });
+  assert.equal(resolved.reuseSource, "env");
+});
+
+test("reuse from the config file, with the environment and the flag overriding per field", () => {
+  const fileIsolation = { mode: "strict", reuse: { enabled: true, trustDomain: "file", maxRequests: 10, idleTimeoutMs: 5000 } } as const;
+  assert.equal(resolveIsolationConfig({ ...strictNone, fileIsolation }).reuseSource, "config");
+  const resolved = resolveIsolationConfig({
+    ...strictNone,
+    fileIsolation,
+    env: { RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS: "20", RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN: "env" },
+    flagReuseTrustDomain: "flag",
+    flagReuseMaxRequests: "30",
+  });
+  assert.deepEqual(resolved.reuse, { enabled: true, trustDomain: "flag", maxRequests: 30, idleTimeoutMs: 5000 });
+  assert.equal(resolved.reuseSource, "flag");
+});
+
+test("RIPSTREAM_ISOLATION_REUSE=false turns off what the config file switched on", () => {
+  const fileIsolation = { mode: "strict", reuse: { enabled: true, trustDomain: "file" } } as const;
+  const resolved = resolveIsolationConfig({ ...strictNone, fileIsolation, env: { RIPSTREAM_ISOLATION_REUSE: "false" } });
+  assert.equal(resolved.reuse, undefined);
+});
+
+test("reuse without a trust domain is refused and says how to name one", () => {
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, env: { RIPSTREAM_ISOLATION_REUSE: "true" } }),
+    (error: unknown) => error instanceof IsolationSettingsError && /trust domain/.test(error.message) && /--isolation-reuse <trust-domain>/.test(error.message),
+  );
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, fileIsolation: { mode: "strict", reuse: { enabled: true } } }),
+    (error: unknown) => error instanceof IsolationSettingsError && /trust domain/.test(error.message),
+  );
+});
+
+test("an empty trust domain is refused", () => {
+  assert.throws(() => resolveIsolationConfig({ ...strictNone, flagReuseTrustDomain: "" }), IsolationSettingsError);
+});
+
+test("reuse is refused while isolation is off: there are no children to reuse", () => {
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, defaultMode: "off", flagReuseTrustDomain: "t" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /isolation mode is off/.test(error.message),
+  );
+});
+
+test("a detail of reuse without reuse switched on is refused, not ignored", () => {
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, flagReuseMaxRequests: "5" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /not switched on/.test(error.message),
+  );
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, env: { RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS: "5" } }),
+    (error: unknown) => error instanceof IsolationSettingsError && /RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS/.test(error.message),
+  );
+});
+
+test("a bad reuse number names where it came from and core's rules apply to the merged result", () => {
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, flagReuseTrustDomain: "t", flagReuseMaxRequests: "many" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /--isolation-reuse-max-requests/.test(error.message),
+  );
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, flagReuseTrustDomain: "t", flagReuseMaxRequests: "0" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /maxRequests/.test(error.message),
+  );
+});
+
+test("a command that parses one document refuses the reuse flags and ignores the variables", () => {
+  assert.throws(
+    () => resolveIsolationConfig({ ...strictNone, reuseApplies: false, flagReuseTrustDomain: "t" }),
+    (error: unknown) => error instanceof IsolationSettingsError && /serve and pipes/.test(error.message),
+  );
+  const resolved = resolveIsolationConfig({ ...strictNone, reuseApplies: false, env: { RIPSTREAM_ISOLATION_REUSE: "true" } });
+  assert.equal(resolved.reuse, undefined);
 });

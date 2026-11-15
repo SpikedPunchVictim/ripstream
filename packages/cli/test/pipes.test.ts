@@ -286,6 +286,60 @@ test("pipes parses in the isolation when one is asked for, and disposes it", asy
   }
 });
 
+test("pipes passes --isolation-reuse to the isolation as the reuse option, and not at all by default", async () => {
+  const paths = workspace({ "a.txt": "content" }, { pipes: { parseMode: "CONTENT_ONLY" } });
+  try {
+    const created: { config: unknown; reuse?: unknown }[] = [];
+    const createIsolation = (async (options: { config: unknown; reuse?: unknown }) => {
+      created.push(options);
+      return {
+        isolator: { dispose: async () => {}, status: () => ({ pool: { poolMb: 1 }, defaultReservationMb: { text: 1 }, containment: "none" }) },
+        ripstream: {
+          detect: async () => {
+            throw new Error("not used");
+          },
+          parse: async () => ({ text: "from the child", metadata: new Metadata() }),
+          parseRecursive: async () => [],
+        },
+      };
+    }) as unknown as NonNullable<CliDeps["createIsolation"]>;
+
+    const plain = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--isolation", "strict"], plain, { createIsolation, env: {} }), 0);
+    assert.equal("reuse" in created[0]!, false, "off by default");
+
+    const args = ["pipes", "--config", paths.config, "--isolation", "strict", "--isolation-reuse", "tenant-a", "--isolation-reuse-max-requests", "25"];
+    assert.equal(await main(args, io(), { createIsolation, env: {} }), 0);
+    assert.deepEqual(created[1]!.reuse, { enabled: true, trustDomain: "tenant-a", maxRequests: 25 });
+    assert.deepEqual(created[1]!.config, { mode: "strict" }, "reuse is an option of the isolator, not part of its config");
+
+    const env = { RIPSTREAM_ISOLATION_REUSE: "true", RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN: "from-env" };
+    assert.equal(await main(["pipes", "--config", paths.config, "--isolation", "strict"], io(), { createIsolation, env }), 0);
+    assert.deepEqual(created[2]!.reuse, { enabled: true, trustDomain: "from-env" });
+  } finally {
+    cleanup(paths);
+  }
+});
+
+test("--isolation-reuse is a usage error without a mode that has children, and on a command that parses one document", async () => {
+  const paths = workspace({ "a.txt": "content" }, { pipes: { parseMode: "CONTENT_ONLY" } });
+  try {
+    const off = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--isolation-reuse", "t"], off, { env: {} }), 2);
+    assert.match(off.err.join(""), /isolation mode is off/);
+
+    const noDomain = io();
+    assert.equal(await main(["pipes", "--config", paths.config, "--isolation", "strict"], noDomain, { env: { RIPSTREAM_ISOLATION_REUSE: "true" } }), 2);
+    assert.match(noDomain.err.join(""), /needs a trust domain/);
+
+    const oneShot = io();
+    assert.equal(await main(["--isolation", "strict", "--isolation-reuse", "t", "-"], oneShot, { env: {} }), 2);
+    assert.match(oneShot.err.join(""), /serve and pipes/);
+  } finally {
+    cleanup(paths);
+  }
+});
+
 /** Runs the built `ripstream` as a process, so it can be killed. */
 function spawnRipstream(args: string[]): { process: ReturnType<typeof spawn>; done: Promise<{ code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string }> } {
   const bin = join(import.meta.dirname, "..", "bin", "ripstream.js");

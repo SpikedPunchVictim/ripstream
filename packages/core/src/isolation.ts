@@ -61,6 +61,24 @@ export interface IsolationConfig {
    * it. The isolator checks the directory on a poll, so a child can overshoot between two samples.
    */
   readonly maxDiskMb?: number;
+  /**
+   * Opt-in reuse of isolation children for requests of one trust domain (docs/isolation.md, "Reusing children"). Off
+   * unless `enabled`. It is not read by the isolator from here: `createNodeIsolator` takes it as its own `reuse`
+   * option, and the CLI (flag, environment, file) passes it so.
+   */
+  readonly reuse?: IsolationReuseConfig;
+}
+
+/** `isolation.reuse` of a configuration file; the fields are those of the isolator's `ChildReuseOptions`, which says what each does. */
+export interface IsolationReuseConfig {
+  readonly enabled?: boolean;
+  readonly trustDomain?: string;
+  readonly maxRequests?: number;
+  readonly rssCeilingMb?: number;
+  readonly rssSampleEvery?: number;
+  readonly idleTimeoutMs?: number;
+  readonly maxIdleChildren?: number;
+  readonly maxTrustDomains?: number;
 }
 
 /**

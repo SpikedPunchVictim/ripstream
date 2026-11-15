@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Child reuse in the CLI and the server (`tikajs-py9u`)
+
+Added: `ripstream serve` and `ripstream pipes` can let an isolation child answer several requests: `--isolation-reuse
+<trust-domain>`, `--isolation-reuse-max-requests <n>`, `RIPSTREAM_ISOLATION_REUSE`, `_TRUST_DOMAIN` and one variable per
+setting, and `isolation.reuse` in the config file (also accepted by core's `loadConfig`/`validateConfig`; new type
+`IsolationReuseConfig`). Off by default, and then nothing changes. A trust domain is required; reuse without isolation,
+without a domain, or on a command that parses one document is a usage error. `serve` uses one domain for all requests
+(docs/isolation.md, "Reusing children").
+
 ### Segments in the recursive output: `--segments`, `tk:segments` (`tikajs-xock`)
 
 Added: `ripstream parse -r --segments` and `ripstream pipes --segments`, `RmetaOptions.segments` (`serializeRmeta`,

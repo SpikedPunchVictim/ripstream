@@ -410,7 +410,7 @@ whole in the parent, so those modes cost parent memory the pool does not account
 A fresh child costs about 290 ms before it parses anything (Node's start and the parsers' modules), which is most of
 the time a small document takes. A library caller can let a child answer several requests instead. **This is off by
 default, and off changes nothing:** the command, the environment, the wire bytes and one child per request are what
-they were. The CLI and the server do not expose it (follow-up `tikajs-py9u`).
+they were. `ripstream serve` and `ripstream pipes` expose it too ("In the CLI and the server", below).
 
 ```ts
 const isolator = await createNodeIsolator({
@@ -440,6 +440,35 @@ await isolator.isolate(request, { trustDomain: "tenant-b" }); // a request of an
 Reuse is refused at construction on a platform where the parent cannot read a child's CPU time (anything but Linux
 and macOS), and checked at construction unless the mode is `off`; it is ignored when the mode is `off` or a lenient
 isolator found isolation unavailable.
+
+### In the CLI and the server
+
+`ripstream serve` and `ripstream pipes` take the same settings, off unless switched on. A trust domain is required:
+the CLI cannot know who owns the documents, so it does not pick one.
+
+```bash
+ripstream serve --isolation strict --isolation-reuse tenant-a --isolation-reuse-max-requests 50
+RIPSTREAM_ISOLATION_REUSE=true RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN=tenant-a ripstream pipes --config pipes.json --isolation strict
+```
+
+```json
+{ "version": 2, "isolation": { "mode": "strict", "reuse": { "enabled": true, "trustDomain": "tenant-a", "maxRequests": 50 } } }
+```
+
+- `--isolation-reuse <trust-domain>` switches reuse on and names the domain. `--isolation-reuse-max-requests <n>` sets
+  `maxRequests`; the other settings are `RIPSTREAM_ISOLATION_REUSE_<MAX_REQUESTS|RSS_CEILING_MB|RSS_SAMPLE_EVERY|IDLE_TIMEOUT_MS|MAX_IDLE_CHILDREN|MAX_TRUST_DOMAINS>`
+  and the keys of `isolation.reuse`.
+- Precedence, per setting: flag, then environment, then the config file. `RIPSTREAM_ISOLATION_REUSE=false` switches off
+  what the file switched on.
+- Refused as a usage error (exit 2), not ignored: reuse without a trust domain; reuse while the mode is `off` (there are
+  no children to reuse); a detail (`--isolation-reuse-max-requests`, `RIPSTREAM_ISOLATION_REUSE_*`) while reuse is not
+  switched on; a non-positive or non-integer number; the flags on a command that parses one document. The variables are
+  ignored by those commands, as `RIPSTREAM_WORKERS` is. A platform that cannot do reuse (not Linux or macOS) is refused
+  by the isolator at start, with its message.
+- **One trust domain for the whole process.** `serve` sends every request with the configured domain, so every client of
+  that server shares children. Run one server per owner, or use the library and `isolate(request, { trustDomain })`, when
+  documents of different owners must not meet in a child. `pipes` is one job, so one domain fits it.
+- The startup line says reuse is on, and `GET /status` carries the isolator's `reuse` counts under `isolation`.
 
 ### What reuse gives up
 

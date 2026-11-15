@@ -183,6 +183,7 @@ export {
   type IsolatedParseResult,
   type IsolatedSegment,
   type IsolationConfig,
+  type IsolationReuseConfig,
   type IsolationMode,
   type ParseIsolator,
 } from "./isolation.ts";

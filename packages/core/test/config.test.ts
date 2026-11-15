@@ -114,6 +114,33 @@ test("isolation validation rejects bad shapes and values", () => {
   assert.throws(() => loadConfig({ isolation: { mode: "nope" } }), RipstreamConfigError);
 });
 
+test("isolation.reuse is loaded as a frozen copy and absent unless configured", () => {
+  const reuse = { enabled: true, trustDomain: "tenant-a", maxRequests: 50, idleTimeoutMs: 5000 };
+  const config = loadConfig({ isolation: { mode: "strict", reuse } });
+  assert.deepEqual(config.isolation?.reuse, reuse);
+  assert.notEqual(config.isolation?.reuse, reuse);
+  assert.equal(Object.isFrozen(config.isolation?.reuse), true);
+  assert.equal(loadConfig({ isolation: { mode: "strict" } }).isolation?.reuse, undefined);
+});
+
+test("isolation.reuse validation rejects bad shapes, unknown keys and bad values", () => {
+  const bad = (reuse: unknown): string => validateConfig({ isolation: { mode: "strict", reuse } }).join(";");
+  assert.match(bad("yes"), /isolation\.reuse must be an object/);
+  assert.match(bad(null), /isolation\.reuse must be an object/);
+  assert.match(bad([]), /isolation\.reuse must be an object/);
+  assert.match(bad({ enabled: 1 }), /isolation\.reuse\.enabled must be a boolean/);
+  assert.match(bad({ surprise: 1 }), /unknown key "surprise" in isolation\.reuse/);
+  assert.match(bad({ trustDomain: "" }), /isolation\.reuse\.trustDomain must be a non-empty string/);
+  assert.match(bad({ trustDomain: "x".repeat(257) }), /isolation\.reuse\.trustDomain/);
+  assert.match(bad({ trustDomain: 3 }), /isolation\.reuse\.trustDomain/);
+  for (const key of ["maxRequests", "rssCeilingMb", "rssSampleEvery", "idleTimeoutMs", "maxIdleChildren", "maxTrustDomains"]) {
+    for (const value of [0, -1, 1.5, "10", null, Number.NaN]) {
+      assert.match(bad({ [key]: value }), new RegExp(`isolation\\.reuse\\.${key} must be a positive integer`), `${key}=${String(value)}`);
+    }
+  }
+  assert.deepEqual(validateConfig({ isolation: { mode: "strict", reuse: { enabled: true, trustDomain: "t", maxRequests: 1 } } }), []);
+});
+
 test("maxQueue accepts zero for load shedding; other numeric fields do not", () => {
   assert.deepEqual(validateConfig({ isolation: { mode: "strict", maxQueue: 0 } }), []);
   assert.equal(validateConfig({ isolation: { mode: "strict", maxQueue: -0 } }).length, 1);

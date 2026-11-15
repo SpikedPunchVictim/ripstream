@@ -70,7 +70,20 @@ const ISOLATION_KEYS = new Set([
   "heapMb",
   "maxQueue",
   "maxDiskMb",
+  "reuse",
 ]);
+/** What `isolation.reuse` may hold; a key outside it is refused as one in `isolation` is. */
+const ISOLATION_REUSE_KEYS = new Set([
+  "enabled",
+  "trustDomain",
+  "maxRequests",
+  "rssCeilingMb",
+  "rssSampleEvery",
+  "idleTimeoutMs",
+  "maxIdleChildren",
+  "maxTrustDomains",
+]);
+const MAX_TRUST_DOMAIN_CHARS = 256;
 /** Inclusive bounds. 2_147_483_647 is the largest setTimeout delay. */
 const ISOLATION_NUMBER_BOUNDS = {
   memoryPoolMb: [1, 1_048_576],
@@ -466,6 +479,12 @@ function inspectIsolation(value: unknown): {
     }
   }
 
+  if (copy.reuse !== undefined) {
+    const reuse = inspectIsolationReuse(copy.reuse, issues);
+    if (reuse === null) delete copy.reuse;
+    else copy.reuse = reuse;
+  }
+
   const pool = copy.memoryPoolMb;
   const child = copy.perChildMb;
   const heap = copy.heapMb;
@@ -476,6 +495,42 @@ function inspectIsolation(value: unknown): {
     issues.push("isolation.heapMb must not exceed isolation.perChildMb");
   }
   return { issues, isolation: Object.freeze(copy) as unknown as IsolationConfig };
+}
+
+/**
+ * `isolation.reuse` as a frozen copy, or null when it is not an object (the issue is noted). Only its shape is checked
+ * here: that a trust domain is there when reuse is enabled, and that the ceiling is below the child's memory limit, are
+ * the isolator's to check, because a trust domain may come from the environment or a flag, and the limit from the child.
+ */
+function inspectIsolationReuse(value: unknown, issues: string[]): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    issues.push("isolation.reuse must be an object");
+    return null;
+  }
+  const copy: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    if (!ISOLATION_REUSE_KEYS.has(key)) {
+      issues.push(`unknown key "${key}" in isolation.reuse`);
+      continue;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) {
+      issues.push(`isolation.reuse.${key} must be a plain data property`);
+      continue;
+    }
+    const entry: unknown = descriptor.value;
+    if (key === "enabled") {
+      if (typeof entry !== "boolean") issues.push("isolation.reuse.enabled must be a boolean");
+    } else if (key === "trustDomain") {
+      if (typeof entry !== "string" || entry.length === 0 || entry.length > MAX_TRUST_DOMAIN_CHARS) {
+        issues.push(`isolation.reuse.trustDomain must be a non-empty string of at most ${MAX_TRUST_DOMAIN_CHARS} characters`);
+      }
+    } else if (typeof entry !== "number" || !Number.isSafeInteger(entry) || entry < 1) {
+      issues.push(`isolation.reuse.${key} must be a positive integer`);
+    }
+    copy[key] = entry;
+  }
+  return Object.freeze(copy);
 }
 
 function isValidNumber(

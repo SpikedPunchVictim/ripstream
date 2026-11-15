@@ -84,6 +84,10 @@ interface Options {
   readonly host: string | null;
   /** `--isolation` as typed; validated by resolveIsolationConfig. */
   readonly isolation: string | null;
+  /** `--isolation-reuse`: the trust domain, which also switches reuse of isolation children on; serve and pipes. */
+  readonly isolationReuse: string | null;
+  /** `--isolation-reuse-max-requests` as typed; validated by resolveIsolationConfig. */
+  readonly isolationReuseMaxRequests: string | null;
   /** `--max-output-chars` as typed; validated by resolveMaxOutputChars. */
   readonly maxOutputChars: string | null;
   /** `--maxEmbeddedDepth` and `--maxEmbeddedCount` as typed; validated by embeddedLimit. */
@@ -533,9 +537,14 @@ function describeIsolation(settings: CliSettings, isolation: StandardIsolation |
   if (status.pool === null || status.defaultReservationMb === null) {
     return `ripstream: isolation ${configured}, in force: ${status.mode}${status.degraded ? " (degraded)" : ""}`;
   }
+  const reuse = settings.isolation.reuse;
+  const reusing =
+    reuse === undefined || status.reuse === undefined
+      ? ""
+      : `; children are reused for trust domain "${reuse.trustDomain}" (${settings.isolation.reuseSource})${reuse.maxRequests === undefined ? "" : `, up to ${reuse.maxRequests} requests each`}`;
   return (
     `ripstream: isolation ${configured}; memory pool ${status.pool.poolMb} MiB, ` +
-    `${status.defaultReservationMb.text} MiB reserved per request, containment ${JSON.stringify(status.containment)}`
+    `${status.defaultReservationMb.text} MiB reserved per request, containment ${JSON.stringify(status.containment)}${reusing}`
   );
 }
 
@@ -554,6 +563,8 @@ async function openIsolation(
   try {
     return await create({
       config: settings.isolation.config,
+      // Off unless asked for, and then the isolator is given exactly what was asked (it refuses what it cannot do).
+      ...(settings.isolation.reuse === undefined ? {} : { reuse: settings.isolation.reuse }),
       // The child, the routing detector and the in-process parsers all build from the configuration's sections; its
       // limits, with the flags laid over them, are the defaults of every parse.
       ...(settings.config === null ? {} : { ripstreamConfig: settings.config }),
@@ -659,6 +670,9 @@ async function resolveSettings(
     const isolation = resolveIsolationConfig({
       defaultMode: options.command === "serve" ? "strict" : "off",
       flagMode: options.isolation,
+      flagReuseTrustDomain: options.isolationReuse,
+      flagReuseMaxRequests: options.isolationReuseMaxRequests,
+      reuseApplies: options.command === "serve" || options.command === "pipes",
       env,
       fileIsolation,
     });
@@ -711,6 +725,8 @@ function parseArgs(argv: readonly string[]): Options {
   let port: number | null = null;
   let host: string | null = null;
   let isolation: string | null = null;
+  let isolationReuse: string | null = null;
+  let isolationReuseMaxRequests: string | null = null;
   let maxOutputChars: string | null = null;
   let maxEmbeddedDepth: string | null = null;
   let maxEmbeddedCount: string | null = null;
@@ -755,6 +771,8 @@ function parseArgs(argv: readonly string[]): Options {
     else if (argument === "--port" || argument === "-p") port = parsePort(takeValue());
     else if (argument === "--host" || argument === "-h") host = takeValue();
     else if (argument === "--isolation") isolation = takeValue();
+    else if (argument === "--isolation-reuse") isolationReuse = takeValue();
+    else if (argument === "--isolation-reuse-max-requests") isolationReuseMaxRequests = takeValue();
     else if (argument === "--max-output-chars") maxOutputChars = takeValue();
     else if (argument === "--maxEmbeddedDepth") maxEmbeddedDepth = takeValue();
     else if (argument === "--maxEmbeddedCount") maxEmbeddedCount = takeValue();
@@ -773,7 +791,7 @@ function parseArgs(argv: readonly string[]): Options {
     throw new Error("ripstream pipes takes no file: its inputs come from the configuration's pipes-iterator");
   }
   return {
-    command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, maxOutputChars,
+    command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, isolationReuse, isolationReuseMaxRequests, maxOutputChars,
     maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers, segments,
   };
 }
@@ -781,13 +799,15 @@ function parseArgs(argv: readonly string[]): Options {
 /** Every flag parseArgs knows. One of these in the place of a flag's value means the value was left out. */
 const FLAGS: ReadonlySet<string> = new Set([
   "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--segments", "--help", "-h", "-?", "--version", "-V",
-  "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--max-output-chars",
+  "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--isolation-reuse",
+  "--isolation-reuse-max-requests", "--max-output-chars",
   "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
 ]);
 
 /** The long options that take a value: the ones `--name=value` is for. */
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
-  "--output", "--config", "--password", "--port", "--host", "--isolation", "--max-output-chars",
+  "--output", "--config", "--password", "--port", "--host", "--isolation", "--isolation-reuse",
+  "--isolation-reuse-max-requests", "--max-output-chars",
   "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
 ]);
 
@@ -817,6 +837,8 @@ function defaultOptions(): Options {
     port: null,
     host: null,
     isolation: null,
+    isolationReuse: null,
+    isolationReuseMaxRequests: null,
     maxOutputChars: null,
     maxEmbeddedDepth: null,
     maxEmbeddedCount: null,
@@ -852,6 +874,11 @@ function usage(): string {
     "  -c, --config <file>  JSON configuration (isolation, parsers, detectors, parse-context, metadata-filters, custom-mimetypes, server)",
     "  -p, --password <pw>  Document password (not available with --isolation; serve: -p is the port)",
     "      --isolation <mode>  strict, lenient or off: parse each document in its own child process",
+    "      --isolation-reuse <trust-domain>  serve, pipes: let a child answer up to 100 requests for documents of that one trust domain",
+    "                              (off by default: one child for each document is the stronger isolation). Needs --isolation",
+    "                              strict or lenient on Linux or macOS; --isolation-reuse-max-requests <n> sets the 100. Also",
+    "                              RIPSTREAM_ISOLATION_REUSE[_TRUST_DOMAIN|_MAX_REQUESTS|_RSS_CEILING_MB|_RSS_SAMPLE_EVERY|",
+    "                              _IDLE_TIMEOUT_MS|_MAX_IDLE_CHILDREN|_MAX_TRUST_DOMAINS] and isolation.reuse in --config (docs/isolation.md)",
     "                          (serve: strict unless set; other commands: off unless set)",
     "                          Off parses inside this process, so a parser crash or out-of-memory ends the process:",
     "                          use --isolation strict for untrusted input and for batch jobs (parse, pipes)",

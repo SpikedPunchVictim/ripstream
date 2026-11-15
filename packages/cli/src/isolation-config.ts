@@ -1,12 +1,17 @@
-import { validateConfig, type IsolationConfig, type IsolationMode } from "@spikedpunch/ripstream-core";
+import { validateConfig, type IsolationConfig, type IsolationMode, type IsolationReuseConfig } from "@spikedpunch/ripstream-core";
 import { WORKERS_VARIABLE } from "./workers-config.ts";
 
 /** Where the effective isolation mode came from (shown in the startup log). */
 export type IsolationSource = "default" | "config" | "env" | "flag";
 
 export interface ResolvedIsolation {
+  /** Without `reuse`, which the isolator takes as an option of its own: see `reuse`. */
   readonly config: IsolationConfig;
   readonly modeSource: IsolationSource;
+  /** Reuse of children, when something switched it on and a trust domain was named; absent (the default) otherwise. */
+  readonly reuse?: IsolationReuseConfig & { readonly enabled: true; readonly trustDomain: string };
+  /** Where `reuse` was switched on; present with it. */
+  readonly reuseSource?: "flag" | "env" | "config";
 }
 
 /** A bad flag, environment variable or config value. The CLI reports it as a usage error. */
@@ -25,6 +30,17 @@ const MAX_OUTPUT_CHARS_VARIABLE = "RIPSTREAM_MAX_OUTPUT_CHARS";
 /** Read by `bin/ripstream.js` before the CLI loads, not by the CLI: any value but "" or "0" runs `dist` instead of the bundle. */
 const NO_BUNDLE_VARIABLE = "RIPSTREAM_NO_BUNDLE";
 
+const REUSE_VARIABLE = "RIPSTREAM_ISOLATION_REUSE";
+const REUSE_TRUST_DOMAIN_VARIABLE = "RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN";
+const REUSE_NUMBER_VARIABLES = [
+  ["RIPSTREAM_ISOLATION_REUSE_MAX_REQUESTS", "maxRequests"],
+  ["RIPSTREAM_ISOLATION_REUSE_RSS_CEILING_MB", "rssCeilingMb"],
+  ["RIPSTREAM_ISOLATION_REUSE_RSS_SAMPLE_EVERY", "rssSampleEvery"],
+  ["RIPSTREAM_ISOLATION_REUSE_IDLE_TIMEOUT_MS", "idleTimeoutMs"],
+  ["RIPSTREAM_ISOLATION_REUSE_MAX_IDLE_CHILDREN", "maxIdleChildren"],
+  ["RIPSTREAM_ISOLATION_REUSE_MAX_TRUST_DOMAINS", "maxTrustDomains"],
+] as const;
+
 const NUMBER_VARIABLES = [
   ["RIPSTREAM_ISOLATION_MEMORY_POOL_MB", "memoryPoolMb"],
   ["RIPSTREAM_ISOLATION_PER_CHILD_MB", "perChildMb"],
@@ -42,7 +58,10 @@ const KNOWN_VARIABLES: readonly string[] = [
   MAX_OUTPUT_CHARS_VARIABLE,
   WORKERS_VARIABLE,
   NO_BUNDLE_VARIABLE,
+  REUSE_VARIABLE,
+  REUSE_TRUST_DOMAIN_VARIABLE,
   ...NUMBER_VARIABLES.map(([variable]) => variable),
+  ...REUSE_NUMBER_VARIABLES.map(([variable]) => variable),
 ];
 
 /** Read by the test suite (packages/parser-pdf/test/pdf.test.ts), never by the CLI, and often set in the same shell. */
@@ -130,6 +149,12 @@ function parseBoolean(value: string, where: string): boolean {
 export function resolveIsolationConfig(input: {
   readonly defaultMode: IsolationMode;
   readonly flagMode: string | null;
+  /** `--isolation-reuse <trust-domain>`: switches reuse on for that domain. */
+  readonly flagReuseTrustDomain?: string | null;
+  /** `--isolation-reuse-max-requests <n>` as typed. */
+  readonly flagReuseMaxRequests?: string | null;
+  /** The command parses many documents (serve, pipes). For the others a reuse flag is refused and the variables are ignored. */
+  readonly reuseApplies?: boolean;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly fileIsolation: IsolationConfig | null;
 }): ResolvedIsolation {
@@ -149,7 +174,8 @@ export function resolveIsolationConfig(input: {
     modeSource = "flag";
   }
 
-  const merged: Record<string, unknown> = { ...(fileIsolation ?? {}), mode };
+  const { reuse: fileReuse, ...fileRest } = fileIsolation ?? ({} as IsolationConfig);
+  const merged: Record<string, unknown> = { ...fileRest, mode };
   for (const [variable, key] of NUMBER_VARIABLES) {
     const raw = env[variable];
     if (raw !== undefined) merged[key] = parseInteger(raw, variable);
@@ -165,7 +191,74 @@ export function resolveIsolationConfig(input: {
 
   const issues = validateConfig({ isolation: merged });
   if (issues.length > 0) throw new IsolationSettingsError(`Invalid isolation settings: ${issues.join("; ")}`);
-  return { config: merged as unknown as IsolationConfig, modeSource };
+  return { config: merged as unknown as IsolationConfig, modeSource, ...resolveReuse(input, fileReuse, mode) };
+}
+
+/**
+ * Child reuse (docs/isolation.md, "Reusing children"), off unless something switches it on: `--isolation-reuse
+ * <trust-domain>` (which also names the domain), RIPSTREAM_ISOLATION_REUSE=true, or the file's `isolation.reuse.enabled`;
+ * the flag wins over the variable, which wins over the file, and `false` in a variable switches a file's `true` off.
+ * Every other setting: its RIPSTREAM_ISOLATION_REUSE_* variable (`--isolation-reuse-max-requests` for maxRequests), else
+ * the file. A trust domain is required, and a mode of `off` has no children to reuse: both are refused here with what to
+ * do, as are settings given to a command that has no use for them. A file that enables reuse and is read by such a
+ * command, or with the mode off by default, is the operator's one file for several commands, and is left alone.
+ */
+function resolveReuse(
+  input: {
+    readonly flagReuseTrustDomain?: string | null;
+    readonly flagReuseMaxRequests?: string | null;
+    readonly reuseApplies?: boolean;
+    readonly env: Readonly<Record<string, string | undefined>>;
+  },
+  fileReuse: IsolationReuseConfig | undefined,
+  mode: IsolationMode,
+): Pick<ResolvedIsolation, "reuse" | "reuseSource"> {
+  const { env } = input;
+  const flagDomain = input.flagReuseTrustDomain ?? null;
+  const flagMaxRequests = input.flagReuseMaxRequests ?? null;
+  const flagGiven = flagDomain !== null || flagMaxRequests !== null;
+  if (!(input.reuseApplies ?? true)) {
+    // The variables are ignored here, as RIPSTREAM_WORKERS is by a command that parses one document; a flag is not.
+    if (flagGiven) throw new IsolationSettingsError("--isolation-reuse and --isolation-reuse-max-requests apply to serve and pipes, which parse many documents");
+    return {};
+  }
+  const envEnabled = env[REUSE_VARIABLE] === undefined ? undefined : parseBoolean(env[REUSE_VARIABLE], REUSE_VARIABLE);
+  let reuseSource: "flag" | "env" | "config" | null = null;
+  if (fileReuse?.enabled === true) reuseSource = "config";
+  if (envEnabled === true) reuseSource = "env";
+  if (envEnabled === false) reuseSource = null;
+  if (flagDomain !== null) reuseSource = "flag";
+  if (reuseSource === null) {
+    // Off. A flag or variable that sets a detail of what is off is a mistake, not a setting.
+    const detail = [REUSE_TRUST_DOMAIN_VARIABLE, ...REUSE_NUMBER_VARIABLES.map(([variable]) => variable)].find((variable) => env[variable] !== undefined);
+    if (flagMaxRequests !== null || (detail !== undefined && envEnabled !== false)) {
+      throw new IsolationSettingsError(
+        `${flagMaxRequests !== null ? "--isolation-reuse-max-requests" : detail} is given but reuse is not switched on: use --isolation-reuse <trust-domain> or RIPSTREAM_ISOLATION_REUSE=true`,
+      );
+    }
+    return {};
+  }
+  const from = { flag: "--isolation-reuse", env: REUSE_VARIABLE, config: "isolation.reuse.enabled" }[reuseSource];
+  if (mode === "off") {
+    throw new IsolationSettingsError(`${from} needs isolation: there are no children to reuse while the isolation mode is off (use --isolation strict or lenient)`);
+  }
+  const merged: Record<string, unknown> = { ...(fileReuse ?? {}), enabled: true };
+  for (const [variable, key] of REUSE_NUMBER_VARIABLES) {
+    if (env[variable] !== undefined) merged[key] = parseInteger(env[variable], variable);
+  }
+  if (flagMaxRequests !== null) merged.maxRequests = parseInteger(flagMaxRequests, "--isolation-reuse-max-requests");
+  if (env[REUSE_TRUST_DOMAIN_VARIABLE] !== undefined) merged.trustDomain = env[REUSE_TRUST_DOMAIN_VARIABLE];
+  if (flagDomain !== null) merged.trustDomain = flagDomain;
+  const domain = merged.trustDomain;
+  if (typeof domain !== "string" || domain.length === 0 || domain.length > 256) {
+    throw new IsolationSettingsError(
+      `${from} needs a trust domain, a non-empty name of at most 256 characters for who owns the documents that may share a child: ` +
+        "--isolation-reuse <trust-domain>, RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN or isolation.reuse.trustDomain",
+    );
+  }
+  const issues = validateConfig({ isolation: { mode, reuse: merged } });
+  if (issues.length > 0) throw new IsolationSettingsError(`Invalid isolation settings: ${issues.join("; ")}`);
+  return { reuse: merged as unknown as NonNullable<ResolvedIsolation["reuse"]>, reuseSource };
 }
 
 /** The server-side `maxOutputChars` ceiling: `--max-output-chars`, else RIPSTREAM_MAX_OUTPUT_CHARS, else null. */
