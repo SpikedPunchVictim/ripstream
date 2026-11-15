@@ -1,0 +1,29 @@
+{
+  "description": "tikajs-f301: the shape of Grizzly corpora-pdf-x000/00237 (Skia output, damaged by cutting key and value endings), small and synthetic: a Type0/CIDFontType2 font with an embedded TrueType program whose /Subtype is /Type, /Encoding /Identity-, /CIDToGIDMap one character short and whose /W lost its name, shown with flipped text matrices and Td-separated pieces. Read as a simple font the glyphs came out one to a line; with the widths lost (/DW 0, no /W) the gap before a piece is not seen and 'H oe' reads 'Hoe'. The rebuild puts the font right (step font-repaired, key repair of tikajs-1myi), so the text reads whole, spaces included.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 130 >>\nstream\nBT /F1 24 Tf 1 0 0 -1 72 100 Tm <000100020003000300040005> Tj 160 0 Td <0001000200030003000400050001> Tj 140 0 Td <00040002> Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type /BaseFont /TestFont /Encoding /Identity- /DescendantFonts [6 0 R] /ToUnicode 8 0 R >>\nendobj\n6 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /TestFont /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 7 0 R /DW 0 / [ 1 [ 600 600 600 600 600 ] ] /CIDToGIDMa /Identity >>\nendobj\n7 0 obj\n<< /Type /FontDescriptor /FontName /TestFont /Flags 4 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 9 0 R >>\nendobj\n8 0 obj\n<< /Length 320 >>\nstream\n/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Adobe-Identity-UCS def /CMapType 2 def 1 begincodespacerange <0000> <FFFF> endcodespacerange 5 beginbfchar <0001> <0048> <0002> <0065> <0003> <006C> <0004> <006F> <0005> <0020> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end\nendstream\nendobj\n9 0 obj\n<< /Length 897 /Filter /ASCIIHexDecode >>\nstream\n000100000006008000020020676C796616A418980000006C000000AA68656164616A43A100000118000000366868656105E401910000015000000026686D74780E10000000000178000000186C6F636100990066000001900000000E6D61787000080006000001A00000002000010000000001F402BC0003000001010101000001F40000FE0C0000000002BC000000010000000001F402BC0003000001010101000001F40000FE0C0000000002BC000000010000000001F402BC0003000001010101000001F40000FE0C0000000002BC000000010000000001F402BC0003000001010101000001F40000FE0C0000000002BC000000010000000001F402BC0003000001010101000001F40000FE0C0000000002BC000000000001000000000000000000005F0F3CF5000003E80000000000000000000000000000000000000000025802BC000000080002000000000000000100000384FF380000025800000000025800010000000000000000000000000000000000060000025800000258000002580000025800000258000002580000000000000011002200330044005500000001000000060004000100000000000200000000000000000000000000000000>\nendstream\nendobj\n",
+    "filename": "pdf-repair-cid-font-00237-shape.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello Hello H oe"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "H\ne"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    }
+  ]
+}

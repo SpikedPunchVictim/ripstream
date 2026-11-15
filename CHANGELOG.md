@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF: what 00237's letter-per-line was, and the test gaps (`tikajs-f301`)
+
+Not a width problem: lost font widths (`/DW 0`, no `/W`) cost only the spaces between pieces of text ("Hoe" for "H oe"),
+as a synthetic font with an embedded TrueType program shows. Letters one to a line came from the font being read as a
+simple font because its `/Subtype` was `/Type` and its `/Encoding` `/Identity-`, which the rebuild already puts right
+(`tikajs-4hfu`), and the key repair of `tikajs-1myi` gives the widths back. New tests, no code: a fixture in the shape of
+00237 (an embedded font, every damage at once, Td-separated pieces; fails without the `/W` repair), a fixture for a PDF cut
+inside its xref stream with the catalog only in an object stream (`objstm-inlined`), and known-answer files for AES-256
+revisions 5 and 6, written once by the test builder and read back by poppler (an independent implementation) so the
+decryptor is no longer checked only against a builder that shares its reading of the standard.
+
 ### Segments: `leafSegments`, and what the labels gaps were (`tikajs-xlne`)
 
 New: `leafSegments(segments)` (core) drops the segments made of the segments inside them (a row of its cells, a pptx table's

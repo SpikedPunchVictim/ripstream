@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-f301: a PDF cut off inside its xref stream, with the catalog and the page tree only in a Flate object stream. Nothing in the file's top-level objects names a catalog, so the rebuild reads the object stream's members as objects (step objstm-inlined) and the text of the page is read.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "base64": "JVBERi0xLjUKMyAwIG9iago8PCAvVHlwZSAvUGFnZSAvUGFyZW50IDIgMCBSIC9NZWRpYUJveCBbMCAwIDYxMiA3OTJdIC9Db250ZW50cyA0IDAgUiAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA2IDAgUiA+PiA+PiA+PgplbmRvYmoKNCAwIG9iago8PCAvTGVuZ3RoIDU0ID4+CnN0cmVhbQpCVCAvRjEgMjQgVGYgNzIgNzAwIFRkIChIZWxsbyBjdXQgb2JqZWN0IHN0cmVhbSkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9PYmpTdG0gL04gMiAvRmlyc3QgOSAvRmlsdGVyIC9GbGF0ZURlY29kZSAvTGVuZ3RoIDczID4+CnN0cmVhbQp4nDNUMFAwUjA2UbCxUdAPqSxIVdB3TixJzMlPV9APSExPLQbKGigEKdjZIamASOh7Z6YUK0Qbg+RjgdryS/NKFAyBKgGkXRaRCmVuZHN0cmVhbQplbmRvYmoKNiAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCjcgMCBvYmoKPDwgL1R5cGUgL1hSZWYgL1NpemUgOCAvVyBbMSAyIDFdIC9Sb290IDEgMCBSIC9GaWx0ZXIgL0ZsYXRlRGVjb2RlIC9MZW5ndGggMzggPj4Kc3RyZWFtCnicY2AAgg==",
+    "filename": "pdf-repair-cut-object-stream.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello cut object stream"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    }
+  ]
+}
