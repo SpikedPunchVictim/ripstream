@@ -76,9 +76,41 @@ Use isolation for documents that might.
 ## When workers help
 
 Workers pay for CPU-bound parsing of many documents: office files, PDFs, HTML and XML, spreadsheets. They do not help
-when the run waits on fetching or emitting (a slow object store, a remote search index), and they cost more than
-they save for documents so small that copying them between threads is most of the work. One worker is about as fast
-as no workers: the gain comes from parsing several documents at once.
+when the run waits on fetching or emitting (a slow object store, a remote search index). They do not reliably help for
+tiny documents either, ones that parse in well under a tenth of a millisecond: handing such a document to a worker and
+taking its result back costs the run's own thread about as much as parsing it there, so that thread stays the limit
+however many workers there are, and a run can be slower than without them (RTF below). One worker is about as fast
+as no workers, or slower for tiny documents: the gain comes from parsing several documents at once.
+
+### Measurements
+
+Measured 2026-11-14 for `tikajs-ow39` on an Apple M2 Pro (12 CPUs, 16 GiB, macOS, Node 24.18), where `auto` is 8.
+Other work kept the machine at a load average of 7 to 18, so a single run swings by tens of percent; each figure is
+the median of three runs. Each group is 6 to 10 documents of xberg's test corpus (the one
+[xberg-benchmark.md](xberg-benchmark.md) uses), parsed warm 1,200 times with `parseRecursive` and
+`scripts/bench/ripstream-config.json`. In-process is the best of 1, 8 and 16 parses in flight on one thread; `n`
+workers keep `2n` in flight, as the CLI does. Documents per second:
+
+| Group (median size) | In-process | 1 worker | 2 | 4 | 8 (`auto`) | 8 against in-process |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Markdown, text (2.9 KB) | 1,206 | 1,056 | 2,117 | 2,596 | 4,567 | 3.8× |
+| HTML, XML (4.2 KB) | 2,566 | 2,299 | 3,731 | 6,670 | 7,789 | 3.0× |
+| JSON (7.8 KB) | 1,111 | 1,099 | 2,073 | 3,961 | 5,169 | 4.7× |
+| CSV, TSV (1.0 KB) | 5,427 | 3,926 | 8,452 | 11,623 | 14,992 | 2.8× |
+| YAML, TOML, ipynb (2.5 KB) | 2,919 | 2,633 | 4,948 | 8,863 | 13,194 | 4.5× |
+| Email (1.2 KB) | 2,000 | 1,351 | 3,243 | 5,314 | 2,939 | 1.5× |
+| OOXML, ODF (28 KB) | 389 | 304 | 395 | 493 | 609 | 1.6× |
+| RTF (85 bytes) | 18,516 | 10,592 | 18,950 | 22,706 | 22,011 | 1.2× (0.6× to 1.4×) |
+
+- **RTF is the group `auto` does not win.** Its documents are about 85 bytes and parse in about 50 µs each; with 8
+  workers the run's own thread was busy 71 to 98% of the time. Over eight runs of 8 workers against in-process
+  (these three and five more), workers were faster in four and slower in four, from 0.57 to 1.36 times. `--help`
+  says the same.
+- **Email** at 8 workers swung from 2,620 to 8,304 documents a second over the same eight runs, never below
+  in-process (about 2,000).
+- **Office files** gain least of the larger documents. The run's own thread was busy only about 8% of the time at
+  8 workers, so the workers are the limit. A separate series on the same machine measured 1.6 to 2.2 times at
+  8 workers; `auto` stays capped at 8 because 8 workers had the best median for office files in every series.
 
 ## How failures arrive
 

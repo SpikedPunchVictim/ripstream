@@ -220,6 +220,17 @@ test("help recommends --isolation strict for untrusted input and says what the i
   assert.match(text, /crash or out-of-memory ends the process/);
 });
 
+// tikajs-ow39: tiny documents were measured slower on workers in half the runs (docs/workers.md), so help says so.
+test("help says --workers is for CPU-bound documents, not tiny ones, and is not containment", async () => {
+  const sink = io();
+  assert.equal(await main(["--help"], sink), 0);
+  const text = sink.out.join("").replace(/\s+/g, " ");
+  assert.match(text, /--workers <n\|auto\|off>/);
+  assert.match(text, /not for tiny ones \(under ~0\.1 ms each, such as short RTF\), which can run slower/);
+  assert.match(text, /cannot be combined with --isolation/);
+  assert.match(text, /RIPSTREAM_WORKERS/);
+});
+
 /** A stand-in for createStandardIsolation that records what the CLI asked of it. */
 function fakeIsolation(overrides: { parse?: () => Promise<{ text: string; metadata: Metadata }> } = {}) {
   const log: { created: unknown[]; disposed: number; parsed: number; detected: number } = {

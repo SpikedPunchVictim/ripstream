@@ -4,6 +4,19 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Worker threads for pipes (`tikajs-ow39`)
+
+Added: `ripstream pipes --workers <n|auto|off>` (or `RIPSTREAM_WORKERS`) parses on a pool of worker threads in the same
+process; the run's own thread still fetches, detects, filters and emits. `auto` is one worker per CPU, at most 8, fewer
+when memory is short, and no pool (with a note on stderr) when that comes to fewer than 2. Without `numClients` in the configuration a run with workers keeps
+`max(4, 2 × workers)` documents in flight. In `@spikedpunch/ripstream-pipes/workers`: `createParsePool`, a ripstream to
+hand the engine, with `autoWorkerCount` and `MAX_WORKERS` (64). Workers are not containment: a native crash or a
+process-wide out-of-memory still ends the run, so the CLI refuses workers together with isolation (exit 2). A worker that
+fills its own heap fails its document with `LimitExceededError`; a stuck one is ended by a watchdog `maxParseMillis` + 5 s
+after it started; a pool that cannot replace a worker stops the run with `PipesFatalError`. Measured 1.5 to 4.7 times the
+in-process rate at 8 workers on CPU-bound groups; tiny documents (85-byte RTF) gain nothing and can be slower. The API
+report now covers package subpath exports. Details and the measurements: `docs/workers.md`.
+
 ### Segments: labels and locations inside a document (`tikajs-62gk`)
 
 Added, in `@spikedpunch/ripstream-core`: `ParseOptions.segments` (parseRecursive only, off by default) gives each
