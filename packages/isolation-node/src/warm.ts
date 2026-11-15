@@ -78,7 +78,7 @@ export type ChildRetireReason =
   | "error_frame"
   /** The child exited by itself (a crash, an odd or a zero exit, an EOF it was not sent). */
   | "exit"
-  /** The child could not be started or never became ready. */
+  /** The child could not be started or never became ready, or the frame reader refused the request it was given. */
   | "unavailable"
   /** Something was left in the child's TMPDIR, or the directory itself was replaced or removed. */
   | "temp_leftover"
@@ -289,20 +289,31 @@ class WarmChild {
     return this.#isDead;
   }
 
-  /** Serves one request. Never rejects: failures are verdicts. The child holds the lease for the request already. */
+  /**
+   * Serves one request. Failures are verdicts, except a request the frame reader refuses (a programming error: an option
+   * that no one validated), which rejects after the child is retired: it was checked out busy and holds its lease, and
+   * nothing else would ever end either (`tikajs-61w8`).
+   */
   serve(spec: RequestSpec, fresh: boolean): Promise<Verdict> {
+    let reader: FrameReader;
+    try {
+      reader = new FrameReader({
+        maxTotalBytes: spec.maxResultBytes,
+        output: spec.request.output ?? "text",
+        ...(spec.maxFrameBytes === undefined ? {} : { maxFrameBytes: spec.maxFrameBytes }),
+        ...(this.#config.options.maxFrames === undefined ? {} : { maxFrames: this.#config.options.maxFrames }),
+        ...(spec.request.unpackBytes === undefined ? {} : { unpackBytes: spec.request.unpackBytes }),
+        ...(spec.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: spec.maxSegmentBytes }),
+        acceptance: true,
+      });
+    } catch (error) {
+      this.retire("unavailable");
+      return Promise.reject(error);
+    }
     return new Promise<Verdict>((resolve) => {
       const req: ActiveRequest = {
         spec,
-        reader: new FrameReader({
-          maxTotalBytes: spec.maxResultBytes,
-          output: spec.request.output ?? "text",
-          ...(spec.maxFrameBytes === undefined ? {} : { maxFrameBytes: spec.maxFrameBytes }),
-          ...(this.#config.options.maxFrames === undefined ? {} : { maxFrames: this.#config.options.maxFrames }),
-          ...(spec.request.unpackBytes === undefined ? {} : { unpackBytes: spec.request.unpackBytes }),
-          ...(spec.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: spec.maxSegmentBytes }),
-          acceptance: true,
-        }),
+        reader,
         resolve,
         fresh,
         t0: performance.now(),
@@ -899,6 +910,7 @@ export class WarmRunner {
       requirePositiveInteger(name, options[name]);
     }
     if (options.maxDiskMb !== undefined) requirePositiveInteger("maxDiskMb", options.maxDiskMb);
+    if (options.maxFrames !== undefined) requirePositiveInteger("maxFrames", options.maxFrames);
     if (options.tempDir !== undefined) requireTempDir(options.tempDir);
     if (options.childScript.length === 0) throw new TypeError("childScript must be a non-empty path");
     requireMemoryOrder(options.heapMb, options.rssLimitMb, options.perChildMb);

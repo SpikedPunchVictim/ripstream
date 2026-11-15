@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: reused child left busy (`tikajs-61w8`, F12)
+
+Fixed: with children reused, a request the frame reader refused (an option no one had validated, such as `maxFrames: 0` or
+a negative `unpackBytes` handed to the runner directly) threw while its child was checked out, so the child stayed busy for
+good, kept its process and its memory lease, and held the process open. `maxFrames` is now checked when the runner is
+made, and a request the reader refuses retires its child before the error is rethrown. The one-shot runner was not affected.
+
 ### Bug hunt at 9a828fc: no waiting room and reused children (`tikajs-moxa`, F7)
 
 Fixed: with children reused and `maxQueue: 0`, a request of one trust domain was refused with `queue_full` while the only

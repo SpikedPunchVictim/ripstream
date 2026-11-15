@@ -501,6 +501,23 @@ test("with no waiting room and every child busy, another request is refused at o
   await busy;
 });
 
+test("a request the frame reader refuses does not leave its child busy, holding its lease (tikajs-61w8)", async () => {
+  const pool = poolFor(2, 0);
+  const { runner } = warm({ pool });
+  // unpackBytes below zero is a request nothing validated on this path, and the reader rejects it.
+  await assert.rejects(runner.run({ input: bytes("ok"), output: "records", unpackBytes: -1 }, { trustDomain: "a" }), RangeError);
+  await until(() => pool.stats().running === 0);
+  assert.equal(runner.stats().busy, 0);
+  assert.equal(retired(runner, "unavailable"), 1);
+  // The pool is free again: another request is served by a new child.
+  const next = await ask(runner, "ok", { trustDomain: "a" });
+  assert.equal(next.parsed, 1);
+});
+
+test("an option the frame reader cannot take is refused when the runner is made, not on a request (tikajs-61w8)", () => {
+  assert.throws(() => warm({ maxFrames: 0 }), /maxFrames must be a positive safe integer/);
+});
+
 test("a child that finishes while someone else waits for memory is retired, not parked", async () => {
   const pool = poolFor(1);
   const { runner } = warm({ pool });
