@@ -34,6 +34,8 @@ console.log(result.metadata.get("Content-Type"), result.text);
 SSRF-blocking URL fetch, archive traversal/symlink rejection, compression ratio and size caps,
 output/time/embedded limits, 0600 temp files, per-document parse isolation in a child process (`ripstream serve` isolates by default), secret redaction. See
 [docs/security.md](docs/security.md).
+What a result means (ok, damaged, repaired, limit hit, nested depth, XXE) and how to derive a status from it:
+[docs/limits-and-statuses.md](docs/limits-and-statuses.md).
 
 ## Development
 
