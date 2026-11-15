@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { deflateSync } from "node:zlib";
 import { pdfDate } from "../src/pdf.ts";
-import { preflightPdf } from "../src/pdf-preflight.ts";
+import { BodyContentHandler, Metadata, ParseContext, RipstreamInputStream } from "@spikedpunch/ripstream-core";
+import { PdfParser } from "../src/index.ts";
+import { preflightPdf, preflightPdfChunks } from "../src/pdf-preflight.ts";
 import { MAX_RECOVERED_BYTES, recoverDocument } from "../src/pdf-recover.ts";
 import { createFileRangeTransport, type RangeTransportConstructor } from "../src/pdf-session.ts";
 
@@ -165,4 +167,35 @@ test("pdfDate reads an ISO 8601 date, and drops a date that does not exist rathe
   assert.equal(pdfDate("20100504084354Z"), "2010-05-04T08:43:54Z");
   assert.equal(pdfDate("D:20100504084354+02'00'"), "2010-05-04T06:43:54Z");
   assert.equal(pdfDate("D:2010"), "2010-01-01T00:00:00Z");
+});
+
+test("preflightPdfChunks sees an object number across a chunk edge and a huge font length, in constant memory (tikajs-a8iv)", async () => {
+  const filler = "%" + "x".repeat(98) + "\n"; // 100 bytes
+  const read = (text: string) => async (start: number, end: number): Promise<Uint8Array> => encoder.encode(text.slice(start, end));
+  const lead = filler.repeat(49) + "%" + "x".repeat(88) + "\n"; // 4,990 bytes
+  const big = lead + "2147483647 0 obj\n<< >>\nendobj\n" + filler.repeat(50);
+  // The object header starts at 4,990; chunks of 4,996 bytes put the edge inside it (only the overlap sees it whole).
+  await assert.rejects(preflightPdfChunks(read(big), big.length, 4996, 64), /exceeds the 8388607 limit/);
+  const font = lead + "5 0 obj\n<< /Length1 4000000000 >>\nendobj\n" + filler.repeat(50);
+  await assert.rejects(preflightPdfChunks(read(font), font.length, 4996, 64), /font program/);
+  const fine = filler.repeat(100) + "7 0 obj\n<< >>\nendobj\n";
+  await preflightPdfChunks(read(fine), fine.length, 4996, 64);
+  // The overlap is what finds it: with none, the edge splits the number and neither chunk holds it.
+  await preflightPdfChunks(read(big), big.length, 4996, 0);
+});
+
+test("a PDF over 8 MiB is preflighted too: padding does not get an object number past the check (tikajs-a8iv)", async () => {
+  const pad = ("%" + "x".repeat(1022) + "\n").repeat(9 * 1024);
+  const body =
+    "1 0 obj <</Type /Catalog /Pages 2 0 R>>\nendobj\n2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n" +
+    "3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 10 10]>>\nendobj\n2147483647 0 obj <</Root 1 0 R>>\nendobj\n";
+  const stream = await RipstreamInputStream.from(encoder.encode("%PDF-1.7\n" + pad + body));
+  const started = performance.now();
+  try {
+    await assert.rejects(new PdfParser({ pageTimeoutMs: 2000 }).parse(stream, new BodyContentHandler(), new Metadata(), new ParseContext()), /exceeds the 8388607 limit|Unable to read PDF/);
+  } finally {
+    await stream.close();
+  }
+  // Unpadded it is refused in milliseconds; unchecked it spun for over a minute.
+  assert.ok(performance.now() - started < 20_000, "the padded file was not refused quickly");
 });

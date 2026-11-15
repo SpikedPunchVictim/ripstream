@@ -7,7 +7,7 @@ import { PageContentScanner, type PageContent } from "./pdf-content.ts";
 import { streamDecryptor } from "./pdf-decrypt.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
 import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
-import { preflightPdf } from "./pdf-preflight.ts";
+import { preflightPdf, preflightPdfChunks } from "./pdf-preflight.ts";
 import { diagnosePdf, latin1, rebuildPdf, type RebuiltPdf, type RepairStep } from "./pdf-rebuild.ts";
 import { isMissingCatalogError, recoverDocumentDetailed } from "./pdf-recover.ts";
 
@@ -321,6 +321,10 @@ export class PdfSession {
         // range loader is stricter than its in-memory recovery path.
         options.data = new Uint8Array(await readFile(input.path));
       } else {
+        // The checks that keep pdf.js from spinning or exhausting memory run on every file, not only the ones small
+        // enough to read whole: padding a file past the limit must not get it past them.
+        if (length <= CONTENT_SCAN_LIMIT) preflightPdf(new Uint8Array(await readFile(input.path)));
+        else await preflightPdfChunks((start, end) => readRange(input.path!, length, start, end), length);
         options.range = createFileRangeTransport(
           pdfjs.PDFDataRangeTransport,
           input.path,

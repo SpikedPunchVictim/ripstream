@@ -35,6 +35,13 @@ Fixed: the ASCII85 filter of the PDF recovery decoded into an array of numbers a
 so 7 MiB of `z` (four bytes a character) reached 893 MiB before it was refused. It now decodes into a buffer sized by the
 remaining budget and stops at the first byte over it (same input: 173 MiB, refused).
 
+### Bug hunt at 9a828fc: PDF preflight above 8 MiB (`tikajs-a8iv`, F20)
+
+Fixed: a PDF larger than 8 MiB is read through pdf.js's range transport, which skipped the preflight, so padding a file
+past 8 MiB got an object number near 2^31 (rejected in 20 ms unpadded) past the check: pdf.js spun for over a minute.
+A file up to 64 MiB is now read once for the full preflight; a larger one is checked a chunk at a time (object numbers and
+font lengths; the form-cycle check needs the whole file and still covers only files that fit in memory).
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

@@ -18,6 +18,30 @@ export const MAX_FONT_PROGRAM_BYTES = 128 * 1024 * 1024;
 /** Cap on form XObject content decoded (decrypted and inflated) to see what it paints. */
 export const MAX_FORM_DECODED_BYTES = 16 * 1024 * 1024;
 
+/** Chunk size and overlap for `preflightPdfChunks`: a match is far shorter than the overlap. */
+const PREFLIGHT_CHUNK_BYTES = 8 * 1024 * 1024;
+const PREFLIGHT_OVERLAP_BYTES = 64 * 1024;
+
+/**
+ * The checks that need no view of the whole file (object numbers, font program lengths), run over a file too large to
+ * read at once, a chunk at a time with an overlap so a match across a chunk edge is still seen. The form XObject cycle
+ * check needs every object and is left to `preflightPdf` on a file that fits in memory. `read` gives the bytes from
+ * `start` up to `end` (fewer at the end of the file).
+ */
+export async function preflightPdfChunks(
+  read: (start: number, end: number) => Promise<Uint8Array>,
+  length: number,
+  chunkBytes = PREFLIGHT_CHUNK_BYTES,
+  overlapBytes = PREFLIGHT_OVERLAP_BYTES,
+): Promise<void> {
+  for (let start = 0; start < length; start += chunkBytes) {
+    const data = await read(start, Math.min(length, start + chunkBytes + overlapBytes));
+    const text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("latin1");
+    rejectHugeObjectNumbers(text);
+    rejectHugeFontLengths(text);
+  }
+}
+
 export function preflightPdf(data: Uint8Array): void {
   const text = Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("latin1");
   rejectHugeObjectNumbers(text);
