@@ -23,6 +23,9 @@ whole process, and in a `pipes` run that is every input not yet done. Run `ripst
 document is parsed in its own child process under the bounds below, and one that crashes or exceeds them fails that document
 alone. `ripstream --help` says the same.
 
+`ripstream pipes --workers` is the other way to parse away from the run's own thread: worker threads in the same process,
+for speed, with none of the containment above. The CLI refuses it together with isolation; see [workers.md](workers.md).
+
 `strict` refuses to start when isolation cannot be provided. `lenient` logs a WARN and parses everything in the
 server process. `off` parses in-process and says so at startup and, when `/status` is served, on `/status`.
 

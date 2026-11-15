@@ -503,6 +503,14 @@
       "withXhtml",
       "writeXmpPacket"
     ],
+    "bundle-standard/isolation": [
+      "StandardIsolation",
+      "StandardIsolationOptions",
+      "createInProcessParsers",
+      "createInProcessRipstream",
+      "createStandardIsolation",
+      "isolationChildPath"
+    ],
     "cli": [
       "CliDeps",
       "CliIO",
@@ -1288,6 +1296,14 @@
       "validatePipesConfig",
       "withRetry",
       "zipChunks"
+    ],
+    "pipes/workers": [
+      "MAX_WORKERS",
+      "ParsePool",
+      "ParsePoolOptions",
+      "WorkerHost",
+      "autoWorkerCount",
+      "createParsePool"
     ],
     "server": [
       "RipstreamServer",
