@@ -310,3 +310,23 @@ test("ASCII85 decoding is unchanged within the budget: groups, z, a short last g
   assert.equal(decodeStream(entries, "87cURD]i,\"Ebo7", { left: 11 }), "Hello World");
   assert.equal(decodeStream(entries, "87cURD]i,\"Ebo7", { left: 10 }), null);
 });
+
+test("an indirect /Kids array is read, not taken for a broken page tree, so pages keep their order (tikajs-bb8r)", () => {
+  const page = (contents: number): string => `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contents} 0 R >>`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids 8 0 R /Count 2 >>",
+    page(4),
+    streamObject("(Logical page two)"),
+    "<< /Type /Font >>",
+    page(7),
+    streamObject("(Logical page one)"),
+    "[6 0 R 3 0 R]",
+  ];
+  const text = classicPdf(objects);
+  assert.deepEqual(diagnosePdf(text, indexObjects(text)).causes, []);
+  // The file order is page 3 first; the tree's order is page 6 (logical page one) first. A rebuild keeps the tree.
+  const rebuilt = latin1(rebuildPdf(bytes(text.replace(/startxref\n\d+/, "startxref\n9")))!.data);
+  assert.doesNotMatch(rebuilt, /page-tree|\/Type \/Pages \/Kids \[3 0 R 6 0 R\]/);
+  assert.match(rebuilt, /\/Kids 8 0 R/);
+});

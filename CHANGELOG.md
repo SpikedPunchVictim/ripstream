@@ -51,6 +51,11 @@ clean empty parse unless the file had been repaired). A page whose content is cu
 text pdf.js did not extract, is named in `tk:exception:warn` for every file, not only repaired ones (it stays a success; the
 text that is there is kept). Files with no unreadable page are unchanged.
 
+### Bug hunt at 9a828fc: indirect /Kids in the PDF rebuild (`tikajs-bb8r`, F23)
+
+Fixed: a page tree whose `/Kids` is an indirect reference to an array object (`/Kids 8 0 R`) was read as a broken tree by
+the rebuild, which then listed the pages in file order instead of tree order (no text was lost). The array is read.
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current

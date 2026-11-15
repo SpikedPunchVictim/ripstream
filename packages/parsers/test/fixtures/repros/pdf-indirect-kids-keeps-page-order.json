@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-bb8r (F23): /Kids as an indirect reference to an array object was read as a broken page tree, and the rebuilt tree listed the pages in file order (page 2 before page 1). startxref removed so the file goes through the rebuild.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids 8 0 R /Count 2 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 47 >>\nstream\nBT /F1 24 Tf 72 700 Td (Logical page two) Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n7 0 obj\n<< /Length 47 >>\nstream\nBT /F1 24 Tf 72 700 Td (Logical page one) Tj ET\nendstream\nendobj\n8 0 obj\n[6 0 R 3 0 R]\nendobj\nxref\n0 9\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000113 00000 n \n0000000239 00000 n \n0000000336 00000 n \n0000000406 00000 n \n0000000532 00000 n \n0000000629 00000 n \ntrailer\n<< /Size 9 /Root 1 0 R >>\n",
+    "filename": "pdf-indirect-kids-keeps-page-order.pdf"
+  },
+  "assertions": [
+    {
+      "type": "matches",
+      "field": "text",
+      "value": "Logical page one[\\s\\S]*Logical page two"
+    },
+    {
+      "type": "not_contains",
+      "field": "metadata.tk:pdf:repair-steps",
+      "value": "page-tree-rebuilt"
+    }
+  ]
+}

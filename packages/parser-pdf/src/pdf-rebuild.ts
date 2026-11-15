@@ -426,7 +426,11 @@ function pageTree(index: ObjectIndex, catalog: Reference): PageTree {
         note("page tree is too deep");
         continue;
       }
-      const refs = referencesIn(kids);
+      let refs = referencesIn(kids);
+      // /Kids may be an indirect reference to the array (`/Kids 8 0 R`, `8 0 obj [3 0 R 6 0 R] endobj`): read the array.
+      const direct = parseReference(kids);
+      const target = direct === null ? undefined : index.objects.get(direct.num);
+      if (target !== undefined && target.stream === null && target.body.trim().startsWith("[")) refs = referencesIn(target.body);
       for (let i = refs.length - 1; i >= 0; i--) stack.push({ num: refs[i]!.num, depth: depth + 1 });
       continue;
     }
