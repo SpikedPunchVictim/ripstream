@@ -400,6 +400,139 @@ for one document is `CLIENT_UNAVAILABLE_WITHIN_MS` for it, listed in the answer'
 A file source is handed to the child as a validated path in CONTENT_ONLY and RMETA; NO_PARSE and UNPACK still read it
 whole in the parent, so those modes cost parent memory the pool does not account for.
 
+## Reusing children (`tikajs-dasw`)
+
+A fresh child costs about 290 ms before it parses anything (Node's start and the parsers' modules), which is most of
+the time a small document takes. A library caller can let a child answer several requests instead. **This is off by
+default, and off changes nothing:** the command, the environment, the wire bytes and one child per request are what
+they were. The CLI and the server do not expose it (follow-up `tikajs-py9u`).
+
+```ts
+const isolator = await createNodeIsolator({
+  config: { mode: "strict" },
+  ripstream,
+  childModule,
+  reuse: { enabled: true, trustDomain: "tenant-a" },
+});
+await isolator.isolate(request, { trustDomain: "tenant-b" }); // a request of another owner gets another child
+```
+
+`createStandardIsolation` passes `reuse` through; its `ripstream` sends every request with the default
+`reuse.trustDomain`, so use `isolator.isolate(request, { trustDomain })` when requests have different owners.
+`status().reuse` counts domains, idle and busy children, spawns, reused requests and retirements by reason.
+
+| Setting | Default | |
+| --- | --- | --- |
+| `enabled` | `false` | |
+| `trustDomain` | required when enabled | The domain of a request that names none. A non-empty string of at most 256 characters. |
+| `maxRequests` | 100 | Requests one child answers before it is retired. |
+| `rssCeilingMb` | half the RSS kill limit (`perChildMb`), 768 | A child above it after a request is retired. Must be below the kill limit. |
+| `rssSampleEvery` | 10 | The ceiling is checked every this many requests of a child (one sample costs about 50 ms on macOS). |
+| `idleTimeoutMs` | 30000 | An idle child is retired after this long. Idle children never keep the process alive. |
+| `maxIdleChildren` | 4 | Over all domains; the least recently used goes first. |
+| `maxTrustDomains` | 8 | Domains with live children. A request of one more domain gets a child that serves only it, unless a domain whose children are all idle can be cleared. |
+
+Reuse is refused at construction on a platform where the parent cannot read a child's CPU time (anything but Linux
+and macOS), and checked at construction unless the mode is `off`; it is ignored when the mode is `off` or a lenient
+isolator found isolation unavailable.
+
+### What reuse gives up
+
+**When documents of different owners can reach the same isolator, one child per document is the strong option.**
+Reuse weakens the boundary *between documents of one child*; the boundary between a child and the server is the same.
+
+- A parser that a document compromises runs in a process that parsed earlier documents and will parse later ones. It
+  can read what earlier documents left in the heap and in module state, and watch the documents that come after it.
+- It can patch built-ins (`JSON`, `TextDecoder`, prototypes) or the parsers' modules, and change what later documents
+  of that child answer.
+- The temp-directory check covers files. It does not cover the heap or module state: nothing short of a new process
+  does.
+- The controls are: `trustDomain` (a child only ever serves the domain it was started for), a small `maxRequests`,
+  retiring a child on anything unusual (below), and the OS limits, which apply to the reused child as to a fresh one
+  (ulimit, the RSS kill, the process-group kill, the disk budget).
+
+A state audit of the parsers for what one document can leave for the next (n3, sql.js, xz-decompress, pdf.js, the
+media-type and parser caches, stderr) found three real carry-overs. The n3 blank-node counters made the same RDF
+document print different labels after earlier ones, and told it how many blank nodes those had: each parse now
+numbers its own (fixed in this change). sql.js keeps one WASM instance per process, and document bytes stay in its
+memory file system when a close fails (`tikajs-usub`); xz-decompress keeps a static instance and a mutex that a
+failing dispose never releases (`tikajs-3o6d`). Retiring a child after any fault bounds both. The rest is either
+independent of the document or is caches that never show in a later answer (the media-type parse cache, the
+composite parser's ranking cache, pdf.js's name caches, cleared on every document's destroy).
+
+`reuse-isolation.test.ts` (bundle-standard) checks this with the real child: documents of four formats carrying a
+unique marker are parsed first, then repository fixtures for every parser family (office, ODF, EPUB, ZIP, tar,
+GeoPackage, SAS, Ogg, HTML, mail, PDF, RDF), twice, as bytes and as paths, on the same child. Every answer must equal
+a fresh child's and never contain the marker; so must requests with `emailHeaders`, records with segments and the
+truncating limits, each followed by a request without them.
+
+### When a child is retired
+
+A retired child is SIGKILLed with its process group; the request it served is answered once it is dead and its
+directory removed. The parent decides all of this from what it sees; nothing depends on the child cooperating.
+
+| Reason | When |
+| --- | --- |
+| `error_frame` | The child answered with an error, whatever it was. |
+| `exception` | The answer carries an exception or any `tk:exception:` key (an embedded failure, a truncated output). |
+| `timeout`, `abort` | The wall-clock deadline fired or the caller aborted: the child is killed, as a fresh one would be. |
+| `cpu` | The request used more than `cpuSecs` of CPU (see below); the answer is a `LimitExceededError`. |
+| `cpu_unmeasured` | The child's CPU time could not be read after the request. |
+| `rss`, `disk`, `result_cap`, `frame_cap`, `metadata_cap` | A limit was hit during the request, as for a fresh child. |
+| `protocol` | A frame broke the protocol, the child wrote on fd 3 outside a request or after its answer, or did not consume its input. |
+| `exit` | The child exited, crashed or was killed by anything, busy or idle. An idle child that dies leaves the idle list at once. |
+| `unavailable` | It could not be started or never became ready. |
+| `temp_leftover` | Anything is left in its TMPDIR after a request, or the directory was replaced. |
+| `stderr_budget` | It used up its stderr budget (a budget for the child's life, not per request). |
+| `rss_ceiling` | Above `rssCeilingMb` (or not measurable) at a sampled request. |
+| `max_requests` | It answered `maxRequests`. |
+| `single_use` | It was started for a domain beyond `maxTrustDomains`. |
+| `idle_timeout`, `evicted`, `dispose` | Idle too long; retired to make room (memory another request waits for, `maxIdleChildren`, `maxTrustDomains`); the isolator was disposed. |
+
+**CPU.** `ulimit -t` counts a process's whole life, so with reuse it is only a backstop (`cpuSecs × maxRequests`, at
+most a day). The parent polls the child's CPU time during the request (`/proc/<pid>/stat` every 100 ms, `ps` every
+250 ms on macOS) and reads it once more after the answer; what the request added, including anything the child did
+while idle, must stay within `cpuSecs`. On macOS the final read is one `ps` per request (about 2 ms).
+
+**Temp files.** The child's TMPDIR is its own call directory. The parent lists it after every request; a file left
+there retires the child, and the directory goes with it.
+
+**Memory.** A child holds one pool lease from its start until it is dead. While busy, the lease is its cap, the
+overshoot and the parent's room for the result; while idle it gives the result room back and keeps the cap and the
+overshoot, so the pool never holds more children than it was sized for. The next request takes its result room again
+only when nobody is waiting; otherwise it queues like any request. Idle memory is never stranded: a request that has to
+wait makes the pool retire idle children, least recently used first, and a child that finishes while requests are
+queued goes to the request at the head of the queue (when it is of the same domain and fits the lease) or is retired
+so the head gets its memory. The queue stays first in, first out. A request that can never fit the pool gets the same
+message as without reuse.
+
+### Measured
+
+`packages/isolation-node/test/bench/warm.mjs` (needs `pnpm build`), darwin/arm64, 12 CPUs, Node 24.18.0. Corpus: the
+repository's fixtures (hazard and chaos left out), the 20 largest (3.66 MB) and 200 small ones (153 distinct files of
+64 KiB or less, cycled). Every type goes to the child (`inProcessTypes: []`). Concurrency equals the pool size, each of
+7 reps builds a new isolation (the warm rows include starting their children), median rep; p50 and p95 per file over
+all reps.
+
+| Set | Pool | In-process files/s | One-shot files/s (p50 / p95 ms) | Reused files/s (p50 / p95 ms) |
+| --- | --- | --- | --- | --- |
+| small | 1 | 290 | 3.3 (298 / 345) | 20.5 (5.0 / 310) |
+| small | 2 | 312 | 6.2 (308 / 457) | 39.8 (6.5 / 312) |
+| small | 4 | 317 | 11.7 (331 / 408) | 70.5 (7.5 / 330) |
+| large | 1 | 246 | 3.2 (311 / 380) | 9.2 (13 / 371) |
+| large | 2 | 249 | 6.1 (325 / 398) | 15.1 (21 / 363) |
+| large | 4 | 264 | 11.4 (333 / 398) | 19.4 (47 / 399) |
+
+The p95 of the reused rows is a child's start: 11 of the small files fail (HWP, StarOffice 5.2, Word 6, password-
+protected OOXML) and 4 of the large ones exceed the output limit; an error retires the child, so the next request
+starts one. The small rows started 25 or 26 children for 200 requests (22 `error_frame`, 1 `exception`), the large
+rows 6 or 7 for 20. On the 141 small files a reused child answers without being retired, one child answered 500
+requests one after another in 2.2 s (4.4 ms each); with `maxRequests` 100, five children took 3.8 s.
+
+The child's RSS over those 500 requests, without recycling: 157 MiB after request 49, 175 after 149, 187 after 499 (a
+first run ended at 163). With `maxRequests` 100 it stays between 129 and 175 MiB. The default ceiling, 768 MiB, is far
+above both.
+
 ## Limits of the design
 
 - **Parser code is trusted.** The disk budget assumes it too: code in the child can hide its files from the poll
@@ -408,6 +541,9 @@ whole in the parent, so those modes cost parent memory the pool does not account
   write to it and forge well-formed result frames. A forged result is accepted; one that breaks the protocol is
   reported as a crash. The child is contained by L1 to L6 and is the first target of the kernel's OOM killer, but a
   compromised parser can lie about its own document.
+- **A reused child is shared by the documents it serves.** With the opt-in `reuse`, a compromised parser sees and can
+  tamper with the later documents of its child; the parent's temp-directory check covers files, not the heap. Keep one child per document when
+  owners mix (see "Reusing children").
 - **A document password does not cross the boundary.** `--password` with `--isolation` is a usage error.
 - **Exception text from a child is data.** Per-document exceptions in recursive results become plain `Error`s with
   the child's text, sanitised and length-capped. They are never a ripstream error class.

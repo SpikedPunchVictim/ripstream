@@ -4,6 +4,30 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Opt-in reuse of isolation children: `reuse` (`tikajs-dasw`)
+
+Added: `createNodeIsolator({ reuse })` and the `createStandardIsolation` passthrough (default off; off changes nothing:
+same command, environment, wire bytes and one child per request). With `reuse: { enabled: true, trustDomain }` a child
+answers up to `maxRequests` (100) requests of one trust domain (`isolate(request, { trustDomain })`), so a small
+document no longer pays the child's start (about 300 ms). On 200 small repository fixtures, 4 concurrent requests: 11.7
+files/s one-shot, 70.5 reused, p50 331 ms to 7.5 ms; one child, sequentially: 3.3 to 20.5 files/s
+(`test/bench/warm.mjs`, 7 reps; documents that fail retire their child, so the rate is lower than the spike's). The
+child is retired (killed with its process group) on an error frame, any exception in the answer, a timeout, an abort,
+any limit, a crash, a protocol violation, a file left in its TMPDIR (the parent lists the directory after every
+request), an RSS above `rssCeilingMb`, the stderr budget, or the request count. The parent measures each request's CPU
+time (`/proc` on Linux, `ps` on macOS) against `cpuSecs`, since `ulimit -t` counts the child's whole life; reuse is
+refused where that cannot be read. A child holds one pool lease for its life and gives the result room back while idle;
+a request that waits makes the pool retire idle children, so the pool is never oversubscribed. Domains, idle children
+and the idle time are bounded (`maxTrustDomains` 8, `maxIdleChildren` 4, `idleTimeoutMs` 30 s); `status().reuse` counts
+spawns, reuses and retirements by reason. The CLI and the server do not expose it (`tikajs-py9u`). Reuse is weaker than
+one child per document when owners mix: a compromised parser sees and can tamper with later documents of its child. See
+`docs/isolation.md`, "Reusing children".
+
+Fixed: the RDF parser numbered blank nodes from n3's per-process counters, so the same document printed different labels
+(`b4_x`, `n3-5`) after earlier parses in the same process and leaked how many those had; each parse now numbers its own
+(`b0_x`, `n3-0`). Found by the reuse state audit, which also filed `tikajs-usub` (sql.js) and `tikajs-3o6d`
+(xz-decompress).
+
 ### Opt-in email header block in the text: `emailHeaders` (`tikajs-5qkk`, email half)
 
 Added: `ParseOptions.emailHeaders` (default `false`, unchanged). With `true`, `parse` and `parseRecursive` write an email's
