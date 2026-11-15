@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments: `leafSegments`, and what the labels gaps were (`tikajs-xlne`)
+
+New: `leafSegments(segments)` (core) drops the segments made of the segments inside them (a row of its cells, a pptx table's
+shape of its rows), so a value is in one segment, the cell, with its column header. Reading Grizzly's pass-2 gaps against
+the current build, no code was wrong: xlsx cells do carry the header (the first segment holding a value is the row, which
+has the sheet name only); a csv under eleven rows is text in Tika and here (lines, no labels; `csv: { delimiter }` reads it
+as a table); log and pdf name nothing; archive entries are records of their own; every planted value of the 290 files is
+in a segment, in the cell the generator put it in. docs/segments.md has the three explanations.
+
 ### PDF recovery: font keys one character short; the empty-after-repair error counts every page (`tikajs-1myi`)
 
 Fixed: a repaired PDF whose fonts had lost the last character of key names (`/Orderin`, `/Registr` in a CID font's

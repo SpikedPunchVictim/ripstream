@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseSegmentLocation, type ParseOptions, type ParseRecord } from "@spikedpunch/ripstream-core";
+import { leafSegments, parseSegmentLocation, type ParseOptions, type ParseRecord } from "@spikedpunch/ripstream-core";
 import { createRipstream } from "../src/index.ts";
 import { loadFixtures } from "./fixture-runner.ts";
 
@@ -88,4 +88,41 @@ test("round trip: (path, location) names exactly one segment, and finds every pl
       assert.ok(found?.includes(value), `${file}: ${holder.location} does not lead back to ${value}`);
     }
   }
+});
+
+test("leafSegments: no two overlap, together they hold every character, and a planted value's segment carries its column header", async () => {
+  const headers = new Map([["vendors.xlsx", "Tax ID"], ["customers.csv", "tax_id"], ["vendors.tsv", "tax_id"]]);
+  for (const file of readdirSync(segmentFiles).filter((name) => name !== "make.py")) {
+    const filename = file.replace(/\.txt$/, "");
+    const records = await ripstream.parseRecursive(readFileSync(join(segmentFiles, file)), { filename, segments: true });
+    for (const record of records) {
+      const leaves = leafSegments(record.segments!);
+      for (let index = 1; index < leaves.length; index++) {
+        assert.ok(leaves[index]!.start >= leaves[index - 1]!.end, `${file}: ${leaves[index]!.location} overlaps ${leaves[index - 1]!.location}`);
+      }
+      // JSON text has its punctuation outside every segment: only its scalars are segments.
+      if (!file.endsWith(".json.txt")) {
+        assert.equal(
+          leaves.map((segment) => segment.text).join("").replace(/\s+/g, ""),
+          record.content.replace(/\s+/g, ""),
+          `${file}: the leaves hold the text`,
+        );
+      }
+      const header = headers.get(file);
+      if (header === undefined) continue;
+      const planted = leaves.find((segment) => segment.text.startsWith("PLANTED-"));
+      assert.ok(planted !== undefined, `${file}: a leaf holds the planted value`);
+      assert.equal(planted.labels.at(-1), header, `${file}: ${planted.location} is labelled by its column header`);
+    }
+  }
+});
+
+test("a short csv is text, as in Tika: lines without labels; csv.delimiter reads it as a table with the header as the label (tikajs-xlne)", async () => {
+  const csv = new TextEncoder().encode("id,cn passport,lt code\n0,n/a,n/a\n1,S5230,3880\n2,n/a,n/a\n");
+  const asText = await ripstream.parseRecursive(csv, { filename: "short.csv", segments: true });
+  const line = asText[0]!.segments!.find((segment) => segment.text.includes("S5230"))!;
+  assert.deepEqual([line.location, line.labels], ["line=3", []]);
+  const asTable = await createRipstream({ csv: { delimiter: "," } }).parseRecursive(csv, { filename: "short.csv", segments: true });
+  const cell = leafSegments(asTable[0]!.segments!).find((segment) => segment.text === "S5230")!;
+  assert.deepEqual([cell.location, cell.labels], ["row=3;col=2", ["cn passport"]]);
 });

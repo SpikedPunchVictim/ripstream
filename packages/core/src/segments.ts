@@ -68,6 +68,32 @@ export function parseSegmentLocation(location: string): Map<SegmentLocationKey, 
   return parts;
 }
 
+/**
+ * The segments of a record that no other segment makes redundant, in the order they came in. A row is the cells it
+ * holds, a pptx shape the table in it; a segment whose characters are all (apart from whitespace) in the segments
+ * inside it is dropped, so each character is in one segment and a value's segment is the cell, not the row. A segment
+ * with text of its own, such as a list item with a nested list, stays. Pass a record's `segments`, in the order it has them.
+ */
+export function leafSegments(segments: readonly Segment[]): Segment[] {
+  return segments.filter((_, index) => !isMadeOfParts(segments, index));
+}
+
+/** Whether the segments that start inside the one at `index` (and end inside it) hold all of its non-whitespace characters. */
+function isMadeOfParts(segments: readonly Segment[], index: number): boolean {
+  const whole = segments[index]!;
+  let covered = whole.start;
+  let hasParts = false;
+  for (let next = index + 1; next < segments.length; next++) {
+    const part = segments[next]!;
+    if (part.start >= whole.end) break;
+    if (part.end > whole.end) continue;
+    if (part.start > covered && /\S/.test(whole.text.slice(covered - whole.start, part.start - whole.start))) return false;
+    hasParts = true;
+    covered = Math.max(covered, part.end);
+  }
+  return hasParts && !/\S/.test(whole.text.slice(covered - whole.start));
+}
+
 function escapeValue(value: string): string {
   return /[%;=\r\n]/.test(value) ? value.replace(/[%;=\r\n]/g, (char) => encodeURIComponent(char)) : value;
 }

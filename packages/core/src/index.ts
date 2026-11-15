@@ -322,6 +322,7 @@ export {
   type PathPartKind,
 } from "./recursive.ts";
 export {
+  leafSegments,
   parseSegmentLocation,
   SEGMENT_LOCATION_KEYS,
   type Segment,

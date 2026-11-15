@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CONTEXT_KEYS,
+  leafSegments,
   MediaType,
   Metadata,
   parseSegmentLocation,
@@ -99,6 +100,37 @@ test("parseSegmentLocation refuses keys out of order, twice, unknown, or without
   for (const bad of ["cell=C7;sheet=A", "row=1;row=2", "colour=red", "row", "", "=1"]) {
     assert.throws(() => parseSegmentLocation(bad), RangeError, bad);
   }
+});
+
+function segment(start: number, end: number, location: string, content: string): Segment {
+  return { text: content.slice(start, end), start, end, labels: [], location };
+}
+
+test("leafSegments drops a row and a shape made of the cells in them, and keeps the cells", () => {
+  const content = "Name\tTax id\nAcme\tPLANTED-1";
+  const segments = [
+    segment(0, 11, "slide=1;shape=Table 1", content),
+    segment(0, 11, "row=1", content),
+    segment(0, 4, "row=1;col=1", content),
+    segment(5, 11, "row=1;col=2", content),
+  ];
+  assert.deepEqual(leafSegments([...segments]).map((s) => s.location), ["row=1;col=1", "row=1;col=2"]);
+});
+
+test("leafSegments keeps a segment with text its parts do not hold", () => {
+  const content = "item one\n  nested";
+  const outer = segment(0, 17, "selector=body > ul > li", content);
+  const inner = segment(11, 17, "selector=body > ul > li > ul > li", content);
+  assert.deepEqual(leafSegments([outer, inner]).map((s) => s.location), [outer.location, inner.location]);
+});
+
+test("leafSegments keeps a lone row of one cell as that cell, and a list with no overlap whole", () => {
+  const content = "a\nb";
+  const row = segment(0, 1, "row=1", content);
+  const cell = segment(0, 1, "row=1;col=1", content);
+  const other = segment(2, 3, "row=2", content);
+  assert.deepEqual(leafSegments([row, cell, other]).map((s) => s.location), ["row=1;col=1", "row=2"]);
+  assert.deepEqual(leafSegments([]), []);
 });
 
 test("segments are off by default: no segments on the records and no hints for the parsers", async () => {

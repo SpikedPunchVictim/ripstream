@@ -72,7 +72,7 @@ offsets stale, which is for whoever configured it to know.
 | xls | a row, and each cell | `sheet=Sheet1;row=3;col=2`, rows counted as written | as xlsx |
 | docx, odt, doc, rtf | a paragraph; a table row, and each cell | `para=14`; `table=2;row=3`, `table=2;row=3;col=1`; `part=footer;para=20` (header, footer, footnote, endnote, comment) | the heading chain (docx heading styles, odt native headings), the column header |
 | pptx | a shape (all its paragraphs) | `slide=3;shape=Title 1`, `slide=3;part=notes;shape=Notes Placeholder 2` | the slide's title, notes included |
-| csv read as a table | a row, and each field | `row=3`, `row=3;col=2` (row 1 is the header row) | the header row's field |
+| csv read as a table (see below) | a row, and each field | `row=3`, `row=3;col=2` (row 1 is the header row) | the header row's field |
 | tsv | a line as a row, and each tab-separated field | `row=3`, `row=3;col=2` | the first line's field |
 | json | each scalar value | `ptr=/customers/0/tax_id` (RFC 6901), with `line=N;` before it when the text holds several values | the object keys on the path |
 | text, log, csv read as text | a line | `line=120` | none |
@@ -87,6 +87,35 @@ and labels of the segment that holds it.
 Text that is outside every block still belongs to a segment: it is located at the element it is in, up to the next
 block. Segments are trimmed of surrounding whitespace, and empty ones are dropped. They come in content order; of two
 that start together, the longer comes first, so a row comes before its first cell.
+
+### Overlap, and one segment per value
+
+Row and cell segments overlap by design: a row is its cells, a pptx table's shape is its rows, an html `tr` is its
+`td`s. A reader that takes the first segment holding a value gets the container (the row, with the sheet's name as its
+only label), not the cell (which also has the column header). `leafSegments(record.segments)` drops every segment
+whose characters, apart from whitespace, are all in the segments inside it, so a value is in exactly one segment: the
+cell. A segment with text of its own (a list item with a nested list) stays. Segments are unchanged by it; it is a
+function of the list, and the default output is the same with or without it. Over a generated set (290 documents of
+13 formats, a known value planted in each place a detector would look) every planted value is in a segment; the table cells (xlsx, csv read as a table, tsv, docx,
+pptx, html) are each in one leaf, labelled by their column header, at the location of the cell the generator put them in.
+
+### A short csv is text
+
+Tika reads a `.csv` as a table only when it is regular enough: at the default confidence a table with no quoted
+cells needs eleven rows (`docs/migration.md`, *Text and CSV*). A shorter one is `text/plain`, and its segments are lines
+(`line=4`) with no labels, the header line being a line like the rest. ripstream keeps that for parity. A caller that
+knows its files are tables sets `createRipstream({ csv: { delimiter: "," } })` (or a lower `csv.minConfidence`): every
+such document is then a table, with `row=3;col=2` locations and the header as the label, and the text is
+tab-separated as for any table. The CLI and the server do not set it.
+
+### What labels there are not
+
+Labels are names the document gives, so a format that names nothing has none. A log has no labels, and a pdf has only
+what the parser writes as a heading (the text a pdf writes as a row, such as `label  value`, is one paragraph
+`page=1;para=4`: the label is in the segment's text, not in `labels`). An archive's entries are records of their own, each with
+its own segments and `embeddedResourcePath`; the archive's record holds the entry names. A consumer that matches a
+detector's context (a keyword near the value) sees the header only in `labels` for a table, so a detector that looks
+at a segment's text alone does not see the header of a short csv, which is text.
 
 ## Location grammar
 
