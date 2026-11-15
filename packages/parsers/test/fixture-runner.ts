@@ -14,6 +14,11 @@ import type { createRipstream } from "../src/index.ts";
  * `records.<i>.text`, `records.<i>.path` (embeddedResourcePath), `records.<i>.pathParts` (the parts as JSON, e.g.
  * `[{"kind":"root","name":"a.zip"},{"kind":"entry","name":"data/b.csv"}]`), `records.<i>.mediaType` and
  * `records.<i>.metadata.<key>`. A record past the end reads as absent.
+ *
+ * With `options.segments: true` (parseRecursive only), `records.<i>.segments` reads the record's segments, one line
+ * each: `<location> | <text> | <labels joined by " > ">`, the text with backslash, CR, LF and tab written as \\, \r,
+ * \n and \t. Such a fixture also checks, whatever its assertions, that every segment's text is its slice of the
+ * content and that each record's content is the same as with segments off.
  */
 export type Assertion =
   | { readonly type: "equals" | "contains" | "not_contains" | "matches"; readonly field: string; readonly value: string }
@@ -33,7 +38,7 @@ export interface Fixture {
   readonly tags?: readonly string[];
   readonly operation?: "parse" | "detect" | "parseRecursive";
   readonly input: FixtureInput;
-  readonly options?: Pick<ParseOptions, "contentType" | "onDocumentFailure" | "onOutputLimit" | "limits">;
+  readonly options?: Pick<ParseOptions, "contentType" | "onDocumentFailure" | "onOutputLimit" | "limits" | "segments">;
   readonly assertions: readonly Assertion[];
 }
 
@@ -112,7 +117,30 @@ function readRecord(view: FieldView, field: string): string | undefined {
     case "path": return record.embeddedResourcePath;
     case "pathParts": return record.pathParts === undefined ? undefined : JSON.stringify(record.pathParts);
     case "mediaType": return record.mediaType.toString();
-    default: throw new Error(`field ${field}: use text, path, pathParts, mediaType or metadata.<key> of a record`);
+    case "segments": return record.segments === undefined ? undefined : renderSegments(record.segments);
+    default: throw new Error(`field ${field}: use text, path, pathParts, mediaType, segments or metadata.<key> of a record`);
+  }
+}
+
+function renderSegments(segments: NonNullable<ParseRecord["segments"]>): string {
+  const escape = (text: string): string =>
+    text.replace(/[\\\r\n\t]/g, (char) => ({ "\\": "\\\\", "\r": "\\r", "\n": "\\n", "\t": "\\t" })[char]!);
+  return segments.map((segment) => `${segment.location} | ${escape(segment.text)} | ${segment.labels.join(" > ")}`).join("\n");
+}
+
+/** What holds for any parse with segments: each is its slice of the content, and the content is as without them. */
+async function checkSegmentInvariants(
+  ripstream: ReturnType<typeof createRipstream>,
+  bytes: Uint8Array,
+  options: ParseOptions,
+  records: readonly ParseRecord[],
+): Promise<void> {
+  const plain = await ripstream.parseRecursive(bytes, { ...options, segments: false });
+  assert.deepEqual(records.map((record) => record.content), plain.map((record) => record.content), "content with segments on vs off");
+  for (const record of records) {
+    for (const segment of record.segments ?? []) {
+      assert.equal(record.content.slice(segment.start, segment.end), segment.text, `segment ${segment.location} is its slice`);
+    }
   }
 }
 
@@ -154,7 +182,9 @@ export async function runFixture(ripstream: ReturnType<typeof createRipstream>, 
   if (fixture.operation === "detect") {
     view = { mediaType: (await ripstream.detect(bytes, options)).toString() };
   } else if (fixture.operation === "parseRecursive") {
-    view = { records: await ripstream.parseRecursive(bytes, options) };
+    const records = await ripstream.parseRecursive(bytes, options);
+    if (options.segments === true) await checkSegmentInvariants(ripstream, bytes, options, records);
+    view = { records };
   } else {
     const result = await ripstream.parse(bytes, options);
     view = { text: result.text, metadata: result.metadata };

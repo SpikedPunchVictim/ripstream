@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-62gk: a markdown block is located by the source line it starts on (fences counted) and labelled with its # headings",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/notes.md",
+    "filename": "notes.md"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "line=7 | The key is PLANTED-MD-KEY on two lines. | Runbook > Secrets"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "line=11 | code block | Runbook > Secrets"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "line=14 | Last line PLANTED-MD-LAST | Runbook > Secrets"
+    }
+  ]
+}

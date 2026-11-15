@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-62gk: a docx paragraph is located by its number and labelled with its heading chain; a table cell by table, row and column, labelled with its column header",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/customers.docx",
+    "filename": "customers.docx"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "para=4 | Account holder PLANTED-DOCX-PARA is on file. | Customers > Banking"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "table=1;row=3;col=2 | PLANTED-DOCX-TABLE | Customers > Banking > IBAN"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "para=3 | Banking | Customers"
+    }
+  ]
+}

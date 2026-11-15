@@ -1,0 +1,33 @@
+{
+  "description": "tikajs-62gk: an xlsx cell is located by sheet name and A1 cell reference, labelled with its column header; an empty row keeps the sheet's row numbers",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/vendors.xlsx",
+    "filename": "vendors.xlsx"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Vendors;cell=C7 | PLANTED-XLSX-C7 | Vendors > Tax ID"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Vendors;row=7 | Vendor 7\\tNL\\tPLANTED-XLSX-C7 | Vendors"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Vendors;cell=D5 | 42.5 | Vendors"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Notes;cell=A3 | PLANTED-XLSX-NOTES-A3 | Notes > Comment"
+    }
+  ]
+}

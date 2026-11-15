@@ -7,6 +7,7 @@ import {
   type ParseContext,
   type Parser,
   type RipstreamInputStream,
+  type SegmentHints,
 } from "@spikedpunch/ripstream-core";
 import { createDecoder, recordDetectedEncoding, withCharset, type StreamDecoder } from "./charset.ts";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
@@ -75,20 +76,22 @@ export class TextParser implements Parser {
       metadata.set("Content-Type", withCharset(incoming, "text/plain", charset));
     }
 
-    await writeText(stream, handler, metadata, decoder);
+    await writeText(stream, handler, metadata, decoder, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
   }
 }
 
 /**
  * Writes the rest of `stream`, decoded with `decoder`, as XHTML paragraphs, one per line. Memory stays O(chunk): each
- * decoded segment is emitted at once.
+ * decoded segment is emitted at once. `hints` (segments asked for) learn that each paragraph is a source line.
  */
 export async function writeText(
   stream: RipstreamInputStream,
   handler: ContentHandler,
   metadata: Metadata,
   decoder: StreamDecoder,
+  hints?: SegmentHints,
 ): Promise<void> {
+  hints?.layout("lines");
   const xhtml = new XHTMLContentHandler(handler, metadata);
   await xhtml.startDocument();
 

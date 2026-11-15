@@ -13,6 +13,7 @@ import {
   type ParseContext,
   type EmbeddedDocumentExtractor,
   type Parser,
+  type SegmentHints,
   RipstreamInputStream,
   TIKA_KEYS,
 } from "@spikedpunch/ripstream-core";
@@ -100,13 +101,14 @@ export class OoxmlParser implements Parser {
     applyPackageMetadata(metadata, files);
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
+    const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
 
     if (files["word/document.xml"] !== undefined) {
-      await renderWord(files, xhtml);
+      await renderWord(files, xhtml, hints);
     } else if (files["xl/workbook.xml"] !== undefined) {
-      await renderWorkbook(files, xhtml);
+      await renderWorkbook(files, xhtml, hints);
     } else if (files["ppt/presentation.xml"] !== undefined) {
-      await renderPresentation(files, xhtml);
+      await renderPresentation(files, xhtml, hints);
     } else if (files["visio/document.xml"] !== undefined) {
       await renderVisio(files, xhtml);
     } else {
@@ -211,6 +213,7 @@ const LARGE_WORD_DOCUMENT_BYTES = 8 * 1024 * 1024;
 async function renderWord(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   const raw = files["word/document.xml"];
   if (raw !== undefined && raw.byteLength > LARGE_WORD_DOCUMENT_BYTES) {
@@ -219,19 +222,19 @@ async function renderWord(
     const document = parsePart(files, "word/document.xml");
     if (document !== undefined) {
       const body = findFirst(document, "body") ?? document;
-      await renderWordBlocks(body, xhtml);
+      await renderWordBlocks(body, xhtml, hints);
     }
   }
 
-  await renderWordPartGroup(files, /^word\/header\d*\.xml$/, "header", xhtml);
-  await renderWordPartGroup(files, /^word\/footer\d*\.xml$/, "footer", xhtml);
-  await renderNotes(files, "word/footnotes.xml", "footnote", xhtml);
-  await renderNotes(files, "word/endnotes.xml", "endnote", xhtml);
-  await renderNotes(files, "word/comments.xml", "comment", xhtml);
+  await renderWordPartGroup(files, /^word\/header\d*\.xml$/, "header", xhtml, hints);
+  await renderWordPartGroup(files, /^word\/footer\d*\.xml$/, "footer", xhtml, hints);
+  await renderNotes(files, "word/footnotes.xml", "footnote", xhtml, hints);
+  await renderNotes(files, "word/endnotes.xml", "endnote", xhtml, hints);
+  await renderNotes(files, "word/comments.xml", "comment", xhtml, hints);
   // A glossary building block's body holds the content-control text Tika extracts from the glossary part.
   const glossary = parsePart(files, "word/glossary/document.xml");
   if (glossary !== undefined) {
-    for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml);
+    for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml, hints);
   }
 }
 
@@ -271,13 +274,14 @@ async function renderWordPartGroup(
   pattern: RegExp,
   className: string,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   for (const name of Object.keys(files).filter((key) => pattern.test(key)).sort()) {
     const root = parsePart(files, name);
     if (root === undefined) continue;
     const content = findFirst(root, "hdr") ?? findFirst(root, "ftr") ?? root;
     await xhtml.startElement("div", "class", className);
-    await renderWordBlocks(content, xhtml);
+    await renderWordBlocks(content, xhtml, hints);
     await xhtml.endElement("div");
   }
 }
@@ -287,6 +291,7 @@ async function renderNotes(
   part: string,
   className: string,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   const root = parsePart(files, part);
   if (root === undefined) return;
@@ -302,7 +307,7 @@ async function renderNotes(
     const type = attribute(note, "type");
     if (type === "separator" || type === "continuationSeparator") continue;
     await xhtml.startElement("div", "class", className);
-    await renderWordBlocks(note, xhtml);
+    await renderWordBlocks(note, xhtml, hints);
     await xhtml.endElement("div");
   }
 }
@@ -310,18 +315,19 @@ async function renderNotes(
 async function renderWordBlocks(
   node: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   for (const child of node.children) {
     const name = localName(child.name);
-    if (name === "p") await renderWordParagraph(child, xhtml);
-    else if (name === "tbl") await renderWordTable(child, xhtml);
+    if (name === "p") await renderWordParagraph(child, xhtml, hints);
+    else if (name === "tbl") await renderWordTable(child, xhtml, hints);
     else if (name === "sdt" || name === "sdtContent" || name === "customXml") {
-      await renderWordBlocks(child, xhtml);
+      await renderWordBlocks(child, xhtml, hints);
     } else if (name === "ins" || name === "del" || name === "moveTo") {
       // A block moved away (moveFrom) is not written, its new place is (moveTo); see wordParagraphText.
-      await renderWordBlocks(child, xhtml);
+      await renderWordBlocks(child, xhtml, hints);
     } else if (name === "body" || name === "hdr" || name === "ftr") {
-      await renderWordBlocks(child, xhtml);
+      await renderWordBlocks(child, xhtml, hints);
     }
   }
 }
@@ -329,16 +335,32 @@ async function renderWordBlocks(
 async function renderWordParagraph(
   paragraph: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   const text = wordParagraphText(paragraph);
   if (text.length > 0) {
+    if (hints !== undefined) {
+      const level = headingLevel(paragraph);
+      if (level > 0) hints.heading(level);
+    }
     await xhtml.startElement("p");
     await xhtml.characters(text);
     await xhtml.endElement("p");
   }
   for (const box of textBoxes(paragraph)) {
-    await renderWordBlocks(box, xhtml);
+    await renderWordBlocks(box, xhtml, hints);
   }
+}
+
+/** The level of a paragraph in a heading style (`Heading1`-`Heading6`; `Title` is 1), for segment labels; 0 otherwise. */
+function headingLevel(paragraph: XmlNode): number {
+  const properties = childrenNamed(paragraph, "pPr")[0];
+  const style = properties === undefined ? undefined : childrenNamed(properties, "pStyle")[0];
+  const id = style === undefined ? undefined : attribute(style, "val");
+  if (id === undefined) return 0;
+  if (/^title$/i.test(id)) return 1;
+  const match = /^heading\s?([1-6])$/i.exec(id);
+  return match === null ? 0 : Number(match[1]);
 }
 
 /**
@@ -408,13 +430,14 @@ function rowCells(row: XmlNode): XmlNode[] {
 async function renderWordTable(
   table: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   await xhtml.startElement("table");
   for (const row of childrenNamed(table, "tr")) {
     await xhtml.startElement("tr");
     for (const cell of rowCells(row)) {
       await xhtml.startElement("td");
-      await renderWordBlocks(cell, xhtml);
+      await renderWordBlocks(cell, xhtml, hints);
       await xhtml.endElement("td");
     }
     await xhtml.endElement("tr");
@@ -433,6 +456,8 @@ interface SheetCell {
 }
 
 interface SheetRow {
+  /** The row's number in the sheet: its `r`, or one past the row before it. */
+  readonly number: number;
   readonly cells: SheetCell[];
 }
 
@@ -495,6 +520,7 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
   let captureDepth = 0;
   let captured = "";
   let row: SheetCell[] = [];
+  let rowNumber = 0;
   let nextColumn = 0;
   let totalCells = 0;
 
@@ -579,6 +605,8 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
     } else if (rowDepth === 0 && name === "row") {
       rowDepth = depth;
       row = [];
+      const number = Number((tag.attributes as Record<string, string>)["r"]);
+      rowNumber = Number.isSafeInteger(number) && number > 0 ? number : rowNumber + 1;
       nextColumn = 0;
     } else if (rowDepth !== 0 && depth === rowDepth + 1 && name === "c") {
       cellStack.push(node);
@@ -603,7 +631,7 @@ function parseSheet(xml: string, shared: string[]): ParsedSheet {
       if (rows.length >= MAX_SHEET_ROWS) {
         throw new LimitExceededError(`Sheet exceeds ${MAX_SHEET_ROWS} rows`);
       }
-      rows.push({ cells: row });
+      rows.push({ number: rowNumber, cells: row });
       rowDepth = 0;
     }
     depth--;
@@ -660,6 +688,7 @@ function formatCell(cell: SheetCell, styles: Styles): string {
 async function renderWorkbook(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   const shared = sharedStrings(parsePart(files, "xl/sharedStrings.xml"));
   const styles = parseStyles(
@@ -682,6 +711,7 @@ async function renderWorkbook(
     const { rows, headerFooter } = parseSheet(decode(files[sheet.file]!), shared);
     await xhtml.startElement("table");
     for (const row of rows) {
+      hints?.row(row.number);
       await xhtml.startElement("tr");
       for (const cell of row.cells) {
         await xhtml.startElement("td");
@@ -797,6 +827,7 @@ function sheetNumber(name: string): number {
 async function renderPresentation(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
 ): Promise<void> {
   const slides = orderedSlides(files);
 
@@ -804,13 +835,13 @@ async function renderPresentation(
     const root = parsePart(files, slide);
     if (root === undefined) continue;
     await xhtml.startElement("div", "class", "slide");
-    await renderDrawingBlocks(root, xhtml);
+    await renderDrawingBlocks(root, xhtml, hints);
     await xhtml.endElement("div");
 
     const notes = notesPart(files, slide);
     if (notes !== undefined) {
       await xhtml.startElement("div", "class", "notes");
-      await renderDrawingBlocks(notes, xhtml);
+      await renderDrawingBlocks(notes, xhtml, hints);
       await xhtml.endElement("div");
     }
   }
@@ -861,16 +892,29 @@ function slideNumber(name: string): number {
   return match === null ? 0 : Number(match[1]);
 }
 
+/** `hints`: a slide's or a notes slide's shapes are named to the segments (a table cell's blocks get none). */
 async function renderDrawingBlocks(
   node: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   for (const child of node.children) {
     const name = localName(child.name);
     if (name === "p") await renderDrawingParagraph(child, xhtml);
     else if (name === "tbl") await renderDrawingTable(child, xhtml);
-    else await renderDrawingBlocks(child, xhtml);
+    else {
+      if (hints !== undefined && (name === "sp" || name === "graphicFrame")) hintShape(child, hints);
+      await renderDrawingBlocks(child, xhtml, hints);
+    }
   }
+}
+
+/** A shape's name (its `cNvPr`), and whether it is the slide's title placeholder. */
+function hintShape(shape: XmlNode, hints: SegmentHints): void {
+  const properties = descendantsNamed(shape, "cNvPr")[0];
+  const placeholder = descendantsNamed(shape, "ph")[0];
+  const type = placeholder === undefined ? undefined : attribute(placeholder, "type");
+  hints.shape(properties === undefined ? "" : attribute(properties, "name") ?? "", type === "title" || type === "ctrTitle");
 }
 
 async function renderDrawingParagraph(

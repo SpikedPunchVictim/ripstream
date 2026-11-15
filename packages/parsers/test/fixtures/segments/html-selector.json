@@ -1,0 +1,33 @@
+{
+  "description": "tikajs-62gk: an html element is located by a CSS selector from the body (an id where there is one) and labelled with its headings and column header",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/page.html",
+    "filename": "page.html"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "part=title | Accounts | "
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "selector=body > p:nth-of-type(1) | Welcome, PLANTED-HTML-P. | Accounts"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "selector=body > table:nth-of-type(1) tr:nth-of-type(2) > td:nth-of-type(2) | PLANTED-HTML-TD | Accounts > Balances > Account"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "selector=#footer > span:nth-of-type(1) | PLANTED-HTML-FOOTER | Accounts > Balances"
+    }
+  ]
+}

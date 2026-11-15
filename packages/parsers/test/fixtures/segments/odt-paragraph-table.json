@@ -1,0 +1,23 @@
+{
+  "description": "tikajs-62gk: an odt paragraph and table cell are located like docx ones, its native headings labelling them",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/suppliers.odt",
+    "filename": "suppliers.odt"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "para=2 | Contact PLANTED-ODT-PARA for details. | Suppliers"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "table=1;row=2;col=2 | PLANTED-ODT-TABLE | Suppliers > Phone"
+    }
+  ]
+}

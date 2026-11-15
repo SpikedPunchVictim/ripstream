@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-62gk: a csv read as a table gives a segment per row and per field, row and column numbered from 1 with the header row as row 1",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/customers.csv",
+    "filename": "customers.csv"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "row=12 | Customer 12\\tBig, Co\\tPLANTED-CSV-ROW12 | "
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "row=12;col=2 | Big, Co | country"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "row=12;col=3 | PLANTED-CSV-ROW12 | tax_id"
+    }
+  ]
+}

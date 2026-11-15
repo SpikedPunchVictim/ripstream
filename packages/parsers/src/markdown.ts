@@ -37,40 +37,100 @@ export class MarkdownParser implements Parser {
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    for (const block of blocks(text)) {
+    const stripped = stripFences(text);
+    const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
+    const lines = hints === undefined ? undefined : lineFinder(text, stripped.pieces);
+    for (const block of blocks(stripped.text)) {
+      if (hints !== undefined) {
+        hints.line(lines!(block.offset));
+        if (block.heading > 0) hints.heading(block.heading);
+      }
       await xhtml.startElement("p");
-      await xhtml.characters(block);
+      await xhtml.characters(block.text);
       await xhtml.endElement("p");
     }
     await xhtml.endDocument();
   }
 }
 
-function blocks(markdown: string): string[] {
-  return stripFences(markdown)
-    .split(/\n{2,}/)
-    .map((block) =>
-      block
-        .split("\n")
-        .flatMap((line) => cleanLongLine(line))
-        .filter((line) => line.length > 0)
-        .join(" "),
-    )
-    .filter((block) => block.length > 0);
+interface Block {
+  readonly text: string;
+  /** Where the block's first written line starts in the fence-stripped text. */
+  readonly offset: number;
+  /** The level of a block that is one ATX heading line (`## Title`), 0 otherwise. */
+  readonly heading: number;
+}
+
+function blocks(markdown: string): Block[] {
+  const result: Block[] = [];
+  let start = 0;
+  for (const separator of [...markdown.matchAll(/\n{2,}/g), null]) {
+    const end = separator === null ? markdown.length : separator.index;
+    let offset = -1;
+    let heading = 0;
+    let written = 0;
+    let lineStart = start;
+    const cleaned: string[] = [];
+    for (const line of markdown.slice(start, end).split("\n")) {
+      const clean = cleanLongLine(line)[0]!;
+      if (clean.length > 0) {
+        if (offset < 0) {
+          offset = lineStart;
+          heading = /^\s{0,3}(#{1,6})\s+/.exec(line)?.[1]?.length ?? 0;
+        }
+        written++;
+        cleaned.push(clean);
+      }
+      lineStart += line.length + 1;
+    }
+    if (cleaned.length > 0) result.push({ text: cleaned.join(" "), offset, heading: written === 1 ? heading : 0 });
+    if (separator !== null) start = separator.index + separator[0].length;
+  }
+  return result;
+}
+
+/** A piece of the fence-stripped text: from `at` on, it is the source from `source` on. */
+interface Piece {
+  readonly at: number;
+  readonly source: number;
 }
 
 /** Linear replacement for /```[^\n]*\n([\s\S]*?)```/g, which is quadratic on unclosed fences. */
-function stripFences(markdown: string): string {
+function stripFences(markdown: string): { readonly text: string; readonly pieces: readonly Piece[] } {
   let out = "";
   let index = 0;
+  const pieces: Piece[] = [];
   for (;;) {
     const open = markdown.indexOf("```", index);
     const newline = open === -1 ? -1 : markdown.indexOf("\n", open + 3);
     const close = newline === -1 ? -1 : markdown.indexOf("```", newline + 1);
-    if (close === -1) return out + markdown.slice(index);
-    out += markdown.slice(index, open) + markdown.slice(newline + 1, close);
+    pieces.push({ at: out.length, source: index });
+    if (close === -1) return { text: out + markdown.slice(index), pieces };
+    out += markdown.slice(index, open);
+    pieces.push({ at: out.length, source: newline + 1 });
+    out += markdown.slice(newline + 1, close);
     index = close + 3;
   }
+}
+
+/** The source line (1-based) of an offset into the fence-stripped text; asked in increasing order of offset. */
+function lineFinder(source: string, pieces: readonly Piece[]): (offset: number) => number {
+  const lineStarts = [0];
+  for (let at = source.indexOf("\n"); at !== -1; at = source.indexOf("\n", at + 1)) lineStarts.push(at + 1);
+  let index = 0;
+  return (offset) => {
+    while (index + 1 < pieces.length && pieces[index + 1]!.at <= offset) index++;
+    const piece = pieces[index]!;
+    const position = piece.source + (offset - piece.at);
+    let low = 0;
+    let high = lineStarts.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (lineStarts[middle]! <= position) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
 }
 
 /**

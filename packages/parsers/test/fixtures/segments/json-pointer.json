@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-62gk: a json scalar is located by its JSON Pointer and labelled with the object keys above it",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/customers.json.txt",
+    "filename": "customers.json"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "ptr=/customers/1/tax_id | PLANTED-JSON-TAX | customers > tax_id"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "ptr=/meta/tags/1 | PLANTED-JSON-TAG | meta > tags"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "ptr=/meta/count | 2 | meta > count"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-62gk: a log line is located by its line number",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/app.log",
+    "filename": "app.log"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "line=120 | 2026-01-01T00:02:00Z WARN token=PLANTED-LOG-L120 | "
+    }
+  ]
+}

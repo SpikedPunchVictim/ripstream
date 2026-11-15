@@ -1,0 +1,33 @@
+{
+  "description": "tikajs-62gk: a pptx text is located by slide and shape name, labelled with the slide title; notes stay on their slide",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/deck.pptx",
+    "filename": "deck.pptx"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "slide=3;shape=Title 1 | Secrets | "
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "slide=3;shape=Content Placeholder 2 | PLANTED-PPTX-BODY | Secrets"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "slide=3;shape=Footer Box | PLANTED-PPTX-TEXTBOX | Secrets"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "slide=3;part=notes;shape=Notes Placeholder 2 | PLANTED-PPTX-NOTES | Secrets"
+    }
+  ]
+}

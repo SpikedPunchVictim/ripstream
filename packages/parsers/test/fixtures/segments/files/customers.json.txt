@@ -1,0 +1,19 @@
+{
+  "customers": [
+    {
+      "name": "Ann",
+      "tax_id": "NL1"
+    },
+    {
+      "name": "Bob",
+      "tax_id": "PLANTED-JSON-TAX"
+    }
+  ],
+  "meta": {
+    "count": 2,
+    "tags": [
+      "a",
+      "PLANTED-JSON-TAG"
+    ]
+  }
+}

@@ -161,7 +161,7 @@ export class CsvParser implements Parser {
     if (delimiter === null) {
       // Tika rebuilds the type from text/plain whatever came in: a text/csv that is not a table is text/plain.
       metadata.set("Content-Type", withCharset(null, "text/plain", charset));
-      await writeText(stream, handler, metadata, decoder);
+      await writeText(stream, handler, metadata, decoder, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
       return;
     }
     // Tika names the delimiters it knows, and writes the code of any other in Content-Type (and no csv:delimiter).
@@ -179,6 +179,7 @@ export class CsvParser implements Parser {
       maxCellsPerRow: this.#maxCellsPerRow,
     });
     scanner.setDelimiter(delimiter);
+    ctx.get(CONTEXT_KEYS.SEGMENT_HINTS)?.layout("table");
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     let tableOpen = false;

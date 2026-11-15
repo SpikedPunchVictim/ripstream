@@ -1,0 +1,23 @@
+{
+  "description": "tikajs-62gk: a tsv line is a row and each tab-separated field a cell, labelled with the first line's field",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/vendors.tsv",
+    "filename": "vendors.tsv"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "row=3 | Zed\\tFR\\tPLANTED-TSV-R3C3 | "
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "row=3;col=3 | PLANTED-TSV-R3C3 | tax_id"
+    }
+  ]
+}
