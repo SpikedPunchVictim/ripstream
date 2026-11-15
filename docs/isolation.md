@@ -461,8 +461,9 @@ media-type and parser caches, stderr) found three real carry-overs. The n3 blank
 document print different labels after earlier ones, and told it how many blank nodes those had: each parse now
 numbers its own (fixed in this change). sql.js kept one WASM instance per process, so document bytes stayed in its
 memory file system when a close failed and a trapped instance served the next file: each document now loads its own
-instance (`tikajs-usub`, about 6 ms a document); xz-decompress keeps a static instance and a mutex that a
-failing dispose never releases (`tikajs-3o6d`). Retiring a child after any fault bounds both. The rest is either
+instance (`tikajs-usub`, about 6 ms a document); xz-decompress kept a static instance and a mutex that a
+failing dispose never released, and now loads its own class for each document (`tikajs-3o6d`). Retiring a child after any
+fault is still the bound for anything this audit did not find. The rest is either
 independent of the document or is caches that never show in a later answer (the media-type parse cache, the
 composite parser's ranking cache, pdf.js's name caches, cleared on every document's destroy).
 

@@ -14,6 +14,7 @@ import {
 import bzip from "seek-bzip";
 import { decodeDeflate64 } from "./deflate64.ts";
 import { decodeLzma } from "./lzma.ts";
+import { loadXzReadableStream } from "./xz.ts";
 import { checkDecompression, parseEntry, readAll, withXhtml } from "./util.ts";
 
 /** Output cap for a decompressor, derived from the parse context limits. */
@@ -205,8 +206,6 @@ interface Lz4Module {
 /** Largest LZ4 block (4 MiB); decompressBound assumes every block is full. */
 const LZ4_MAX_BLOCK_BYTES = 4 * 1024 * 1024;
 
-type XzConstructor = new (stream: ReadableStream<Uint8Array>) => ReadableStream<Uint8Array>;
-
 export class XzParser extends CompressorParser {
   readonly name = "XzParser";
   readonly types = ["application/x-xz"] as const;
@@ -216,12 +215,7 @@ export class XzParser extends CompressorParser {
     data: Uint8Array,
     budget: OutputBudget,
   ): Promise<Uint8Array> {
-    const module = (await import("xz-decompress")) as unknown as {
-      readonly default?: { readonly XzReadableStream?: XzConstructor };
-      readonly XzReadableStream?: XzConstructor;
-    };
-    const XzReadableStream =
-      module.default?.XzReadableStream ?? module.XzReadableStream;
+    const XzReadableStream = loadXzReadableStream();
     if (XzReadableStream === undefined) {
       throw new MalformedDocumentError("XZ decompressor is unavailable");
     }

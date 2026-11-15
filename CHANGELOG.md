@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### xz-decompress: a class, WASM instance and mutex for every XZ document (`tikajs-3o6d`)
+
+Fixed: xz-decompress keeps its WASM instance and the mutex that serializes decodes as statics, and the mutex is not
+released when a failing decode cannot dispose its context. Every later XZ decode in the process, embedded ones
+included, then waited on it for good, on an instance that was trapped. `XzParser` now loads the library afresh for each
+document (`src/xz.ts`), so what one document breaks stays with it.
+
 ### sql.js: a new WASM instance for every SQLite and GeoPackage document (`tikajs-usub`)
 
 Fixed: sql.js caches its first init in the module, so every SQLite or GeoPackage parse in a process shared one WASM
