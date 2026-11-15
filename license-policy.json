@@ -16,5 +16,8 @@
     "@spikedpunch/cbd": "development-only test selection tooling; not shipped",
     "@spikedpunch/cbd-cli": "development-only test selection tooling; not shipped",
     "@spikedpunch/cbd-node-test": "development-only test adapter; not shipped"
+  },
+  "installScriptExemptions": {
+    "esbuild@0.28.2": "build-time devDependency for the CLI bundle (tikajs-jjat), not shipped; its postinstall only verifies the platform binary and is disabled here (allowBuilds: esbuild: false in pnpm-workspace.yaml). Owner-approved 2026-11-15; exact version, so an upgrade needs a new review."
   }
 }

@@ -5,9 +5,12 @@ import { join } from "node:path";
 const policy = JSON.parse(readFileSync("license-policy.json", "utf8")) as {
   allowedLicenses: string[];
   exemptions: Record<string, string>;
+  /** Exact `name@version` keys allowed to carry an install script; any other version still fails. */
+  installScriptExemptions?: Record<string, string>;
 };
 const ALLOWED = new Set(policy.allowedLicenses);
 const exempt = new Set(Object.keys(policy.exemptions));
+const installScriptExempt = new Set(Object.keys(policy.installScriptExemptions ?? {}));
 
 interface LicenseGroup {
   readonly license: string;
@@ -38,7 +41,7 @@ for (const group of groups) {
       scripts?: Record<string, string>;
     };
     for (const hook of ["preinstall", "install", "postinstall"]) {
-      if (parsed.scripts?.[hook] !== undefined) {
+      if (parsed.scripts?.[hook] !== undefined && !installScriptExempt.has(key)) {
         problems.push(`install script ${hook}: ${key}`);
       }
     }
