@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-1myi: as pdf-repair-cidsysteminfo-ordering-damaged, with /Registry written /Registr.",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.5\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n4 0 obj\n<< /Length 83 >>\nstream\nBT /F1 24 Tf 72 700 Td <0001000200030003000400050001000200030003000400020003> Tj ET\nendstream\nendobj\n5 0 obj\n<< /Type /Font /Subtype /Type0 /BaseFont /ArialMT /Encoding /Identity-H /DescendantFonts [6 0 R] /ToUnicode 8 0 R >>\nendobj\n6 0 obj\n<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ArialMT /CIDSystemInfo << /Registr (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor 7 0 R /DW 0 /W [ 1 [ 600 600 600 600 600 ] ] /CIDToGIDMap /Identity >>\nendobj\n7 0 obj\n<< /Type /FontDescriptor /FontName /ArialMT /Flags 4 /FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 /CapHeight 700 /StemV 80 >>\nendobj\n8 0 obj\n<< /Length 320 >>\nstream\n/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Adobe-Identity-UCS def /CMapType 2 def 1 begincodespacerange <0000> <FFFF> endcodespacerange 5 beginbfchar <0001> <0048> <0002> <0065> <0003> <006C> <0004> <006F> <0005> <0020> endbfchar endcmap CMapName currentdict /CMap defineresource pop end end\nendstream\nendobj\n",
+    "filename": "pdf-repair-cidsysteminfo-registry-damaged.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Hello Hello"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:pdf:repaired",
+      "value": "true"
+    }
+  ]
+}

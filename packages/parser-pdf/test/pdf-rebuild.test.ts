@@ -69,7 +69,9 @@ test("rebuildPdf repairs a font with a damaged /Subtype or Identity CMap name", 
   objects.push("<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ArialMT >>");
   const rebuilt = rebuildPdf(bytes(classicPdf(objects)));
   const text = latin1(rebuilt!.data);
-  assert.match(text, /5 0 obj\n<< \/Subtype \/Type1 \/Type \/Font \/Subtyp \/Type1 /);
+  // The damaged key is put right in place (pdf-keys.ts), not shadowed by a second /Subtype.
+  assert.match(text, /5 0 obj\n<< \/Type \/Font \/Subtype \/Type1 \/BaseFont \/Helvetica >>/);
+  assert.doesNotMatch(text, /\/Subtyp\s/);
   assert.match(text, /6 0 obj\n<< \/Type \/Font \/Subtype \/Type0 \/BaseFont \/ArialMT \/Encoding \/Identity-H /);
   assert.match(text, /7 0 obj\n<< \/Type \/Font \/Subtype \/CIDFontType2 /);
   assert.ok(rebuilt!.steps.includes("font-repaired"));

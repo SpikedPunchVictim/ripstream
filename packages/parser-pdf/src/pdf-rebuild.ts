@@ -1,5 +1,6 @@
 import { inflateSync } from "node:zlib";
 import { indexObjects, type ObjectIndex, type PdfObject } from "./pdf-objects.ts";
+import { repairFontKeys } from "./pdf-keys.ts";
 import { dictEntries, parseName, parseReference, referencesIn, type Reference } from "./pdf-syntax.ts";
 
 /**
@@ -89,9 +90,17 @@ export function rebuildPdf(data: Uint8Array, index: ObjectIndex = indexObjects(l
   let fontsRepaired = false;
   for (const object of index.objects.values()) {
     if (object.stream !== null) continue;
-    const entries = dictEntries(bodies.get(object.num) ?? object.body);
-    if (parseName(entries.get("Type")) !== "Font") continue;
-    let body = bodies.get(object.num) ?? object.body;
+    const original = bodies.get(object.num) ?? object.body;
+    // Damaged key names first: a font whose /Type lost its last character is still a font.
+    let body = original.includes("<<") ? repairFontKeys(original) : original;
+    const entries = dictEntries(body);
+    if (parseName(entries.get("Type")) !== "Font") {
+      if (body !== original) {
+        bodies.set(object.num, body);
+        fontsRepaired = true;
+      }
+      continue;
+    }
     if (!FONT_SUBTYPES.has(parseName(entries.get("Subtype")) ?? "")) {
       // PDFBox reads a font with no valid /Subtype as Type 1; pdf.js refuses it ("invalid font Subtype").
       body = setEntry(body, "Subtype", entries.has("DescendantFonts") ? "/Type0" : "/Type1");
@@ -101,7 +110,7 @@ export function rebuildPdf(data: Uint8Array, index: ObjectIndex = indexObjects(l
       // A damaged Identity CMap name ("Identity-"): pdf.js cannot load it and drops the font's text.
       body = setEntry(body, "Encoding", "/Identity-H");
     }
-    if (body === (bodies.get(object.num) ?? object.body)) continue;
+    if (body === original) continue;
     bodies.set(object.num, body);
     fontsRepaired = true;
   }

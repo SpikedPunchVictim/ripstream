@@ -4,6 +4,18 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF recovery: font keys one character short; the empty-after-repair error counts every page (`tikajs-1myi`)
+
+Fixed: a repaired PDF whose fonts had lost the last character of key names (`/Orderin`, `/Registr` in a CID font's
+`/CIDSystemInfo`, `/Typ`, `/FontNam`, `/Subtyp`) lost the text of those fonts (pdf.js refuses a CID font with no
+`/Ordering`) or read as empty; a CID font's `/W` written as a nameless key left its glyphs zero-width. A key is put right
+only when it is one character short of exactly one key the dictionary kind can hold and that key is absent (new
+`pdf-keys.ts`, step `font-repaired`). Grizzly's `pdfs/00549` now reads its whole text, as Tika does, and `pdfs/00613` and
+`corpora-pdf-x000/00237` read their second line whole instead of a glyph to a line (`tikajs-f301` has the rest of 00237). The error for a repaired PDF with no provable text now says how many pages beyond
+the first four had a problem ("16 more pages with a problem"). `corpora-pdf-x258/00144` and `corpora-pdf-x801/00015` are
+cut-off files with no recoverable text (Tika answers empty for both): the failure stays, by the rule that an empty result
+after repair is ok only when every page is proven empty.
+
 ### A reused child that died before it began a request: the request runs again (`tikajs-krih`)
 
 Fixed: with child reuse, a reused child that died in the instant between its death and our noticing it could be

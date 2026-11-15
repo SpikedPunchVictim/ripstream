@@ -322,6 +322,7 @@ class EmptyDocumentEvidence {
   #text = false;
   #failed = 0;
   #contentRead = false;
+  #unlisted = 0;
   readonly #problems: string[] = [];
 
   pageFailed(): void {
@@ -333,19 +334,24 @@ class EmptyDocumentEvidence {
       this.#text = true;
       return;
     }
-    if (this.#problems.length >= 4) return;
-    if (content === undefined) this.#problems.push(`page ${index} content could not be checked`);
-    else if (content.contents === "cut-off") this.#problems.push(`page ${index} is cut off`);
-    else if (content.contents === "missing") this.#problems.push(`page ${index} content is missing`);
-    else if (content.contents === "unreadable") this.#problems.push(`page ${index} content could not be decoded`);
-    else if (content.showsText) this.#problems.push(`page ${index} shows text that could not be extracted`);
+    let problem: string | null = null;
+    if (content === undefined) problem = `page ${index} content could not be checked`;
+    else if (content.contents === "cut-off") problem = `page ${index} is cut off`;
+    else if (content.contents === "missing") problem = `page ${index} content is missing`;
+    else if (content.contents === "unreadable") problem = `page ${index} content could not be decoded`;
+    else if (content.showsText) problem = `page ${index} shows text that could not be extracted`;
     if (content?.contents === "read") this.#contentRead = true;
+    if (problem === null) return;
+    // The message names the first few; the rest are counted, so a document of many pages does not read as four.
+    if (this.#problems.length < 4) this.#problems.push(problem);
+    else this.#unlisted++;
   }
 
   /** Why an empty result is not shown to be text-less; empty when it is, or when there was text. */
   unproven(pages: number, pageTreeRebuilt: boolean): string[] {
     if (this.#text) return [];
     const problems = [...this.#problems];
+    if (this.#unlisted > 0) problems.push(`${this.#unlisted} more page${this.#unlisted === 1 ? "" : "s"} with a problem`);
     if (pages === 0) problems.push("no pages");
     if (this.#failed > 0) problems.push(`${this.#failed} page${this.#failed === 1 ? "" : "s"} could not be read`);
     // Pages found by scanning that name no content prove nothing about the document they came from.

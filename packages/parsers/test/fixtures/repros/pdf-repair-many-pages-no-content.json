@@ -1,0 +1,32 @@
+{
+  "description": "tikajs-1myi: a file cut after its page objects, before any content stream (six pages, none readable). The error names the damage and the first four pages, and counts the rest, so a long document does not read as four pages (Grizzly's corpora-pdf-x801/00015 was 97 pages cut at 8 KB).",
+  "tags": [
+    "repro",
+    "pdf",
+    "repair"
+  ],
+  "input": {
+    "text": "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R 6 0 R 7 0 R 8 0 R] /Count 6 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 20 0 R /Resources << >> >>\nendobj\n4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 21 0 R /Resources << >> >>\nendobj\n5 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 22 0 R /Resources << >> >>\nendobj\n6 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 23 0 R /Resources << >> >>\nendobj\n7 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 24 0 R /Resources << >> >>\nendobj\n8 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 25 0 R /Resources << >> >>\nendobj\n",
+    "filename": "pdf-repair-many-pages-no-content.pdf"
+  },
+  "options": {
+    "onDocumentFailure": "record"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "page 4 content is missing"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "2 more pages with a problem"
+    },
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "missing %%EOF"
+    }
+  ]
+}

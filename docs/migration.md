@@ -72,14 +72,15 @@ when they apply:
 - `tk:pdf:repaired` (`true`) and `tk:pdf:repair-steps` (`tikajs-4hfu`): the file was damaged and was read after a
   recovery. The steps, in order: `brute-force-scan` (every `N G obj` found by scanning, as PDFBox's lenient parser
   does), `rebuilt-xref`, `synthetic-trailer`, `objstm-inlined` (object stream members read out), `page-tree-rebuilt`
-  (orphan pages gathered into a new page tree), `font-repaired` (a damaged font `/Subtype` or Identity CMap name),
+  (orphan pages gathered into a new page tree), `font-repaired` (a damaged font `/Subtype` or Identity CMap name, or font keys one character short such as `/Orderin` or
+  `/Registr` in a CID font's `/CIDSystemInfo`, or a CID font's `/W` written as a nameless key),
   `stream-salvaged` (the readable start of a cut Flate stream kept). `rebuilt-xref` alone means pdf.js indexed the
   objects itself because `startxref` was missing or pointed nowhere.
 
 A repaired file that yields no text is an empty success only when every page is shown to have none: the page's content
 was read whole, in the file as given, and shows no text. A page or content stream that is cut off proves nothing.
 Otherwise it is a `MalformedDocumentError` that names the damage, for example
-`PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 is cut off)`. A
+`PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 is cut off)`. The message names the first four pages with a problem and counts the rest. A
 file no recovery can open names its damage the same way (`Unable to read PDF (...)`). The recovery's text is not
 byte-for-byte what Tika's PDFBox recovers. The text of a PDF with no text of its own still holds its document title (a
 scanner's `untitled`, say) and blank lines, as Tika 4.2.0's does (oracle: the scanned test files).

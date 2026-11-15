@@ -82,35 +82,59 @@ function skipLiteralString(text: string, at: number, end: number): number {
 
 const REFERENCE_TAIL = /^\s+(\d{1,5})\s+R(?![^\s()<>[\]{}/%])/;
 
+/** Where one entry of a dictionary sits in its text: the key (without the slash) and the raw value. */
+export interface EntryRange {
+  readonly key: string;
+  /** Index of the key's slash. */
+  readonly keyStart: number;
+  /** Index just past the key. */
+  readonly keyEnd: number;
+  readonly valueStart: number;
+  readonly valueEnd: number;
+}
+
 /**
- * The entries of the dictionary whose `<<` is at or after `from`, as raw value text by key (without the slash). An
- * indirect reference is one value (`"12 0 R"`). A dictionary that is cut off yields the entries read before the cut.
+ * The entries of the dictionary whose `<<` is at or after `from`, with their positions, in file order (a repeated key
+ * appears each time). An indirect reference is one value (`"12 0 R"`). A dictionary that is cut off yields the entries
+ * read before the cut.
  */
-export function dictEntries(text: string, from = 0, end = text.length): Map<string, string> {
-  const entries = new Map<string, string>();
+export function dictEntryRanges(text: string, from = 0, end = text.length): EntryRange[] {
+  const ranges: EntryRange[] = [];
   let at = text.indexOf("<<", from);
-  if (at === -1 || at >= end) return entries;
+  if (at === -1 || at >= end) return ranges;
   at += 2;
   for (;;) {
     at = skipSpace(text, at, end);
-    if (at >= end || text.startsWith(">>", at)) return entries;
+    if (at >= end || text.startsWith(">>", at)) return ranges;
     if (text[at] !== "/") {
       // Not a key: skip the stray value and carry on.
       at = skipValue(text, at, end, 1);
       continue;
     }
     const keyEnd = skipValue(text, at, end, 1);
-    const key = text.slice(at + 1, keyEnd);
+    const keyStart = at;
     at = skipSpace(text, keyEnd, end);
-    if (at >= end || text.startsWith(">>", at)) return entries;
+    if (at >= end || text.startsWith(">>", at)) return ranges;
     const valueStart = at;
     at = skipValue(text, at, end, 1);
     if (/^\d+$/.test(text.slice(valueStart, at))) {
       const tail = REFERENCE_TAIL.exec(text.slice(at, Math.min(end, at + 16)));
       if (tail !== null) at += tail[0].length;
     }
-    if (!entries.has(key)) entries.set(key, text.slice(valueStart, at));
+    ranges.push({ key: text.slice(keyStart + 1, keyEnd), keyStart, keyEnd, valueStart, valueEnd: at });
   }
+}
+
+/**
+ * The entries of the dictionary whose `<<` is at or after `from`, as raw value text by key (without the slash); the
+ * first of a repeated key wins. See dictEntryRanges.
+ */
+export function dictEntries(text: string, from = 0, end = text.length): Map<string, string> {
+  const entries = new Map<string, string>();
+  for (const range of dictEntryRanges(text, from, end)) {
+    if (!entries.has(range.key)) entries.set(range.key, text.slice(range.valueStart, range.valueEnd));
+  }
+  return entries;
 }
 
 export interface Reference {
