@@ -555,9 +555,14 @@ message as without reuse.
 
 ### What is left
 
-- A reused child that dies after it was checked out and before it reads the request fails that request; it is not
-  retried on a fresh child (`tikajs-krih`). An idle child that dies is retired on its exit event, so the death has to
-  land in that instant.
+- A reused child that dies after it was checked out and before it began the request (the window between its death and
+  our exit event, in which it can still be checked out) is not a failure of the request: the child sends an `accepted`
+  frame once it has read the request whole and before it parses anything, so a child that dies without one, with no
+  answer, no kill of ours, no abort and nothing on stderr never started it, and the request runs once more on another
+  child (`retried` in the reuse stats; `tikajs-krih`). A child that dies after `accepted` is the document's doing and is
+  never retried, whatever it left behind. Only the one retry: if that child dies the same way the request fails. The
+  failed attempt is still reported to `onRunSettled`. This is for the reused child only; a child started for the
+  request is never retried.
 - CPU a child spends while idle counts toward its next request. An idle child does nothing unless a parser left work
   behind, which is why it is counted, but the next request then pays for it.
 - The audit and the marker test cover the parsers and fixtures named above, not every path of every parser. What they

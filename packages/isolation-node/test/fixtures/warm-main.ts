@@ -2,7 +2,7 @@ import { writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MalformedDocumentError, MediaType, Metadata, type ParseRecord } from "@spikedpunch/ripstream-core";
-import { sendFrame } from "../../src/child-io.ts";
+import { InputReader, sendFrame } from "../../src/child-io.ts";
 import { runChildMain, type ChildRipstream } from "../../src/child-main.ts";
 
 /**
@@ -17,6 +17,11 @@ let parsed = 0;
 const retained: Buffer[] = [];
 /** What a "plant" request left behind in module state, for "peek" to show (the fixture's own state, not a parser's). */
 let planted = "";
+/**
+ * Set by "die-before-accept": the NEXT request is read whole and the process is killed before it says "accepted", as
+ * if it had died in the window between the parent's checkout and the child's start (tikajs-krih).
+ */
+let dieBeforeAccept = false;
 
 function commandOf(source: unknown): { command: string; arg: string } {
   const text = source instanceof Uint8Array ? new TextDecoder().decode(source) : "";
@@ -101,6 +106,9 @@ async function behave(source: unknown, options: unknown): Promise<Answer> {
     case "exit-later":
       setTimeout(() => process.exit(0), 50);
       return { text: "leaving" };
+    case "die-before-accept":
+      dieBeforeAccept = true;
+      return { text: "armed" };
     case "plant":
       planted = arg;
       return { text: "planted" };
@@ -139,4 +147,14 @@ const ripstream: ChildRipstream = {
   },
 };
 
-await runChildMain({ ripstream });
+const reader = new InputReader(process.stdin);
+await runChildMain({
+  ripstream,
+  io: {
+    nextInput: async () => {
+      const input = await reader.next();
+      if (dieBeforeAccept && input !== null) process.kill(process.pid, "SIGKILL");
+      return input;
+    },
+  },
+});

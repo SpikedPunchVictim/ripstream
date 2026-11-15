@@ -1181,3 +1181,48 @@ test("segments: a bad maxSegmentBytes option is refused", () => {
   for (const value of [-1, 1.5, Number.NaN]) assert.throws(() => recordsReader({ maxSegmentBytes: value }), RangeError, String(value));
   assert.throws(() => reader({ maxSegmentBytes: 5 }), TypeError);
 });
+
+// ---- acceptance: a child that serves several requests says when it began one (tikajs-krih) ------------------
+
+const ACCEPTED = { t: "accepted" };
+
+test("acceptance: ready, accepted, then the answer: it is accepted and the result is whole", () => {
+  const r = reader({ acceptance: true });
+  const events = feedLines(r, [READY, ACCEPTED, { t: "meta", metadata: {} }, textFrame("hi"), DONE]);
+  assert.deepEqual(violationKinds(events), []);
+  assert.equal(r.accepted, true);
+  assert.equal(r.terminal, "done");
+});
+
+test("acceptance: nothing but ready so far means not accepted", () => {
+  const r = reader({ acceptance: true });
+  feedLines(r, [READY]);
+  assert.equal(r.accepted, false);
+});
+
+test("acceptance: an error frame may come before accepted (a request that could not be read), and is final", () => {
+  const r = reader({ acceptance: true });
+  const events = feedLines(r, [READY, { t: "error", kind: "crash", message: "unreadable" }]);
+  assert.deepEqual(violationKinds(events), []);
+  assert.equal(r.accepted, false);
+  assert.equal(r.terminal, "error");
+});
+
+const BAD_ACCEPTANCE: readonly [string, object[], boolean][] = [
+  ["a meta frame before accepted", [READY, { t: "meta", metadata: {} }], true],
+  ["a second accepted", [READY, ACCEPTED, ACCEPTED], true],
+  ["accepted before ready", [ACCEPTED], true],
+  ["accepted from a child that was not asked to send it", [READY, ACCEPTED], false],
+];
+
+for (const [name, sequence, acceptance] of BAD_ACCEPTANCE) {
+  test(`acceptance: ${name} is a protocol violation`, () => {
+    const events = feedLines(reader({ acceptance }), sequence);
+    assert.deepEqual(violationKinds(events), ["protocol"]);
+  });
+}
+
+test("acceptance: an accepted frame carries nothing else", () => {
+  const events = feedLines(reader({ acceptance: true }), [READY, { t: "accepted", extra: 1 }]);
+  assert.deepEqual(violationKinds(events), ["protocol"]);
+});

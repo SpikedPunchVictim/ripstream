@@ -23,6 +23,7 @@ import {
  * rather than after the whole stream was buffered:
  *
  *   text:    ready, meta, text*, done      (an error frame may end it anywhere after ready)
+ *   A child that serves several requests sends "accepted" right after "ready" (option `acceptance`).
  *   records: ready, (record text* segments* bytes*)*, done  (a record that announces `contentLength` is followed by
  *            text frames that add up to exactly that many characters; one that announces `segmentCount` then by
  *            segments frames that add up to exactly that many segments, and only when the request asked for
@@ -99,6 +100,8 @@ export interface ErrorFrame {
 
 export type Frame =
   | { readonly t: "ready"; readonly pid: number }
+  /** Serving children only: the request was read whole and parsing begins (see FrameReaderOptions.acceptance). */
+  | { readonly t: "accepted" }
   | { readonly t: "meta"; readonly metadata: Record<string, string[]>; readonly exception?: IsolatedException }
   | { readonly t: "text"; readonly chunk: string }
   /**
@@ -153,6 +156,13 @@ export interface FrameReaderOptions {
    * also what the parent reserves memory for (runner.ts). Omitted: the child may send no segments.
    */
   readonly maxSegmentBytes?: number;
+  /**
+   * A child that serves several requests (warm.ts) sends an "accepted" frame once it has read a request whole and is
+   * about to parse it. With this set the reader requires exactly one, right after "ready" and before anything but an
+   * error; without it the frame is refused. The parent uses it to tell a child that died before it started a request
+   * (which can be run again) from one that died parsing it (tikajs-krih).
+   */
+  readonly acceptance?: boolean;
 }
 
 interface MetadataLimits {
@@ -189,6 +199,8 @@ export class FrameReader {
   #totalBytes = 0;
   #frameCount = 0;
   #sawReady = false;
+  #accepted = false;
+  readonly #acceptance: boolean;
   #terminal: "done" | "error" | null = null;
   #trailingBytes = false;
   #errorFrame: ErrorFrame | null = null;
@@ -249,6 +261,7 @@ export class FrameReader {
       }
     }
     this.#maxSegmentBytes = options.maxSegmentBytes ?? -1;
+    this.#acceptance = options.acceptance ?? false;
   }
 
   /** Frames accepted so far, of every kind. */
@@ -274,6 +287,11 @@ export class FrameReader {
   /** "post-ready" once the ready frame was accepted. */
   get phase(): "pre-ready" | "post-ready" {
     return this.#sawReady ? "post-ready" : "pre-ready";
+  }
+
+  /** Whether the child sent "accepted": it read the request whole and was about to parse it. */
+  get accepted(): boolean {
+    return this.#accepted;
   }
 
   /** The terminal frame received, if any. Final: nothing after it changes it. */
@@ -451,6 +469,13 @@ export class FrameReader {
       return null;
     }
     if (!this.#sawReady) return `"${frame.t}" frame before "ready"`;
+    if (frame.t === "accepted") {
+      if (!this.#acceptance) return '"accepted" frame from a child that serves one request';
+      if (this.#accepted) return 'second "accepted" frame';
+      this.#accepted = true;
+      return null;
+    }
+    if (this.#acceptance && !this.#accepted && frame.t !== "error") return `"${frame.t}" frame before "accepted"`;
 
     switch (frame.t) {
       case "meta":
@@ -770,6 +795,10 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
         return "ready.pid must be a positive integer";
       }
       return { t: "ready", pid: value.pid };
+    }
+    case "accepted": {
+      const extra = onlyKeys(value, ["t"]);
+      return extra === null ? { t: "accepted" } : `accepted: ${extra}`;
     }
     case "meta": {
       const extra = onlyKeys(value, ["t", "metadata", "exception"]);

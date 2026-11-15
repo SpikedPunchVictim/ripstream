@@ -106,6 +106,8 @@ export interface ChildReuseStats {
   readonly spawned: number;
   /** Requests answered by a child that had answered one before. */
   readonly reused: number;
+  /** Requests run a second time on a new child because the reused child died before it began them. */
+  readonly retried: number;
   /** Children retired so far, by reason. Reasons that never happened are absent. */
   readonly retired: Readonly<Partial<Record<ChildRetireReason, number>>>;
 }
@@ -159,6 +161,12 @@ interface Verdict {
   readonly error: Error | null;
   /** Why the child was retired, or null when it may serve again. */
   readonly retire: ChildRetireReason | null;
+  /**
+   * A reused child died before it said it had read the request whole ("accepted") and nobody here killed it, so
+   * nothing was ever parsed and the request can run on another child (tikajs-krih). Never true after any frame
+   * of the request's answer, a kill, an abort or output on stderr.
+   */
+  readonly neverStarted: boolean;
 }
 
 /** One request on one child. */
@@ -293,6 +301,7 @@ class WarmChild {
           ...(this.#config.options.maxFrames === undefined ? {} : { maxFrames: this.#config.options.maxFrames }),
           ...(spec.request.unpackBytes === undefined ? {} : { unpackBytes: spec.request.unpackBytes }),
           ...(spec.maxSegmentBytes === undefined ? {} : { maxSegmentBytes: spec.maxSegmentBytes }),
+          acceptance: true,
         }),
         resolve,
         fresh,
@@ -329,7 +338,7 @@ class WarmChild {
       this.#carry = "";
       if (this.state === "retired") {
         // Died between checkout and now (a reused child checked out from the idle list is alive, so this is defensive).
-        this.#finishDead(req, new IsolationError("unavailable", "The reused isolated parser ended before the request was sent"));
+        this.#finishDead(req, new IsolationError("unavailable", "The reused isolated parser ended before the request was sent"), true);
         return;
       }
       this.#setRef(true);
@@ -647,10 +656,10 @@ class WarmChild {
   }
 
   /** The child is dead (or did not die within the reap wait): classify what was seen, as for a fresh child. */
-  #finishDead(req: ActiveRequest, forced?: Error): void {
+  #finishDead(req: ActiveRequest, forced?: Error, unsent = false): void {
     if (req.settled) return;
     if (this.#exited && !this.#isDead) {
-      void this.dead.then(() => this.#finishDead(req, forced));
+      void this.dead.then(() => this.#finishDead(req, forced, unsent));
       return;
     }
     let result: IsolatedParseResult | null = null;
@@ -664,7 +673,25 @@ class WarmChild {
       }
     }
     if (this.state !== "retired") this.retire("exit");
-    this.#settle(req, { result, error, retire: this.retireReason ?? "exit" });
+    this.#settle(req, { result, error, retire: this.retireReason ?? "exit", neverStarted: unsent || (result === null && this.#neverStarted(req)) });
+  }
+
+  /**
+   * Whether `req` died on a reused child before the child began it: no "accepted" frame, no answer, no kill of ours,
+   * no abort, nothing on stderr. A fresh child is not retried (it was started for this request), and a process that
+   * dies after "accepted" is the document's doing, whatever it left behind.
+   */
+  #neverStarted(req: ActiveRequest): boolean {
+    return (
+      !req.fresh &&
+      !req.reader.accepted &&
+      req.reader.terminal === null &&
+      req.reader.violation === null &&
+      req.killReason === null &&
+      !req.stopping &&
+      !req.spec.signal.aborted &&
+      this.#ring.text() === ""
+    );
   }
 
   /** A terminal frame arrived: decide whether the answer stands and whether the child may serve again. */
@@ -689,7 +716,7 @@ class WarmChild {
       this.retire(this.state === "retired" ? (this.retireReason ?? retire) : retire);
       await this.#deadOrGiveUp();
     }
-    this.#settle(req, { result, error, retire: retire === null ? null : (this.retireReason ?? retire) });
+    this.#settle(req, { result, error, retire: retire === null ? null : (this.retireReason ?? retire), neverStarted: false });
   }
 
   /** The checks a clean answer must pass before the child is kept. Null: keep it. */
@@ -864,6 +891,7 @@ export class WarmRunner {
   #spawned = 0;
   #reused = 0;
   #unreaped = 0;
+  #retried = 0;
   #disposed = false;
 
   constructor(options: WarmRunnerOptions) {
@@ -941,6 +969,7 @@ export class WarmRunner {
       busy,
       spawned: this.#spawned,
       reused: this.#reused,
+      retried: this.#retried,
       retired: { ...this.#retired },
     };
   }
@@ -969,14 +998,35 @@ export class WarmRunner {
     const key = `${heapMb}:${domain}`;
     const spec: RequestSpec = { request, prefix, deadlineAt, signal, maxResultBytes, maxFrameBytes, maxSegmentBytes: segmentBytes };
 
-    let child = this.#reuseIdle(key, parentMb);
+    let attempt = await this.#attempt(spec, domain, key, heapMb, parentMb, true);
+    if (attempt.verdict.neverStarted) {
+      // A reused child died before it read the request (the window between its death and our exit event, in which it
+      // could be checked out): nothing was parsed, so run it once more, on a child that was started for it.
+      this.#retried += 1;
+      attempt = await this.#attempt(spec, domain, key, heapMb, parentMb, false);
+    }
+    const { verdict } = attempt;
+    if (verdict.result !== null) return verdict.result;
+    throw verdict.error ?? new Error("unreachable: a verdict without a result or an error");
+  }
+
+  /** One request on one child: an idle one when `mayReuse`, else one taken from the pool or spawned. */
+  async #attempt(
+    spec: RequestSpec,
+    domain: string,
+    key: string,
+    heapMb: number,
+    parentMb: number,
+    mayReuse: boolean,
+  ): Promise<{ readonly verdict: Verdict }> {
+    let child = mayReuse ? this.#reuseIdle(key, parentMb) : null;
     let fresh = false;
     if (child === null) {
-      const got = await this.#acquire(key, parentMb, signal, deadlineAt);
+      const got = await this.#acquire(key, parentMb, spec.signal, spec.deadlineAt);
       if ("child" in got) {
         child = got.child;
       } else {
-        child = this.#adoptIdle(key, got.lease);
+        child = mayReuse ? this.#adoptIdle(key, got.lease) : null;
         if (child === null) {
           child = this.#spawn(domain, key, heapMb, got.lease);
           fresh = true;
@@ -991,8 +1041,7 @@ export class WarmRunner {
       child.countedUnreaped = true;
       this.#unreaped += 1;
     }
-    if (verdict.result !== null) return verdict.result;
-    throw verdict.error ?? new Error("unreachable: a verdict without a result or an error");
+    return { verdict };
   }
 
   async #checkInputSize(request: IsolatedParseRequest): Promise<void> {

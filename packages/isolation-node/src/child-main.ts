@@ -48,7 +48,9 @@ import { MAX_BYTES_CHUNK, MAX_SEGMENTS_PER_FRAME, MAX_TEXT_CHUNK_CHARS } from ".
  * by exiting at once: the frame is already in the pipe, and stderr is best-effort diagnostics.
  *
  * A REUSED child (the parent set SERVE_ENV through the wrapper, see warm.ts) sends "ready" once, then answers request
- * after request on the same stdin: steps 4 to 6 repeat, each with its own terminal frame, until the parent closes
+ * after request on the same stdin: steps 4 to 6 repeat, each with its own terminal frame (and an "accepted" frame once
+ * the request has been read whole, before any parsing: a process that dies before it is one the parent may run the
+ * request on again), until the parent closes
  * stdin (exit code 0) or kills the group. Nothing of one request's header, options or frames is kept for the next;
  * the ripstream is built once per distinct `components` and reused. A fault outside a request's promise chain still
  * ends the process, as above. The parent retires the child after any error frame, so the loop never has to decide
@@ -389,6 +391,9 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
           break;
         }
         try {
+          // The whole request is here and nothing was parsed: the parent may still run it elsewhere if this process
+          // dies before this frame (warm.ts, tikajs-krih). From here on a death counts as the document's.
+          send({ t: "accepted" });
           await answer(input);
         } catch (error) {
           if (!answerError(error)) break;

@@ -118,7 +118,7 @@ test("a clean answer keeps the child: the next request of the same domain runs i
   assert.deepEqual([first.parsed, second.parsed], [1, 2]);
   assert.deepEqual(
     { ...runner.stats(), retired: undefined },
-    { domains: 1, idle: 1, busy: 0, spawned: 1, reused: 1, retired: undefined },
+    { domains: 1, idle: 1, busy: 0, spawned: 1, reused: 1, retried: 0, retired: undefined },
   );
   assert.equal(runner.unreapedChildren, 0);
 });
@@ -219,6 +219,32 @@ test("a child that dies while idle is never checked out: the next request gets a
   const next = await ask(runner, "ok");
   assert.notEqual(next.pid, leaving.pid);
   assert.equal(next.parsed, 1);
+});
+
+test("a reused child that dies before it began the request: the request runs once more, on a new child, and succeeds", async () => {
+  const { runner, seen } = warm();
+  const first = await ask(runner, "die-before-accept");
+  const answer = await ask(runner, "ok");
+  assert.notEqual(answer.pid, first.pid, "the answer came from a new process");
+  assert.equal(answer.parsed, 1);
+  assert.equal(answer.text, "ok");
+  assert.equal(runner.stats().retried, 1);
+  assert.equal(runner.stats().spawned, 2);
+  await expectGroupGone(first.pid);
+  assert.equal(runner.unreapedChildren, 0);
+  assert.equal(seen.length, 3, "the failed attempt is reported like any other run");
+});
+
+test("a reused child that dies parsing the request (after it accepted it) is never retried", async () => {
+  const { runner } = warm();
+  const first = await ask(runner, "ok");
+  const error = await ask(runner, "segv").then(
+    () => assert.fail("should have failed"),
+    (e: unknown) => e,
+  );
+  assert.ok(error instanceof IsolationError && error.reason === "crash", String(error));
+  assert.equal(runner.stats().retried, 0);
+  await expectGroupGone(first.pid);
 });
 
 test("an idle child does not keep the parent's event loop alive", async () => {

@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### A reused child that died before it began a request: the request runs again (`tikajs-krih`)
+
+Fixed: with child reuse, a reused child that died in the instant between its death and our noticing it could be
+checked out, and the request failed as a crash or unavailability though nothing of it had been parsed. A serving child
+now sends an `accepted` frame once it has read a request whole, before parsing; a request whose reused child dies
+without one (no answer, no kill of ours, no abort, nothing on stderr) runs once more on another child. A death after
+`accepted` is never retried. New: `ChildReuseStats.retried`. Wire protocol: serving children send `accepted`; parent and
+child ship together.
+
 ### Segments in frames of their own: a 4 GiB pool admits the full cap (`tikajs-9ztw`)
 
 Changed: an isolated request with `segments: true` reserved its whole result at 24x (10,146 MiB at 52,428,800

@@ -104,14 +104,14 @@ function echoing(): { ripstream: ChildRipstream; options: Record<string, unknown
 
 const types = (frames: readonly Frame[]): string[] => frames.map((frame) => frame.t);
 
-test("serve: one ready, then meta/text/done per request, then exit code 0 when stdin closes", async () => {
+test("serve: one ready, then accepted/meta/text/done per request, then exit code 0 when stdin closes", async () => {
   const { ripstream } = echoing();
   const s = serve(ripstream);
   s.give(message("one"));
   s.give(message("two"));
   s.give(null);
   assert.equal(await s.outcome, 0);
-  assert.deepEqual(types(s.frames), ["ready", "meta", "text", "done", "meta", "text", "done"]);
+  assert.deepEqual(types(s.frames), ["ready", "accepted", "meta", "text", "done", "accepted", "meta", "text", "done"]);
   assert.deepEqual(
     s.frames.filter((f) => f.t === "text").map((f) => f["chunk"]),
     ["one", "two"],
@@ -126,7 +126,7 @@ test("serve: a failed request is answered with its error frame and the loop goes
   s.give(message("after"));
   s.give(null);
   assert.equal(await s.outcome, 0);
-  assert.deepEqual(types(s.frames), ["ready", "error", "meta", "text", "done"]);
+  assert.deepEqual(types(s.frames), ["ready", "accepted", "error", "accepted", "meta", "text", "done"]);
 });
 
 test("serve: a message that cannot be read is answered with an error frame and ends the loop", async () => {
@@ -135,7 +135,7 @@ test("serve: a message that cannot be read is answered with an error frame and e
   s.give(message("ok"));
   s.give(new RangeError("input header is 70000 bytes, the maximum is 65536"));
   await s.outcome;
-  assert.deepEqual(types(s.frames), ["ready", "meta", "text", "done", "error"]);
+  assert.deepEqual(types(s.frames), ["ready", "accepted", "meta", "text", "done", "error"]);
 });
 
 test("serve: nothing of one request's options reaches the next", async () => {
@@ -178,8 +178,8 @@ test("serve: a fault while waiting for the next request is a crash frame of a ne
   await s.waiting();
   await new Promise((resolve) => setImmediate(resolve));
   s.fatal(new TypeError("leftover timer"));
-  assert.deepEqual(types(s.frames), ["ready", "meta", "text", "done", "error"]);
-  assert.equal(s.frames[4]!["kind"], "crash");
+  assert.deepEqual(types(s.frames), ["ready", "accepted", "meta", "text", "done", "error"]);
+  assert.equal(s.frames[5]!["kind"], "crash");
   assert.deepEqual(s.exits, [1]);
   s.give(null);
   await s.outcome;
