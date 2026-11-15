@@ -8,10 +8,9 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { parseEntry, readAll, withXhtml } from "./util.ts";
+import { EntryLimit, parseEntry, readAll, withXhtml } from "./util.ts";
 
 const SECTOR = 2048;
-const MAX_ENTRIES = 10_000;
 
 interface IsoEntry {
   readonly name: string;
@@ -50,7 +49,7 @@ export class Iso9660Parser implements Parser {
 
     await withXhtml(handler, metadata, async (xhtml) => {
       const visited = new Set<number>();
-      let count = 0;
+      const entries = new EntryLimit("ISO", ctx);
       const walk = async (
         entry: IsoEntry,
         prefix: string,
@@ -61,12 +60,12 @@ export class Iso9660Parser implements Parser {
             `ISO directory depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`,
           );
         }
-        if (visited.has(entry.extent) || count >= MAX_ENTRIES) return;
+        if (visited.has(entry.extent)) return;
         visited.add(entry.extent);
         const start = entry.extent * SECTOR;
         const end = Math.min(start + entry.size, data.length);
         let position = start;
-        while (position < end && count < MAX_ENTRIES) {
+        while (position < end) {
           const length = data[position]!;
           if (length === 0) {
             position = (Math.floor(position / SECTOR) + 1) * SECTOR;
@@ -76,12 +75,14 @@ export class Iso9660Parser implements Parser {
           if (child === null) break;
           position += length;
           if (child.name === "." || child.name === "..") continue;
-          count++;
+          // Directories count too, as before; a directory past the limit is still walked, to count what is in it.
+          const admitted = entries.admit();
           const path = `${prefix}/${child.name}`;
           if (child.directory) {
             await walk(child, path, depth + 1);
             continue;
           }
+          if (!admitted) continue;
           await xhtml.startElement("div", "class", "iso-entry");
           await xhtml.element("h1", path);
           const fileStart = child.extent * SECTOR;
@@ -99,7 +100,8 @@ export class Iso9660Parser implements Parser {
         }
       };
       await walk(root, "", 0);
-      metadata.set("iso:entry-count", String(count));
+      metadata.set("iso:entry-count", String(entries.read));
+      entries.note(metadata);
     });
     void view;
   }

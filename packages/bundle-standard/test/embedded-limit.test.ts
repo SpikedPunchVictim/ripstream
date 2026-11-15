@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { crc32 } from "node:zlib";
 import { MemoryPool } from "@spikedpunch/ripstream-isolation-node";
-import { LimitExceededError, createRipstream, type ParseRecord } from "../src/index.ts";
+import { BodyContentHandler, LimitExceededError, createRipstream, type ParseRecord } from "../src/index.ts";
 import { createStandardIsolation } from "../src/isolation.ts";
 
 /**
@@ -261,4 +261,33 @@ function wrapEntry(entryName: string, data: Uint8Array): Uint8Array {
   end.writeUInt32LE(entry.length + nameBytes.length, 12);
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([local, nameBytes, data, entry, nameBytes, end]);
+}
+
+/**
+ * tikajs-6ghz (F5): the three `parseTo*` methods always throw (the doc on `ParseOptions.onEmbeddedLimit`): a cut archive
+ * is not a result they can flag, so `truncate` is ignored there. (The isolated ripstream has no such methods.)
+ */
+const truncating = { filename: "five.zip", onEmbeddedLimit: "truncate", limits: { maxEmbeddedResources: 3 } } as const;
+
+test("in-process: parseToString ignores onEmbeddedLimit truncate and throws", async () => {
+  await assert.rejects(inProcess.parseToString(bigZip(5), truncating), /Embedded count 4 exceeds 3/);
+});
+
+test("in-process: parseToHandler and parseToStream throw under onEmbeddedLimit truncate too", async () => {
+  await assert.rejects(inProcess.parseToHandler(bigZip(5), new BodyContentHandler(), truncating), LimitExceededError);
+  const reader = inProcess.parseToStream(bigZip(5), truncating).getReader();
+  await assert.rejects(async () => {
+    for (;;) if ((await reader.read()).done) return;
+  }, LimitExceededError);
+});
+
+/** tikajs-6ghz (F8): the embedded-count error is a LimitExceededError by name, here and across the isolation boundary. */
+for (const [arm, ripstream] of arms) {
+  test(`${arm}: the embedded-count limit error is named LimitExceededError`, async () => {
+    await assert.rejects(ripstream.parse(bigZip(5), { filename: "five.zip", limits: { maxEmbeddedResources: 3 } }), (e: unknown) => {
+      assert.ok(e instanceof LimitExceededError, String(e));
+      assert.equal((e as Error).name, "LimitExceededError");
+      return true;
+    });
+  });
 }

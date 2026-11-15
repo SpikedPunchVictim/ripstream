@@ -7,7 +7,12 @@ import {
   type Parser,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
-import { parseEntry, readAll, withXhtml } from "./util.ts";
+import { EntryLimit, parseEntry, readAll, withXhtml } from "./util.ts";
+
+/** Records that the rest of an archive could not be read, at the offset its next header was expected. */
+function recordBrokenHeader(metadata: Metadata, format: string, offset: number, why: string): void {
+  metadata.add("tk:exception:embedded-stream-exception", `${MalformedDocumentError.name}: ${format} header at offset ${offset} ${why}; the rest of the archive was not read`);
+}
 
 /** CPIO newc/odc archive parser. */
 export class CpioParser implements Parser {
@@ -34,9 +39,13 @@ export class CpioParser implements Parser {
     }
     await withXhtml(handler, metadata, async (xhtml) => {
       let position = 0;
-      for (let count = 0; count < ctx.limits.maxZipEntries && position + 110 <= data.length; count++) {
+      const entries = new EntryLimit("CPIO", ctx);
+      while (position + 110 <= data.length) {
         const header = new TextDecoder("latin1").decode(data.subarray(position, position + 110));
-        if (!["070701", "070702"].includes(header.slice(0, 6))) break;
+        if (!["070701", "070702"].includes(header.slice(0, 6))) {
+          recordBrokenHeader(metadata, "CPIO", position, "is not a newc header");
+          break;
+        }
         // A field is eight hex digits; parseInt would also accept "-0000074" (a size that walks back to this header, so the
         // same entry is read until the entry limit) and "12zz" (read as 0x12).
         const field = (index: number): number => {
@@ -45,7 +54,10 @@ export class CpioParser implements Parser {
         };
         const size = field(6);
         const nameSize = field(11);
-        if (Number.isNaN(size) || Number.isNaN(nameSize)) break;
+        if (Number.isNaN(size) || Number.isNaN(nameSize)) {
+          recordBrokenHeader(metadata, "CPIO", position, "has a size that is not a number");
+          break;
+        }
         const nameStart = position + 110;
         const name = new TextDecoder("latin1")
           .decode(data.subarray(nameStart, nameStart + Math.max(0, nameSize - 1)))
@@ -53,7 +65,7 @@ export class CpioParser implements Parser {
         const dataStart = align4(nameStart + nameSize);
         if (name === "TRAILER!!!") break;
         const content = data.subarray(dataStart, Math.min(dataStart + size, data.length));
-        if (name.length > 0) {
+        if (name.length > 0 && entries.admit()) {
           await xhtml.startElement("div", "class", "package-entry");
           await xhtml.element("h1", name);
           await parseEntry(xhtml, name, content, metadata, ctx);
@@ -61,6 +73,7 @@ export class CpioParser implements Parser {
         }
         position = align4(dataStart + size);
       }
+      entries.note(metadata);
     });
   }
 }
@@ -85,14 +98,21 @@ export class ArParser implements Parser {
     }
     await withXhtml(handler, metadata, async (xhtml) => {
       let position = 8;
-      for (let count = 0; count < ctx.limits.maxZipEntries && position + 60 <= data.length; count++) {
+      const entries = new EntryLimit("ar", ctx);
+      while (position + 60 <= data.length) {
         const header = new TextDecoder("latin1").decode(data.subarray(position, position + 60));
         const name = header.slice(0, 16).trim().replace(/\/$/, "");
         const size = Number.parseInt(header.slice(48, 58).trim(), 10);
-        if (!Number.isFinite(size) || size < 0) break;
+        if (!Number.isFinite(size) || size < 0) {
+          recordBrokenHeader(metadata, "ar", position, "has no valid size");
+          break;
+        }
         const start = position + 60;
-        if (start + size > data.length) break;
-        if (name.length > 0 && name !== "/") {
+        if (start + size > data.length) {
+          recordBrokenHeader(metadata, "ar", position, `claims ${size} bytes but the archive ends first`);
+          break;
+        }
+        if (name.length > 0 && name !== "/" && entries.admit()) {
           await xhtml.startElement("div", "class", "package-entry");
           await xhtml.element("h1", name);
           await parseEntry(xhtml, name, data.subarray(start, start + size), metadata, ctx);
@@ -102,6 +122,7 @@ export class ArParser implements Parser {
         if (next <= position) break; // require strictly monotonic advance
         position = next;
       }
+      entries.note(metadata);
     });
   }
 }

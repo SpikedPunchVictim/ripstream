@@ -46,6 +46,8 @@ export class EmbeddedCountLimitError extends LimitExceededError {
 
   constructor(seen: number, max: number) {
     super(`Embedded count ${seen} exceeds ${max}`);
+    // The same name an isolated parse gives it (the error codec rebuilds it by code as a LimitExceededError).
+    this.name = "LimitExceededError";
     this.seen = seen;
     this.max = max;
     WHOLE_PARSE_LIMITS.add(this);

@@ -321,7 +321,7 @@ container carries the flag plus four keys that say what was cut:
 | `tk:exception:embedded-resource-limit-seen` | entries or embedded documents counted when the read stopped |
 | `tk:exception:embedded-resource-limit-read` | entries or embedded documents read (the limit) |
 
-`seen` is exact for a ZIP (its directory is read first) and for a tar (the rest of the archive is walked past, unparsed);
+`seen` is exact for a ZIP (its directory is read first), for a tar, a cpio, an ar and an ISO 9660 image (the rest of the archive is walked past, unparsed);
 for `maxEmbeddedResources` it is the count at which the parse stopped (N+1), not the total, since a tree is not walked
 further. The keys are ripstream's addition: Tika sets the flag alone. In `parseRecursive` an archive with too many
 entries is flagged on its own record (a nested archive on the nested record); reaching `maxEmbeddedResources`, a budget
@@ -329,7 +329,7 @@ for the whole tree, flags the container's. `parse` carries them on the one metad
 (`maxTotalEmbeddedBytes`, `maxEmbeddedResourceBytes`, `maxDecompressionRatio`) and every other
 limit still throw. `onEmbeddedLimit` crosses the isolation boundary like `onOutputLimit` (`truncateEmbedded` in the
 request), and an isolated and an in-process parse agree. `maxZipEntries` is not a per-request limit: an isolated child
-always applies 10,000. Dump, cpio, ar and other archive formats, `serve` and the CLI still throw at their limits.
+always applies 10,000. cpio, ar and ISO 9660 images follow `maxZipEntries` like ZIP and tar (`tikajs-6ghz`: they used to stop at the limit without a word, and an ISO at a fixed 10,000): an entry past it throws by default and is flagged under `truncate`, `seen` counting the entries walked past; a cpio or ar header that cannot be read after a good entry is no longer a silent end but a `tk:exception:embedded-stream-exception` on the archive. Dump and other archive formats, `serve` and the CLI still throw at their limits. `parseToString`, `parseToHandler` and `parseToStream` ignore `onEmbeddedLimit` and always throw, as the option's doc says (they used to honour `truncate`, returning partial text with no flag). The in-process embedded-count error is named `LimitExceededError`, as an isolated parse's already was (it was `EmbeddedCountLimitError`; `instanceof`, `code` and the HTTP status are unchanged).
 
 A configuration file's `embedded-limits` is unchanged: `maxCount` is accepted only beside `throwOnMaxCount: true`
 (ripstream fails the parse). Tika with `throwOnMaxCount: false` behaves as `onEmbeddedLimit: "truncate"` does, so

@@ -69,3 +69,54 @@ test("rejects excessively deep directory chains with LimitExceededError", async 
   );
   await stream.close();
 });
+
+/** The entry limit of an ISO image is the context's maxZipEntries, and past it the image throws or is flagged (tikajs-6ghz, F3). */
+function isoWithFiles(count: number): Uint8Array {
+  const data = new Uint8Array(20 * 2048);
+  const pvd = 16 * 2048;
+  data[pvd] = 1;
+  data.set([0x43, 0x44, 0x30, 0x30, 0x31], pvd + 1);
+  data.set(record("\0", 17, 2048, true), pvd + 156);
+  let position = 17 * 2048;
+  for (let index = 1; index <= count; index++) {
+    const entry = record(`F${index}.TXT;1`, 18, 5, false);
+    data.set(entry, position);
+    position += entry.length;
+  }
+  data.set([...new TextEncoder().encode("hello")], 18 * 2048);
+  return data;
+}
+
+async function parseIso(bytes: Uint8Array, maxZipEntries: number, truncate: boolean): Promise<{ text: string; metadata: Metadata }> {
+  const stream = await RipstreamInputStream.from(bytes);
+  const handler = new BodyContentHandler();
+  const metadata = new Metadata();
+  const ctx = new ParseContext({ limits: { maxZipEntries } });
+  ctx.set(CONTEXT_KEYS.PARSER, plainText);
+  if (truncate) ctx.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
+  try {
+    await new Iso9660Parser().parse(stream, handler, metadata, ctx);
+  } finally {
+    await stream.close();
+  }
+  return { text: handler.toString(), metadata };
+}
+
+test("ISO: more files than maxZipEntries throws LimitExceededError", async () => {
+  await assert.rejects(parseIso(isoWithFiles(5), 3, false), (error: Error) => error.name === "LimitExceededError");
+});
+
+test("ISO: under onEmbeddedLimit truncate the first files are read and the cut is flagged", async () => {
+  const { text, metadata } = await parseIso(isoWithFiles(5), 3, true);
+  assert.match(text, /F3\.TXT/);
+  assert.doesNotMatch(text, /F4\.TXT/);
+  assert.equal(metadata.get("tk:exception:embedded-resource-limit-reached"), "true");
+  assert.equal(metadata.get("tk:exception:embedded-resource-limit-seen"), "5");
+  assert.equal(metadata.get("tk:exception:embedded-resource-limit-read"), "3");
+});
+
+test("ISO: exactly maxZipEntries files is neither an error nor a flag, and the limit is no longer a fixed 10,000", async () => {
+  const { text, metadata } = await parseIso(isoWithFiles(3), 3, false);
+  assert.match(text, /F3\.TXT/);
+  assert.equal(metadata.get("tk:exception:embedded-resource-limit-reached"), null);
+});

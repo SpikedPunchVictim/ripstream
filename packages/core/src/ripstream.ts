@@ -80,7 +80,7 @@ export interface ParseOptions {
    * in archive order, and the document carries `tk:exception:embedded-resource-limit-reached` = "true" with
    * `tk:exception:embedded-resource-limit` (which limit), `-max`, `-seen` and `-read`. `maxEmbeddedResources` is one
    * budget for the whole tree, so reaching it stops the parse and the flag is on the container's metadata; an archive
-   * with too many entries (ZIP, tar) is read up to `maxZipEntries` entries and flagged on its own metadata (its
+   * with too many entries (ZIP, tar, cpio, ar, ISO 9660) is read up to `maxZipEntries` entries and flagged on its own metadata (its
    * record's, in `parseRecursive`). The bomb limits (`maxTotalEmbeddedBytes`, `maxEmbeddedResourceBytes`, the
    * decompression ratio) and every other limit still reject. The other parse methods always throw. See "The entry-count limit" in docs/migration.md.
    */
@@ -173,7 +173,7 @@ export class Ripstream {
   }
 
   async parseToString(source: InputSource, options: ParseOptions = {}): Promise<string> {
-    return (await this.parse(source, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw" })).text;
+    return (await this.parse(source, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw", onEmbeddedLimit: "throw" })).text;
   }
 
   /**
@@ -275,7 +275,7 @@ export class Ripstream {
     handler: ContentHandler,
     options: ParseOptions = {},
   ): Promise<Metadata> {
-    return (await this.parseNoting(source, handler, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw" })).metadata;
+    return (await this.parseNoting(source, handler, { ...options, onDocumentFailure: "throw", onOutputLimit: "throw", onEmbeddedLimit: "throw" })).metadata;
   }
 
   /**

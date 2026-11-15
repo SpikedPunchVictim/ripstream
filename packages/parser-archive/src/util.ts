@@ -8,6 +8,8 @@ import {
   RipstreamInputStream,
   TIKA_KEYS,
   XHTMLContentHandler,
+  noteEmbeddedLimit,
+  truncatesEmbeddedLimit,
   type ContentHandler,
   type EmbeddedDocumentExtractor,
   type ParseContext,
@@ -58,6 +60,47 @@ export function checkDecompression(
     throw new LimitExceededError(
       `${what} exceeds the decompression ratio limit`,
     );
+  }
+}
+
+/**
+ * Counts the entries of an archive against `maxZipEntries`, as zip and tar do: an entry past the limit throws
+ * `LimitExceededError`, or, under `onEmbeddedLimit: "truncate"`, is not read (the walk goes on only to count it) and the
+ * archive's metadata says so. Exactly the limit is no cut. Count real entries only: not a trailer or an index.
+ */
+export class EntryLimit {
+  readonly #label: string;
+  readonly #max: number;
+  readonly #truncate: boolean;
+  #seen = 0;
+
+  constructor(label: string, ctx: ParseContext) {
+    this.#label = label;
+    this.#max = ctx.limits.maxZipEntries;
+    this.#truncate = truncatesEmbeddedLimit(ctx);
+  }
+
+  /** How many entries were counted, read or not. */
+  get seen(): number {
+    return this.#seen;
+  }
+
+  /** How many were read: up to the limit. */
+  get read(): number {
+    return Math.min(this.#seen, this.#max);
+  }
+
+  /** Counts one entry; true when it is to be read, false when it is past the limit and the parse truncates. */
+  admit(): boolean {
+    this.#seen++;
+    if (this.#seen <= this.#max) return true;
+    if (!this.#truncate) throw new LimitExceededError(`${this.#label} entries exceed ${this.#max}`);
+    return false;
+  }
+
+  /** Notes the cut on the archive's metadata when there was one. */
+  note(metadata: Metadata): void {
+    if (this.#seen > this.#max) noteEmbeddedLimit(metadata, { limit: "maxZipEntries", max: this.#max, seen: this.#seen, read: this.#max });
   }
 }
 

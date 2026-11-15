@@ -56,6 +56,19 @@ text that is there is kept). Files with no unreadable page are unchanged.
 Fixed: a page tree whose `/Kids` is an indirect reference to an array object (`/Kids 8 0 R`) was read as a broken tree by
 the rebuild, which then listed the pages in file order instead of tree order (no text was lost). The array is read.
 
+### Bug hunt at 9a828fc: entry limits of cpio, ar and ISO; `parseTo*` and `onEmbeddedLimit`; the embedded-count error name (`tikajs-6ghz`, F3 F5 F8)
+
+Changed (visible to callers): cpio, ar and ISO 9660 archives now follow `maxZipEntries` like ZIP and tar. An archive with more
+entries threw nothing and set no flag before (it read the first N and stopped; an ISO at a fixed 10,000, ignoring the limit):
+it now throws `LimitExceededError`, or under `onEmbeddedLimit: "truncate"` reads the first N and carries
+`tk:exception:embedded-resource-limit-*` (with `seen` counted by walking past the rest). Exactly N entries is neither. The ar
+symbol table and the cpio trailer do not count. A cpio or ar header that cannot be read after a good entry is recorded as
+`tk:exception:embedded-stream-exception` on the archive instead of ending it silently. `parseToString`, `parseToHandler` and
+`parseToStream` now ignore `onEmbeddedLimit` and always throw, as the option's documentation says (they honoured `truncate` and
+returned partial text with no flag). The in-process embedded-count error is named `LimitExceededError` (was
+`EmbeddedCountLimitError`) like the isolated one; `instanceof`, `code` and the HTTP status are unchanged. docs/migration.md
+("The entry-count limit") is corrected: it said cpio and ar throw at their limits.
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current
