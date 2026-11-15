@@ -13,6 +13,7 @@ import {
   MediaType,
   Metadata,
   ParseTimeoutError,
+  type IsolatedParseResult,
   type IsolationConfig,
 } from "@spikedpunch/ripstream-core";
 import { containmentFor, type Containment } from "../src/containment.ts";
@@ -32,6 +33,7 @@ import { fakeRipstream, IN_PROCESS_TEXT, type FakeRipstream } from "./fixtures/f
 import { CHILD, DISK_CHILD } from "./fixtures/helpers.ts";
 
 const HEADER_CHILD = fileURLToPath(new URL("./fixtures/header-child.ts", import.meta.url));
+const WARM_CHILD = fileURLToPath(new URL("./fixtures/warm-main.ts", import.meta.url));
 const MIB = 1024 * 1024;
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
 
@@ -1314,3 +1316,95 @@ test(
     }
   },
 );
+
+// ---------------------------------------------------------------- reuse (warm children, warm.ts)
+// fixtures/warm-main.ts answers with its pid, so "the same child" is checked by pid. The process-level behaviour of
+// reuse (faults, recycling, leases) is in warm.test.ts; these check the isolator's wiring.
+
+const childPid = (result: IsolatedParseResult): string => {
+  assert.equal(result.kind, "text");
+  return result.metadata["pid"]![0]!;
+};
+
+test("reuse absent or disabled: every request gets its own child and status has no reuse entry", async () => {
+  for (const reuse of [undefined, { enabled: false }, { enabled: false, trustDomain: "t", maxRequests: 3 }]) {
+    const isolator = await setup({ childModule: WARM_CHILD, ...(reuse === undefined ? {} : { reuse }) }).create();
+    const first = childPid(await isolator.isolate({ input: bytes("ok") }));
+    const second = childPid(await isolator.isolate({ input: bytes("ok") }));
+    assert.notEqual(first, second, JSON.stringify(reuse));
+    assert.equal("reuse" in isolator.status(), false, JSON.stringify(reuse));
+  }
+});
+
+test("reuse enabled: consecutive requests share a child and status counts it", async () => {
+  const isolator = await setup({ childModule: WARM_CHILD, reuse: { enabled: true, trustDomain: "tenant-a" } }).create();
+  const first = childPid(await isolator.isolate({ input: bytes("ok") }));
+  const second = childPid(await isolator.isolate({ input: bytes("ok") }));
+  assert.equal(first, second);
+  const reuse = isolator.status().reuse;
+  assert.deepEqual(
+    { domains: reuse?.domains, idle: reuse?.idle, busy: reuse?.busy, spawned: reuse?.spawned, reused: reuse?.reused },
+    { domains: 1, idle: 1, busy: 0, spawned: 1, reused: 1 },
+  );
+  assert.doesNotThrow(() => JSON.stringify(isolator.status()));
+});
+
+test("reuse enabled: a request's trustDomain picks its own child; the default domain is reuse.trustDomain", async () => {
+  const isolator = await setup({ childModule: WARM_CHILD, reuse: { enabled: true, trustDomain: "tenant-a" } }).create();
+  const a = childPid(await isolator.isolate({ input: bytes("ok") }));
+  const b = childPid(await isolator.isolate({ input: bytes("ok") }, { trustDomain: "tenant-b" }));
+  const a2 = childPid(await isolator.isolate({ input: bytes("ok") }, { trustDomain: "tenant-a" }));
+  const b2 = childPid(await isolator.isolate({ input: bytes("ok") }, { trustDomain: "tenant-b" }));
+  assert.notEqual(a, b);
+  assert.equal(a2, a);
+  assert.equal(b2, b);
+  assert.equal(isolator.status().reuse?.domains, 2);
+});
+
+test("isolate: a malformed trustDomain is refused before anything runs, with or without reuse", async () => {
+  for (const reuse of [undefined, { enabled: true, trustDomain: "tenant-a" }]) {
+    const h = setup({ childModule: WARM_CHILD, ...(reuse === undefined ? {} : { reuse }) });
+    const isolator = await h.create();
+    for (const trustDomain of ["", "x".repeat(257), 5]) {
+      await assert.rejects(isolator.isolate({ input: bytes("ok") }, { trustDomain: trustDomain as string }), TypeError);
+    }
+    assert.equal(h.ripstream.detectCalls.length, 0);
+    assert.equal(h.runs(), 0);
+  }
+});
+
+test("reuse: an invalid setting rejects construction and says why", async () => {
+  const bad: Array<{ reuse: unknown; message: RegExp }> = [
+    { reuse: { enabled: true }, message: /trustDomain is required/ },
+    { reuse: { enabled: true, trustDomain: "t", rssCeilingMb: 512 }, message: /below the child's RSS kill limit/ },
+    { reuse: { enabled: false, maxRequests: 0 }, message: /maxRequests/ },
+    { reuse: { enabled: true, trustDomain: "t", recycle: 5 }, message: /unknown key\(s\) "recycle"/ },
+    { reuse: "yes", message: /reuse must be an object/ },
+  ];
+  for (const { reuse, message } of bad) {
+    await assert.rejects(
+      setup({ childModule: WARM_CHILD, reuse: reuse as NodeIsolatorOptions["reuse"] }).create(),
+      (error: unknown) => (error instanceof RangeError || error instanceof TypeError) && message.test(error.message),
+      JSON.stringify(reuse),
+    );
+  }
+});
+
+test("reuse: a platform where the parent cannot measure CPU refuses it at construction", async () => {
+  await assert.rejects(
+    setup({ childModule: WARM_CHILD, platform: "win32", reuse: { enabled: true, trustDomain: "t" } }).create(),
+    /cannot be enabled on win32/,
+  );
+});
+
+test("reuse is ignored when the mode is off or a lenient isolator is degraded", async () => {
+  const off = await setup({ config: { mode: "off" }, reuse: { enabled: true, trustDomain: "t" } }).create();
+  assert.equal("reuse" in off.status(), false);
+  const degraded = await setup({
+    config: { ...STRICT, mode: "lenient" },
+    probe: async () => ({ available: false, reason: "no wrapper shell" }),
+    reuse: { enabled: true, trustDomain: "t" },
+  }).create();
+  assert.equal(degraded.status().degraded, true);
+  assert.equal("reuse" in degraded.status(), false);
+});

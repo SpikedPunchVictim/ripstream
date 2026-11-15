@@ -490,6 +490,33 @@ test("phase is post-ready after the ready frame", () => {
   assert.equal(r.phase, "post-ready");
 });
 
+// trailingBytes: a reused child (warm.ts) must write nothing after its answer, so the reader notes any byte past it.
+test("trailingBytes is false for a stream that ends exactly at the terminal frame", () => {
+  const r = reader();
+  feedAll(r, line(READY) + line(META) + line(DONE));
+  assert.equal(r.trailingBytes, false);
+});
+
+test("trailingBytes is true for bytes after the terminal frame in the same chunk", () => {
+  const r = reader();
+  r.push(bytes(line(READY) + line(META) + line(DONE) + "x"));
+  assert.equal(r.trailingBytes, true);
+});
+
+test("trailingBytes is true for a later push after the terminal frame", () => {
+  const r = reader();
+  feedAll(r, line(READY) + line(META) + line(DONE));
+  r.push(bytes(line({ t: "text", chunk: "late" })));
+  assert.equal(r.trailingBytes, true);
+});
+
+test("trailingBytes stays false for an empty push after the terminal frame", () => {
+  const r = reader();
+  feedAll(r, line(READY) + line(META) + line(DONE));
+  r.push(new Uint8Array(0));
+  assert.equal(r.trailingBytes, false);
+});
+
 test("terminal is null until done or error", () => {
   const r = reader();
   feedAll(r, line(READY));

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   DEFAULT_CHILD_STDERR_BUDGET_BYTES,
   MAX_HEADER_BYTES,
+  InputReader,
   encodeInputPrefix,
   installStderrGuard,
   readInput,
@@ -347,4 +348,63 @@ test("stderr guard: counts BYTES of any typed array or DataView, not elements, a
   stream.write(Buffer.alloc(60)); // 110 > 100: dropped
   assert.equal(guard.exhausted(), true);
   assert.equal(received(), 50);
+});
+
+// ---- InputReader (a reused child reads message after message from one stdin) ----
+
+test("InputReader: several messages in one stream, then null at a clean end", async () => {
+  const one = Buffer.from("first");
+  const two = Buffer.from("second!");
+  const reader = new InputReader(
+    stream(wire(header({ byteLength: one.length, filename: "a" }), one), wire(header({ byteLength: two.length }), two)),
+  );
+  const a = await reader.next();
+  const b = await reader.next();
+  assert.deepEqual([a?.header.filename, Buffer.from(a!.bytes).toString()], ["a", "first"]);
+  assert.deepEqual([b?.header.filename, Buffer.from(b!.bytes).toString()], [undefined, "second!"]);
+  assert.equal(await reader.next(), null);
+  assert.equal(await reader.next(), null);
+});
+
+test("InputReader: messages split at any byte boundary are reassembled", async () => {
+  const body = Buffer.from("split body");
+  const all = Buffer.concat([wire(header({ byteLength: body.length }), body), wire(header({ byteLength: body.length }), body)]);
+  const reader = new InputReader(stream(...[...all].map((byte) => Uint8Array.of(byte))));
+  assert.equal(Buffer.from((await reader.next())!.bytes).toString(), "split body");
+  assert.equal(Buffer.from((await reader.next())!.bytes).toString(), "split body");
+  assert.equal(await reader.next(), null);
+});
+
+test("InputReader: a stream that ends before its first message gives null", async () => {
+  assert.equal(await new InputReader(stream()).next(), null);
+});
+
+test("InputReader: a stream that ends inside a message rejects, then gives null", async () => {
+  const body = Buffer.from("cut short");
+  const truncated = wire(header({ byteLength: body.length }), body).subarray(0, -3);
+  const reader = new InputReader(stream(wire(header()), truncated));
+  assert.notEqual(await reader.next(), null);
+  await assert.rejects(reader.next(), /input/);
+  assert.equal(await reader.next(), null);
+});
+
+test("InputReader: an over-long header length rejects", async () => {
+  const prefix = Buffer.alloc(4);
+  prefix.writeUInt32BE(MAX_HEADER_BYTES + 1, 0);
+  await assert.rejects(new InputReader(stream(prefix)).next(), RangeError);
+});
+
+test("InputReader: the next message is not read before it is asked for", async () => {
+  const source = new PassThrough();
+  const reader = new InputReader(source);
+  source.write(wire(header({ filename: "one" })));
+  assert.equal((await reader.next())?.header.filename, "one");
+  const pending = reader.next();
+  let settled = false;
+  void pending.then(() => (settled = true));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  source.end(wire(header({ filename: "two" })));
+  assert.equal((await pending)?.header.filename, "two");
+  assert.equal(await reader.next(), null);
 });

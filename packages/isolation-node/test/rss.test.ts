@@ -72,3 +72,43 @@ test("stop() is idempotent and a stopped poller never fires", { skip: !measurabl
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(fired, 0);
 });
+
+test("RssPoller with delayFirstSample takes no sample before one interval has passed", async () => {
+  let calls = 0;
+  const poller = new RssPoller({
+    pid: process.pid,
+    platform: "linux",
+    limitMb: 1e9,
+    pollMs: 200,
+    delayFirstSample: true,
+    sample: () => {
+      calls += 1;
+      return 10;
+    },
+    onOverLimit: () => {},
+  });
+  poller.start();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(calls, 0, "a request shorter than the interval costs no sample");
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  poller.stop();
+  assert.equal(calls, 1);
+});
+
+test("RssPoller without delayFirstSample samples at once (the one-shot behaviour is unchanged)", async () => {
+  let calls = 0;
+  const poller = new RssPoller({
+    pid: process.pid,
+    platform: "linux",
+    limitMb: 1e9,
+    pollMs: 10_000,
+    sample: () => {
+      calls += 1;
+      return 10;
+    },
+    onOverLimit: () => {},
+  });
+  poller.start();
+  poller.stop();
+  assert.equal(calls, 1);
+});

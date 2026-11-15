@@ -442,3 +442,21 @@ test("execArgv passes the normalised flag spelling on, never the original text",
   const first = command.args.indexOf("--no-warnings");
   assert.deepEqual(command.args.slice(first, first + 3), ["--no-warnings", "--no-deprecation", "--require=./Preload.cjs"]);
 });
+
+// ---- serve (a reused child, warm.ts) ----
+
+test("serve: true sets RIPSTREAM_CHILD_SERVE=1 and changes nothing else", () => {
+  const oneShot = build({ tmpDir: "/scratch/call-1" });
+  const serving = build({ tmpDir: "/scratch/call-1", serve: true });
+  assert.equal(serving.env.RIPSTREAM_CHILD_SERVE, "1");
+  const { RIPSTREAM_CHILD_SERVE: _serve, ...rest } = serving.env;
+  assert.deepEqual(rest, oneShot.env);
+  assert.deepEqual([serving.file, serving.args], [oneShot.file, oneShot.args]);
+});
+
+test("serve omitted or false: the variable is absent, even when the parent has it", () => {
+  for (const serve of [undefined, false]) {
+    const env = build({ serve, parentEnv: { RIPSTREAM_CHILD_SERVE: "1", PATH: "/bin" } }).env;
+    assert.equal("RIPSTREAM_CHILD_SERVE" in env, false, String(serve));
+  }
+});

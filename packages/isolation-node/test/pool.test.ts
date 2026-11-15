@@ -534,6 +534,170 @@ test("charge then release wakes a waiter that needed that memory", async () => {
   assert.deepEqual(accounting(pool), initialStats(1000));
 });
 
+// ---- reused children (warm.ts): tryCharge, refund, headTag, reclaimers ----
+
+test("refund: gives part of a live lease back; release returns the rest", async () => {
+  const { pool } = makePool(1000, 5);
+  const lease = await pool.acquire(600);
+  pool.refund(lease, 200);
+  assert.equal(lease.reservedMb, 400);
+  assert.deepEqual(accounting(pool), { poolMb: 1000, freeMb: 600, reservedMb: 400, queued: 0, running: 1 });
+  lease.release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("refund: admits a waiter the returned memory lets in", async () => {
+  const { pool } = makePool(1000, 5);
+  const lease = await pool.acquire(800);
+  const waiter = track(pool.acquire(400));
+  await tick();
+  assert.equal(waiter.state().status, "pending");
+  pool.refund(lease, 200);
+  await tick();
+  granted(waiter).release();
+  lease.release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("refund: more than the lease holds, a released lease, a foreign lease and bad amounts are programming errors", async () => {
+  const { pool } = makePool(1000, 5);
+  const other = makePool(1000, 5).pool;
+  const lease = await pool.acquire(100);
+  assert.throws(() => pool.refund(lease, 101), RangeError);
+  assert.throws(() => pool.refund(lease, -1), RangeError);
+  assert.throws(() => pool.refund(lease, 0.5), RangeError);
+  assert.throws(() => other.refund(lease, 1), TypeError);
+  lease.release();
+  assert.throws(() => pool.refund(lease, 1), /already released/);
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("tryCharge: adds the memory when it fits and nobody waits", async () => {
+  const { pool } = makePool(1000, 5);
+  const lease = await pool.acquire(300);
+  assert.equal(pool.tryCharge(lease, 700), true);
+  assert.equal(lease.reservedMb, 1000);
+  assert.equal(pool.tryCharge(lease, 1), false);
+  assert.equal(lease.reservedMb, 1000);
+  lease.release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("tryCharge: refuses while anyone waits, even when the memory is free (it never jumps the queue)", async () => {
+  const { pool } = makePool(1000, 5);
+  const lease = await pool.acquire(300);
+  const holder = await pool.acquire(500);
+  const waiter = track(pool.acquire(400)); // 200 free: waits
+  await tick();
+  assert.equal(pool.tryCharge(lease, 100), false);
+  assert.equal(lease.reservedMb, 300);
+  holder.release();
+  await tick();
+  granted(waiter).release();
+  assert.equal(pool.tryCharge(lease, 100), true);
+  lease.release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("tryCharge: a released lease, a foreign lease and bad amounts are programming errors; a disposed pool refuses", async () => {
+  const { pool } = makePool(1000, 5);
+  const other = makePool(1000, 5).pool;
+  const lease = await pool.acquire(100);
+  assert.throws(() => pool.tryCharge(lease, -1), RangeError);
+  assert.throws(() => other.tryCharge(lease, 1), TypeError);
+  pool.dispose();
+  assert.equal(pool.tryCharge(lease, 1), false);
+  lease.release();
+  assert.throws(() => pool.tryCharge(lease, 1), /already released/);
+});
+
+test("headTag: the tag of the waiter at the head, undefined without one", async () => {
+  const { pool } = makePool(1000, 5);
+  const holder = await pool.acquire(1000);
+  assert.equal(pool.headTag(), undefined);
+  const first = {};
+  const second = {};
+  const a = track(pool.acquire(100, { tag: first }));
+  const b = track(pool.acquire(100, { tag: second }));
+  await tick();
+  assert.equal(pool.headTag(), first);
+  holder.release();
+  await tick();
+  assert.equal(pool.headTag(), undefined);
+  granted(a).release();
+  granted(b).release();
+  const untagged = await pool.acquire(1000);
+  const c = track(pool.acquire(100));
+  await tick();
+  assert.equal(pool.headTag(), undefined);
+  untagged.release();
+  await tick();
+  granted(c).release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("reclaimer: told the queue's shortfall when a request has to wait, not when it is granted", async () => {
+  const { pool } = makePool(1000, 5);
+  const calls: number[] = [];
+  const remove = pool.addReclaimer((shortfallMb) => calls.push(shortfallMb));
+  const holder = await pool.acquire(700);
+  assert.deepEqual(calls, []);
+  const a = track(pool.acquire(400)); // 300 free: short by 100
+  const b = track(pool.acquire(300)); // queued 700 against 300 free: short by 400
+  await tick();
+  assert.deepEqual(calls, [100, 400]);
+  remove();
+  holder.release();
+  await tick();
+  granted(a).release();
+  granted(b).release();
+  const c = track(pool.acquire(1000));
+  await tick();
+  granted(c).release();
+  assert.deepEqual(calls, [100, 400]);
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("reclaimer: one that frees memory synchronously lets the waiter in", async () => {
+  const { pool } = makePool(1000, 5);
+  const idle = await pool.acquire(800);
+  pool.addReclaimer(() => idle.release());
+  const waiter = track(pool.acquire(500));
+  await tick();
+  granted(waiter).release();
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
+test("reclaimer: one that throws is a process warning; the waiter still waits and the others still run", async () => {
+  const { pool } = makePool(1000, 5);
+  const warnings: string[] = [];
+  const onWarning = (warning: Error): void => {
+    warnings.push(warning.message);
+  };
+  process.on("warning", onWarning);
+  try {
+    let second = 0;
+    pool.addReclaimer(() => {
+      throw new Error("reclaimer broke");
+    });
+    pool.addReclaimer(() => (second += 1));
+    const holder = await pool.acquire(1000);
+    const waiter = track(pool.acquire(100));
+    await tick();
+    await tick();
+    assert.equal(second, 1);
+    assert.equal(waiter.state().status, "pending");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /reclaimer threw: reclaimer broke/);
+    holder.release();
+    await tick();
+    granted(waiter).release();
+  } finally {
+    process.off("warning", onWarning);
+  }
+  assert.deepEqual(accounting(pool), initialStats(1000));
+});
+
 test("argument validation: constructor", () => {
   for (const poolMb of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.throws(() => new MemoryPool({ poolMb, maxQueue: 0 }), RangeError, `poolMb ${poolMb}`);
