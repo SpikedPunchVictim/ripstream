@@ -265,11 +265,33 @@ Other findings:
   and returns empty content; ripstream fails it with `Not a WordPerfect document`. Neither extracts text, but xberg
   does. `wp_mac1.wpd` fails the same way in ripstream, while Tika, without a file name, calls it
   `application/octet-stream`.
-- **Warm JSON latency.** Warm ripstream takes 9.4 ms (p50) on JSON files under 20 KB against Tika's 1.8 ms, and
-  29 ms against 13 ms on files of 100 KB and more. The bench's one-warmup regime exaggerates this. On
-  `csv-comma.csv.json` (61 KB) the bench measured 81 ms against Tika's 3.3 ms. In a tight loop (5 warmups, 20 runs)
-  the same file takes 20 ms at `95d44dd` in the container, of which 11 ms is the same bytes read as `.txt`, and
-  10 ms with the working tree. That is worth a profile once the tree is committed.
+- **Warm JSON latency** (`tikajs-r8rv`, profiled 2026-11-15 at `1174a6f`). The 9.4 ms p50 on JSON under 20 KB (`95d44dd`) does not
+  reproduce: at `1174a6f` the Docker bench lane read 2.8 ms (ripstream) against 3.4 ms (Tika) with the harness's one
+  warmup, and with five warmups 1.58 ms against 1.59 ms under 20 KB, 3.8 against 2.4 ms from 20 to 100 KB and 17.5 against
+  9.4 ms from 100 KB, over the 112 JSON fixtures (5 iterations each). What was left is a per-event cost that grows with
+  size. CPU profile of a tight warm loop on the host (100 and 30 runs, 1 ms sampling, self time):
+
+  | Where | Under 20 KB (64 files) | 100 KB and more (18 files) |
+  | --- | ---: | ---: |
+  | `magic.ts` (mime detection: `detect`, `evaluate`) | 44% | 4% |
+  | `handlers/xhtml.ts` (`filterText`, `writeCharacters`, `startElement`) | 12% | 45% |
+  | `text.ts` (`feed`, `emitSegment`: an await chain per line) | 12% | 17% |
+  | `text-encoding.ts` (`isBinary`, `detectIso2022`) | 9% | 2% |
+  | `handlers/text.ts` (the output handlers) | 5% | 7% |
+  | garbage collector and runtime | 9% | 22% |
+
+  Charset detection and the JSON path itself are not the cost: the same bytes read as `.txt` take the same time, and
+  `detectEncoding` is 0.1 to 0.5 ms for these sizes. Mime detection runs all 917 magic rules against the prefix, and
+  76 range rules compare at about 95,000 offsets per file. Three changes, all keeping the output byte for byte (fixtures
+  and goldens green): a range rule tests its first byte inline before comparing the rest (detect 0.168 to 0.122 ms);
+  `writeText` and `WriteOutContentHandler` wait only for a delegate that returns a promise (97 ns against 7 ns per
+  event in a microbenchmark); `filterText` skips code point decoding for printable ASCII. Measured in one process
+  alternating the committed code and the new code, five pairs per size class, 30 warmups and 40 rounds, p50 per call:
+  under 20 KB 0.40 to 0.32 ms, 20 to 100 KB 1.89 to 1.44 ms, 100 KB and more 8.8 to 5.8 ms. The Docker bench lane could
+  not confirm it: the machine was under heavy load from other work (load average 45 to 90) and the ripstream/Tika p50
+  ratio moved by 0.3 to 0.4 between identical runs, so the Docker comparison is inconclusive. A native `indexOf` for
+  the range scan was tried and was slower (0.168 to 0.26 ms); decoding the regex windows once per detection saved 3%
+  and was dropped. The remaining gap on large files is the per-line XHTML events (a paragraph per line, as in Tika).
 - **Shared failures**: four malformed-CSV fixtures (zero overlap, because the ground truth keeps commas inside tokens),
   `fake-encrypted.eml` (zero overlap) and `mime-no-body.eml` and `wp_mac3.wpd` (empty) fail for ripstream and Tika
   alike. xberg's only failure is `redp5110_sampled.doctags.txt` ("Nesting too deep: 1025").
