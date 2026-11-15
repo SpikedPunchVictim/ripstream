@@ -52,7 +52,7 @@ function crossingLimits(options: Partial<ParseLimits> | undefined): Partial<Pars
  * A Ripstream-shaped front over a ParseIsolator, so code written against `parse` / `parseRecursive` (the server,
  * the pipes engine, the CLI) runs every parse across the isolation boundary without knowing it. Only what an
  * `IsolatedParseRequest` can express crosses: bytes or a `{ path }`, a filename, `maxOutputChars`,
- * `maxEmbeddedResources`, `maxNodeDepth`, `maxParseMillis` and the abort signal. Anything else (`contentType`, other limits, streams) is refused
+ * `maxEmbeddedResources`, `maxNodeDepth`, `maxParseMillis` and the abort signal. Anything else (`contentType`, `password`, other limits, streams) is refused
  * before anything is isolated, because ignoring it would silently change the parse.
  */
 export function createIsolatedRipstream(options: IsolatedRipstreamOptions): IsolatedRipstream {
@@ -91,6 +91,9 @@ function toRequest(
 ): IsolatedParseRequest {
   if (options.contentType !== undefined) {
     throw new TypeError("ParseOptions.contentType cannot cross the isolation boundary; the child detects the type itself");
+  }
+  if (options.password !== undefined) {
+    throw new TypeError("ParseOptions.password cannot cross the isolation boundary: a request carries no password, so the parse would run without it");
   }
   if (options.segments !== undefined && typeof options.segments !== "boolean") {
     throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);

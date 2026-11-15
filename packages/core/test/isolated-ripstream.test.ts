@@ -245,6 +245,17 @@ test("parse: sources and options that cannot cross the boundary are refused, and
   assert.equal(calls.length, 0);
 });
 
+test("a password cannot cross the boundary and is refused, not dropped (tikajs-rkmb)", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  const ripstream = createIsolatedRipstream({ isolator, detector });
+  await assert.rejects(ripstream.parse(new Uint8Array(1), { password: "hunter2" }), /password/);
+  await assert.rejects(ripstream.parse(new Uint8Array(1), { password: () => "hunter2" }), /password/);
+  await assert.rejects(ripstream.parseRecursive(new Uint8Array(1), { password: "hunter2" }), /password/);
+  assert.equal(calls.length, 0);
+  await ripstream.parse(new Uint8Array(1), { password: undefined });
+  assert.equal(calls.length, 1, "an undefined password is none");
+});
+
 test("parse: a limit set to undefined is not a limit", async () => {
   const { isolator, calls } = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1), {

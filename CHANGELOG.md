@@ -4,6 +4,12 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Bug hunt at 9a828fc: password on an isolated parse (`tikajs-rkmb`, F11)
+
+Fixed: `ParseOptions.password` handed to the isolated ripstream was dropped without a word, so an encrypted document was
+parsed without its password and came back as the failure or the empty text of a locked file. It is now refused with a
+`TypeError` before anything is isolated, as `contentType` is (the CLI already refused `--password` with `--isolation`).
+
 ### Bug hunt at 9a828fc: reused child left busy (`tikajs-61w8`, F12)
 
 Fixed: with children reused, a request the frame reader refused (an option no one had validated, such as `maxFrames: 0` or
