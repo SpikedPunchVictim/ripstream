@@ -293,8 +293,11 @@ function readXrefTables(text: string, at: number, base: number): { free: number[
   for (let section = 0; section < 16 && at !== -1 && !seen.has(at) && text.startsWith("xref", at); section++) {
     seen.add(at);
     const trailer = text.indexOf("trailer", at);
-    const table = text.slice(at + 4, trailer === -1 ? Math.min(text.length, at + 4 + 20 * 100_000) : trailer);
-    const tokens = /(\d+)\s+(\d+)(?:\s+([nf]))?/g;
+    // A table is read up to 2 MB (100,000 entries) whether or not a trailer follows it.
+    const table = text.slice(at + 4, Math.min(trailer === -1 ? text.length : trailer, at + 4 + 20 * 100_000));
+    // Numbers are at most ten digits (an offset) and not the tail of a longer run: a run of digits is one candidate,
+    // not one per starting digit, which backtracked through the rest of the run each time.
+    const tokens = /(?<![0-9])(\d{1,10})\s+(\d{1,10})(?:\s+([nf]))?/g;
     let num = 0;
     let match: RegExpExecArray | null;
     while ((match = tokens.exec(table)) !== null) {

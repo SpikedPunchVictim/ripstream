@@ -267,3 +267,14 @@ test("diagnosePdf does not call a deleted page damage: freed objects that only n
   // A live page tree that still names the freed page is damage.
   assert.deepEqual(diagnosePdf(update("3 0 R 6 0 R")).freedReferenced, [6]);
 });
+
+test("diagnosePdf reads an xref table that is one long run of digits in linear time (tikajs-zi5a)", () => {
+  const head = "%PDF-1.4\n" + onePageObjects("Hello").map((object, index) => `${index + 1} 0 obj\n${object}\nendobj\n`).join("");
+  for (const trailer of ["\ntrailer\n<< /Root 1 0 R >>\n", ""]) {
+    const text = `${head}xref\n${"1".repeat(400_000)}${trailer}startxref\n${head.length}\n%%EOF\n`;
+    const started = performance.now();
+    diagnosePdf(text);
+    // Backtracking from every digit is quadratic: 80 KB took 3 s and each doubling costs four times as much.
+    assert.ok(performance.now() - started < 5000, "reading the table took too long");
+  }
+});

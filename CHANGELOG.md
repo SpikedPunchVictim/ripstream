@@ -15,6 +15,13 @@ incremental update that deletes objects was reported as damaged (`tk:pdf:repaire
 deleted page and its annotation named each other; only objects reachable from the catalog through live objects now count
 as freed-but-referenced.
 
+### Bug hunt at 9a828fc: quadratic xref scan (`tikajs-zi5a`, F14)
+
+Fixed: the damage diagnosis read the classic xref table with a regex that backtracked from every digit of a long digit run,
+synchronously, before pdf.js and out of reach of the page timeout (an 80 KB file held the parse 3 s; each doubling cost
+four times more). Numbers are now at most ten digits and are not matched from inside a longer run (80 KB: 74 ms), and
+the 2 MB cap on the table text applies whether or not a `trailer` keyword follows.
+
 ### Bug hunt at 9a828fc: XZ files in the CLI bundle (`tikajs-wiwf`, F1)
 
 Fixed: an `.xz`/`.txz` file read as malformed ("Invalid XzParser stream", exit 3) in a CLI bundle built from the current
