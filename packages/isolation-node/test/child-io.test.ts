@@ -53,6 +53,11 @@ test("truncateEmbedded round trips", async () => {
   assert.equal((await readInput(stream(wire(header())))).header.truncateEmbedded, undefined);
 });
 
+test("emailHeaders round trips", async () => {
+  assert.equal((await readInput(stream(wire(header({ emailHeaders: true }))))).header.emailHeaders, true);
+  assert.equal((await readInput(stream(wire(header())))).header.emailHeaders, undefined);
+});
+
 test("unpackBytes round trips for a records request, including 0", async () => {
   for (const unpackBytes of [0, 1, 268_435_456]) {
     const got = await readInput(stream(wire(header({ output: "records", unpackBytes }))));
@@ -155,6 +160,7 @@ for (const [label, json] of [
   ["string recordFailures", '{"v":1,"output":"text","byteLength":0,"recordFailures":"yes"}'],
   ["string truncateOutput", '{"v":1,"output":"text","byteLength":0,"truncateOutput":"yes"}'],
   ["string truncateEmbedded", '{"v":1,"output":"text","byteLength":0,"truncateEmbedded":"yes"}'],
+  ["string emailHeaders", '{"v":1,"output":"text","byteLength":0,"emailHeaders":"yes"}'],
   ["negative unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":-1}'],
   ["fractional unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":1.5}'],
   ["string unpackBytes", '{"v":1,"output":"records","byteLength":0,"unpackBytes":"9"}'],

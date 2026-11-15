@@ -105,6 +105,16 @@ export interface ParseOptions {
    * content is the same either way. See docs/segments.md.
    */
   readonly segments?: boolean;
+  /**
+   * Email only (RFC 822 and emlx messages, and each message of an mbox): write the message's header block ahead of its
+   * body text, as `Name: value` lines in the order Subject, From, To, CC, BCC, Date, then a blank line. A header the
+   * message lacks has no line. Each value is the header as the message wrote it, unfolded, with RFC 2047 words decoded
+   * (an address list keeps its quoting; the Date is the sender's string, not the normalised `dcterms:created`).
+   * Default false: the text is the body alone, as Tika gives it, and metadata is the same either way. Meant for text
+   * that must stand on its own, such as a search index or a model prompt, where the sender and subject are content.
+   * See "The email header block" in docs/migration.md.
+   */
+  readonly emailHeaders?: boolean;
 }
 
 export interface ParseResult {
@@ -386,6 +396,7 @@ export class Ripstream {
       password?: string | PasswordProvider;
       signal?: AbortSignal;
       limits?: Partial<ParseLimits>;
+      emailHeaders?: boolean;
     },
     action: (
       stream: RipstreamInputStream,
@@ -394,6 +405,9 @@ export class Ripstream {
     ) => Promise<T>,
   ): Promise<T> {
     assertValidLimits(options.limits);
+    if (options.emailHeaders !== undefined && typeof options.emailHeaders !== "boolean") {
+      throw new TypeError(`emailHeaders must be a boolean, got ${typeof options.emailHeaders}`);
+    }
     const limits = this.limitsFor(options.limits);
     const timeout = limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timeoutController = new AbortController();
@@ -417,6 +431,7 @@ export class Ripstream {
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
+    if (options.emailHeaders === true) ctx.set(CONTEXT_KEYS.EMAIL_HEADER_BLOCK, true);
     const charset = charsetHint(options.contentType);
     if (charset !== undefined) ctx.set(CONTEXT_KEYS.CHARSET_HINT, charset);
     if (options.password !== undefined) {

@@ -19,6 +19,11 @@ import type { createRipstream } from "../src/index.ts";
  * each: `<location> | <text> | <labels joined by " > ">`, the text with backslash, CR, LF and tab written as \\, \r,
  * \n and \t. Such a fixture also checks, whatever its assertions, that every segment's text is its slice of the
  * content and that each record's content is the same as with segments off.
+ *
+ * With `options.emailHeaders: true` a fixture also checks, whatever its assertions, that nothing but the text changed: the
+ * metadata is what it is without the option, and each content is the content it has without the option with a header
+ * block (header lines and a blank line) put in, at the start of a `parse` text (or no block at all, when the message has
+ * no header to show).
  */
 export type Assertion =
   | { readonly type: "equals" | "contains" | "not_contains" | "matches"; readonly field: string; readonly value: string }
@@ -38,7 +43,7 @@ export interface Fixture {
   readonly tags?: readonly string[];
   readonly operation?: "parse" | "detect" | "parseRecursive";
   readonly input: FixtureInput;
-  readonly options?: Pick<ParseOptions, "contentType" | "onDocumentFailure" | "onOutputLimit" | "limits" | "segments">;
+  readonly options?: Pick<ParseOptions, "contentType" | "onDocumentFailure" | "onOutputLimit" | "limits" | "segments" | "emailHeaders">;
   readonly assertions: readonly Assertion[];
 }
 
@@ -144,6 +149,36 @@ async function checkSegmentInvariants(
   }
 }
 
+const HEADER_BLOCK = /^(?:(?:Subject|From|To|CC|BCC|Date): [^\n]+\n)+\n/m;
+
+/**
+ * What holds for any parse with emailHeaders: the metadata is the same, and the content is the content without it with
+ * a header block put in. `atStart`: where the block is (`parse`: the first thing in the text; a `parseRecursive` record
+ * has its title and markup whitespace first, as without the option).
+ */
+function checkEmailHeaderInvariants(
+  withBlock: { text: string; metadata?: Metadata },
+  plain: { text: string; metadata?: Metadata },
+  atStart: boolean,
+  label: string,
+): void {
+  if (withBlock.metadata !== undefined && plain.metadata !== undefined) {
+    assert.deepEqual(metadataEntries(withBlock.metadata), metadataEntries(plain.metadata), `${label}: metadata with emailHeaders vs without`);
+  }
+  if (withBlock.text === plain.text) return;
+  const block = HEADER_BLOCK.exec(withBlock.text);
+  assert.notEqual(block, null, `${label}: the content with emailHeaders has a header block`);
+  const at = (block as RegExpExecArray).index;
+  if (atStart) assert.equal(at, 0, `${label}: the header block is the first thing in the text`);
+  const without = withBlock.text.slice(0, at) + withBlock.text.slice(at + (block as RegExpExecArray)[0].length);
+  assert.equal(without, plain.text, `${label}: the content without the header block is the content without emailHeaders`);
+}
+
+/** Every name and its values but the parse's own clock, which differs between two parses of the same bytes. */
+function metadataEntries(metadata: Metadata): Array<[string, readonly string[]]> {
+  return [...metadata.names()].filter((name) => name !== "tk:parse-time-millis").sort().map((name) => [name, metadata.getAll(name)]);
+}
+
 /** Throws an AssertionError naming the field and assertion when it does not hold. */
 export function check(view: FieldView, a: Assertion): void {
   const actual = read(view, a.field);
@@ -184,9 +219,19 @@ export async function runFixture(ripstream: ReturnType<typeof createRipstream>, 
   } else if (fixture.operation === "parseRecursive") {
     const records = await ripstream.parseRecursive(bytes, options);
     if (options.segments === true) await checkSegmentInvariants(ripstream, bytes, options, records);
+    if (options.emailHeaders === true) {
+      const plain = await ripstream.parseRecursive(bytes, { ...options, emailHeaders: false });
+      assert.equal(records.length, plain.length, "record count with emailHeaders on vs off");
+      records.forEach((record, index) =>
+        checkEmailHeaderInvariants({ text: record.content, metadata: record.metadata }, { text: plain[index]!.content, metadata: plain[index]!.metadata }, false, `record ${index}`),
+      );
+    }
     view = { records };
   } else {
     const result = await ripstream.parse(bytes, options);
+    if (options.emailHeaders === true) {
+      checkEmailHeaderInvariants(result, await ripstream.parse(bytes, { ...options, emailHeaders: false }), true, "parse");
+    }
     view = { text: result.text, metadata: result.metadata };
   }
   for (const a of fixture.assertions) check(view, a);

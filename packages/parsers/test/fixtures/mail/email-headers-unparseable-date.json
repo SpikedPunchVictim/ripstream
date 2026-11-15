@@ -1,0 +1,26 @@
+{
+  "description": "emailHeaders: the Date line is the header as the sender wrote it, even when no date can be read from it (dcterms:created is then absent) (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: sender@example.com\nTo: recipient@example.com\nSubject: Test invalid date format\nDate: INVALID-DATE-FORMAT\n\nBody.\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: Test invalid date format\nFrom: sender@example.com\nTo: recipient@example.com\nDate: INVALID-DATE-FORMAT\n\nBody.\n"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.dcterms:created"
+    }
+  ]
+}

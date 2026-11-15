@@ -108,6 +108,22 @@ test("parse and parseRecursive: onEmbeddedLimit truncate crosses as truncateEmbe
   assert.equal("truncateEmbedded" in (plain.calls[0]?.request ?? {}), false);
 });
 
+test("parse and parseRecursive: emailHeaders crosses in the request, false sends nothing, a non-boolean is refused", async () => {
+  const text = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: true });
+  assert.equal(text.calls[0]?.request.emailHeaders, true);
+  const records = fakeIsolator(RECORDS_ANSWER);
+  await createIsolatedRipstream({ isolator: records.isolator, detector }).parseRecursive(new Uint8Array(1), { emailHeaders: true });
+  assert.equal(records.calls[0]?.request.emailHeaders, true);
+  const plain = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: false });
+  assert.equal("emailHeaders" in (plain.calls[0]?.request ?? {}), false);
+  await assert.rejects(
+    createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: "yes" as never }),
+    /emailHeaders must be a boolean/,
+  );
+});
+
 test("parse and parseRecursive: handlerType crosses in the request, and the records come back stamped with it", async () => {
   const text = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { handlerType: "markdown" });

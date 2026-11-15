@@ -95,6 +95,9 @@ function toRequest(
   if (options.segments !== undefined && typeof options.segments !== "boolean") {
     throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
   }
+  if (options.emailHeaders !== undefined && typeof options.emailHeaders !== "boolean") {
+    throw new TypeError(`emailHeaders must be a boolean, got ${typeof options.emailHeaders}`);
+  }
   const limits = { ...defaults, ...crossingLimits(options.limits) };
   return {
     input: toInput(source),
@@ -106,6 +109,7 @@ function toRequest(
     ...(options.onDocumentFailure === "record" ? { recordFailures: true } : {}),
     ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
     ...(options.onEmbeddedLimit === "truncate" ? { truncateEmbedded: true } : {}),
+    ...(options.emailHeaders === true ? { emailHeaders: true } : {}),
     ...(options.handlerType === undefined ? {} : { handlerType: options.handlerType }),
     // Only a records answer has records to hang bytes on.
     ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),

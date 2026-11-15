@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  CONTEXT_KEYS,
   LimitExceededError,
   MalformedDocumentError,
   MediaType,
@@ -263,6 +264,16 @@ test("a request that truncates the embedded count reaches the parsers' context",
   await run(ripstream, input(header({ truncateEmbedded: true }))).outcome;
   await run(ripstream, input(header())).outcome;
   assert.deepEqual(seen, [true, false]);
+});
+
+test("a request for the email header block reaches the parsers' context", async () => {
+  const seen: unknown[] = [];
+  const ripstream = ripstreamOf(async (_handler, _metadata, ctx) => {
+    seen.push(ctx.get(CONTEXT_KEYS.EMAIL_HEADER_BLOCK));
+  });
+  await run(ripstream, input(header({ emailHeaders: true }))).outcome;
+  await run(ripstream, input(header())).outcome;
+  assert.deepEqual(seen, [true, undefined]);
 });
 
 test("a request's handlerType decides the shape of the content, for the text and the records answer", async () => {

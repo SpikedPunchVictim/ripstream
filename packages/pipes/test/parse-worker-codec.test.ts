@@ -211,8 +211,9 @@ test("parse options cross without the signal; a password must be a string", () =
   assert.throws(() => wireOptions({ password: (() => "x") as never }), TypeError);
 });
 
-test("onEmbeddedLimit crosses to a worker", () => {
+test("onEmbeddedLimit and emailHeaders cross to a worker", () => {
   assert.deepEqual(wireOptions({ onEmbeddedLimit: "truncate" }), { onEmbeddedLimit: "truncate" });
+  assert.deepEqual(wireOptions({ emailHeaders: true }), { emailHeaders: true });
 });
 
 test("a worker is given every configuration section a ripstream is built from, and builds the same configuration", () => {

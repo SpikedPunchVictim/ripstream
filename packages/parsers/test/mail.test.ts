@@ -13,7 +13,7 @@ import {
   RipstreamInputStream,
   type EmbeddedDocumentExtractor,
 } from "@spikedpunch/ripstream-core";
-import { MailParser } from "../src/index.ts";
+import { MailParser, MboxParser } from "../src/index.ts";
 
 const message = [
   "From: Ada <ada@example.com>",
@@ -620,4 +620,52 @@ test("a boundary string inside a text line is not a delimiter (tikajs-gz44)", as
   ].join("\r\n");
   const result = await parse(text);
   assert.match(result.text, /see the marker --b1 here, not a delimiter/);
+});
+
+// ParseOptions.emailHeaders (tikajs-5qkk) reaches the parser as a context key; declarative cases are in fixtures/mail/email-headers-*.json.
+async function parseWithHeaders(parser: { parse: MailParser["parse"] }, value: string, emailHeaders: boolean): Promise<string> {
+  const stream = await RipstreamInputStream.from(new TextEncoder().encode(value));
+  const handler = new BodyContentHandler();
+  const ctx = new ParseContext();
+  if (emailHeaders) ctx.set(CONTEXT_KEYS.EMAIL_HEADER_BLOCK, true);
+  await parser.parse(stream, handler, new Metadata(), ctx);
+  await stream.close();
+  return handler.toString();
+}
+
+test("the header block is off unless the context asks for it", async () => {
+  assert.equal(await parseWithHeaders(new MailParser(), "Subject: S\nFrom: a@example.com\n\nBody\n", false), "Body\n");
+});
+
+test("a header that occurs twice: the last Subject and Date, every From, To, CC and BCC", async () => {
+  const text = await parseWithHeaders(
+    new MailParser(),
+    [
+      "Subject: first", "Subject: second",
+      "From: a@example.com", "From: b@example.com",
+      "To: c@example.com", "To: d@example.com",
+      "Date: Mon, 01 Jan 2024 00:00:00 +0000", "Date: Tue, 02 Jan 2024 00:00:00 +0000",
+      "", "Body", "",
+    ].join("\n"),
+    true,
+  );
+  assert.equal(
+    text,
+    "Subject: second\nFrom: a@example.com, b@example.com\nTo: c@example.com, d@example.com\nDate: Tue, 02 Jan 2024 00:00:00 +0000\n\nBody\n",
+  );
+});
+
+test("a header with nothing in it has no line, and a message with no header to show has no block", async () => {
+  assert.equal(await parseWithHeaders(new MailParser(), "Subject:\nTo:   \nX-Other: 1\n\nBody\n", true), "Body\n");
+});
+
+test("an mbox writes each message's own header block, as paragraphs like the rest of the message (the mbox parser drops blank lines)", async () => {
+  const mbox = [
+    "From a@example.com Tue Oct  1 12:34:56 2024", "From: a@example.com", "Subject: One", "", "First body.", "",
+    "From b@example.com Tue Oct  1 13:00:00 2024", "From: b@example.com", "Subject: Two", "", "Second body.", "",
+  ].join("\n");
+  const text = await parseWithHeaders(new MboxParser(), mbox, true);
+  assert.match(text, /Subject: One\nFrom: a@example.com\nFirst body\./);
+  assert.match(text, /Subject: Two\nFrom: b@example.com\nSecond body\./);
+  assert.doesNotMatch(await parseWithHeaders(new MboxParser(), mbox, false), /Subject:/);
 });

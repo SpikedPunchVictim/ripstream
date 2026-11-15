@@ -956,6 +956,27 @@ test("a request that truncates the embedded count reaches the child as a header 
   assert.equal(plain.ripstream.parseCalls[1]?.options.onEmbeddedLimit, undefined);
 });
 
+test("a request with an emailHeaders that is not a boolean is refused", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), emailHeaders: "yes" as never }), /emailHeaders/);
+});
+
+test("a request for the email header block reaches the child as a header field, and an in-process parse as the option", async () => {
+  const h = setup({ childModule: HEADER_CHILD, childArgs: ["report"] });
+  const child = await h.create();
+  const header = async (request: Parameters<NodeIsolator["isolate"]>[0]) =>
+    (JSON.parse(((await child.isolate(request)) as { text: string }).text) as { header: Record<string, unknown> }).header;
+  assert.equal((await header({ input: bytes("x"), emailHeaders: true })).emailHeaders, true);
+  assert.equal("emailHeaders" in (await header({ input: bytes("x") })), false);
+
+  const plain = setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) });
+  const inProcess = await plain.create();
+  await inProcess.isolate({ input: bytes("x"), emailHeaders: true });
+  await inProcess.isolate({ input: bytes("x") });
+  assert.equal(plain.ripstream.parseCalls[0]?.options.emailHeaders, true);
+  assert.equal(plain.ripstream.parseCalls[1]?.options.emailHeaders, undefined);
+});
+
 test("a request with a handlerType that is not one is refused", async () => {
   const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
   await assert.rejects(isolator.isolate({ input: bytes("x"), handlerType: "txt" as never }), /handlerType/);

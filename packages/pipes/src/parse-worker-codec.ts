@@ -163,6 +163,7 @@ export interface WireParseOptions {
   readonly handlerType?: HandlerType;
   readonly unpackBytes?: number;
   readonly segments?: boolean;
+  readonly emailHeaders?: boolean;
 }
 
 /**
@@ -179,6 +180,7 @@ const PARSE_OPTION_FIELDS = {
   handlerType: "copied",
   unpackBytes: "copied",
   segments: "copied",
+  emailHeaders: "copied",
   signal: "parent",
 } as const satisfies Record<keyof ParseOptions, "copied" | "parent">;
 

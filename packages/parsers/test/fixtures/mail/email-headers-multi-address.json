@@ -1,0 +1,22 @@
+{
+  "description": "emailHeaders: To, CC and BCC lists (BCC folded over two lines) are each one line, written as the sender wrote them with the fold made one space, so a quoted name with a comma stays one address; the labels are CC and BCC (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: \"Sender, Example\" <sender@example.com>\nTo: \"Bob\" <bob@example.com>, \"Sue\" <sue@example.com>\nCc: \"Tom\" <tom@example.com>, alice@example.com\nBcc: \"John\" <john@example.com>,\n  \"Mary\" <mary@example.com>\nSubject: Example Plain-Text MIME Message\nDate: Wed, 15 Mar 2024 14:30:00 +0000\n\nThis is a plain-text message.\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: Example Plain-Text MIME Message\nFrom: \"Sender, Example\" <sender@example.com>\nTo: \"Bob\" <bob@example.com>, \"Sue\" <sue@example.com>\nCC: \"Tom\" <tom@example.com>, alice@example.com\nBCC: \"John\" <john@example.com>, \"Mary\" <mary@example.com>\nDate: Wed, 15 Mar 2024 14:30:00 +0000\n\nThis is a plain-text message.\n"
+    }
+  ]
+}

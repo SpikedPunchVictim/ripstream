@@ -1,0 +1,22 @@
+{
+  "description": "emailHeaders: an encoded word that decodes to a line break cannot start a forged header line; it is one line of the block (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: attacker@example.com\nTo: victim@example.com\nSubject: =?UTF-8?Q?Hello=0AFrom=3A_ceo=40example.com=0D=0ATo=3A_all?=\n\nBody.\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: Hello From: ceo@example.com To: all\nFrom: attacker@example.com\nTo: victim@example.com\n\nBody.\n"
+    }
+  ]
+}

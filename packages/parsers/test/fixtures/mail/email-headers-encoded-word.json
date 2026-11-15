@@ -1,0 +1,22 @@
+{
+  "description": "emailHeaders: RFC 2047 encoded words (B and Q, adjacent words joined) are decoded in the subject and in a sender's name (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: =?UTF-8?Q?J=C3=BCrgen_M=C3=BCller?= <jm@example.com>\nTo: recipient@example.com\nSubject: =?UTF-8?B?U2ltcGxlIGVtYWlsIHdpdGgg4pi44pi/?= =?UTF-8?Q?_Unicode_subject?=\n\nBody text.\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: Simple email with ☸☿ Unicode subject\nFrom: Jürgen Müller <jm@example.com>\nTo: recipient@example.com\n\nBody text.\n"
+    }
+  ]
+}

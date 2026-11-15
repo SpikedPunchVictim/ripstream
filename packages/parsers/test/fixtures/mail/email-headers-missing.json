@@ -1,0 +1,22 @@
+{
+  "description": "emailHeaders: a message with no To, CC, BCC or Date has no lines for them, and no empty ones (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: sender@example.com\nSubject: No recipients\n\nJust a body.\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: No recipients\nFrom: sender@example.com\n\nJust a body.\n"
+    }
+  ]
+}

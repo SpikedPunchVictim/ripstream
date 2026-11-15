@@ -19,6 +19,7 @@ import {
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 import { createDecoder } from "./charset.ts";
 import { HtmlDocumentParser } from "./html.ts";
+import { mailHeaderBlock } from "./mail-header-block.ts";
 import { applyMailMetadata, type HeaderField } from "./mail-metadata.ts";
 import { parseStructured } from "./mail-structured.ts";
 
@@ -64,7 +65,8 @@ interface Entity {
  * Like Tika's RFC822Parser it also reads Apple Mail's emlx (`message/x-emlx`): a first line carrying the message's byte
  * count, then the message, then an XML plist. See {@link stripEmlxFraming}.
  *
- * Headers become metadata as in Tika's MailContentHandler (see {@link applyMailMetadata}). Of a multipart/alternative only the
+ * Headers become metadata as in Tika's MailContentHandler (see {@link applyMailMetadata}); with `ParseOptions.emailHeaders`
+ * the message's header block is also written ahead of the body (see `mailHeaderBlock`). Of a multipart/alternative only the
  * best part is read, unless `extractAllAlternatives` is set. Not yet as Tika does it (tikajs-68os.46 records the rest): a
  * text part that is an attachment, or that sits below the first level of a multipart outside an alternative, is read inline here
  * and is an embedded document in Tika; a message/rfc822 part is read inline and is an embedded document in Tika; the text of
@@ -128,6 +130,11 @@ export class MailParser implements Parser {
       maxHeaderBytes: this.#maxHeaderBytes,
     };
     await xhtml.startDocument();
+    // `ParseOptions.emailHeaders`: the message's own header block, ahead of its body. Not Tika's output, so it is opt-in.
+    if (ctx.get(CONTEXT_KEYS.EMAIL_HEADER_BLOCK) === true) {
+      const block = mailHeaderBlock(root.headers, decodeHeader);
+      if (block.length > 0) await xhtml.characters(block);
+    }
     await renderEntity(root, output, 0, undefined);
     await xhtml.endDocument();
   }

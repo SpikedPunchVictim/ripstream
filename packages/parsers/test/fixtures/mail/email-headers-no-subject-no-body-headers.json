@@ -1,0 +1,27 @@
+{
+  "description": "emailHeaders: a message with only a Date header gets a block of that one line (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "Date: Mon, 07 Aug 2006 12:34:56 -0700 (PDT)\nX-Mailer: test\n\nbody\n",
+    "filename": "message.eml"
+  },
+  "options": {
+    "emailHeaders": true
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Date: Mon, 07 Aug 2006 12:34:56 -0700 (PDT)\n\nbody\n"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2006-08-07T19:34:56Z"
+    }
+  ]
+}

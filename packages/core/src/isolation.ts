@@ -143,6 +143,11 @@ export interface IsolatedParseRequest {
    */
   readonly truncateEmbedded?: boolean;
   /**
+   * `ParseOptions.emailHeaders`: an email's header block (Subject, From, To, CC, BCC, Date) is written ahead of its body
+   * text. Omitted: false.
+   */
+  readonly emailHeaders?: boolean;
+  /**
    * `ParseOptions.handlerType`: the shape the content of the answer is written in (`text` of the text arm, `content` of
    * each record). Omitted: "text".
    */

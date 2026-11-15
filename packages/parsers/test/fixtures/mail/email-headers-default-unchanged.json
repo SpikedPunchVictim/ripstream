@@ -1,0 +1,38 @@
+{
+  "description": "Default parse of an email is the body alone, as Tika gives it; the headers are metadata only, and the original Date string is not kept (Tika's RFC822Parser does not either). Guards ParseOptions.emailHeaders being opt-in (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "Date: Tue, 01 Oct 2024 12:34:56 -0500\nFrom: sender@example.com\nTo: recipient@example.com\nSubject: Example RFC 822 Email\nMessage-ID: <1@example.com>\n\nThis is an RFC 822 email message.\n",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "This is an RFC 822 email message.\n"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Subject:"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:subject",
+      "value": "Example RFC 822 Email"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2024-10-01T17:34:56Z"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.message:raw-header:Date"
+    }
+  ]
+}

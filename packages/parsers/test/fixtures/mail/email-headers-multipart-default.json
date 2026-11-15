@@ -1,0 +1,29 @@
+{
+  "description": "Without emailHeaders the same multipart message reads as before: parts only, no header lines (tikajs-5qkk).",
+  "tags": [
+    "mail",
+    "rfc822",
+    "email-headers"
+  ],
+  "input": {
+    "text": "From: sender@example.com\nTo: recipient@example.com\nSubject: Multipart Email Test\nDate: Wed, 15 Mar 2024 14:30:00 +0000\nMIME-Version: 1.0\nContent-Type: multipart/mixed; boundary=\"BOUND\"\n\n--BOUND\nContent-Type: multipart/alternative; boundary=\"ALT\"\n\n--ALT\nContent-Type: text/plain; charset=utf-8\n\nThis is the plain text version.\n--ALT\nContent-Type: text/html; charset=utf-8\n\n<p>This is the <b>html</b> version.</p>\n--ALT--\n--BOUND\nContent-Type: text/plain; name=\"notes.txt\"\nContent-Disposition: attachment; filename=\"notes.txt\"\n\nAttachment text.\n--BOUND--\n",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "Subject:"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "From:"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "html"
+    }
+  ]
+}
