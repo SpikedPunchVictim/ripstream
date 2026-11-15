@@ -169,6 +169,7 @@ class Thread {
   readonly #ready: Promise<void>;
   #pending: { readonly id: number; readonly resolve: (reply: Reply) => void; readonly reject: (death: unknown) => void } | null = null;
   #death: unknown = undefined;
+  #exited = false;
 
   private constructor(options: ThreadOptions, directory: string) {
     this.worker = new Worker(options.entry, {
@@ -191,7 +192,7 @@ class Thread {
         ready();
       } else if (message?.t === "init-error") {
         failed(new WorkerInitError(decodeError(message.error)));
-        void this.worker.terminate();
+        this.worker.terminate().catch(() => undefined);
       } else {
         this.#reply(message);
       }
@@ -201,6 +202,7 @@ class Thread {
     });
     this.gone = new Promise<void>((resolve) => {
       this.worker.once("exit", (code) => {
+        this.#exited = true;
         const death = this.#death ?? new Error(`the parse worker exited with code ${code}`);
         failed(death);
         this.#pending?.reject(death);
@@ -212,8 +214,9 @@ class Thread {
     });
   }
 
-  get busy(): boolean {
-    return this.#pending !== null;
+  /** Running nothing and not exited: a message posted to an exited worker goes nowhere. */
+  get idle(): boolean {
+    return this.#pending === null && !this.#exited;
   }
 
   /**
@@ -248,7 +251,7 @@ class Thread {
     }
     // A message out of turn: the worker is not following the protocol, and is not trusted with another document.
     this.#death ??= new IsolationError("crash", `the parse worker sent an unexpected message (${describe(message)})`);
-    void this.worker.terminate();
+    this.worker.terminate().catch(() => undefined);
   }
 }
 
@@ -316,12 +319,16 @@ export class WorkerParsePool {
   static async start(options: WorkerParsePoolOptions): Promise<WorkerParsePool> {
     const root = await mkdtemp(join(options.tempRoot ?? tmpdir(), "ripstream-workers-"));
     const pool = new WorkerParsePool(options, root);
-    try {
-      await Promise.all(pool.#slots.map(async (slot) => pool.#attach(slot, await pool.#startThread())));
-    } catch (error) {
+    // Settled, not raced: a worker still starting when another fails would otherwise be left running.
+    const started = await Promise.allSettled(pool.#slots.map(() => pool.#startThread()));
+    const failed = started.find((each) => each.status === "rejected");
+    if (failed !== undefined) {
+      await Promise.all(started.map((each) => (each.status === "fulfilled" ? each.value.stop() : undefined)));
       await pool.close();
+      const error: unknown = failed.reason;
       throw error instanceof WorkerInitError ? error.error : new PipesFatalError(`the parse pool could not start a worker: ${describe(error)}`, { cause: error });
     }
+    started.forEach((each, index) => pool.#attach(pool.#slots[index]!, (each as PromiseFulfilledResult<Thread>).value));
     return pool;
   }
 
@@ -428,7 +435,7 @@ export class WorkerParsePool {
     for (const slot of this.#slots) {
       if (this.#queue.length === 0) return;
       const thread = slot.thread;
-      if (thread !== null && !thread.busy) this.#execute(slot, thread, this.#queue.shift()!);
+      if (thread !== null && thread.idle) this.#execute(slot, thread, this.#queue.shift()!);
     }
   }
 
@@ -528,7 +535,9 @@ export class WorkerParsePool {
         this.#dispatch();
         return undefined;
       },
-      (error: unknown) => this.#fail(new PipesFatalError(`the parse pool could not replace a worker: ${describe(error)}`, { cause: error })),
+      (error: unknown) => {
+        if (this.#closing === null) this.#fail(new PipesFatalError(`the parse pool could not replace a worker: ${describe(error)}`, { cause: error }));
+      },
     );
     this.#starting.add(starting);
     void starting.finally(() => this.#starting.delete(starting));
@@ -541,6 +550,7 @@ export class WorkerParsePool {
       } catch (error) {
         if (error instanceof WorkerInitError || attempt >= SPAWN_ATTEMPTS || this.#closing !== null) throw error;
         await new Promise((resolve) => setTimeout(resolve, this.#spawnBackoffMs * 4 ** (attempt - 1)));
+        if (this.#closing !== null) throw error;
       }
     }
   }

@@ -41,6 +41,7 @@ import { type Checkpoint, type RetryOptions, isTransientError, withRetry } from 
 import { type ExtensionOf, resolveUnpack, unpackDocuments } from "./unpack.ts";
 import { type FetchEmitTuple, type Fetcher, type PipesIterator } from "./tuple.ts";
 import {
+  PipesFatalError,
   type PipesResult,
   type PipesResultStatus,
   describeError,
@@ -518,8 +519,9 @@ export class PipesEngine {
         const document = filtered(metadata, result.text, mode === "CONTENT_ONLY");
         return emitting([{ id: emitKey, mode, text: document.text, metadata: document.metadata }], result.exception);
       } catch (error) {
-        // The run is already ending (its first failure aborted this parse): that failure is what is thrown.
-        if (signal.aborted) throw error;
+        // The run is already ending (its first failure aborted this parse): that failure is what is thrown. A
+        // PipesFatalError (the parse pool cannot start workers) ends the run: every input after would fail the same way.
+        if (signal.aborted || error instanceof PipesFatalError) throw error;
         return settled(statusForParseError(error), describeError(error));
       }
     };
