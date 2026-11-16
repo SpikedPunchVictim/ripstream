@@ -705,3 +705,15 @@ test("text directly in an ODT comment is not written", async () => {
   const text = await odtBody("<text:p>X<office:annotation>Direct</office:annotation>Y</text:p>");
   assert.equal(text.replace(/\n+/g, "\n"), "X\nY\n");
 });
+
+// tikajs-z36j: Tika 4.2.0 writes a heading's text with no line break after it, and an empty paragraph as a newline.
+test("an ODT heading has no line break after it, and an empty paragraph has one", async () => {
+  const text = await odtBody(
+    '<text:h text:outline-level="1">T</text:h><text:p>B</text:p><text:h text:outline-level="2">U</text:h><text:p></text:p><text:p>C</text:p>',
+  );
+  assert.equal(text, "TB\nU\nC\n");
+});
+
+test("a trailing ODT heading has no final line break", async () => {
+  assert.equal(await odtBody('<text:h text:outline-level="1">T</text:h>'), "T");
+});

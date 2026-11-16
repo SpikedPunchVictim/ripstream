@@ -183,7 +183,7 @@ async function renderOdfChild(
   hints?: SegmentHints,
 ): Promise<void> {
   const name = localName(child.name);
-  if (name === "p" || name === "h") await renderOdfParagraph(child, xhtml);
+  if (name === "p" || name === "h") await renderOdfParagraph(child, xhtml, hints);
   else if (name === "list-item") {
     await xhtml.startElement("li");
     await renderOdfMixed(child, xhtml, hints);
@@ -226,19 +226,36 @@ async function renderOdfChild(
 async function renderOdfParagraph(
   paragraph: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   const heading = localName(paragraph.name) === "h";
-  // An office:annotation (a comment) inside a paragraph ends the text before it and is a block of its own; the text after it
+  // office:annotation (a comment) inside a paragraph ends the text before it and is a block of its own; the text after it
   // is a paragraph again (Tika 4.2.0, tikajs-u03v).
   let run: (XmlNode | string)[] = [];
   const flush = async (): Promise<void> => {
     const text = odfText({ ...paragraph, content: run });
     run = [];
-    if (text.length === 0) return;
-    const element = heading ? "h1" : "p";
-    await xhtml.startElement(element);
+    // An empty paragraph writes an empty p (one newline), as Tika's does; an empty heading writes nothing.
+    if (text.length === 0) {
+      if (heading || paragraph.content.length > 0) return;
+      await xhtml.startElement("p");
+      await xhtml.endElement("p");
+      return;
+    }
+    // Tika 4.2.0 writes a heading's text with no line break after it, so the block after it starts on the same line
+    // ('TB' for a heading T and a paragraph B) and a trailing heading has no final newline. `figcaption` is a block to
+    // the segment hints (which are told the level) without a line break of its own in the XHTML handler (tikajs-z36j).
+    if (heading) {
+      const level = Number(attribute(paragraph, "outline-level") ?? 1);
+      hints?.heading(Number.isInteger(level) && level >= 1 && level <= 6 ? level : 1);
+      await xhtml.startElement("figcaption");
+      await xhtml.characters(text);
+      await xhtml.endElement("figcaption");
+      return;
+    }
+    await xhtml.startElement("p");
     await xhtml.characters(text);
-    await xhtml.endElement(element);
+    await xhtml.endElement("p");
   };
   for (const part of paragraph.content) {
     if (typeof part !== "string" && localName(part.name) === "annotation") {
