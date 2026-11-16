@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-quny] Tika 4.2.0 oracle (PUT /rmeta/body, filename elife-56337.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/elife-56337.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename elife-56337.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/elife-56337.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f; fixed by tikajs-quny.",
   "tags": [
     "xberg",
     "oracle",
-    "markdown",
-    "xfail"
+    "markdown"
   ],
   "input": {
     "file": "../files/docling-gt-elife-56337.nxml.md",

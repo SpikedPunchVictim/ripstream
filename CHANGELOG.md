@@ -138,6 +138,12 @@ of each cell, a line per row, a blank line after the table. A header row can int
 cells than the header makes no table; a row is padded or cut to the header's width; the table goes on until a blank line, an
 indented line or another block; `\|` is a pipe in a cell.
 
+### Markdown character references are decoded (`tikajs-quny`)
+
+Fixed: `&amp;`, `&lt;`, `&gt;`, `&quot;` and the other named and numeric references stayed as written. They are decoded as Tika
+decodes them, except in code spans and code blocks and after a backslash; an unknown name (`&bogus;`) stays as written and `&#0;`
+is U+FFFD. The named references come from the tables of `htmlparser2`, which the package already depends on.
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as
