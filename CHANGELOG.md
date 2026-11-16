@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments: a very large docx gets the same hints and text as a small one (`tikajs-ne73`)
+
+Fixed: a docx whose `word/document.xml` is over 8 MiB is read as a stream, and that path never called `SegmentHints`, so with
+`segments: true` it had no `para`, heading or table row/column locations. It now gives the hints of the normal path and writes the
+same text. Before, its tables (`table`, `tr`, `td`), `moveFrom` and `sectPr` skipping, text boxes, CDATA, `noBreakHyphen` and `sym`
+were read differently, so the text of a very large docx changes to what a small one with the same content gives. It still does not
+build the document's tree: one paragraph's tree at a time, and the output is written after each 256 KiB slice.
+
 ### Segments: a docx `para` is Word's own paragraph number (`tikajs-69cs`)
 
 Changed: with `segments: true`, `para=N` of a docx counts every paragraph of the document in order, empty ones and those in table

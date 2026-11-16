@@ -20,6 +20,7 @@ import {
 import { SaxesParser } from "saxes";
 import { OpcPackage } from "./opc.ts";
 import {
+  appendText,
   attribute,
   childrenNamed,
   descendantsNamed,
@@ -220,58 +221,159 @@ async function renderWord(
   hints: SegmentHints | undefined,
 ): Promise<void> {
   if (hints !== undefined) headingStyles.set(hints, wordHeadingStyles(parsePart(files, WORD_STYLES)));
+  // Word's own paragraph number, empty paragraphs included, for a block's para= location.
+  const paragraphs: WordParagraphCounter = { value: 0 };
   const raw = files["word/document.xml"];
   if (raw !== undefined && raw.byteLength > LARGE_WORD_DOCUMENT_BYTES) {
-    await renderLargeWordDocument(decode(raw), xhtml);
+    await renderLargeWordDocument(decode(raw), xhtml, hints, paragraphs);
   } else {
     const document = parsePart(files, "word/document.xml");
     if (document !== undefined) {
       const body = findFirst(document, "body") ?? document;
-      await renderWordBlocks(body, xhtml, hints);
+      await renderWordBlocks(body, xhtml, hints, paragraphs);
     }
   }
 
-  await renderWordPartGroup(files, /^word\/header\d*\.xml$/, "header", xhtml, hints);
-  await renderWordPartGroup(files, /^word\/footer\d*\.xml$/, "footer", xhtml, hints);
-  await renderNotes(files, "word/footnotes.xml", "footnote", xhtml, hints);
-  await renderNotes(files, "word/endnotes.xml", "endnote", xhtml, hints);
-  await renderNotes(files, "word/comments.xml", "comment", xhtml, hints);
+  await renderWordPartGroup(files, /^word\/header\d*\.xml$/, "header", xhtml, hints, paragraphs);
+  await renderWordPartGroup(files, /^word\/footer\d*\.xml$/, "footer", xhtml, hints, paragraphs);
+  await renderNotes(files, "word/footnotes.xml", "footnote", xhtml, hints, paragraphs);
+  await renderNotes(files, "word/endnotes.xml", "endnote", xhtml, hints, paragraphs);
+  await renderNotes(files, "word/comments.xml", "comment", xhtml, hints, paragraphs);
   // A glossary building block's body holds the content-control text Tika extracts from the glossary part.
   const glossary = parsePart(files, "word/glossary/document.xml");
   if (glossary !== undefined) {
-    for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml, hints);
+    for (const body of descendantsNamed(glossary, "docPartBody")) await renderWordBlocks(body, xhtml, hints, paragraphs);
   }
 }
 
+/** The slice of a very large document.xml read between two writes of what it made to the handler. */
+const LARGE_WORD_CHUNK_CHARS = 256 * 1024;
+
+/** The elements whose children are blocks, as renderWordBlocks reads them (a table cell is one too). */
+const WORD_BLOCK_WRAPPERS = new Set(["sdt", "sdtContent", "customXml", "ins", "del", "moveTo", "hdr", "ftr"]);
+const WORD_ROW_WRAPPERS = new Set(["sdt", "sdtContent", "customXml"]);
+
+/** Word's paragraph number in the part, empty paragraphs included (a docx para= location). */
+interface WordParagraphCounter {
+  value: number;
+}
+
+/** Where the streaming read is, by the kinds of block renderWordBlocks, renderWordTable and rowCells walk. */
+type WordFrame = "document" | "shell" | "block" | "table" | "row" | "wrapper" | "skip";
+
 /**
- * Text of a very large document.xml in one streaming pass: paragraphs break where `w:p` closes, `w:t` carries the
- * text, and tabs/breaks become their characters. Structure (tables, drawings) is not rebuilt; the text is.
+ * A very large document.xml in one streaming pass that writes what renderWord writes for a small one, hints included. Only one
+ * paragraph's tree is built at a time (renderWordParagraph reads it, then it is dropped); tables, rows and cells are written as
+ * their tags go by. The part is cut into slices, and what a slice made is written before the next is read, so memory holds a slice,
+ * not the document. Content the tree walk does not reach (`moveFrom`, `sectPr`, a row's non-cell child) is skipped the same way.
  */
-async function renderLargeWordDocument(xml: string, xhtml: XHTMLContentHandler): Promise<void> {
-  const paragraphs: string[] = [];
-  let current = "";
-  let inText = 0;
+async function renderLargeWordDocument(
+  xml: string,
+  xhtml: XHTMLContentHandler,
+  hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
+): Promise<void> {
+  // renderWord reads the first w:body, or the root when there is none.
+  const hasBody = /<(?:[^\s<>/:]+:)?body[\s/>]/.test(xml);
+  let bodySeen = false;
+  let queue: (() => void | Promise<void>)[] = [];
+  const frames: WordFrame[] = ["document"];
+  let depth = 0;
+  // The paragraph being read, outermost first; empty between paragraphs.
+  const open: XmlNode[] = [];
   const parser = new SaxesParser({ xmlns: false });
-  parser.on("opentag", (tag) => {
-    const name = localName(tag.name);
-    if (name === "t") inText++;
-    else if (name === "tab") current += "\t";
-    else if (name === "br" || name === "cr") current += "\n";
-  });
-  parser.on("text", (text) => {
-    if (inText > 0) current += text;
-  });
-  parser.on("closetag", (tag) => {
-    const name = localName(tag.name);
-    if (name === "t") inText = Math.max(0, inText - 1);
-    else if (name === "p") {
-      if (current.length > 0) paragraphs.push(current);
-      current = "";
+
+  const frameFor = (parent: WordFrame, name: string): WordFrame => {
+    switch (parent) {
+      case "document":
+        return hasBody ? "shell" : "block";
+      case "shell":
+        if (name !== "body" || bodySeen) return "skip";
+        bodySeen = true;
+        return "block";
+      case "block":
+        if (name === "tbl") return "table";
+        return name === "body" || WORD_BLOCK_WRAPPERS.has(name) ? "block" : "skip";
+      case "table":
+        return name === "tr" ? "row" : "skip";
+      case "row":
+      case "wrapper":
+        if (name === "tc") return "block";
+        return WORD_ROW_WRAPPERS.has(name) ? "wrapper" : "skip";
+      default:
+        return "skip";
     }
+  };
+
+  parser.on("opentag", (tag) => {
+    depth++;
+    if (depth > MAX_XML_DEPTH) throw new MalformedDocumentError(`XML nesting exceeds ${MAX_XML_DEPTH} levels`);
+    const name = localName(tag.name);
+    const node: XmlNode = {
+      name: tag.name,
+      attributes: { ...(tag.attributes as Record<string, string>) },
+      children: [],
+      text: "",
+      content: [],
+    };
+    if (open.length > 0) {
+      const parent = open[open.length - 1]!;
+      parent.children.push(node);
+      parent.content.push(node);
+      open.push(node);
+      return;
+    }
+    const parent = frames[frames.length - 1]!;
+    if (parent === "block" && name === "p") {
+      open.push(node);
+      frames.push("skip");
+      return;
+    }
+    const frame = frameFor(parent, name);
+    frames.push(frame);
+    if (frame === "table") queue.push(() => xhtml.startElement("table"));
+    else if (frame === "row") queue.push(() => xhtml.startElement("tr"));
+    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => xhtml.startElement("td"));
   });
-  parser.write(xml).close();
-  if (current.length > 0) paragraphs.push(current);
-  for (const paragraph of paragraphs) await xhtml.element("p", paragraph);
+  const onText = (text: string): void => {
+    const node = open[open.length - 1];
+    if (node !== undefined) appendText(node, text);
+  };
+  parser.on("text", onText);
+  parser.on("cdata", onText);
+  parser.on("closetag", () => {
+    depth--;
+    if (open.length > 0) {
+      const node = open.pop()!;
+      if (open.length === 0) {
+        frames.pop();
+        queue.push(() => renderWordParagraph(node, xhtml, hints, paragraphs));
+      }
+      return;
+    }
+    const frame = frames.pop();
+    const parent = frames[frames.length - 1];
+    if (frame === "table") queue.push(() => xhtml.endElement("table"));
+    else if (frame === "row") queue.push(() => xhtml.endElement("tr"));
+    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => xhtml.endElement("td"));
+  });
+
+  const flush = async (): Promise<void> => {
+    const done = queue;
+    queue = [];
+    for (const write of done) await write();
+  };
+  for (let start = 0; start < xml.length; ) {
+    let end = Math.min(start + LARGE_WORD_CHUNK_CHARS, xml.length);
+    // Do not cut a surrogate pair.
+    const last = xml.charCodeAt(end - 1);
+    if (end < xml.length && last >= 0xd800 && last <= 0xdbff) end++;
+    parser.write(xml.slice(start, end));
+    start = end;
+    await flush();
+  }
+  parser.close();
+  await flush();
 }
 
 async function renderWordPartGroup(
@@ -280,13 +382,14 @@ async function renderWordPartGroup(
   className: string,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
 ): Promise<void> {
   for (const name of Object.keys(files).filter((key) => pattern.test(key)).sort()) {
     const root = parsePart(files, name);
     if (root === undefined) continue;
     const content = findFirst(root, "hdr") ?? findFirst(root, "ftr") ?? root;
     await xhtml.startElement("div", "class", className);
-    await renderWordBlocks(content, xhtml, hints);
+    await renderWordBlocks(content, xhtml, hints, paragraphs);
     await xhtml.endElement("div");
   }
 }
@@ -297,6 +400,7 @@ async function renderNotes(
   className: string,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
 ): Promise<void> {
   const root = parsePart(files, part);
   if (root === undefined) return;
@@ -312,7 +416,7 @@ async function renderNotes(
     const type = attribute(note, "type");
     if (type === "separator" || type === "continuationSeparator") continue;
     await xhtml.startElement("div", "class", className);
-    await renderWordBlocks(note, xhtml, hints);
+    await renderWordBlocks(note, xhtml, hints, paragraphs);
     await xhtml.endElement("div");
   }
 }
@@ -321,18 +425,19 @@ async function renderWordBlocks(
   node: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
 ): Promise<void> {
   for (const child of node.children) {
     const name = localName(child.name);
-    if (name === "p") await renderWordParagraph(child, xhtml, hints);
-    else if (name === "tbl") await renderWordTable(child, xhtml, hints);
+    if (name === "p") await renderWordParagraph(child, xhtml, hints, paragraphs);
+    else if (name === "tbl") await renderWordTable(child, xhtml, hints, paragraphs);
     else if (name === "sdt" || name === "sdtContent" || name === "customXml") {
-      await renderWordBlocks(child, xhtml, hints);
+      await renderWordBlocks(child, xhtml, hints, paragraphs);
     } else if (name === "ins" || name === "del" || name === "moveTo") {
       // A block moved away (moveFrom) is not written, its new place is (moveTo); see wordParagraphText.
-      await renderWordBlocks(child, xhtml, hints);
+      await renderWordBlocks(child, xhtml, hints, paragraphs);
     } else if (name === "body" || name === "hdr" || name === "ftr") {
-      await renderWordBlocks(child, xhtml, hints);
+      await renderWordBlocks(child, xhtml, hints, paragraphs);
     }
   }
 }
@@ -341,10 +446,11 @@ async function renderWordParagraph(
   paragraph: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
 ): Promise<void> {
   const text = wordParagraphText(paragraph);
   // Word's own paragraph number: empty paragraphs and those in table cells count, so a location holds when a consumer maps it back.
-  const number = hints === undefined ? 0 : nextWordParagraph(hints);
+  const number = ++paragraphs.value;
   if (text.length > 0) {
     if (hints !== undefined) {
       hints.para(number);
@@ -356,17 +462,8 @@ async function renderWordParagraph(
     await xhtml.endElement("p");
   }
   for (const box of textBoxes(paragraph)) {
-    await renderWordBlocks(box, xhtml, hints);
+    await renderWordBlocks(box, xhtml, hints, paragraphs);
   }
-}
-
-/** How many paragraphs the parse that owns these hints has read so far. */
-const wordParagraphs = new WeakMap<SegmentHints, number>();
-
-function nextWordParagraph(hints: SegmentHints): number {
-  const number = (wordParagraphs.get(hints) ?? 0) + 1;
-  wordParagraphs.set(hints, number);
-  return number;
 }
 
 /**
@@ -474,13 +571,14 @@ async function renderWordTable(
   table: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  paragraphs: WordParagraphCounter,
 ): Promise<void> {
   await xhtml.startElement("table");
   for (const row of childrenNamed(table, "tr")) {
     await xhtml.startElement("tr");
     for (const cell of rowCells(row)) {
       await xhtml.startElement("td");
-      await renderWordBlocks(cell, xhtml, hints);
+      await renderWordBlocks(cell, xhtml, hints, paragraphs);
       await xhtml.endElement("td");
     }
     await xhtml.endElement("tr");

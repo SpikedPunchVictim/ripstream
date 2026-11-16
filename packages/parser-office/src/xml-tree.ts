@@ -82,14 +82,7 @@ function buildTree(xml: string, options: XmlTreeOptions, untilError: boolean): P
     parent.content.push(node);
     stack.push(node);
   });
-  const onText = (text: string): void => {
-    const node = stack[stack.length - 1]!;
-    node.text += text;
-    const last = node.content.length - 1;
-    const tail = node.content[last];
-    if (typeof tail === "string") node.content[last] = tail + text;
-    else node.content.push(text);
-  };
+  const onText = (text: string): void => appendText(stack[stack.length - 1]!, text);
   parser.on("text", onText);
   // CDATA is character data like any other (a feed, an EPUB chapter or a shared string may carry its text in it).
   parser.on("cdata", onText);
@@ -107,6 +100,15 @@ function buildTree(xml: string, options: XmlTreeOptions, untilError: boolean): P
     return { root, failure: error };
   }
   return { root };
+}
+
+/** Adds text to an element as the tree builder does: to `text`, and to `content` merged with the text before it. */
+export function appendText(node: XmlNode, text: string): void {
+  node.text += text;
+  const last = node.content.length - 1;
+  const tail = node.content[last];
+  if (typeof tail === "string") node.content[last] = tail + text;
+  else node.content.push(text);
 }
 
 export function childrenNamed(node: XmlNode, name: string): XmlNode[] {
