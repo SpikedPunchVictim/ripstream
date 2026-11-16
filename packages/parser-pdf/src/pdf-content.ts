@@ -10,6 +10,8 @@ import { decodeStream, dictEntries, parseName, parseReference, referencesIn, typ
 
 /** Cap on content-stream bytes decoded per document. */
 export const MAX_CONTENT_DECODED_BYTES = 32 * 1024 * 1024;
+/** Cap on font-program bytes decoded per document (to tell a readable font from a damaged one). */
+const MAX_FONT_DECODED_BYTES = 16 * 1024 * 1024;
 
 /** Form XObjects nested deeper than this are not followed. */
 const MAX_FORM_DEPTH = 8;
@@ -33,18 +35,24 @@ export interface PageContent {
   readonly paintsImage: boolean;
   /** Text is shown in a font with no font file (a Type3 font counts as embedded); false when the content was not read. */
   readonly nonEmbeddedFont: boolean;
+  /** Text is shown in a font whose font file PDFBox could not read (Tika's pdf:contains-damaged-font). */
+  readonly damagedFont: boolean;
 }
 
 interface Painted {
   showsText: boolean;
   paintsImage: boolean;
   nonEmbeddedFont: boolean;
+  damagedFont: boolean;
 }
 
 export class PageContentScanner {
   readonly #index: ObjectIndex;
   readonly #decrypt: StreamDecryptor | null;
   readonly #budget: DecodeBudget = { left: MAX_CONTENT_DECODED_BYTES };
+  /** Font programs are decoded for the damaged-font metadata only; they do not share the content budget. */
+  readonly #fontBudget: DecodeBudget = { left: MAX_FONT_DECODED_BYTES };
+  readonly #fontPrograms = new Map<number, boolean>();
   readonly #forms = new Map<number, Painted | null>();
 
   constructor(index: ObjectIndex, decrypt: StreamDecryptor | null = null) {
@@ -60,7 +68,7 @@ export class PageContentScanner {
     const resources = this.#resources(page, entries);
     const contents = entries.get("Contents");
     if (contents === undefined || contents.trim() === "null") {
-      return { contents: page.closed ? "none" : "cut-off", showsText: false, paintsImage: false, nonEmbeddedFont: false };
+      return { contents: page.closed ? "none" : "cut-off", showsText: false, paintsImage: false, nonEmbeddedFont: false, damagedFont: false };
     }
     let refs = referencesIn(contents);
     const direct = parseReference(contents);
@@ -69,15 +77,15 @@ export class PageContentScanner {
       const target = this.#index.objects.get(direct.num);
       if (target !== undefined && target.stream === null && target.body.trim().startsWith("[")) refs = referencesIn(target.body);
     }
-    if (refs.length === 0) return { contents: "missing", showsText: false, paintsImage: false, nonEmbeddedFont: false };
+    if (refs.length === 0) return { contents: "missing", showsText: false, paintsImage: false, nonEmbeddedFont: false, damagedFont: false };
     let text = "";
     for (const ref of refs) {
       const stream = this.#index.objects.get(ref.num);
-      if (stream === undefined || stream.stream === null) return { contents: "missing", showsText: false, paintsImage: false, nonEmbeddedFont: false };
+      if (stream === undefined || stream.stream === null) return { contents: "missing", showsText: false, paintsImage: false, nonEmbeddedFont: false, damagedFont: false };
       // What a cut-off stream would have shown after the cut is unknown.
-      if (!stream.stream.complete) return { contents: "cut-off", showsText: false, paintsImage: false, nonEmbeddedFont: false };
+      if (!stream.stream.complete) return { contents: "cut-off", showsText: false, paintsImage: false, nonEmbeddedFont: false, damagedFont: false };
       const decoded = this.#decode(stream);
-      if (decoded === null) return { contents: "unreadable", showsText: false, paintsImage: this.#holdsImage(resources), nonEmbeddedFont: false };
+      if (decoded === null) return { contents: "unreadable", showsText: false, paintsImage: this.#holdsImage(resources), nonEmbeddedFont: false, damagedFont: false };
       // Content streams are concatenated with a separator, as if one stream (ISO 32000-2 7.8.2).
       text += `${decoded}\n`;
     }
@@ -85,7 +93,7 @@ export class PageContentScanner {
     return { contents: "read", ...painted };
   }
 
-  #decode(object: PdfObject): string | null {
+  #decode(object: PdfObject, budget: DecodeBudget = this.#budget): string | null {
     const stream = object.stream!;
     let data = this.#index.text.slice(stream.start, stream.end);
     if (this.#decrypt !== null) {
@@ -93,7 +101,7 @@ export class PageContentScanner {
       if (plain === null) return null;
       data = plain;
     }
-    return decodeStream(dictEntries(object.body), data, this.#budget);
+    return decodeStream(dictEntries(object.body), data, budget);
   }
 
   /** The value an entry names, resolving one reference, as dictionary text. */
@@ -126,33 +134,58 @@ export class PageContentScanner {
     return xobject === undefined ? new Map() : dictEntries(xobject);
   }
 
-  /** Whether any of the named page fonts has no font file. A font the resources do not hold is not counted. */
-  #shownNonEmbedded(names: ReadonlySet<string>, resources: string | undefined): boolean {
-    if (names.size === 0 || resources === undefined) return false;
+  /**
+   * The font flags of the page: whether a font the named text is shown in has no font file, and whether one's font file
+   * cannot be read (a font the resources do not hold is not counted). Tika's PDFBox reads the font program when text is
+   * shown; a program it cannot read is damaged and counts as not embedded (tikajs-xxud).
+   */
+  #shownFonts(names: ReadonlySet<string>, resources: string | undefined): { nonEmbedded: boolean; damaged: boolean } {
+    if (names.size === 0 || resources === undefined) return { nonEmbedded: false, damaged: false };
     const fonts = this.#resolve(dictEntries(resources).get("Font"));
-    if (fonts === undefined) return false;
+    if (fonts === undefined) return { nonEmbedded: false, damaged: false };
     const entries = dictEntries(fonts);
+    let nonEmbedded = false;
+    let damaged = false;
     for (const name of names) {
       const font = this.#resolve(entries.get(name));
-      if (font !== undefined && !this.#embedded(font, 0)) return true;
+      if (font === undefined) continue;
+      const state = this.#fontState(font, 0);
+      if (!state.embedded) nonEmbedded = true;
+      if (state.damaged) damaged = true;
     }
-    return false;
+    return { nonEmbedded, damaged };
   }
 
-  /** Whether a font dictionary has a font program, as PDFBox's isEmbedded asks: its descriptor's /FontFile, /FontFile2 or /FontFile3. */
-  #embedded(font: string, depth: number): boolean {
+  /** Whether a font dictionary has a font program PDFBox can read, and whether the one it names is damaged. */
+  #fontState(font: string, depth: number): { embedded: boolean; damaged: boolean } {
     const entries = dictEntries(font);
     const subtype = parseName(entries.get("Subtype"));
-    if (subtype === "Type3") return true;
+    if (subtype === "Type3") return { embedded: true, damaged: false };
     if (subtype === "Type0" && depth === 0) {
       const descendant = referencesIn(this.#resolve(entries.get("DescendantFonts"))).at(0) ?? referencesIn(entries.get("DescendantFonts")).at(0);
       const body = descendant === undefined ? undefined : this.#index.objects.get(descendant.num)?.body;
-      return body === undefined || this.#embedded(body, 1);
+      if (body === undefined) return { embedded: false, damaged: false };
+      return this.#fontState(body, 1);
     }
     const descriptor = this.#resolve(entries.get("FontDescriptor"));
-    if (descriptor === undefined) return false;
+    if (descriptor === undefined) return { embedded: false, damaged: false };
     const keys = dictEntries(descriptor);
-    return keys.has("FontFile") || keys.has("FontFile2") || keys.has("FontFile3");
+    const key = keys.has("FontFile") ? "FontFile" : keys.has("FontFile2") ? "FontFile2" : keys.has("FontFile3") ? "FontFile3" : undefined;
+    if (key === undefined) return { embedded: false, damaged: false };
+    return this.#fontProgram(keys.get(key), key) ? { embedded: true, damaged: false } : { embedded: false, damaged: true };
+  }
+
+  /** Whether the font program a descriptor entry names is readable; false when it is missing, undecodable or damaged. */
+  #fontProgram(value: string | undefined, key: string): boolean {
+    const ref = parseReference(value);
+    const object = ref === null ? undefined : this.#index.objects.get(ref.num);
+    if (object === undefined || object.stream === null || !object.stream.complete) return false;
+    const cached = this.#fontPrograms.get(object.num);
+    if (cached !== undefined) return cached;
+    const data = this.#decode(object, this.#fontBudget);
+    const readable = data !== null && readableFontProgram(data, key, parseName(dictEntries(object.body).get("Subtype")));
+    this.#fontPrograms.set(object.num, readable);
+    return readable;
   }
 
   #holdsImage(resources: string | undefined): boolean {
@@ -166,10 +199,12 @@ export class PageContentScanner {
 
   #paint(content: string, resources: string | undefined, depth: number, forms: Set<number>): Painted {
     const scan = scanContent(content);
+    const fonts = this.#shownFonts(scan.fonts, resources);
     const result: Painted = {
       showsText: scan.showsText,
       paintsImage: scan.inlineImage,
-      nonEmbeddedFont: this.#shownNonEmbedded(scan.fonts, resources),
+      nonEmbeddedFont: fonts.nonEmbedded,
+      damagedFont: fonts.damaged,
     };
     if (scan.painted.size === 0) return result;
     const xobjects = this.#xobjects(resources);
@@ -196,6 +231,7 @@ export class PageContentScanner {
         result.showsText ||= form.showsText;
         result.paintsImage ||= form.paintsImage;
         result.nonEmbeddedFont ||= form.nonEmbeddedFont;
+        result.damagedFont ||= form.damagedFont;
       }
     }
     return result;
@@ -329,4 +365,51 @@ function inlineImageEnd(content: string, from: number): number {
   ei.lastIndex = start.index + start[0].length;
   const stop = ei.exec(content);
   return stop === null ? content.length : stop.index + stop[0].length;
+}
+
+/**
+ * Whether a font program is one PDFBox can read: the header and table directory of an sfnt (TrueType or OpenType) as
+ * /FontFile2 or /OpenType holds it, the CFF header of a Type1C/CIDFontType0C program, or a Type 1 program's header. A
+ * program that is cut short or starts with something else is damaged (tikajs-xxud).
+ */
+function readableFontProgram(data: string, key: string, subtype: string | null): boolean {
+  if (key === "FontFile3") {
+    if (subtype === "OpenType") return readableSfnt(data);
+    return subtype === "Type1C" || subtype === "CIDFontType0C" ? readableCff(data) : readableSfnt(data) || readableCff(data);
+  }
+  if (key === "FontFile2" || subtype === "OpenType") return readableSfnt(data);
+  // A Type 1 program: ASCII (%!PS...), or the binary PFB segments 0x80 0x01 / 0x80 0x02.
+  return data.startsWith("%!PS") || (data.charCodeAt(0) === 0x80 && (data.charCodeAt(1) === 1 || data.charCodeAt(1) === 2));
+}
+
+const SFNT_VERSIONS: ReadonlySet<number> = new Set([0x0001_0000, 0x7472_7565 /* true */, 0x4f54_544f /* OTTO */]);
+
+function readableSfnt(data: string): boolean {
+  if (data.length < 12) return false;
+  const version = readUint32(data, 0);
+  if (version === 0x7474_6366 /* ttcf */) return data.length >= 16;
+  if (!SFNT_VERSIONS.has(version)) return false;
+  const tables = readUint16(data, 4);
+  if (tables === 0 || 12 + tables * 16 > data.length) return false;
+  for (let index = 0; index < tables; index++) {
+    const offset = readUint32(data, 12 + index * 16 + 8);
+    const length = readUint32(data, 12 + index * 16 + 12);
+    if (offset < 12 || offset + length > data.length) return false;
+  }
+  return true;
+}
+
+/** A CFF program: version 1.0 and a header size of at least the four bytes the header has. */
+function readableCff(data: string): boolean {
+  if (data.length < 4) return false;
+  const headerSize = data.charCodeAt(2);
+  return data.charCodeAt(0) === 1 && data.charCodeAt(1) === 0 && headerSize >= 4 && headerSize <= data.length;
+}
+
+function readUint16(data: string, offset: number): number {
+  return (data.charCodeAt(offset) << 8) | data.charCodeAt(offset + 1);
+}
+
+function readUint32(data: string, offset: number): number {
+  return readUint16(data, offset) * 0x1_0000 + readUint16(data, offset + 2);
 }

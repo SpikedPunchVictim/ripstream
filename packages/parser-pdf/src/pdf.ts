@@ -164,6 +164,7 @@ export class PdfParser implements Parser {
       for (const title of ready.outline) await xhtml.element("p", title);
 
       let nonEmbeddedFont = false;
+      let damagedFont = false;
       const annotationTypes = new Set<string>();
       const annotationSubtypes = new Set<string>();
       let hasAcroForm = false;
@@ -204,6 +205,7 @@ export class PdfParser implements Parser {
         }
         metadata.add("pdf:chars-per-page", String(characters));
         if (message.nonEmbeddedFont === true) nonEmbeddedFont = true;
+        if (message.damagedFont === true) damagedFont = true;
         const hasText = message.lines.some((line) => line.trim().length > 0);
         emptiness.page(index, hasText, message.content);
         if (!hasText && message.content?.paintsImage === true) imageOnlyPages.push(index);
@@ -245,6 +247,7 @@ export class PdfParser implements Parser {
       }
 
       metadata.set("pdf:num-3d-annotations", String(threeDAnnotations));
+      metadata.set("pdf:contains-damaged-font", damagedFont ? "true" : "false");
       metadata.set("pdf:contains-non-embedded-font", nonEmbeddedFont ? "true" : "false");
       if (hasAcroForm) metadata.set("pdf:has-acro-form-fields", "true");
 

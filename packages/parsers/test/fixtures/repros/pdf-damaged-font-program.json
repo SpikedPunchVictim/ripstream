@@ -1,0 +1,12 @@
+{
+  "description": "tikajs-xxud: Tika 4.2.0 (PDFBox) cannot read a TrueType font whose /FontFile2 is ten junk bytes, so pdf:contains-damaged-font is true and the font also counts as not embedded. Written by scripts/make-pdf-repros.ts.",
+  "tags": ["repro", "pdf"],
+  "input": {
+    "file": "pdf-damaged-font-program.pdf",
+    "filename": "pdf-damaged-font-program.pdf"
+  },
+  "assertions": [
+    { "type": "equals", "field": "metadata.pdf:contains-damaged-font", "value": "true" },
+    { "type": "equals", "field": "metadata.pdf:contains-non-embedded-font", "value": "true" }
+  ]
+}

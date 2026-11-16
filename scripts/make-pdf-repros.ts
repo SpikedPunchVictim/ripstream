@@ -67,6 +67,14 @@ const FILES: Record<string, Buffer> = {
   // The Type3 font is selected, Helvetica is selected inside q ... Q, and the text is shown after Q: false.
   "pdf-font-restored-by-q.pdf": pageWith("/F1 12 Tf q /F2 12 Tf Q BT (H) Tj ET", "/F1 5 0 R /F2 6 0 R", type3(7), HELVETICA, GLYPH),
   "pdf-cjk-predefined-cmap.pdf": CJK_PREDEFINED_CMAP,
+  // tikajs-xxud: a TrueType font whose /FontFile2 is ten junk bytes. Tika 4.2.0 (PDFBox) cannot read the program, so it
+  // is a damaged font and also counts as not embedded: both keys true.
+  "pdf-damaged-font-program.pdf": onePage(
+    "BT /F1 18 Tf 20 100 Td (H) Tj ET",
+    "<< /Type /Font /Subtype /TrueType /BaseFont /Junk /FirstChar 72 /LastChar 72 /Widths [500] /FontDescriptor 6 0 R /Encoding /WinAnsiEncoding >>",
+    "<< /Type /FontDescriptor /FontName /Junk /Flags 4 /FontBBox [0 0 1000 1000] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 7 0 R >>",
+    "<< /Length 10 >>\nstream\n0123456789\nendstream",
+  ),
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

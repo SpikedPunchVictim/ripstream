@@ -92,6 +92,8 @@ export type PdfResponse =
       readonly content?: PageContent;
       /** Text on the page is shown in a font with no font file, when the file could be scanned (tikajs-j60e). */
       readonly nonEmbeddedFont?: true;
+      /** Text on the page is shown in a font whose font program cannot be read (tikajs-xxud). */
+      readonly damagedFont?: true;
       /** Set on the page whose evidence made the session reopen the document from repaired bytes (tikajs-w4ps). */
       readonly repair?: PdfRepair;
     }
@@ -591,6 +593,7 @@ export class PdfSession {
         annotations,
         ...(content === undefined ? {} : { content }),
         ...(scanned?.nonEmbeddedFont === true ? { nonEmbeddedFont: true } : {}),
+        ...(scanned?.damagedFont === true ? { damagedFont: true } : {}),
         ...(repair === undefined ? {} : { repair }),
       };
     } catch (error) {
