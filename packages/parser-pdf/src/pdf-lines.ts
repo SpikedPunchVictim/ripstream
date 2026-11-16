@@ -17,12 +17,12 @@ const WORD_GAP = 0.15;
  */
 function sortedByPosition(items: PdfTextItem[]): PdfTextItem[] {
   const byBaseline = [...items].sort((left, right) => (right.transform?.[5] ?? 0) - (left.transform?.[5] ?? 0));
-  const result: PdfTextItem[] = [];
+  const rows: Array<{ items: PdfTextItem[]; y: number; height: number }> = [];
   let row: PdfTextItem[] = [];
   let rowY: number | undefined;
   const flush = (): void => {
     row.sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0));
-    result.push(...row);
+    rows.push({ items: row, y: rowY ?? 0, height: Math.max(0, ...row.map((item) => item.height ?? 0)) });
     row = [];
   };
   for (const item of byBaseline) {
@@ -32,6 +32,19 @@ function sortedByPosition(items: PdfTextItem[]): PdfTextItem[] {
     row.push(item);
   }
   flush();
+
+  // A row of smaller text just above a line is that line's superscript (PDFBox keeps it on the line); a row below is a
+  // subscript, which PDFBox starts a new line for, so it stays a row of its own (tikajs-yt4g).
+  const result: PdfTextItem[] = [];
+  for (let index = 0; index < rows.length; index++) {
+    const current = rows[index]!;
+    const next = rows[index + 1];
+    if (next !== undefined && current.height > 0 && current.height < next.height && current.y - next.y <= next.height / 2) {
+      next.items = [...next.items, ...current.items].sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0));
+      continue;
+    }
+    result.push(...current.items);
+  }
   return result;
 }
 
@@ -45,32 +58,72 @@ function needsSpace(previous: PdfTextItem | undefined, next: PdfTextItem): boole
   return start - (end + width) > WORD_GAP * height;
 }
 
-/** Groups pdf.js text items into visual lines by baseline. */
+/** A vertical gap wider than this many font heights is a paragraph break: a blank line, as PDFBox's extractor writes. */
+const PARAGRAPH_GAP = 2;
+
 export function lines(items: PdfTextItem[], sortByPosition = false): string[] {
   if (sortByPosition) items = sortedByPosition(items);
   const result: string[] = [];
   let current = "";
-  let lastY: number | null = null;
   let previous: PdfTextItem | undefined;
+  // The baseline and height of the last completed line, and of the one being written, for the paragraph gap.
+  let lastLineY: number | undefined;
+  let lastLineHeight = 0;
+  let lineY: number | undefined;
+  let lineHeight = 0;
 
   for (const item of items) {
     if (typeof item.str !== "string") continue;
+    if (current.length === 0 && item.str.length > 0) {
+      if (lastLineY !== undefined && item.transform?.[5] !== undefined) {
+        const height = Math.max(lastLineHeight, item.height ?? 0, 1);
+        if (lastLineY - item.transform[5]! > PARAGRAPH_GAP * height) result.push("");
+      }
+      lineY = item.transform?.[5];
+      lineHeight = item.height ?? 0;
+    } else if (current.length > 0) {
+      lineHeight = Math.max(lineHeight, item.height ?? 0);
+    }
+
     const y = item.transform?.[5];
-    if (lastY !== null && y !== undefined && Math.abs(y - lastY) > SAME_LINE) {
-      result.push(current.trimEnd());
+    // A lower baseline starts a line; a higher one is a superscript (or raised text) on the line being written: PDFBox
+    // keeps it there, so 'E = mc' and its raised '2' are one line. The allowance is half the text's height, so the small
+    // steps within a row of superscripts are not line breaks (tikajs-yt4g).
+    const tolerance = Math.max(SAME_LINE, 0.5 * (item.height ?? 0));
+    const lower = lineY !== undefined && y !== undefined && y < lineY - tolerance;
+    // Text that goes up with the same or a larger height is a new line in stream order, not a superscript.
+    const higher = lineY !== undefined && y !== undefined && y > lineY + SAME_LINE && (item.height ?? 0) >= lineHeight && current.length > 0;
+    if (lower || higher) {
+      // pdf.js gives an empty item of its own at the end of a line (hasEOL): its baseline change is not an empty line.
+      if (current.length > 0) {
+        result.push(current.trimEnd());
+        lastLineY = lineY;
+        lastLineHeight = lineHeight;
+        if (lineY !== undefined && y !== undefined && lineY - y > PARAGRAPH_GAP * Math.max(lineHeight, item.height ?? 0, 1)) {
+          result.push("");
+          // This new line's gap is written; its first item must not write it again.
+          lastLineY = y;
+          lastLineHeight = Math.max(lineHeight, item.height ?? 0);
+        }
+      }
       current = "";
       previous = undefined;
+      lineY = y;
+      lineHeight = item.height ?? 0;
     }
     if (current.length > 0 && !current.endsWith(" ") && !item.str.startsWith(" ") && needsSpace(previous, item)) current += " ";
     current += item.str;
     previous = item;
     if (item.hasEOL === true) {
-      result.push(current.trimEnd());
+      if (current.length > 0) {
+        result.push(current.trimEnd());
+        lastLineY = lineY;
+        lastLineHeight = lineHeight;
+      }
       current = "";
-      lastY = null;
       previous = undefined;
-    } else if (y !== undefined) {
-      lastY = y;
+      lineY = undefined;
+      lineHeight = 0;
     }
   }
   if (current.length > 0) result.push(current.trimEnd());
