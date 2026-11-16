@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-ow96: Tika 4.2.0 resolves reference links from their definitions and writes the link text, with labels matched case-insensitively; the definitions are not text. Oracle: PUT /rmeta/body, filename t.md.",
+  "tags": [
+    "repro",
+    "markdown"
+  ],
+  "input": {
+    "text": "[a][b]\n\n[b]: http://x \"t\"\n\n[A][] and [b] but not [c]\n\n[A]: http://y\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "a\nA and b but not [c]\n"
+    }
+  ]
+}

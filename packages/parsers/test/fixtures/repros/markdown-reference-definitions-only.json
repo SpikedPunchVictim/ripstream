@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ow96: a paragraph of link reference definitions alone writes nothing in Tika 4.2.0. Oracle: PUT /rmeta/body, filename t.md.",
+  "tags": ["repro", "markdown"],
+  "input": {
+    "text": "[a]: b\n[c]: d\n\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

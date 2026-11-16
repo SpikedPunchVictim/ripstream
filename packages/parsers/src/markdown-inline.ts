@@ -1,5 +1,5 @@
 import { Parser as HtmlParser } from "htmlparser2";
-import { trimSpaces } from "./markdown-blocks.ts";
+import { normalizeLabel, trimSpaces } from "./markdown-blocks.ts";
 import { removeEmphasis } from "./markdown-emphasis.ts";
 
 /**
@@ -16,8 +16,8 @@ import { removeEmphasis } from "./markdown-emphasis.ts";
 const MAX_INLINE_WINDOW = 256;
 const MAX_WORD_LOOKBACK = 64;
 
-export function cleanInline(line: string): string {
-  if (line.length <= MAX_INLINE_WINDOW) return cleanWindow(line);
+export function cleanInline(line: string, definitions: ReadonlyMap<string, string> = EMPTY_DEFINITIONS): string {
+  if (line.length <= MAX_INLINE_WINDOW) return cleanWindow(line, definitions);
   let out = "";
   let start = 0;
   while (start < line.length) {
@@ -33,12 +33,14 @@ export function cleanInline(line: string): string {
         end--;
       }
     }
-    out += cleanWindow(line.slice(start, end));
+    out += cleanWindow(line.slice(start, end), definitions);
     start = end + separator.length;
     if (start < line.length) out += separator;
   }
   return out;
 }
+
+const EMPTY_DEFINITIONS: ReadonlyMap<string, string> = new Map();
 
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff;
@@ -99,16 +101,13 @@ function findRun(text: string, from: number, length: number): number {
   return -1;
 }
 
-function cleanWindow(raw: string): string {
+function cleanWindow(raw: string, definitions: ReadonlyMap<string, string>): string {
   // The spaces at the ends of the line are not text (CommonMark); a space left at an end by what is removed below is.
   const window = trimSpaces(raw);
   const mark = window.includes("`") || window.includes("\\") ? freeMark(window) : undefined;
   const kept: string[] = [];
   const text = mark === undefined ? window : protect(window, mark, kept);
-  const links = text
-    // An image is nothing: Tika writes no alt text.
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+  const links = resolveLinks(text, definitions)
     // An autolink is its address.
     .replace(/<([A-Za-z][A-Za-z0-9+.-]{1,31}:[^\s<>]*|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)>/g, "$1")
     // Strikethrough: one or two tildes, the text between them not starting or ending in a space (`~5 and ~10` is no strikethrough).
@@ -116,6 +115,74 @@ function cleanWindow(raw: string): string {
   const decoded = decodeEntities(removeEmphasis(links, mark));
   if (mark === undefined) return decoded;
   return decoded.replace(new RegExp(`${mark}(\\d+)${mark}`, "g"), (_, index: string) => kept[Number(index)]!);
+}
+
+/**
+ * The text with its resolved links and images taken out: an inline link or image (`[text](destination)`) and a reference
+ * link, collapsed or shortcut (`[text][label]`, `[text][]`, `[text]`) whose label a definition names, keep the link text
+ * (an image keeps nothing, as Tika writes no alt text); an unresolved one is left as written. Link text may hold balanced
+ * brackets. Tika 4.2.0 resolves the references (tikajs-ow96).
+ */
+function resolveLinks(text: string, definitions: ReadonlyMap<string, string>): string {
+  if (!text.includes("[")) return text;
+  let out = "";
+  let index = 0;
+  while (index < text.length) {
+    const char = text[index]!;
+    if (char === "!" && text[index + 1] === "[") {
+      const image = readLink(text, index + 1, definitions);
+      if (image !== undefined) {
+        index = image.end;
+        continue;
+      }
+    } else if (char === "[") {
+      const link = readLink(text, index, definitions);
+      if (link !== undefined) {
+        out += link.text;
+        index = link.end;
+        continue;
+      }
+    }
+    out += char;
+    index++;
+  }
+  return out;
+}
+
+/** The link that starts at the `[` at `open`, when its label a definition names: its text and the index after it. */
+function readLink(text: string, open: number, definitions: ReadonlyMap<string, string>): { text: string; end: number } | undefined {
+  let depth = 0;
+  let close = -1;
+  for (let index = open; index < text.length; index++) {
+    const char = text[index]!;
+    if (char === "[") depth++;
+    else if (char === "]" && --depth === 0) {
+      close = index;
+      break;
+    }
+  }
+  if (close < 0) return undefined;
+  const labelText = text.slice(open + 1, close);
+  const after = close + 1;
+  if (text[after] === "(") {
+    // An inline link's destination runs to the `)` that matches its `(`; a destination may hold balanced parentheses.
+    let parens = 0;
+    for (let index = after; index < text.length; index++) {
+      if (text[index] === "(") parens++;
+      else if (text[index] === ")" && --parens === 0) return { text: labelText, end: index + 1 };
+    }
+    return undefined;
+  }
+  let label = labelText;
+  let end = after;
+  if (text[after] === "[") {
+    const labelClose = text.indexOf("]", after + 1);
+    if (labelClose < 0) return undefined;
+    const reference = text.slice(after + 1, labelClose);
+    if (reference.length > 0) label = reference;
+    end = labelClose + 1;
+  }
+  return definitions.has(normalizeLabel(label)) ? { text: labelText, end } : undefined;
 }
 
 const ENTITY = /&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});/g;

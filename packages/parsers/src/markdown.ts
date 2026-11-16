@@ -40,8 +40,9 @@ export class MarkdownParser implements Parser {
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    const writer = new BlockWriter(xhtml, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
-    for (const block of parseMarkdownBlocks(text)) await writer.write(block, false);
+    const definitions = new Map<string, string>();
+    const writer = new BlockWriter(xhtml, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS), definitions);
+    for (const block of parseMarkdownBlocks(text, definitions)) await writer.write(block, false);
     await xhtml.endDocument();
   }
 }
@@ -61,22 +62,24 @@ const SOFT_BREAK = "\n";
 class BlockWriter {
   readonly #xhtml: XHTMLContentHandler;
   readonly #hints: SegmentHints | undefined;
+  readonly #definitions: ReadonlyMap<string, string>;
 
-  constructor(xhtml: XHTMLContentHandler, hints: SegmentHints | undefined) {
+  constructor(xhtml: XHTMLContentHandler, hints: SegmentHints | undefined, definitions: ReadonlyMap<string, string>) {
     this.#xhtml = xhtml;
     this.#hints = hints;
+    this.#definitions = definitions;
   }
 
   async write(block: Block, tight: boolean): Promise<void> {
     switch (block.kind) {
       case "paragraph":
         // The paragraphs of a tight list item are not wrapped in a `p`: the item holds the text.
-        if (tight) await this.#xhtml.characters(inlineText(block.lines));
-        else await this.#element("p", block.line, inlineText(block.lines));
+        if (tight) await this.#xhtml.characters(inlineText(block.lines, this.#definitions));
+        else await this.#element("p", block.line, inlineText(block.lines, this.#definitions));
         return;
       case "heading":
         // Front matter is text between two rules: it is not announced as a heading.
-        await this.#element(block.frontMatter ? "p" : `h${block.level}`, block.line, inlineText(block.lines));
+        await this.#element(block.frontMatter ? "p" : `h${block.level}`, block.line, inlineText(block.lines, this.#definitions));
         return;
       case "code":
         await this.#element("pre", block.line, block.lines.length === 0 ? "" : `${block.lines.join("\n")}\n`);
@@ -119,7 +122,7 @@ class BlockWriter {
     await this.#xhtml.startElement("tr");
     for (const text of cells) {
       await this.#xhtml.startElement(cell);
-      await this.#xhtml.characters(cleanInline(text));
+      await this.#xhtml.characters(cleanInline(text, this.#definitions));
       await this.#xhtml.endElement(cell);
     }
     await this.#xhtml.endElement("tr");
@@ -138,7 +141,7 @@ class BlockWriter {
 }
 
 /** The lines of a paragraph or a heading as one text: marks removed, a hard break (two spaces or a backslash) a newline. */
-function inlineText(lines: readonly string[]): string {
+function inlineText(lines: readonly string[], definitions: ReadonlyMap<string, string>): string {
   let text = "";
   for (let index = 0; index < lines.length; index++) {
     let line = lines[index]!;
@@ -151,7 +154,7 @@ function inlineText(lines: readonly string[]): string {
         line = line.slice(0, -1);
       }
     }
-    text += cleanInline(line);
+    text += cleanInline(line, definitions);
     if (!last) text += hard ? LINE_BREAK : SOFT_BREAK;
   }
   return text;

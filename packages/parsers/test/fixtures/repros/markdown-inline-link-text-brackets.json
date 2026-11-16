@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ow96: the text of an inline link may hold balanced brackets and is kept without the destination (Tika 4.2.0). Oracle: PUT /rmeta/body, filename t.md.",
+  "tags": ["repro", "markdown"],
+  "input": {
+    "text": "[a [b] c](u)\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "a [b] c\n" }
+  ]
+}

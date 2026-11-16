@@ -89,7 +89,7 @@ export interface TableBlock extends BlockBase {
 
 export type Block = ParagraphBlock | HeadingBlock | CodeBlock | HtmlBlock | RuleBlock | QuoteBlock | ListBlock | TableBlock;
 
-export function parseMarkdownBlocks(markdown: string): Block[] {
+export function parseMarkdownBlocks(markdown: string, definitions: Map<string, string> = new Map()): Block[] {
   const lines: SourceLine[] = [];
   let no = 1;
   const split = markdown.split(/\r\n|\r|\n/);
@@ -99,7 +99,7 @@ export function parseMarkdownBlocks(markdown: string): Block[] {
     const expanded = expandIndent(text);
     lines.push(expanded === text ? { text, no: no++ } : { text: expanded, no: no++, raw: text, rawColumn: 0 });
   }
-  return parseBlocks(lines, 0);
+  return parseBlocks(lines, 0, definitions);
 }
 
 /** Tabs in the indentation count to the next multiple of four columns, as the spec has it; later tabs are text. */
@@ -184,7 +184,7 @@ function isBlank(text: string): boolean {
   return true;
 }
 
-function parseBlocks(lines: readonly SourceLine[], depth: number): Block[] {
+function parseBlocks(lines: readonly SourceLine[], depth: number, definitions: Map<string, string>): Block[] {
   const out: Block[] = [];
   const count = lines.length;
   let index = 0;
@@ -220,11 +220,11 @@ function parseBlocks(lines: readonly SourceLine[], depth: number): Block[] {
       continue;
     }
     if (depth < MAX_DEPTH && rest.charCodeAt(0) === 0x3e) {
-      index = readQuote(lines, index, depth, out);
+      index = readQuote(lines, index, depth, out, definitions);
       continue;
     }
     if (depth < MAX_DEPTH && listMarker(rest) !== undefined) {
-      index = readList(lines, index, depth, out);
+      index = readList(lines, index, depth, out, definitions);
       continue;
     }
     const html = htmlStart(rest, false);
@@ -236,7 +236,7 @@ function parseBlocks(lines: readonly SourceLine[], depth: number): Block[] {
       index = readTable(lines, index, depth, out);
       continue;
     }
-    index = readParagraph(lines, index, depth, out);
+    index = readParagraph(lines, index, depth, out, definitions);
   }
   return out;
 }
@@ -347,9 +347,179 @@ function setextLevel(rest: string): number {
   return isBlank(rest.slice(index)) ? (marker === "=" ? 1 : 2) : 0;
 }
 
-function readParagraph(lines: readonly SourceLine[], start: number, depth: number, out: Block[]): number {
-  const paragraph: string[] = [trimSpaces(lines[start]!.text, true, false)];
-  let index = start + 1;
+/** Whether the line, at a block's start, begins a block of its own rather than text. */
+function startsBlockLine(lines: readonly SourceLine[], index: number, depth: number): boolean {
+  const text = lines[index]!.text;
+  const indent = indentOf(text);
+  if (indent >= 4) return true;
+  const rest = text.slice(indent);
+  if (fenceOpen(rest) !== undefined || isAtxHeading(rest) || isRule(rest)) return true;
+  if (depth < MAX_DEPTH && (rest.charCodeAt(0) === 0x3e || listMarker(rest) !== undefined)) return true;
+  return htmlStart(rest, false) !== undefined || tableStartsAt(lines, index);
+}
+
+interface Definition {
+  /** The label as a definition is looked up by: whitespace collapsed and case-folded. */
+  readonly label: string;
+  readonly destination: string;
+  /** The line after the definition (0-based). */
+  readonly next: number;
+}
+
+/**
+ * The link reference definition the line starts, as CommonMark has it (`[label]: destination "title"`; the destination
+ * and the title may each be on the next line), or undefined. The label's whitespace is collapsed and it is case-folded
+ * for the lookup. Tika 4.2.0 drops the definitions and resolves the links that use them (tikajs-ow96).
+ */
+function readDefinition(lines: readonly SourceLine[], start: number): Definition | undefined {
+  const first = lines[start]!;
+  if (first.lazy === true) return undefined;
+  const text = trimSpaces(first.text, true, false);
+  if (text.charCodeAt(0) !== 0x5b) return undefined;
+  const labelEnd = findLabelEnd(text, 1);
+  if (labelEnd < 0) return undefined;
+  const label = text.slice(1, labelEnd);
+  if (label.trim().length === 0 || label.length > 999 || text.charCodeAt(labelEnd + 1) !== 0x3a) return undefined;
+
+  // The rest of the label's line, then the destination's line when the destination is not on the label's own line.
+  let line = start;
+  let rest = trimSpaces(text.slice(labelEnd + 2), true, false);
+  if (rest.length === 0) {
+    line++;
+    const continuation = nextDefinitionLine(lines, line);
+    if (continuation === undefined) return undefined;
+    rest = continuation;
+  }
+
+  let destination: string;
+  let remainder: string;
+  if (rest.charCodeAt(0) === 0x3c) {
+    const close = findUnescaped(rest, 0x3e, 1);
+    if (close < 0) return undefined;
+    destination = rest.slice(1, close);
+    remainder = rest.slice(close + 1);
+  } else {
+    const bare = readBareDestination(rest);
+    if (bare === undefined) return undefined;
+    destination = bare.destination;
+    remainder = bare.remainder;
+  }
+  remainder = trimSpaces(remainder, true, true);
+
+  // A title may be on the destination's line or on the line after it, with nothing after it. One that does not parse
+  // on the next line is not a title (the definition stands without one); one that does not parse on this line makes
+  // the definition invalid, as its trailing text does.
+  if (remainder.length === 0) {
+    const candidate = nextDefinitionLine(lines, line + 1);
+    if (candidate !== undefined && isTitleOpener(candidate.charCodeAt(0))) {
+      const titleEnd = readTitle(candidate);
+      if (titleEnd > 0 && trimSpaces(candidate.slice(titleEnd), true, true).length === 0) {
+        line++;
+      }
+    }
+  } else {
+    const titleEnd = readTitle(remainder);
+    if (titleEnd < 0 || trimSpaces(remainder.slice(titleEnd), true, true).length !== 0) return undefined;
+  }
+  return { label: normalizeLabel(label), destination, next: line + 1 };
+}
+
+/** The line's text without its indentation, if it can be a definition's continuation line: not blank and not lazy. */
+function nextDefinitionLine(lines: readonly SourceLine[], index: number): string | undefined {
+  const line = lines[index];
+  if (line === undefined || line.lazy === true || isBlank(line.text)) return undefined;
+  return trimSpaces(line.text, true, false);
+}
+
+/** Where, from `from` on, the label's closing `]` is, or -1. A label holds no unescaped bracket. */
+function findLabelEnd(text: string, from: number): number {
+  for (let index = from; index < text.length; index++) {
+    const char = text[index];
+    if (char === "\\") {
+      index++;
+      continue;
+    }
+    if (char === "[") return -1;
+    if (char === "]") return index;
+  }
+  return -1;
+}
+
+/** Where, from `from` on, the first unescaped `close` is, or -1. */
+function findUnescaped(text: string, close: number, from: number): number {
+  for (let index = from; index < text.length; index++) {
+    const char = text.charCodeAt(index);
+    if (char === 0x5c) {
+      index++;
+      continue;
+    }
+    if (char === close) return index;
+    if (close === 0x29 && char === 0x28) return -1;
+  }
+  return -1;
+}
+
+/** A destination that is not in `<>`: a run of non-space with balanced parentheses, and what follows it. */
+function readBareDestination(text: string): { destination: string; remainder: string } | undefined {
+  let depth = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text.charCodeAt(index);
+    if (char === 0x5c) {
+      index++;
+      continue;
+    }
+    if (char === 0x28) depth++;
+    else if (char === 0x29) {
+      if (depth === 0) return undefined;
+      depth--;
+    } else if (char <= 0x20 || char === 0x7f) {
+      if (index === 0) return undefined;
+      return { destination: text.slice(0, index), remainder: text.slice(index) };
+    }
+  }
+  if (depth !== 0 || text.length === 0) return undefined;
+  return { destination: text, remainder: "" };
+}
+
+function isTitleOpener(char: number): boolean {
+  return char === 0x22 || char === 0x27 || char === 0x28;
+}
+
+/** Where the title that starts the text ends (the index after its closing delimiter), or -1. */
+function readTitle(text: string): number {
+  const opener = text.charCodeAt(0);
+  const closer = opener === 0x28 ? 0x29 : opener;
+  for (let index = 1; index < text.length; index++) {
+    const char = text.charCodeAt(index);
+    if (char === 0x5c) {
+      index++;
+      continue;
+    }
+    if (char === closer) return index + 1;
+    if (closer === 0x29 && char === 0x28) return -1;
+  }
+  return -1;
+}
+
+/** A definition label as links are matched to it: whitespace collapsed to one space, the ends trimmed, case-folded. */
+export function normalizeLabel(label: string): string {
+  return label.replace(/\\([!-/:-@[-`{-~])/g, "$1").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function readParagraph(lines: readonly SourceLine[], start: number, depth: number, out: Block[], definitions: Map<string, string>): number {
+  // Link reference definitions at the start of the paragraph define links and are not text. A paragraph of definitions
+  // alone writes nothing (as Tika 4.2.0 does: tikajs-ow96).
+  let first = start;
+  for (;;) {
+    const definition = readDefinition(lines, first);
+    if (definition === undefined) break;
+    if (!definitions.has(definition.label)) definitions.set(definition.label, definition.destination);
+    first = definition.next;
+    if (first >= lines.length || isBlank(lines[first]!.text)) return first;
+    if (startsBlockLine(lines, first, depth)) return first;
+  }
+  const paragraph: string[] = [trimSpaces(lines[first]!.text, true, false)];
+  let index = first + 1;
   for (; index < lines.length; index++) {
     const text = lines[index]!.text;
     if (isBlank(text)) break;
@@ -361,15 +531,15 @@ function readParagraph(lines: readonly SourceLine[], start: number, depth: numbe
       if (level > 0) {
         const previous = out[out.length - 1];
         // The lines between two `---` at the start of a block are front matter, not a heading.
-        const frontMatter = level === 2 && previous?.kind === "rule" && previous.blankAfter !== true && previous.line + 1 === lines[start]!.no && rest[0] === "-";
-        out.push({ kind: "heading", line: lines[start]!.no, level, lines: paragraph, frontMatter });
+        const frontMatter = level === 2 && previous?.kind === "rule" && previous.blankAfter !== true && previous.line + 1 === lines[first]!.no && rest[0] === "-";
+        out.push({ kind: "heading", line: lines[first]!.no, level, lines: paragraph, frontMatter });
         return index + 1;
       }
       if (interruptsParagraph(lines, index, depth)) break;
     }
     paragraph.push(trimSpaces(text, true, false));
   }
-  out.push({ kind: "paragraph", line: lines[start]!.no, lines: paragraph });
+  out.push({ kind: "paragraph", line: lines[first]!.no, lines: paragraph });
   return index;
 }
 
@@ -447,7 +617,7 @@ function readHtml(lines: readonly SourceLine[], start: number, end: HtmlEnd, out
 
 // --- quotes --------------------------------------------------------------------------------------------------------
 
-function readQuote(lines: readonly SourceLine[], start: number, depth: number, out: Block[]): number {
+function readQuote(lines: readonly SourceLine[], start: number, depth: number, out: Block[], definitions: Map<string, string>): number {
   const inner: SourceLine[] = [];
   let index = start;
   let fence: Fence | undefined;
@@ -467,7 +637,7 @@ function readQuote(lines: readonly SourceLine[], start: number, depth: number, o
     if (!lastWasText || fence !== undefined || isBlank(line.text) || (indent < 4 && startsBlockOutside(lines, index, depth))) break;
     inner.push(dropColumns(line, 0, true));
   }
-  const quote: QuoteBlock = { kind: "quote", line: lines[start]!.no, children: parseBlocks(inner, depth + 1) };
+  const quote: QuoteBlock = { kind: "quote", line: lines[start]!.no, children: parseBlocks(inner, depth + 1, definitions) };
   out.push(quote);
   return index;
 }
@@ -535,7 +705,7 @@ function firstItemLine(line: SourceLine, contentColumn: number): SourceLine {
   return rest.text.charCodeAt(0) === 0x09 ? { text: expandIndent(rest.text), no: line.no } : rest;
 }
 
-function readList(lines: readonly SourceLine[], start: number, depth: number, out: Block[]): number {
+function readList(lines: readonly SourceLine[], start: number, depth: number, out: Block[], definitions: Map<string, string>): number {
   const first = listMarker(lines[start]!.text.slice(indentOf(lines[start]!.text)))!;
   const items: ListItem[] = [];
   let loose = false;
@@ -577,7 +747,7 @@ function readList(lines: readonly SourceLine[], start: number, depth: number, ou
       }
       break;
     }
-    const children = parseBlocks(body, depth + 1);
+    const children = parseBlocks(body, depth + 1, definitions);
     items.push({ line: line.no, children });
     if (children.slice(0, -1).some((child) => child.blankAfter === true)) loose = true;
 

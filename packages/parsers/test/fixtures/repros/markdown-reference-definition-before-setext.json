@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ow96: a definition before a paragraph is dropped and the text after it is kept (Tika 4.2.0). Oracle: PUT /rmeta/body, filename t.md.",
+  "tags": ["repro", "markdown"],
+  "input": {
+    "text": "Setext\n===\n\n[x]: y\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "Setext\n" }
+  ]
+}
