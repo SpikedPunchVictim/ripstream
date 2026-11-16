@@ -4,6 +4,16 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Server: a `/pipes` run ends when its client disconnects (`tikajs-q0ir`)
+
+Fixed: every route aborted its work when the client went away except `/pipes` (the batch job and Tika's tuple): its run went on and
+held its slot at the gate until it ended (a 400-file batch whose client left after 150 ms had written 141 files 1.5 s later, and
+`/status` still showed `active: 1`). Added: `signal?: AbortSignal` on `PipesRunOptions`, `PipesSettingsRunOptions` and
+`PipesEngineOptions`. When it fires, no input is started, the parses in flight are aborted, the emitters and fetchers are closed
+and `run()` rejects with the signal's reason (`PipesClient.run()` rejects instead of returning counts); a signal that has fired
+already starts nothing. The server passes the request's disconnect signal, so the slot comes back at once. Output already written
+stays on disk and is not rolled back (see `docs/migration.md`). Public API addition (`api-report.json`).
+
 ### Segments: a very large docx gets the same hints and text as a small one (`tikajs-ne73`)
 
 Fixed: a docx whose `word/document.xml` is over 8 MiB is read as a stream, and that path never called `SegmentHints`, so with

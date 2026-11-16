@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -523,5 +524,46 @@ test("/async in UNPACK mode writes the same package in the background", () =>
       const file = join(paths.output, "outer.zip-frictionless.zip");
       await until(() => existsSync(file), "the package");
       assert.deepEqual(readZip(readFileSync(file)).map((entry) => entry.name), ["datapackage.json", "rmeta.json", "unpacked/1.bin"]);
+    });
+  }));
+
+test("/pipes aborts the parse of a tuple whose client goes away and frees the slot", () =>
+  scratch(async (paths) => {
+    writeFileSync(join(paths.input, "a.txt"), "content of a");
+    const real = createRipstream();
+    let aborted = false;
+    const ripstream: ServerRipstream = {
+      detect: (...args) => real.detect(...args),
+      parse: (...args) => real.parse(...args),
+      parseRecursive: (_source, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              reject(options.signal?.reason);
+            },
+            { once: true },
+          );
+        }),
+    };
+    await serving({ ripstream, pipes: { settings: settingsFor(paths) }, maxConcurrent: 1 }, async ({ port }) => {
+      const active = async (): Promise<number> =>
+        ((await (await fetch(`http://127.0.0.1:${port}/status`)).json()) as { active: number }).active;
+      const body = JSON.stringify(tuple("a.txt"));
+      const client = connect(port, "127.0.0.1");
+      client.on("error", () => undefined);
+      client.write(`POST /pipes HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+      const deadline = performance.now() + 5_000;
+      while ((await active()) !== 1) {
+        if (performance.now() > deadline) assert.fail("timed out waiting for the parse to take the slot");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      client.destroy();
+      while ((await active()) !== 0) {
+        if (performance.now() > deadline) assert.fail("timed out waiting for the slot to come back");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.ok(aborted, "the parse was told to stop");
     });
   }));

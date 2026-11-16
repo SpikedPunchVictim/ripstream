@@ -352,3 +352,99 @@ test("a file-system fetcher hands the parser a path, not the whole body, in CONT
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+/** A parser that takes `ms` for every document and gives up when its signal fires, as a real parse does. */
+function slowParser(ms: number, started: string[] = [], aborted: string[] = []): PipesRipstream {
+  const wait = (name: string, signal: AbortSignal | undefined): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      started.push(name);
+      const timer = setTimeout(resolve, ms);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          aborted.push(name);
+          reject(signal.reason);
+        },
+        { once: true },
+      );
+    });
+  return {
+    parse: async (_source, options) => {
+      await wait(options?.filename ?? "?", options?.signal);
+      return { metadata: new Metadata(), text: "text" };
+    },
+    parseRecursive: async () => [],
+    detect: async () => new Metadata({ "Content-Type": "text/plain" }),
+  } as unknown as PipesRipstream;
+}
+
+test("a run whose signal fires stops starting files, aborts the parses in flight and keeps what was written", async () => {
+  const input = mkdtempSync(join(tmpdir(), "ripstream-pipes-signal-in-"));
+  const output = mkdtempSync(join(tmpdir(), "ripstream-pipes-signal-out-"));
+  try {
+    for (let index = 0; index < 100; index++) writeFileSync(join(input, `f${String(index).padStart(3, "0")}.txt`), `file ${index}`);
+    const started: string[] = [];
+    const aborted: string[] = [];
+    const controller = new AbortController();
+    const client = new PipesClient(
+      { source: { type: "filesystem", path: input }, sink: { type: "filesystem", path: output }, mode: "CONTENT_ONLY", concurrency: 2 },
+      { ripstream: slowParser(20, started, aborted), signal: controller.signal },
+    );
+    const run = client.run();
+    setTimeout(() => controller.abort(new Error("client went away")), 150);
+    await assert.rejects(run, /client went away/);
+    const written = readdirSync(output).length;
+    assert.ok(written > 0 && written < 100, `partial output stays on disk: ${written} of 100`);
+    const startedAtAbort = started.length;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(started.length, startedAtAbort, "no file is started after the abort");
+    assert.equal(readdirSync(output).length, written, "nothing is written after the abort");
+    assert.ok(aborted.length > 0, "a parse that was in flight was aborted");
+  } finally {
+    rmSync(input, { recursive: true, force: true });
+    rmSync(output, { recursive: true, force: true });
+  }
+});
+
+test("a run whose signal has fired already starts nothing", async () => {
+  const input = mkdtempSync(join(tmpdir(), "ripstream-pipes-signal-in-"));
+  try {
+    writeFileSync(join(input, "a.txt"), "alpha");
+    const started: string[] = [];
+    const emitter = new MemoryEmitter();
+    const controller = new AbortController();
+    controller.abort(new Error("already gone"));
+    await assert.rejects(
+      new PipesEngine({ ...fileSystem(input), emitter, mode: "CONTENT_ONLY", ripstream: slowParser(1, started), signal: controller.signal }).run(),
+      /already gone/,
+    );
+    assert.deepEqual(started, []);
+    assert.equal(emitter.documents.length, 0);
+  } finally {
+    rmSync(input, { recursive: true, force: true });
+  }
+});
+
+test("an ordered run whose signal fires stops too", async () => {
+  const input = mkdtempSync(join(tmpdir(), "ripstream-pipes-signal-in-"));
+  try {
+    for (let index = 0; index < 50; index++) writeFileSync(join(input, `f${index}.txt`), `file ${index}`);
+    const emitter = new MemoryEmitter();
+    const controller = new AbortController();
+    const run = new PipesEngine({
+      ...fileSystem(input),
+      emitter,
+      mode: "CONTENT_ONLY",
+      ordered: true,
+      concurrency: 2,
+      ripstream: slowParser(20),
+      signal: controller.signal,
+    }).run();
+    setTimeout(() => controller.abort(new Error("stop")), 100);
+    await assert.rejects(run, /stop/);
+    assert.ok(emitter.documents.length < 50);
+  } finally {
+    rmSync(input, { recursive: true, force: true });
+  }
+});

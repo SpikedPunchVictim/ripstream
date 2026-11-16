@@ -85,9 +85,10 @@ export class TikaPipes {
   /**
    * POST /pipes: one tuple, parsed and emitted before the answer. The answer is `{status, message?}` with the HTTP status
    * Tika gives that result (a parse exception that was recorded is still 200). The settings' reporters are not run: the
-   * answer is the report, and a reporter that appends to a file would fail the second request.
+   * answer is the report, and a reporter that appends to a file would fail the second request. `signal` is the client
+   * going away: the parse is aborted and this rejects with its reason.
    */
-  async pipes(body: unknown): Promise<TikaPipesAnswer> {
+  async pipes(body: unknown, signal?: AbortSignal): Promise<TikaPipesAnswer> {
     const { issues, tuple } = parseFetchEmitTuple(body);
     if (tuple === undefined) throw new HttpError(400, `Could not parse the /pipes request body: ${issues.join("; ")}`);
     rejectReservedIds(tuple);
@@ -99,6 +100,7 @@ export class TikaPipes {
           yield tuple;
         })(),
         ripstream: this.#ripstream,
+        ...(signal === undefined ? {} : { signal }),
         ...(this.#extensionOf === undefined ? {} : { extensionOf: this.#extensionOf }),
         ...(this.#metadataFilterServices === undefined ? {} : { metadataFilterServices: this.#metadataFilterServices }),
         reporter: { report: (result) => void results.push(result) },

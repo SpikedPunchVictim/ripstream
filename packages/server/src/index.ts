@@ -830,7 +830,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       const parsedBody = parseJsonBody(await readBody(request, maxBodyBytes));
       // A body with a `source` is the batch job; any other is a Tika tuple, so its own mistakes get the tuple's messages.
       if (tikaPipes !== undefined && !(isRecord(parsedBody) && "source" in parsedBody)) {
-        sendTika(response, await tikaPipes.pipes(parsedBody));
+        sendTika(response, await tikaPipes.pipes(parsedBody, gone));
         return;
       }
       if (options.pipes.sourceRoot === undefined) {
@@ -855,7 +855,9 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           else omitted++;
         },
       };
-      const result = await new PipesClient(config, { ripstream: ceilinged, reporter }).run();
+      // A client that goes away ends the run (nothing new is started, the parses in flight are aborted, the slot is freed);
+      // the files it had written stay on disk.
+      const result = await new PipesClient(config, { ripstream: ceilinged, reporter, signal: gone }).run();
       sendJson(response, 200, { ...result, failures, ...(omitted === 0 ? {} : { failuresOmitted: omitted }) });
       return;
     }

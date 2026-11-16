@@ -190,6 +190,13 @@ export interface PipesEngineOptions {
   /** Receives the result of every input. Default: none. */
   readonly reporter?: Reporter;
   /**
+   * Ends the run when it fires (a client that went away): no input is started after it, the parses in flight are aborted,
+   * the emitters and fetchers are closed, and `run()` rejects with the signal's reason. What was emitted before stays
+   * emitted (it is not rolled back), so with a `checkpoint` the run can be started again. A signal that has fired
+   * already starts nothing. Default: none.
+   */
+  readonly signal?: AbortSignal;
+  /**
    * A document that could not be read (malformed, encrypted, empty) is "EMIT" (default, as Tika's): what was
    * extracted is emitted with the failure in its metadata, EMIT_SUCCESS_PARSE_EXCEPTION; "SKIP": nothing is emitted,
    * PARSE_EXCEPTION_NO_EMIT.
@@ -605,6 +612,12 @@ export class PipesEngine {
       }
     };
 
+    // The caller's signal ends the run as a failure would: its reason is what run() rejects with.
+    const external = options.signal;
+    const onExternalAbort = (): void => fail(external!.reason);
+    if (external?.aborted === true) onExternalAbort();
+    else external?.addEventListener("abort", onExternalAbort, { once: true });
+
     try {
       const workers = Promise.all(
         Array.from({ length: concurrency }, () => guarded(worker)),
@@ -616,6 +629,7 @@ export class PipesEngine {
       if (failure !== null) throw (failure as { readonly error: unknown }).error;
       if (slots.length !== 0) throw new Error("ordered buffer not drained");
     } finally {
+      external?.removeEventListener("abort", onExternalAbort);
       // A run that stopped early (a failure, an abort) leaves the source part read: it is closed, which is what ends a
       // directory walk or a database cursor. A read still pending settles on its own, so it is not waited for.
       if (!fetchedDone) void Promise.resolve(iterator.return?.()).catch(() => undefined);
@@ -782,6 +796,8 @@ export interface PipesRunOptions {
   readonly ripstream?: PipesRipstream;
   readonly reporter?: Reporter;
   readonly onParseException?: OnParseException;
+  /** Ends the run when it fires: `run()` rejects with its reason, nothing new is started, and what was written stays. See `PipesEngineOptions.signal`. */
+  readonly signal?: AbortSignal;
   /** UNPACK: what is emitted. See `PipesEngineOptions.unpack`; the shorthand config's default is REGULAR, the layout it always had. */
   readonly unpack?: UnpackSettings;
   /** UNPACK with `suffixStrategy: "DETECTED"`: the extension of a media type. See `PipesEngineOptions.extensionOf`. */
@@ -824,6 +840,7 @@ export function createEngine(config: PipesConfig, options: PipesRunOptions = {})
     ordered: config.ordered ?? false,
     ...(options.ripstream === undefined ? {} : { ripstream: options.ripstream }),
     ...(options.reporter === undefined ? {} : { reporter: options.reporter }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.onParseException === undefined ? {} : { onParseException: options.onParseException }),
     // The shorthand's sink is flat, and a zip in it would be a `.bin` named after the key: it keeps the REGULAR layout.
     unpack: options.unpack ?? { outputFormat: "REGULAR" },
@@ -1012,6 +1029,7 @@ export function createEngineFromSettings(settings: PipesSettings, options: Pipes
     ...(settings.maxQueue === undefined ? {} : { maxQueue: settings.maxQueue }),
     ...(reporters.length === 0 ? {} : { reporter: reporters.length === 1 ? reporters[0]! : new CompositeReporter(reporters) }),
     ...(options.ripstream === undefined ? {} : { ripstream: options.ripstream }),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(onParseException === undefined ? {} : { onParseException }),
     ...(options.retry === undefined ? {} : { retry: options.retry }),
     ...(options.checkpoint === undefined ? {} : { checkpoint: options.checkpoint }),

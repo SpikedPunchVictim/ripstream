@@ -486,6 +486,12 @@ Not the same:
   its exception (`EMIT_SUCCESS_PARSE_EXCEPTION`) or, with `onParseException: "SKIP"`, left out (`PARSE_EXCEPTION_NO_EMIT`).
   Tika's endpoint takes one `FetchEmitTuple` and answers its status: ripstream's does too, when the server is given
   `pipes.settings` and the body has no `source` (`tikajs-68os.6.5`, see Pipes configuration below).
+- **A `/pipes` run ends when its client disconnects** (`tikajs-q0ir`), as every other route does: no input is started after
+  it, the parses in flight are aborted, and the request's slot at the gate is freed. **Output already written stays on disk**
+  (a batch job's sink, a tuple's emitter): it is not rolled back, so a disconnected batch is a partial run. The library has
+  the same switch as `signal` on `PipesRunOptions` and `PipesEngineOptions`: when it fires `run()` rejects with the signal's
+  reason (`PipesClient.run()` gives no counts), and with a `checkpoint` a second run does the inputs that are left. Tika's
+  `/pipes` is not enabled in the oracle server, so its behaviour on a disconnect was not compared.
 - The statuses ripstream's pipes engine produces are `EMIT_SUCCESS`, `EMIT_SUCCESS_PARSE_EXCEPTION`,
   `PARSE_EXCEPTION_NO_EMIT`, `EMPTY_OUTPUT`, `FETCH_EXCEPTION`, `EMIT_EXCEPTION`, `FETCHER_NOT_FOUND`,
   `EMITTER_NOT_FOUND`, `TIMEOUT`, `UNSPECIFIED_CRASH`, `CLIENT_UNAVAILABLE_WITHIN_MS` and `PAYLOAD_LIMIT_EXCEEDED`. The last is the nearest status for a document over a

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { connect, type Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { MediaType, Metadata, type ParseOptions, type ParseRecord } from "@spikedpunch/ripstream-core";
 import { createRipstreamServer, type RipstreamServerOptions, type ServerRipstream } from "../src/index.ts";
@@ -195,4 +198,63 @@ test("a /unpack download the client abandons under backpressure frees its slot",
     client.destroy();
     await until(async () => (await status(port)).active === 0, "the slot to come back");
   });
+});
+
+/** A parser that takes `ms` for each document and gives up with the request's own signal. */
+function slowEngine(ms: number): ServerRipstream {
+  const base = engine(null);
+  const wait = (options: ParseOptions | undefined): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      options?.signal?.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          reject(options.signal?.reason);
+        },
+        { once: true },
+      );
+    });
+  return {
+    ...base,
+    async parse(_source, options) {
+      await wait(options);
+      return { metadata: new Metadata(), text: "fake text" };
+    },
+  };
+}
+
+test("a /pipes batch job the client abandons stops, frees its slot and leaves the output it wrote", async () => {
+  const input = mkdtempSync(join(tmpdir(), "ripstream-server-pipes-gone-in-"));
+  const output = mkdtempSync(join(tmpdir(), "ripstream-server-pipes-gone-out-"));
+  try {
+    for (let index = 0; index < 200; index++) writeFileSync(join(input, `f${String(index).padStart(3, "0")}.txt`), `file ${index}`);
+    await withServer(
+      {
+        ripstream: slowEngine(20),
+        authenticate: () => true,
+        maxConcurrent: 1,
+        requestTimeoutMs: 60_000,
+        pipes: { sourceRoot: input, sinkRoot: output },
+      },
+      async (port) => {
+        const body = JSON.stringify({ source: { type: "filesystem", path: "." }, sink: { type: "filesystem", path: "." }, mode: "CONTENT_ONLY", concurrency: 2 });
+        const client = raw(
+          port,
+          `POST /pipes HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
+        );
+        await until(async () => (await status(port)).active === 1, "the run to take the slot");
+        await until(async () => readdirSync(output).length >= 3, "the run to write a few files");
+        client.destroy();
+        await until(async () => (await status(port)).active === 0, "the slot to come back");
+        const written = readdirSync(output).length;
+        assert.ok(written > 0 && written < 200, `the files written stay on disk, the rest are never started: ${written} of 200`);
+        await sleep(300);
+        assert.equal(readdirSync(output).length, written, "nothing is written after the client is gone");
+      },
+    );
+  } finally {
+    rmSync(input, { recursive: true, force: true });
+    rmSync(output, { recursive: true, force: true });
+  }
 });
