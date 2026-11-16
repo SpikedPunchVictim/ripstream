@@ -50,3 +50,15 @@ test("a subscript starts a line, as Tika does", () => {
   assert.deepEqual(lines(items), ["a", "i + b"]);
   assert.deepEqual(lines(items, true), ["a", "i + b"]);
 });
+
+// tikajs-p5a4: pdf.js reports text drawn twice at the same spot (PDFBox suppresses duplicate overlapping text), and a
+// subscript just under a line belongs to the line when it is close (chemical formulas), unlike mth2's lowered run.
+test("duplicate text at the same position is written once, and a longer run hides a glyph under it", () => {
+  assert.deepEqual(lines([item("3", 271, 714, 4, 8), item("3", 271, 714, 4, 8)]), ["3"]);
+  assert.deepEqual(lines([item("O", 460, 712, 6, 8), item("Oxygen-annealed", 460, 712, 61, 8)]), ["Oxygen-annealed"]);
+});
+
+test("a close subscript joins its line; a whole-height lowering does not", () => {
+  const formula = [item("LaAlO", 232, 716, 39), item("3", 271, 714.2, 4, 8), item("/SrTiO", 276, 716, 43)];
+  assert.deepEqual(lines(formula, true), ["LaAlO3/SrTiO"]);
+});

@@ -33,18 +33,29 @@ function sortedByPosition(items: PdfTextItem[]): PdfTextItem[] {
   }
   flush();
 
-  // A row of smaller text just above a line is that line's superscript (PDFBox keeps it on the line); a row below is a
-  // subscript, which PDFBox starts a new line for, so it stays a row of its own (tikajs-yt4g).
-  const result: PdfTextItem[] = [];
+  // Small text close to a line is its superscript or subscript and PDFBox keeps it on the line; small text a whole
+  // height away (mth2's lowered 'i + b' at 5 points under a 12-point line) is a line of its own (tikajs-yt4g).
+  // `skip`: the row's items were merged into another row, which writes them.
+  const skip = new Array<boolean>(rows.length).fill(false);
+  for (let index = 1; index < rows.length; index++) {
+    const current = rows[index]!;
+    const previous = rows[index - 1]!;
+    if (!skip[index - 1] && current.height > 0 && current.height < previous.height && previous.y - current.y <= current.height / 2) {
+      previous.items = [...previous.items, ...current.items].sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0));
+      skip[index] = true;
+    }
+  }
   for (let index = 0; index < rows.length; index++) {
+    if (skip[index]) continue;
     const current = rows[index]!;
     const next = rows[index + 1];
-    if (next !== undefined && current.height > 0 && current.height < next.height && current.y - next.y <= next.height / 2) {
+    if (next !== undefined && !skip[index + 1] && current.height > 0 && current.height < next.height && current.y - next.y <= next.height / 2) {
       next.items = [...next.items, ...current.items].sort((left, right) => (left.transform?.[4] ?? 0) - (right.transform?.[4] ?? 0));
-      continue;
+      skip[index] = true;
     }
-    result.push(...current.items);
   }
+  const result: PdfTextItem[] = [];
+  for (let index = 0; index < rows.length; index++) if (!skip[index]) result.push(...rows[index]!.items);
   return result;
 }
 
@@ -58,10 +69,37 @@ function needsSpace(previous: PdfTextItem | undefined, next: PdfTextItem): boole
   return start - (end + width) > WORD_GAP * height;
 }
 
+/**
+ * Items that draw the same text at the same spot: PDFBox's extractor suppresses duplicate overlapping text, pdf.js
+ * reports it. A glyph at a spot where a longer run also starts is the longer run's first character (an overprinted 'O' in
+ * front of 'Oxygen-annealed'), so the longer item is kept.
+ */
+function withoutDuplicateText(items: PdfTextItem[]): PdfTextItem[] {
+  const chosen = new Map<string, PdfTextItem>();
+  for (const item of items) {
+    if (typeof item.str !== "string") continue;
+    const x = item.transform?.[4];
+    const y = item.transform?.[5];
+    if (x === undefined || y === undefined) continue;
+    const key = `${x.toFixed(2)},${y.toFixed(2)}`;
+    const existing = chosen.get(key);
+    if (existing === undefined || item.str.length > existing.str.length) chosen.set(key, item);
+  }
+  if (chosen.size === 0) return items;
+  return items.filter((item) => {
+    if (typeof item.str !== "string") return false;
+    const x = item.transform?.[4];
+    const y = item.transform?.[5];
+    if (x === undefined || y === undefined) return true;
+    return chosen.get(`${x.toFixed(2)},${y.toFixed(2)}`) === item;
+  });
+}
+
 /** A vertical gap wider than this many font heights is a paragraph break: a blank line, as PDFBox's extractor writes. */
 const PARAGRAPH_GAP = 2;
 
 export function lines(items: PdfTextItem[], sortByPosition = false): string[] {
+  items = withoutDuplicateText(items);
   if (sortByPosition) items = sortedByPosition(items);
   const result: string[] = [];
   let current = "";
