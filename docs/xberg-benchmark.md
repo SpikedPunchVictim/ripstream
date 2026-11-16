@@ -161,7 +161,13 @@ container; beads filed at P3, ids only, nothing fixed here):
   (sub- and superscripts as tokens of their own). `tikajs-yt4g`.
 - Table pages `pb_1948bb0c-01f1-aa67-a1bd-4d54323f4f0d_page2` and `pb_fqr-retail-blackrock-global-allocation-fund-inc_page4`:
   adjacent text in table cells is glued without a separator (fewer tokens than Tika, long concatenated words and digit
-  strings). `tikajs-jmd0`.
+  strings). `tikajs-jmd0`. **Cause found and fixed for the first page** (follow-up, same 92-PDF run on the fix's commit): the page has
+  `/Rotate 90` and its text runs up the page, so pdf.js positions put a row's cells in different baseline groups and the page
+  was read a column at a time. After turning the positions into the text's own frame, that page goes from TF1 0.543 to 0.599
+  (Tika 0.599, token multiset equal to Tika's) and no other fixture changes: mean TF1 0.8101 to 0.8107. The second page is
+  not a gluing problem (ripstream has 1016 tokens to Tika's 985): its gap is superscript footnote marks raised 2.7 pt, which
+  the 1 pt baseline tolerance breaks onto a line of their own where Tika keeps them in the line (the same family as
+  `tikajs-yt4g`); it stays at 0.597 against Tika's 0.654.
 - `1401.4991`, the largest gap: word fragments and extra digit tokens, a different pattern from the math papers.
   `tikajs-p5a4`.
 

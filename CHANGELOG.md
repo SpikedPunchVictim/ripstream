@@ -20,6 +20,16 @@ that had text). Added: `SegmentHints.para(number)`, which says the block written
 `col` do for tables; a block with no hint goes on from the last number, so every other parser is unchanged. `content` and the
 metadata are unchanged.
 
+### PDF: text that runs up or down the page is read a row at a time (`tikajs-jmd0`)
+
+Fixed: pdf.js reports text positions in the page's own coordinates, ahead of the page's `/Rotate`. On a page rotated to show upright
+text that runs up the page (the text matrix `0 1 -1 0`, as on landscape table pages), a line of text is a column of positions, so the
+line grouping and the sort by position read the page a column at a time and glued or scattered the cells of a row. When most of a page's
+text runs up or down, the positions are now turned a quarter turn the other way before the lines are grouped, which is how Tika's
+PDFBox reads such a page (checked against Tika 4.2.0 on synthetic pages with `/Rotate 90` and `/Rotate 270`). A page of upright text
+with a few sideways items (a margin stamp) is unchanged. Reference-tier benchmark (92 PDFs, quality only): mean TF1 0.8101 to 0.8107, one
+fixture changed (a ParseBench table page on a rotated page, 0.543 to 0.599, Tika 0.599; its token multiset now equals Tika's).
+
 ### PDF: `pdf:contains-non-embedded-font` is emitted (`tikajs-j60e`)
 
 Added: `pdf:contains-non-embedded-font`, `true` when text is shown in a font with no font file (the standard 14 fonts without a
