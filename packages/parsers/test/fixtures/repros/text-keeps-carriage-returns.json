@@ -1,0 +1,18 @@
+{
+  "description": "A text file keeps the CR of its CRLF and a lone CR, as Tika 4.2.0's TXTParser does (tikajs-d31m; oracle PUT /rmeta/body, filename x.txt: the same text and a final newline).",
+  "tags": [
+    "repro",
+    "text"
+  ],
+  "input": {
+    "base64": "YSxiDQpjLGQNCmUNZgoNCmc=",
+    "filename": "x.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "a,b\r\nc,d\r\ne\rf\n\r\ng\n"
+    }
+  ]
+}

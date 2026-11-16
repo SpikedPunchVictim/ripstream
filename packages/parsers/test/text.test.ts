@@ -60,7 +60,7 @@ test("passes vCard and iCalendar text through", async () => {
   assert.match(calendar.text, /Meeting/);
 });
 
-test("splits lines across chunk boundaries including split CRLF", async () => {
+test("splits lines across chunk boundaries including split CRLF, and keeps the CRs (Tika 4.2.0 oracle)", async () => {
   const input = new TextEncoder().encode("ab\r\ncd\ref\n\ngh");
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -73,7 +73,7 @@ test("splits lines across chunk boundaries including split CRLF", async () => {
     },
   });
   const result = await ripstream.parse(stream);
-  assert.equal(result.text, "ab\ncd\nef\n\ngh\n");
+  assert.equal(result.text, "ab\r\ncd\ref\n\ngh\n");
 });
 
 test("falls back to UTF-8 for an unsupported charset label", async () => {

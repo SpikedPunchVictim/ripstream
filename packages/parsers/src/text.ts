@@ -82,8 +82,9 @@ export class TextParser implements Parser {
 }
 
 /**
- * Writes the rest of `stream`, decoded with `decoder`, as XHTML paragraphs, one per line. Memory stays O(chunk): each
- * decoded segment is emitted at once. `hints` (segments asked for) learn that each paragraph is a source line.
+ * Writes the rest of `stream`, decoded with `decoder`, as XHTML paragraphs, one per line (a line feed ends a line; a carriage
+ * return stays in the text). Memory stays O(chunk): each decoded segment is emitted at once. `hints` (segments asked for) learn
+ * that each paragraph is a source line.
  */
 export async function writeText(
   stream: RipstreamInputStream,
@@ -100,7 +101,6 @@ export async function writeText(
   // O(chunk) even for a newline-free body and the handler's output limit can
   // fire mid-line. Several characters() calls within one <p> are legal SAX.
   let inParagraph = false;
-  let heldCarriageReturn = false;
   // The handler chain answers synchronously unless a sink is slow, and an await costs a promise tick per call: with a
   // paragraph and a segment per source line that is most of a large text file's time. So wait only for a real promise.
   const emitSegment = (segment: string): MaybePromise<void> => {
@@ -114,21 +114,16 @@ export async function writeText(
     after(xhtml.endElement("p"), () => {
       inParagraph = false;
     });
-  const feed = async (decoded: string, final: boolean): Promise<void> => {
-    let text = heldCarriageReturn ? `\r${decoded}` : decoded;
-    heldCarriageReturn = false;
-    // A trailing \r may be the first half of \r\n split across chunks.
-    if (!final && text.endsWith("\r")) {
-      heldCarriageReturn = true;
-      text = text.slice(0, -1);
-    }
+  const feed = async (text: string, final: boolean): Promise<void> => {
+    // Only a line feed ends a line. A carriage return is text, as in Tika's TXTParser, which writes the characters of the
+    // whole document into one paragraph: a CRLF file keeps its CRs, and a lone CR is no line break at all.
     let position = 0;
-    for (const match of text.matchAll(/\r\n|\r|\n/g)) {
-      const emitted = emitSegment(text.slice(position, match.index));
+    for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", position)) {
+      const emitted = emitSegment(text.slice(position, at));
       if (isThenable(emitted)) await emitted;
       const ended = endLine();
       if (isThenable(ended)) await ended;
-      position = match.index + match[0].length;
+      position = at + 1;
     }
     const last = emitSegment(text.slice(position));
     if (isThenable(last)) await last;

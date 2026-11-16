@@ -93,3 +93,9 @@ Files under files/ (source path in test_documents, size in bytes, sha256):
   docling-gt-amt_handbook_sample.json  <- test_documents/vendored/docling/groundtruth/docling_v1/amt_handbook_sample.json  10535  d6f18798f0cee86ad9758d858a09db207a457106a998fa1906b88fe963bd6418
   docling-gt-right_to_left_03.json  <- test_documents/vendored/docling/groundtruth/docling_v1/right_to_left_03.json  15443  3ed5b9e7edc57758d5845ccbb0e29a6d4a4d4b6d682b28adcc78cdd509e200b7
   docling-gt-2305.03393v1.doctags.txt  <- test_documents/vendored/docling/groundtruth/docling_v1/2305.03393v1.doctags.txt  44908  07ec7eabed50179429d340e7d922338483c88742f4014fc2d6ff1eb6279aa3ec
+  docling-csv-comma.csv  <- test_documents/vendored/docling/csv/csv-comma.csv  1005  0f3643115a0a1d4b748b93ad9ab2a02ad1fde6a7a9506ce90422792e17244824
+  docling-csv-semicolon.csv  <- test_documents/vendored/docling/csv/csv-semicolon.csv  997  26912eaca8f5a50fb8c3e8f17c081e280f121759fae6e0c1e8ae1cfb5045c689
+  docling-csv-tab.csv  <- test_documents/vendored/docling/csv/csv-tab.csv  997  8071cda34f80e7690b00f4bbef6af7a96a86175c4d4ba1fb7f8d0f28593c3487
+  docling-csv-too-few-columns.csv  <- test_documents/vendored/docling/csv/csv-too-few-columns.csv  44  192be2a77124929ac1dc560b1dd178627ce681aad7fc3c10384d14ff967aabab
+  docling-csv-too-many-columns.csv  <- test_documents/vendored/docling/csv/csv-too-many-columns.csv  46  f87b302f0905323f6660e2deec90af183d77dfa8c45e05026f028b71e1dd2e1f
+  markitdown-test_mskanji.csv  <- test_documents/vendored/markitdown/csv/test_mskanji.csv  70  184c3dbe4c92d80c0ffef7141dc2401d6ed2fed2e001d444dffb3c3414ce5ff9

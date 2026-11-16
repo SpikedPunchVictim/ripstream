@@ -54,25 +54,26 @@ async function traceOf(chunks: readonly string[]): Promise<string> {
   return handler.trace.replaceAll("</p>\\n", "</p>");
 }
 
+// A line feed ends a paragraph; a carriage return is text (Tika 4.2.0 oracle: TXTParser keeps the CR of a CRLF, and a lone CR is no break).
 const cases: ReadonlyArray<readonly [string, readonly string[], string]> = [
   ["empty file", [], "<p></p>"],
   ["single empty chunk", [""], "<p></p>"],
   ["no terminator", ["abc"], "<p>abc</p>"],
   ["LF", ["a\nb"], "<p>a</p><p>b</p>"],
-  ["CRLF", ["a\r\nb"], "<p>a</p><p>b</p>"],
-  ["CR", ["a\rb"], "<p>a</p><p>b</p>"],
-  ["mixed terminators", ["a\r\nb\rc\nd"], "<p>a</p><p>b</p><p>c</p><p>d</p>"],
+  ["CRLF", ["a\r\nb"], "<p>a\\r</p><p>b</p>"],
+  ["CR", ["a\rb"], "<p>a\\rb</p>"],
+  ["mixed terminators", ["a\r\nb\rc\nd"], "<p>a\\r</p><p>b\\rc</p><p>d</p>"],
   ["blank lines", ["a\n\n\nb"], "<p>a</p><p></p><p></p><p>b</p>"],
-  ["CRCR LF", ["a\r\r\nb"], "<p>a</p><p></p><p>b</p>"],
+  ["CRCR LF", ["a\r\r\nb"], "<p>a\\r\\r</p><p>b</p>"],
   ["trailing LF", ["a\nb\n"], "<p>a</p><p>b</p><p></p>"],
-  ["trailing CRLF", ["a\r\n"], "<p>a</p><p></p>"],
-  ["lone trailing CR", ["a\r"], "<p>a</p><p></p>"],
+  ["trailing CRLF", ["a\r\n"], "<p>a\\r</p><p></p>"],
+  ["lone trailing CR", ["a\r"], "<p>a\\r</p>"],
   ["only newline", ["\n"], "<p></p><p></p>"],
-  ["CRLF split across chunks", ["a\r", "\nb"], "<p>a</p><p>b</p>"],
-  ["CR then non-LF across chunks", ["a\r", "b"], "<p>a</p><p>b</p>"],
-  ["CR held across an empty chunk", ["a\r", "", "\nb"], "<p>a</p><p>b</p>"],
+  ["CRLF split across chunks", ["a\r", "\nb"], "<p>a\\r</p><p>b</p>"],
+  ["CR then non-LF across chunks", ["a\r", "b"], "<p>a\\rb</p>"],
+  ["CR across an empty chunk", ["a\r", "", "\nb"], "<p>a\\r</p><p>b</p>"],
   ["line spanning chunks", ["he", "ll", "o\nwor", "ld"], "<p>hello</p><p>world</p>"],
-  ["trailing CR in its own final chunk", ["a\nb", "\r"], "<p>a</p><p>b</p><p></p>"],
+  ["trailing CR in its own final chunk", ["a\nb", "\r"], "<p>a</p><p>b\\r</p>"],
 ];
 
 for (const [name, chunks, expected] of cases) {

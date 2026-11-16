@@ -1,0 +1,18 @@
+{
+  "description": "A .csv that is no table (one column) is text, with its CRLF kept, as Tika 4.2.0 has it (tikajs-d31m; oracle filename x.csv).",
+  "tags": [
+    "repro",
+    "text"
+  ],
+  "input": {
+    "base64": "YQ0KYg0KYw0K",
+    "filename": "x.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "a\r\nb\r\nc\r\n\n"
+    }
+  ]
+}

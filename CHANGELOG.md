@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Text keeps its carriage returns (`tikajs-d31m`)
+
+Fixed: a plain-text file, a `.csv` that is no table, a `.tsv`, a log or a source file read through the text parser lost the CR of
+its CRLF line endings, and a lone CR became a line break. Tika's TXTParser writes the characters of the document into one
+paragraph as they are, so a CRLF file keeps its CRs in `text`, and a lone CR is no line break. Only a line feed ends a line here
+now: the segments (and their line numbers) of a file with lone CRs, an old Mac file, are one line, as the text is.
+
 ### A short Shift_JIS text is windows-31j (`tikajs-9imn`)
 
 Fixed: a short Japanese text in Shift_JIS (a CSV of a few names and cities, with no kana) was read as windows-1252, so its text came

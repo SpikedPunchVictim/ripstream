@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-d31m] Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-semicolon.csv) text and Content-Type for test_documents/vendored/docling/csv/csv-semicolon.csv from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename csv-semicolon.csv) text and Content-Type for test_documents/vendored/docling/csv/csv-semicolon.csv from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f; fixed by tikajs-d31m.",
   "tags": [
     "xberg",
     "oracle",
-    "csv",
-    "xfail"
+    "csv"
   ],
   "input": {
     "file": "../files/docling-csv-semicolon.csv",
