@@ -4,6 +4,23 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### XML: UTF-16 without a byte order mark, and no text from the prolog or after the root (`tikajs-dmp7`)
+
+Fixed, checked against Tika 4.2.0's `/rmeta/body` over 50 UTF-16 shapes (both byte orders, with and without a mark, six declarations,
+even and odd lengths) and on synthetic documents:
+
+- A UTF-16 `.xml` with no byte order mark that begins `<?` is read as UTF-16 when its declaration allows it, as Xerces does from the first
+  four bytes: `encoding="utf-16"` or `ISO-10646-UCS-2` takes either byte order, `UTF-16LE` and `UTF-16BE` only their own, and a
+  declaration with no encoding takes either. It was Malformed XML. A document with no declaration, a declaration of another encoding, or a
+  byte order the declaration does not name still fails, as in Tika.
+- The white space between the declaration, comments and the root, and the lines after the root's end, were written as text (`\n  hello` for
+  a document Tika gives `  hello`). They are not text now.
+- A UTF-16 `.xml` with a stray last byte fails in Tika (XML parse error) and here (Malformed XML), as before.
+
+Not the same as Tika's, by decision: a UTF-16 `.xml` with a byte order mark whose declaration names another encoding (`UTF-8`) or the other
+byte order fails in Tika and is read by its mark here (see `tikajs-5tjh`). The xberg `factbook-utf-16.xml` is that case (it also has the stray
+byte): Tika fails on it, so there is no text for ripstream to match.
+
 ### WordPerfect: a file with no version is an empty document (`tikajs-mic4`)
 
 Fixed: a binary file detected as `application/vnd.wordperfect` with no version (a name or type says WordPerfect and the content has no

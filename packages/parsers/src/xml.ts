@@ -72,7 +72,9 @@ export class XmlParser implements Parser {
     const parser = new SaxesParser({ xmlns: false });
     const addText = (text: string): void => {
       const current = stack.at(-1);
-      if (current !== undefined) current.text += text;
+      // The white space of the prolog and of what follows the root is not text: Tika's XML handler never sees it.
+      if (current === undefined) return;
+      current.text += text;
       pending.push(text);
     };
     parser.on("opentag", (tag) => {

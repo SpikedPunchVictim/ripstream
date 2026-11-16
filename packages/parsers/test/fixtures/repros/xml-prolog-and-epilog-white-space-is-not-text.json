@@ -1,0 +1,18 @@
+{
+  "description": "The white space between the prolog's declaration and comments and the root, and the lines after the root's end, are not text: Tika's XML handler never sees them (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "tags": [
+    "repro",
+    "xml"
+  ],
+  "input": {
+    "text": "<?xml version=\"1.0\"?>\n<!-- c -->\n<root><a>hello</a>\n<b>world</b>\n</root>\n\n\n",
+    "filename": "page.xml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "  hello\n world\n\n"
+    }
+  ]
+}

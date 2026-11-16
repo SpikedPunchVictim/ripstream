@@ -1,0 +1,24 @@
+{
+  "description": "Deliberately not Tika's: a UTF-16LE .xml with a byte order mark whose declaration says UTF-8 fails in Tika 4.2.0 (XML parse error, no text); ripstream reads it by its mark and parses it, as it does a declaration of UTF-16LE (owner decision, tikajs-5tjh and tikajs-dmp7). The expected text is ripstream's. Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "tags": [
+    "repro",
+    "xml",
+    "encoding"
+  ],
+  "input": {
+    "base64": "//48AD8AeABtAGwAIAB2AGUAcgBzAGkAbwBuAD0AIgAxAC4AMAAiACAAZQBuAGMAbwBkAGkAbgBnAD0AIgBVAFQARgAtADgAIgA/AD4ACgA8AHIAbwBvAHQAPgA8AGEAPgBoAGUAbABsAG8APAAvAGEAPgAKADwAYgAgAHgAPQAiADEAIgA+AHcAbwByAGwAZAA8AC8AYgA+AAoAPAAvAHIAbwBvAHQAPgAKAA==",
+    "filename": "page.xml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/xml"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "  hello\n world\n\n"
+    }
+  ]
+}

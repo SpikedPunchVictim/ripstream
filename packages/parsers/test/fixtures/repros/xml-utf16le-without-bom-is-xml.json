@@ -1,0 +1,24 @@
+{
+  "description": "A UTF-16LE .xml with no byte order mark whose declaration says encoding=\"utf-16\" is read as UTF-16, as Xerces does from the first four bytes (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "tags": [
+    "repro",
+    "xml",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PAA/AHgAbQBsACAAdgBlAHIAcwBpAG8AbgA9ACIAMQAuADAAIgAgAGUAbgBjAG8AZABpAG4AZwA9ACIAdQB0AGYALQAxADYAIgA/AD4ACgA8AHIAbwBvAHQAPgA8AGEAPgBoAGUAbABsAG8APAAvAGEAPgAKADwAYgAgAHgAPQAiADEAIgA+AHcAbwByAGwAZAA8AC8AYgA+AAoAPAAvAHIAbwBvAHQAPgAKAA==",
+    "filename": "page.xml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/xml"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "  hello\n world\n\n"
+    }
+  ]
+}

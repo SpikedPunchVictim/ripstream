@@ -1,0 +1,24 @@
+{
+  "description": "A UTF-16BE .xml with no mark whose declaration says UTF-16BE is read as UTF-16BE (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "tags": [
+    "repro",
+    "xml",
+    "encoding"
+  ],
+  "input": {
+    "base64": "ADwAPwB4AG0AbAAgAHYAZQByAHMAaQBvAG4APQAiADEALgAwACIAIABlAG4AYwBvAGQAaQBuAGcAPQAiAFUAVABGAC0AMQA2AEIARQAiAD8APgAKADwAcgBvAG8AdAA+ADwAYQA+AGgAZQBsAGwAbwA8AC8AYQA+AAoAPABiACAAeAA9ACIAMQAiAD4AdwBvAHIAbABkADwALwBiAD4ACgA8AC8AcgBvAG8AdAA+AAo=",
+    "filename": "page.xml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/xml"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "  hello\n world\n\n"
+    }
+  ]
+}

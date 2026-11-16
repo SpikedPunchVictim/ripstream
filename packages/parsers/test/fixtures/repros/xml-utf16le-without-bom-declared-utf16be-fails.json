@@ -1,0 +1,22 @@
+{
+  "description": "A UTF-16LE .xml with no mark whose declaration says UTF-16BE is not XML to Xerces: Tika records an XML parse error and has no text; ripstream's parse fails as Malformed XML (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "tags": [
+    "repro",
+    "xml",
+    "encoding"
+  ],
+  "input": {
+    "base64": "PAA/AHgAbQBsACAAdgBlAHIAcwBpAG8AbgA9ACIAMQAuADAAIgAgAGUAbgBjAG8AZABpAG4AZwA9ACIAVQBUAEYALQAxADYAQgBFACIAPwA+AAoAPAByAG8AbwB0AD4APABhAD4AaABlAGwAbABvADwALwBhAD4ACgA8AGIAIAB4AD0AIgAxACIAPgB3AG8AcgBsAGQAPAAvAGIAPgAKADwALwByAG8AbwB0AD4ACgA=",
+    "filename": "page.xml"
+  },
+  "options": {
+    "onDocumentFailure": "record"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "metadata.tk:exception:container-exception",
+      "value": "Malformed XML"
+    }
+  ]
+}

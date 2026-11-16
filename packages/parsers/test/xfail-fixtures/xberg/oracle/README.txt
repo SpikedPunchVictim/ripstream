@@ -29,7 +29,6 @@ Files under files/ (source path in test_documents, size in bytes, sha256, cause)
   docling-2203.01017v2.md  <- test_documents/vendored/docling/md/2203.01017v2.md  54005  e7de19a6ef829041d3ded1cefcddc3f847c0375925e9d0aa60b30b77f63282ee  md-heading-number
   myst-nb-basic_unrun.md  <- test_documents/vendored/executablebooks-myst-nb/basic_unrun.md  248  b03b173651637a8078447b35f96256c06f2d709854e5af4541753b5ff10c5cb4  md-frontmatter
   myst-nb-with_eval.md  <- test_documents/vendored/executablebooks-myst-nb/with_eval.md  1967  84d12b04fbe3d9c50a885c91e000860ed948cde55e72c503c887b6a04f86ff7a  md-frontmatter
-  unstructured-factbook-utf-16.xml  <- test_documents/vendored/unstructured/xml/factbook-utf-16.xml  1341  ab617a7f7cc2790c77872651f993892233700cf0ac95a1f6b879f31a94c1cca0  xml-utf16-decl
   docling-gt-table_01.html.md  <- test_documents/vendored/docling/groundtruth/docling_v2/table_01.html.md  101  adc446310555ee02e35ce1bc075b98c726882c7f3417a31d6fc2f4407fb858bc  md-table
   docling-gt-tablecell.docx.md  <- test_documents/vendored/docling/groundtruth/docling_v2/tablecell.docx.md  152  65e8a8d68fc0ae88c7f15adb1d4567b9e71a73e9c5920434cb282005e3316f79  md-table
   docling-gt-list_after_num_headers.docx.md  <- test_documents/vendored/docling/groundtruth/docling_v2/list_after_num_headers.docx.md  164  08cd8f390d4a80299c5bb607182bde5efe3d0939ed47916726cdec0b763c1793  md-list
