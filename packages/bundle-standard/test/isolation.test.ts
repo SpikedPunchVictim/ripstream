@@ -40,6 +40,9 @@ const runner = new ChildRunner({
   heapMb: 256,
   cpuSecs: 120,
   maxTaskMillis: 60_000,
+  // The default grace (250 ms) is what a healthy child needs to exit after its terminal frame; on a loaded machine a
+  // child that leaked nothing can need longer. A leaked handle keeps the child alive for good, so this still catches it.
+  graceMs: 10_000,
   maxInputBytes: 16 * MIB,
   maxResultBytes: 16 * MIB,
   rssLimitMb: 1024,

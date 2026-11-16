@@ -589,9 +589,15 @@ class Supervision {
       return;
     }
     this.#graceTimer = setTimeout(() => {
-      this.#graceKilled = true;
-      this.#groupKill();
-      this.#armReapTimer();
+      // Timers run before this turn's I/O, so a child that exited within its grace can still look alive here when this
+      // process was busy: its exit is delivered in the poll phase, and `setImmediate` runs after it. Only a child that is
+      // still alive then overstayed.
+      setImmediate(() => {
+        if (this.#exited || this.#settled) return;
+        this.#graceKilled = true;
+        this.#groupKill();
+        this.#armReapTimer();
+      });
     }, this.#graceMs);
   }
 
