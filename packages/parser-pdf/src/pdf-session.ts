@@ -90,6 +90,8 @@ export type PdfResponse =
       readonly annotations: readonly PdfAnnotation[];
       /** For a page with no text: what its content streams do, when the file could be scanned. */
       readonly content?: PageContent;
+      /** Text on the page is shown in a font with no font file, when the file could be scanned (tikajs-j60e). */
+      readonly nonEmbeddedFont?: true;
       /** Set on the page whose evidence made the session reopen the document from repaired bytes (tikajs-w4ps). */
       readonly repair?: PdfRepair;
     }
@@ -544,7 +546,8 @@ export class PdfSession {
       page = await document.getPage(index);
       let items = await this.#readTextItems(page);
       let pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
-      let content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
+      let scanned = await this.#pageContent(page);
+      let content = pageLines.some((line) => line.trim().length > 0) ? undefined : scanned;
       let repair: PdfRepair | undefined;
       if (content?.showsText === true && this.#repair === undefined && this.#reopenRepaired !== undefined) {
         const reopen = this.#reopenRepaired;
@@ -558,7 +561,8 @@ export class PdfSession {
           page = await document.getPage(index);
           items = await this.#readTextItems(page);
           pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
-          content = pageLines.some((line) => line.trim().length > 0) ? undefined : await this.#pageContent(page);
+          scanned = await this.#pageContent(page);
+          content = pageLines.some((line) => line.trim().length > 0) ? undefined : scanned;
         }
       }
       let annotations: PdfAnnotation[] = [];
@@ -586,6 +590,7 @@ export class PdfSession {
         lines: pageLines,
         annotations,
         ...(content === undefined ? {} : { content }),
+        ...(scanned?.nonEmbeddedFont === true ? { nonEmbeddedFont: true } : {}),
         ...(repair === undefined ? {} : { repair }),
       };
     } catch (error) {

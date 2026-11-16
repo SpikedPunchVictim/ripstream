@@ -70,6 +70,10 @@ export function indexObjects(text: string, budget: DecodeBudget = { left: MAX_IN
     } else {
       const body = text.slice(start, streamAt);
       let dataStart = streamAt + "stream".length;
+      // Spaces before the line break are tolerated, as PDFBox and pdf.js do.
+      let blanks = dataStart;
+      while (text[blanks] === " ") blanks++;
+      if (text[blanks] === "\r" || text[blanks] === "\n") dataStart = blanks;
       if (text[dataStart] === "\r") dataStart++;
       if (text[dataStart] === "\n") dataStart++;
       const declared = dictEntries(body).get("Length")?.trim() ?? "";

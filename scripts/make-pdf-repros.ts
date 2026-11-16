@@ -23,16 +23,27 @@ function pdf(objects: string[]): Buffer {
   return Buffer.from(out, "latin1");
 }
 
-/** A one-page document showing `content` in the font object 5, with `fontObjects` as objects 5 on. */
-function onePage(content: string, ...fontObjects: string[]): Buffer {
+/** A one-page document with `content`, the page's font resources `fonts` and `objects` as objects 5 on. */
+function pageWith(content: string, fonts: string, ...objects: string[]): Buffer {
   return pdf([
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << ${fonts} >> >> >>`,
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
-    ...fontObjects,
+    ...objects,
   ]);
 }
+
+/** A one-page document showing `content` in the font object 5, with `fontObjects` as objects 5 on. */
+function onePage(content: string, ...fontObjects: string[]): Buffer {
+  return pageWith(content, "/F1 5 0 R", ...fontObjects);
+}
+
+const HELVETICA = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+/** A Type3 font (its glyphs are drawn by the file itself, so it counts as embedded) whose one glyph H is object `glyph`. */
+const type3 = (glyph: number): string =>
+  `<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /H ${glyph} 0 R >> /Encoding << /Type /Encoding /Differences [72 /H] >> /FirstChar 72 /LastChar 72 /Widths [500] >>`;
+const GLYPH = "<< /Length 20 >>\nstream\n500 0 d0 0 0 500 500 re f\nendstream";
 
 /**
  * A Type0 font that is not embedded and has no ToUnicode map: its characters are the two-byte codes of the predefined CMap
@@ -46,6 +57,15 @@ const CJK_PREDEFINED_CMAP = onePage(
 );
 
 const FILES: Record<string, Buffer> = {
+  // tikajs-j60e: Tika 4.2.0 pdf:contains-non-embedded-font is true only when text is shown in a font with no font file.
+  // The standard 14 font Helvetica, shown: true.
+  "pdf-font-not-embedded.pdf": onePage("BT /F1 18 Tf 20 100 Td (Hello) Tj ET", HELVETICA),
+  // A Type3 font, shown: false.
+  "pdf-font-type3-is-embedded.pdf": onePage("BT /F1 18 Tf 20 100 Td (H) Tj ET", type3(6), GLYPH),
+  // Helvetica in the page's resources and never shown: false.
+  "pdf-font-not-embedded-unused.pdf": onePage("0 0 10 10 re f", HELVETICA),
+  // The Type3 font is selected, Helvetica is selected inside q ... Q, and the text is shown after Q: false.
+  "pdf-font-restored-by-q.pdf": pageWith("/F1 12 Tf q /F2 12 Tf Q BT (H) Tj ET", "/F1 5 0 R /F2 6 0 R", type3(7), HELVETICA, GLYPH),
   "pdf-cjk-predefined-cmap.pdf": CJK_PREDEFINED_CMAP,
 };
 

@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-j60e: Apache Tika 4.2.0 (/rmeta/body) gives pdf:contains-non-embedded-font false for this hand-written PDF (Helvetica is in the page's resources but no text is shown); ripstream did not emit the key. Written by scripts/make-pdf-repros.ts.",
+  "tags": [
+    "repro",
+    "pdf"
+  ],
+  "input": {
+    "file": "pdf-font-not-embedded-unused.pdf",
+    "filename": "pdf-font-not-embedded-unused.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.pdf:contains-non-embedded-font",
+      "value": "false"
+    }
+  ]
+}

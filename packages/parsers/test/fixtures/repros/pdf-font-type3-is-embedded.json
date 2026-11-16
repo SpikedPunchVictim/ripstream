@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-j60e: Apache Tika 4.2.0 (/rmeta/body) gives pdf:contains-non-embedded-font false for this hand-written PDF (text is shown in a Type3 font, which counts as embedded); ripstream did not emit the key. Written by scripts/make-pdf-repros.ts.",
+  "tags": [
+    "repro",
+    "pdf"
+  ],
+  "input": {
+    "file": "pdf-font-type3-is-embedded.pdf",
+    "filename": "pdf-font-type3-is-embedded.pdf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.pdf:contains-non-embedded-font",
+      "value": "false"
+    }
+  ]
+}

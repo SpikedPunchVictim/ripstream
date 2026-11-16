@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF: `pdf:contains-non-embedded-font` is emitted (`tikajs-j60e`)
+
+Added: `pdf:contains-non-embedded-font`, `true` when text is shown in a font with no font file (the standard 14 fonts without a
+FontFile, a Type1 or TrueType font with no `/FontFile*`, a Type0 font whose descendant has none; a Type3 font counts as embedded) and
+`false` otherwise, as Tika 4.2.0 writes it. It is read from the page content (the font `Tf` selects as `q` and `Q` leave it when text
+is shown), so a font that is only in the resources does not count. A font whose font file is present but unreadable is still taken as
+embedded (Tika's `pdf:contains-damaged-font` is not written).
+
+Fixed: a PDF stream whose `stream` keyword is followed by spaces before the line break was not decoded by the page-content scan (as
+in the corpus's `pdfa_001`), so a text-less page of such a file could not be told from a damaged one; PDFBox and pdf.js skip the spaces.
+
 ### XML: UTF-16 without a byte order mark, and no text from the prolog or after the root (`tikajs-dmp7`)
 
 Fixed, checked against Tika 4.2.0's `/rmeta/body` over 50 UTF-16 shapes (both byte orders, with and without a mark, six declarations,
