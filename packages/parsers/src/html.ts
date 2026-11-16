@@ -52,6 +52,10 @@ const LINE_ENDING_ELEMENTS: ReadonlySet<string> = new Set([
   "p", "h1", "h2", "h3", "h4", "h5", "h6", "div", "ul", "ol", "dl", "pre", "hr", "blockquote", "address", "fieldset", "table",
   "form", "noscript", "li", "dt", "dd", "noframes", "br", "tr", "select", "option", "link", "script",
 ]);
+/** Table parts HTML5 drops where no table is open: their text stays, their element (and its line break) does not (tikajs-ixsj). */
+const TABLE_PARTS: ReadonlySet<string> = new Set([
+  "tr", "td", "th", "tbody", "thead", "tfoot", "caption", "colgroup", "col",
+]);
 
 export interface HtmlParserOptions {
   /**
@@ -138,11 +142,30 @@ export class HtmlDocumentParser implements Parser {
     let bodyWritten = false;
     // Per open element: whether its start was written. One that was not (dropped ahead of the body) writes no end either.
     const written: boolean[] = [];
+    // Per open element: a table part HTML5 drops where no table is open (its text stays, its element does not).
+    const ignoredElement: boolean[] = [];
+    // Per open table: whether a row is open, and whether it is the implied one a cell outside a row makes.
+    const tables: Array<{ row: boolean; implied: boolean }> = [];
+    // HTML5 (and htmlparser2) closes a p when a table starts; Tika's parser keeps the table in the p, so the close waits
+    // for the next event: a table means the p stays open, anything else applies the close first (tikajs-ixsj).
+    let deferredPClose = false;
+    const applyDeferredPClose = (): void => {
+      if (!deferredPClose) return;
+      deferredPClose = false;
+      depth = Math.max(0, depth - 1);
+      const sent = written.pop() ?? true;
+      if (sent) events.push({ type: "close", name: "p" });
+      else if (bodyWritten) events.push({ type: "newline" });
+    };
 
     const parser = new HtmlParser(
       {
         onopentag(name, attributes) {
           tick();
+          if (deferredPClose) {
+            if (name === "table") deferredPClose = false;
+            else applyDeferredPClose();
+          }
           if (name === "script" || name === "style") {
             suppressed++;
             return;
@@ -150,28 +173,55 @@ export class HtmlDocumentParser implements Parser {
           if (suppressed > 0) return;
           if ((name === "html" && htmlOpen) || (name === "body" && bodyOpen)) return;
           afterEnd = false;
-          if (++depth > maxDepth) {
-            throw new LimitExceededError(
-              `HTML nesting exceeds ${maxDepth} open elements`,
-            );
+          // HTML5 drops a tr, td, th or another table part where no table is open (tikajs-ixsj): its text is written, its
+          // element and the line break after it are not.
+          const dropped = tables.length === 0 && TABLE_PARTS.has(name);
+          if (!dropped) {
+            if (++depth > maxDepth) {
+              throw new LimitExceededError(
+                `HTML nesting exceeds ${maxDepth} open elements`,
+              );
+            }
+            if (name === "svg") svgDepth++;
+            // The document title is the first <title>; an inline SVG's <title> is its accessible name, not the page's.
+            if (name === "title" && !titleDone && svgDepth === 0) inTitle = true;
+            if (name === "title" && !bodyStarted && svgDepth === 0) {
+              inHeadTitle = true;
+              return;
+            }
+            if (!HEAD_ELEMENTS.has(name)) bodyStarted = true;
+            if (name === "html") htmlOpen = true;
+            if (name === "body") bodyOpen = true;
           }
-          if (name === "svg") svgDepth++;
-          // The document title is the first <title>; an inline SVG's <title> is its accessible name, not the page's.
-          if (name === "title" && !titleDone && svgDepth === 0) inTitle = true;
-          if (name === "title" && !bodyStarted && svgDepth === 0) {
-            inHeadTitle = true;
-            return;
-          }
-          if (!HEAD_ELEMENTS.has(name)) bodyStarted = true;
-          if (name === "html") htmlOpen = true;
-          if (name === "body") bodyOpen = true;
           // The XHTML writes its own html, head and body: those of the page are not elements of it. Any other element that does
           // not begin the body is dropped ahead of it, as Tika drops it.
           const starts = BODY_STARTING_ELEMENTS.has(name);
-          const send = name !== "html" && name !== "body" && (bodyWritten || starts || HELD_INLINE_ELEMENTS.has(name));
-          if (name !== "html" && name !== "body") written.push(send);
+          const send = !dropped && name !== "html" && name !== "body" && (bodyWritten || starts || HELD_INLINE_ELEMENTS.has(name));
+          if (name !== "html" && name !== "body") {
+            written.push(send);
+            ignoredElement.push(dropped);
+          }
+          if (dropped) return;
           if (!send) return;
           if (starts) bodyWritten = true;
+
+          // A cell outside a row is in the row HTML5 implies for it, which the table's end closes.
+          if (name === "table") tables.push({ row: false, implied: false });
+          else if (name === "tr" && tables.length > 0) {
+            const table = tables.at(-1)!;
+            if (table.implied) {
+              events.push({ type: "close", name: "tr" });
+              table.implied = false;
+            }
+            table.row = true;
+          } else if ((name === "td" || name === "th") && tables.length > 0) {
+            const table = tables.at(-1)!;
+            if (!table.row) {
+              events.push({ type: "open", name: "tr", attributes: new AttributesImpl() });
+              table.row = true;
+              table.implied = true;
+            }
+          }
 
           const atts = new AttributesImpl();
           for (const [key, value] of Object.entries(attributes)) {
@@ -183,6 +233,7 @@ export class HtmlDocumentParser implements Parser {
         },
         ontext(text) {
           tick();
+          applyDeferredPClose();
           if (suppressed > 0) return;
           if (inTitle) title += text;
           if (inHeadTitle) return;
@@ -196,7 +247,8 @@ export class HtmlDocumentParser implements Parser {
           bodyWritten = true;
           events.push({ type: "text", text });
         },
-        onclosetag(name) {
+        onclosetag(name, isImplied) {
+          applyDeferredPClose();
           if (name === "script" || name === "style") {
             suppressed = Math.max(0, suppressed - 1);
             return;
@@ -206,6 +258,13 @@ export class HtmlDocumentParser implements Parser {
             afterEnd = true;
             return;
           }
+          // A p closed by a following block waits one event: a table keeps it open, as Tika's parser does.
+          if (isImplied && name === "p") {
+            deferredPClose = true;
+            return;
+          }
+          const dropped = ignoredElement.pop() ?? false;
+          if (dropped) return;
           depth = Math.max(0, depth - 1);
           if (name === "svg") svgDepth = Math.max(0, svgDepth - 1);
           if (name === "title" && inTitle) {
@@ -220,6 +279,12 @@ export class HtmlDocumentParser implements Parser {
           if (name === "title" && inHeadTitle) {
             inHeadTitle = false;
             return;
+          }
+          if (name === "table" && tables.length > 0) {
+            const table = tables.pop()!;
+            if (table.implied) events.push({ type: "close", name: "tr" });
+          } else if (name === "tr" && tables.length > 0) {
+            tables.at(-1)!.row = false;
           }
           const sent = written.pop() ?? true;
           if (sent) events.push({ type: "close", name });
@@ -243,6 +308,7 @@ export class HtmlDocumentParser implements Parser {
       await drain(events, xhtml, tick);
     }
     parser.end();
+    applyDeferredPClose();
     await drain(events, xhtml, tick);
 
     await xhtml.endDocument();

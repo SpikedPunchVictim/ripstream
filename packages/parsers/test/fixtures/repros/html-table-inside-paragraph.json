@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ixsj: a table that starts inside a p does not close the p in Tika's parser, so the text before the table and after it stay in it. Oracle: PUT /rmeta/body, filename x.html.",
+  "tags": ["repro", "html"],
+  "input": {
+    "text": "<p>a<table><td>X</td></table>b</p>",
+    "filename": "x.html"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "a\tX\n\nb\n" }
+  ]
+}

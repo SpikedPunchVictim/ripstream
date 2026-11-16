@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-ixsj: an HTML5 parser drops a tr, td or th with no table; Tika 4.2.0 writes their text without the element's line break or indent. Oracle: PUT /rmeta/body, filename x.html.",
+  "tags": [
+    "repro",
+    "html"
+  ],
+  "input": {
+    "text": "<tr>X</tr>Z<td>Y</td><th>W</th>",
+    "filename": "x.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "XZYW"
+    }
+  ]
+}

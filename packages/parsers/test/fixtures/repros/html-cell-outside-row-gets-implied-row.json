@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-ixsj: a cell directly in a table is in the row HTML5 implies for it, so the table ends a row and then itself (Tika 4.2.0). Oracle: PUT /rmeta/body, filename x.html.",
+  "tags": ["repro", "html"],
+  "input": {
+    "text": "<table><td>X</td><td>Y</td></table>",
+    "filename": "x.html"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "\tX\tY\n\n" }
+  ]
+}
