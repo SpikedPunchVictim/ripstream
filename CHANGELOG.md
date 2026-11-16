@@ -4,6 +4,29 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### OLE2 property sets give Tika's keys and date format (`tikajs-nb4y`)
+
+Fixed: the SummaryInformation and DocumentSummaryInformation streams of a `.doc`, `.xls`, `.ppt` and the other OLE2 formats (Publisher,
+Visio, DGN 8, ...) now give the keys and values Tika 4.2.0's `SummaryExtractor` gives, checked on every OLE2 fixture and on
+synthetic property sets with `/rmeta`:
+
+- Dates are written to the second (`2007-09-14T17:33:12Z`, not `...12.000Z`); a stored FILETIME of 0 is `1601-01-01T00:00:00Z`.
+- A SummaryInformation stream always gives `extended-properties:TotalTime`: the edit time in FILETIME ticks (to the millisecond),
+  0 when there is none. The last printed date is `meta:print-date` (it was `meta:lastPrinted`).
+- The custom properties of the user-defined section (`custom:*`) were never read from a real file: the dictionary was read with a
+  type word it does not have. They now come from the second section of a DocumentSummaryInformation stream, as text.
+- The page count is also `xmpTPg:NPages`, and so is a PowerPoint's slide count. Counts are set when above 0.
+- Keywords are `meta:keyword` and the first `dc:subject`, the comments are `w:Comments`, the template is
+  `extended-properties:Template`, the security is `extended-properties:DocSecurity`. Authors and managers split at `;`. A title is
+  no longer trimmed.
+- Keys Tika does not give are gone: `meta:editTime`, `meta:lastPrinted`, `pdf:Keywords`, `dc:description`, `cp:template`,
+  `extended-properties:Security`, `meta:note-count`, `meta:hidden-slide-count`, `meta:multimedia-clip-count`,
+  `meta:character-count-with-spaces`, `cp:contentType`, `cp:contentStatus`, `dc:language`, `extended-properties:AppVersion`,
+  `extended-properties:DocVersion`.
+
+Not the same as Tika's: a title stored as a FILETIME (Tika writes Java's `Date.toString()` of it), and the message properties of a
+`.msg` and `msoffice:has-comments` / `msoffice:ppt:has-animations`, which do not come from the property sets.
+
 ### Text keeps its carriage returns (`tikajs-d31m`)
 
 Fixed: a plain-text file, a `.csv` that is no table, a `.tsv`, a log or a source file read through the text parser lost the CR of

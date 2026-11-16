@@ -1,5 +1,5 @@
 {
-  "description": "Tika 4.2.0 on testEXCEL_5.xls (tikajs-cigc): a BIFF5 workbook in an OLE2 container (stream Book) is read by OfficeParser through POI OldExcelExtractor: a Sheet: line for each sheet name, then one line per cell with numbers as Java writes a double (1.0). Checked against the oracle, body text. The SummaryInformation stream is metadata as for every OLE2 file (tikajs-n83j).",
+  "description": "Tika 4.2.0 on testEXCEL_5.xls (tikajs-cigc): a BIFF5 workbook in an OLE2 container (stream Book) is read by OfficeParser through POI OldExcelExtractor: a Sheet: line for each sheet name, then one line per cell with numbers as Java writes a double (1.0). Checked against the oracle, body text. The SummaryInformation stream is metadata as for every OLE2 file (tikajs-n83j). Its dates are written to the second and it has TotalTime 0 and meta:print-date 1601-01-01T00:00:00Z, as the oracle gives them (tikajs-nb4y).",
   "tags": [
     "office",
     "excel",
@@ -40,19 +40,29 @@
       "value": "RIBEN9"
     },
     {
-      "type": "matches",
+      "type": "equals",
       "field": "metadata.dcterms:created",
-      "value": "^2007-10-01T16:13:56(\\.000)?Z$"
+      "value": "2007-10-01T16:13:56Z"
     },
     {
-      "type": "matches",
+      "type": "equals",
       "field": "metadata.dcterms:modified",
-      "value": "^2007-10-01T16:31:43(\\.000)?Z$"
+      "value": "2007-10-01T16:31:43Z"
     },
     {
       "type": "equals",
       "field": "metadata.cp:revision",
       "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:TotalTime",
+      "value": "0"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:print-date",
+      "value": "1601-01-01T00:00:00Z"
     }
   ]
 }

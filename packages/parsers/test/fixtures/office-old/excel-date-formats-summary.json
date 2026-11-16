@@ -1,0 +1,20 @@
+{
+  "description": "Tika 4.2.0 /rmeta on testEXCEL_dateFormats.xls (tikajs-nb4y): the OLE2 property sets give TotalTime 0, meta:print-date 1601-01-01T00:00:00Z, dates to the second, and the custom properties of the user-defined section (named by its dictionary, which has no type word) as custom:* text",
+  "tags": ["office", "excel", "ole2", "metadata"],
+  "input": { "file": "testEXCEL_dateFormats.xls" },
+  "assertions": [
+    { "type": "equals", "field": "metadata.dc:creator", "value": "Gábor" },
+    { "type": "equals", "field": "metadata.meta:last-author", "value": "Precognox Kft" },
+    { "type": "equals", "field": "metadata.cp:revision", "value": "0" },
+    { "type": "equals", "field": "metadata.dcterms:created", "value": "2019-05-07T11:21:24Z" },
+    { "type": "equals", "field": "metadata.dcterms:modified", "value": "2020-02-21T12:20:23Z" },
+    { "type": "equals", "field": "metadata.meta:print-date", "value": "1601-01-01T00:00:00Z" },
+    { "type": "equals", "field": "metadata.extended-properties:TotalTime", "value": "0" },
+    { "type": "equals", "field": "metadata.custom:DocSecurity", "value": "0" },
+    { "type": "equals", "field": "metadata.custom:ShareDoc", "value": "false" },
+    { "type": "equals", "field": "metadata.custom:ScaleCrop", "value": "false" },
+    { "type": "equals", "field": "metadata.custom:HyperlinksChanged", "value": "false" },
+    { "type": "equals", "field": "metadata.custom:LinksUpToDate", "value": "false" },
+    { "type": "equals", "field": "metadata.custom:AppVersion", "value": "16.0300" }
+  ]
+}
