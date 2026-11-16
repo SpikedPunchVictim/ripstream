@@ -4,6 +4,19 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### OpenDocument text: notes, nested lists, header and footer regions as Tika writes them (`tikajs-uay4`)
+
+Fixed, to match Tika 4.2.0's OpenDocumentContentHandler (corpus `odt/footnote`, `endnote`, `unorderedList` and `unicode` lost text):
+
+- A footnote or endnote is written in its paragraph as its citation, a space and its body paragraphs (`Some text1 Footnote text  with a footnote.`);
+  ripstream dropped the citation and the spaces.
+- A list is a `ul` of `li` that each hold their own paragraphs and lists, so a nested list keeps its line breaks instead of running into
+  one line, and the whitespace between the elements of a `text:list`, `text:list-item` or `text:section` is text, as Tika passes it.
+- `text:page-number` and `text:page-count` give no text, the header and footer regions are written in the order `styles.xml` has them
+  with no block around them, and the left and first variants (`header-left`, `footer-first`, ...) are written too.
+
+Known gap: Tika writes a heading with no line break after it (`TB` for a heading `T` and a paragraph `B`); ripstream ends it with one.
+
 ### A UTF-16 text without a byte order mark is binary to the type sniff (`tikajs-z5j5`)
 
 Fixed, checked against Tika 4.2.0's `/rmeta/body`: a UTF-16 text with no byte order mark has NULs, so Tika's type sniff finds binary

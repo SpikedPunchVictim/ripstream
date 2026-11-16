@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-uay4: a list is a ul of li that each hold their paragraphs and lists, and the whitespace between the elements of a text:list or text:list-item is text (a pretty-printed pandoc file has it). ripstream flattened a nested list into one line ('\\tA thirdNew level!...'; corpus odt/unorderedList 0.634 against Tika's 1.000). Written by scripts/make-odt-repros.ts. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes.",
+  "tags": [
+    "repro",
+    "odt"
+  ],
+  "input": {
+    "file": "odt-nested-list.odt",
+    "filename": "odt-nested-list.odt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n  \t\n    one\n\n    \n      \tone.one\n\n\n    \n\n  \n\n  \ttwo\n\n\n  \t\n  \n\n\n"
+    }
+  ]
+}

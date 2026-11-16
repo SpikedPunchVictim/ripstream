@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-uay4: a footnote or endnote in a paragraph reads as its citation, a space, and the paragraphs of its body, each ending in a space and one after another starting with one (Tika: 'A1 P1  P2 B'); a note with no citation still has the space. ripstream dropped the citation and the spaces ('Some textFootnote text with a footnote.'; corpus odt/footnote 0.429 against Tika's 0.827). Written by scripts/make-odt-repros.ts. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes.",
+  "tags": [
+    "repro",
+    "odt"
+  ],
+  "input": {
+    "file": "odt-notes.odt",
+    "filename": "odt-notes.odt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Some text1 Footnote text  with a footnote.\nTwoi P1  P2 paragraphs.\nNone N .\n"
+    }
+  ]
+}

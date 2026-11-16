@@ -103,8 +103,7 @@ export class OpenDocumentParser implements Parser {
     const styles = files.get("styles.xml");
     if (styles !== undefined) {
       const styleRoot = parseXmlTree(decode(styles));
-      await renderStyleRegion(styleRoot, "header", xhtml);
-      await renderStyleRegion(styleRoot, "footer", xhtml);
+      await renderStyleRegions(styleRoot, xhtml);
     }
 
     await xhtml.endDocument();
@@ -125,15 +124,21 @@ function findBody(root: XmlNode): XmlNode | undefined {
   return officeBody;
 }
 
-async function renderStyleRegion(
-  root: XmlNode,
-  name: string,
-  xhtml: XHTMLContentHandler,
-): Promise<void> {
-  for (const region of descendantsNamed(root, name)) {
-    await xhtml.startElement("div", "class", name);
-    await renderOdfBlocks(region, xhtml);
-    await xhtml.endElement("div");
+/** The six header and footer regions of a master page. */
+const STYLE_REGIONS: ReadonlySet<string> = new Set([
+  "header",
+  "footer",
+  "header-left",
+  "footer-left",
+  "header-first",
+  "footer-first",
+]);
+
+/** Each header and footer region in the order styles.xml has them, as its paragraphs alone: Tika 4.2.0 wraps them in nothing (tikajs-uay4). */
+async function renderStyleRegions(node: XmlNode, xhtml: XHTMLContentHandler): Promise<void> {
+  for (const child of node.children) {
+    if (STYLE_REGIONS.has(localName(child.name))) await renderOdfBlocks(child, xhtml);
+    else await renderStyleRegions(child, xhtml);
   }
 }
 
@@ -151,39 +156,70 @@ async function renderOdfBlocks(
   xhtml: XHTMLContentHandler,
   hints?: SegmentHints,
 ): Promise<void> {
-  for (const child of node.children) {
-    const name = localName(child.name);
-    if (name === "p" || name === "h") await renderOdfParagraph(child, xhtml);
-    else if (name === "list") await renderOdfList(child, xhtml);
-    else if (name === "table") await renderOdfTable(child, xhtml, hints);
-    else if (name === "page") await renderOdfPage(child, xhtml, hints);
-    else if (name === "notes") {
-      await xhtml.startElement("div", "class", "notes");
-      await renderOdfBlocks(child, xhtml, hints);
-      await xhtml.endElement("div");
-    } else if (
-      name === "text-box" ||
-      name === "frame" ||
-      name === "text" ||
-      name === "spreadsheet" ||
-      name === "presentation" ||
-      name === "drawing" ||
-      name === "body" ||
-      name === "list-item" ||
-      name === "section" ||
-      name === "header" ||
-      name === "footer" ||
-      name === "table-cell" ||
-      name === "table-row" ||
-      // A chart document (.odc) holds its titles and data table under office:chart/chart:chart.
-      name === "chart" ||
-      name === "plot-area" ||
-      name === "axis" ||
-      name === "title" ||
-      name === "subtitle"
-    ) {
-      await renderOdfBlocks(child, xhtml, hints);
+  for (const child of node.children) await renderOdfChild(child, xhtml, hints);
+}
+
+/**
+ * The content of a text: element that is not a paragraph (a list, a list item, a section): the whitespace between its children is
+ * text, as Tika 4.2.0 passes it (a pretty-printed list is "\n  \t\n    item\n\n  \n"), where office:text's own is not (tikajs-uay4).
+ */
+async function renderOdfMixed(
+  node: XmlNode,
+  xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
+): Promise<void> {
+  for (const part of node.content) {
+    if (typeof part === "string") {
+      if (part.length > 0) await xhtml.characters(part);
+    } else {
+      await renderOdfChild(part, xhtml, hints);
     }
+  }
+}
+
+async function renderOdfChild(
+  child: XmlNode,
+  xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
+): Promise<void> {
+  const name = localName(child.name);
+  if (name === "p" || name === "h") await renderOdfParagraph(child, xhtml);
+  else if (name === "list-item") {
+    await xhtml.startElement("li");
+    await renderOdfMixed(child, xhtml, hints);
+    await xhtml.endElement("li");
+  } else if (name === "list") await renderOdfList(child, xhtml, hints);
+  else if (name === "section") await renderOdfMixed(child, xhtml, hints);
+  else if (name === "table") await renderOdfTable(child, xhtml, hints);
+  else if (name === "page") await renderOdfPage(child, xhtml, hints);
+  else if (name === "notes") {
+    await xhtml.startElement("div", "class", "notes");
+    await renderOdfBlocks(child, xhtml, hints);
+    await xhtml.endElement("div");
+  } else if (
+    name === "text-box" ||
+    name === "frame" ||
+    name === "text" ||
+    name === "spreadsheet" ||
+    name === "presentation" ||
+    name === "drawing" ||
+    name === "body" ||
+    name === "header" ||
+    name === "footer" ||
+    name === "header-left" ||
+    name === "footer-left" ||
+    name === "header-first" ||
+    name === "footer-first" ||
+    name === "table-cell" ||
+    name === "table-row" ||
+    // A chart document (.odc) holds its titles and data table under office:chart/chart:chart.
+    name === "chart" ||
+    name === "plot-area" ||
+    name === "axis" ||
+    name === "title" ||
+    name === "subtitle"
+  ) {
+    await renderOdfBlocks(child, xhtml, hints);
   }
 }
 
@@ -268,12 +304,10 @@ function odfText(node: XmlNode): string {
       } else if (name === "tab") text += "\t";
       else if (name === "line-break") text += "\n";
       else if (name === "soft-page-break") continue;
-      else if (name === "annotation") continue;
-      else if (name === "note") {
-        for (const body of descendantsNamed(child, "note-body")) {
-          text += odfText(body);
-        }
-      } else {
+      // Tika's handler passes text only from text: elements and not from these two, whose text is the page the reader is on.
+      else if (name === "annotation" || name === "page-number" || name === "page-count") continue;
+      else if (name === "note") text += odfNote(child);
+      else {
         text += odfText(child);
       }
     }
@@ -282,16 +316,28 @@ function odfText(node: XmlNode): string {
   return text;
 }
 
+/**
+ * A footnote or endnote in the text of its paragraph (Tika 4.2.0, tikajs-uay4): its citation, then a space, then the paragraphs of
+ * its body, each ending in a space and one that follows another starting with one ("A1 P1  P2 B"). A note with no citation still
+ * has the space.
+ */
+function odfNote(note: XmlNode): string {
+  const citation = childrenNamed(note, "note-citation").map((node) => odfText(node)).join("");
+  const body = childrenNamed(note, "note-body")
+    .flatMap((node) => childrenNamed(node, "p"))
+    .map((paragraph, index) => `${index === 0 ? "" : " "}${odfText(paragraph)} `)
+    .join("");
+  return `${citation} ${body}`;
+}
+
+/** A list is a ul of li, each holding its own paragraphs and lists: Tika's text has each of their line breaks (tikajs-uay4). */
 async function renderOdfList(
   list: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   await xhtml.startElement("ul");
-  for (const item of childrenNamed(list, "list-item")) {
-    await xhtml.startElement("li");
-    await xhtml.characters(odfText(item));
-    await xhtml.endElement("li");
-  }
+  await renderOdfMixed(list, xhtml, hints);
   await xhtml.endElement("ul");
 }
 

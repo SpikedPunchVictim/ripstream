@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-uay4: the header, footer and left header regions of a master page are written in the order styles.xml has them, as their paragraphs alone (no wrapping block that adds a blank line), and text:page-number and text:page-count give no text. ripstream wrote 'Page 1 of 9' and an empty line after each region (corpus odt/unicode 0.667 against Tika's 1.000), and no left or first regions. Written by scripts/make-odt-repros.ts. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes.",
+  "tags": [
+    "repro",
+    "odt"
+  ],
+  "input": {
+    "file": "odt-header-footer.odt",
+    "filename": "odt-header-footer.odt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Body\nHead\nPage  of  \nLeft\n"
+    }
+  ]
+}
