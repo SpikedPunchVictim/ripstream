@@ -125,6 +125,12 @@ Not the same as Tika's: link reference definitions and `[text][ref]` links are l
 not a link (`tikajs-ow96`); a few unusual nestings of containers (a fence inside an empty list item next to blank lines, a table header
 and its delimiter row in different containers) differ in a blank line or a tab (`tikajs-nf2b`).
 
+### Markdown front matter has no fences, as in Tika (`tikajs-fhyw`)
+
+Fixed: a `---` YAML front matter block was written as `--- key: value ...` on one line. CommonMark reads it as a thematic break and
+a setext heading, so Tika writes the keys on their own lines and no fences: `---\nfile_format: mystnb\n---` is
+`\nfile_format: mystnb\n`.
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as

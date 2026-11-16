@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-fhyw] Tika 4.2.0 oracle (PUT /rmeta/body, filename with_eval.md) text and Content-Type for test_documents/vendored/executablebooks-myst-nb/with_eval.md from the xberg corpus (myst-nb, BSD-3-Clause, Copyright (c) 2020 ExecutableBookProject); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename with_eval.md) text and Content-Type for test_documents/vendored/executablebooks-myst-nb/with_eval.md from the xberg corpus (myst-nb, BSD-3-Clause, Copyright (c) 2020 ExecutableBookProject); bead tikajs-qw7f; fixed by tikajs-fhyw.",
   "tags": [
     "xberg",
     "oracle",
-    "markdown",
-    "xfail"
+    "markdown"
   ],
   "input": {
     "file": "../files/myst-nb-with_eval.md",

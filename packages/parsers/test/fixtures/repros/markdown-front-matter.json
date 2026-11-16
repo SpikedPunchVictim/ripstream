@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-fhyw: YAML front matter is an hr and a setext heading to CommonMark: its fences are dropped and each key keeps its line. Expected text is what Tika 4.2.0 /rmeta/body returned for the same bytes.",
+  "tags": [
+    "markdown",
+    "repro"
+  ],
+  "input": {
+    "text": "---\nfile_format: mystnb\nkernelspec:\n  display_name: Python 3\n---\n\n# Title\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\nfile_format: mystnb\nkernelspec:\ndisplay_name: Python 3\nTitle\n"
+    }
+  ]
+}
