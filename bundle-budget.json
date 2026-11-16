@@ -4,7 +4,7 @@
   "parsers": 1145,
   "parser-office": 740,
   "parser-archive": 250,
-  "parser-pdf": 375,
+  "parser-pdf": 385,
   "parser-media": 450,
   "parity": 25,
   "test-corpus": 15,

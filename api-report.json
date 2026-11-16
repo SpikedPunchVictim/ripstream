@@ -498,6 +498,7 @@
       "serializeRmeta",
       "sha256Digest",
       "signalCheckpoint",
+      "textDecoderLabel",
       "throwIfAborted",
       "tikaDateMetadataString",
       "tikaDateMetadataStringKeepPartial",
@@ -960,6 +961,7 @@
       "filenameFromContentDisposition",
       "parseCustomMimeTypes",
       "readCustomMimeTypesFile",
+      "textDecoderLabel",
       "withCustomMimeTypes"
     ],
     "parity": [

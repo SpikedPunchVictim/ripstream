@@ -83,7 +83,7 @@ function withoutDuplicateText(items: PdfTextItem[]): PdfTextItem[] {
     if (x === undefined || y === undefined) continue;
     const key = `${x.toFixed(2)},${y.toFixed(2)}`;
     const existing = chosen.get(key);
-    if (existing === undefined || item.str.length > existing.str.length) chosen.set(key, item);
+    if (existing === undefined || item.str.length > (existing.str?.length ?? 0)) chosen.set(key, item);
   }
   if (chosen.size === 0) return items;
   return items.filter((item) => {
