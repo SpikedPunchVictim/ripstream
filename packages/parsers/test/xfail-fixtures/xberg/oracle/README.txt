@@ -27,7 +27,6 @@ Files under files/ (source path in test_documents, size in bytes, sha256, cause)
   docling-deepseek_example.md.md  <- test_documents/vendored/docling/md/deepseek_example.md.md  2918  b118997a37f3415f08e015938090d7c376ee02691177417829e975dd226738c2  md-entities
   docling-docling.md  <- test_documents/vendored/docling/md/docling.md  29179  be856fa92b35923738bc103e16cdc1ef1e89ed2d27c320cd6a1c1b69f0cac95c  md-list
   docling-2203.01017v2.md  <- test_documents/vendored/docling/md/2203.01017v2.md  54005  e7de19a6ef829041d3ded1cefcddc3f847c0375925e9d0aa60b30b77f63282ee  md-heading-number
-  markitdown-test_blog.html  <- test_documents/vendored/markitdown/html/test_blog.html  41310  6a52707b7faa4b15e151a89dca68f74885c3356d99ff58705f827dc3bfce7f2f  html-head-newlines
   myst-nb-basic_unrun.md  <- test_documents/vendored/executablebooks-myst-nb/basic_unrun.md  248  b03b173651637a8078447b35f96256c06f2d709854e5af4541753b5ff10c5cb4  md-frontmatter
   myst-nb-with_eval.md  <- test_documents/vendored/executablebooks-myst-nb/with_eval.md  1967  84d12b04fbe3d9c50a885c91e000860ed948cde55e72c503c887b6a04f86ff7a  md-frontmatter
   unstructured-factbook-utf-16.xml  <- test_documents/vendored/unstructured/xml/factbook-utf-16.xml  1341  ab617a7f7cc2790c77872651f993892233700cf0ac95a1f6b879f31a94c1cca0  xml-utf16-decl

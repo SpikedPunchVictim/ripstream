@@ -261,9 +261,6 @@ async function writeTextBody(xhtml: XHTMLContentHandler, text: string): Promise<
  */
 const SINGLE_BREAK_ELEMENTS = new Set(["div", "hr", "fieldset", "form", "noscript", "br", "select", "option", "link", "script"]);
 
-/** The `html`, `head` and `body` tags that a source document has inside its own `body` are no elements of the message's XHTML. */
-const NESTED_DOCUMENT_ELEMENTS = new Set(["html", "head", "body"]);
-
 /**
  * Tika's BodyContentHandler over a parent's handler: the events of a document's `body` element, without the element itself,
  * written to the parent as they come. A text/html body is parsed with this so that the message's own XHTML adds its line
@@ -285,7 +282,7 @@ class BodyEvents implements ContentHandler {
     this.#swallowBreak = false;
     if (this.#depth > 0) {
       this.#depth++;
-      return NESTED_DOCUMENT_ELEMENTS.has(localName) ? undefined : this.#target.startElement(uri, localName, qName, attributes);
+      return this.#target.startElement(uri, localName, qName, attributes);
     }
     if (localName === "body") this.#depth = 1;
     return undefined;
@@ -294,7 +291,7 @@ class BodyEvents implements ContentHandler {
   endElement(uri: string, localName: string, qName: string): MaybePromise<void> {
     if (this.#depth === 0) return undefined;
     this.#depth--;
-    if (this.#depth === 0 || NESTED_DOCUMENT_ELEMENTS.has(localName)) return undefined;
+    if (this.#depth === 0) return undefined;
     // The parser's own line break follows this event, and the message's XHTML has just written one for it.
     this.#swallowBreak = SINGLE_BREAK_ELEMENTS.has(localName);
     return this.#target.endElement(uri, localName, qName);

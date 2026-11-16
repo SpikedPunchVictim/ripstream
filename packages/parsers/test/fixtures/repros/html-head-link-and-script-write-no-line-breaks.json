@@ -1,0 +1,18 @@
+{
+  "description": "The link, meta, base and script elements of a head write no line break: Tika's XHTML has not begun its body there, and the line break after a link is lost (tikajs-x1cd). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.html).",
+  "tags": [
+    "repro",
+    "html"
+  ],
+  "input": {
+    "text": "<!doctype html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<link rel=\"a\" href=\"b\">\n<link rel=\"c\" href=\"d\">\n<script src=\"e\"></script>\n<title>T</title>\n</head>\n<body><p>x</p></body>\n</html>\n",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "x\n"
+    }
+  ]
+}

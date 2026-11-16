@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-x1cd] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_blog.html) text and Content-Type for test_documents/vendored/markitdown/html/test_blog.html from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test_blog.html) text and Content-Type for test_documents/vendored/markitdown/html/test_blog.html from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f; fixed by tikajs-x1cd.",
   "tags": [
     "xberg",
     "oracle",
-    "html",
-    "xfail"
+    "html"
   ],
   "input": {
     "file": "../files/markitdown-test_blog.html",

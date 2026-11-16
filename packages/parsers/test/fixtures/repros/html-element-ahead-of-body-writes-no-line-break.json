@@ -1,0 +1,18 @@
+{
+  "description": "An element Tika drops (div, form, br, hr, fieldset, select) that ends before anything of the body is written writes no line break; after it has begun, it does. An empty p begins the body (tikajs-x1cd). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.html).",
+  "tags": [
+    "repro",
+    "html"
+  ],
+  "input": {
+    "text": "<html><head></head><body><div><div></div></div><br><hr><form></form><p></p><div></div><span>x</span></body></html>",
+    "filename": "page.html"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "\n\nx"
+    }
+  ]
+}

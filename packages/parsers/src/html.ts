@@ -18,6 +18,7 @@ import { Parser as HtmlParser } from "htmlparser2";
 type Event =
   | { readonly type: "open"; readonly name: string; readonly attributes: AttributesImpl }
   | { readonly type: "close"; readonly name: string }
+  | { readonly type: "newline" }
   | { readonly type: "text"; readonly text: string };
 
 /**
@@ -34,6 +35,23 @@ export const DEFAULT_MAX_HTML_DEPTH = 2000;
 const HEAD_ELEMENTS: ReadonlySet<string> = new Set(["html", "head", "title", "meta", "link", "base"]);
 
 const XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+
+/**
+ * The elements Tika's HtmlMapper keeps and that begin the body of its XHTML (measured on 4.2.0 with an empty element ahead of a
+ * `div`: the line break after the `div` is written only when the body has begun). Any other element is dropped by Tika, and
+ * the line break it ends with is written when the body has begun, and lost before.
+ */
+const BODY_STARTING_ELEMENTS: ReadonlySet<string> = new Set([
+  "a", "q", "del", "ins", "img", "map", "area", "param", "iframe", "object", "p", "dl", "dd", "dt", "li", "ol", "ul", "menu",
+  "h1", "h2", "h3", "h4", "h5", "h6", "pre", "table", "address", "blockquote",
+]);
+/** The inline elements the XHTML handler holds back until text follows: they do not begin the body. */
+const HELD_INLINE_ELEMENTS: ReadonlySet<string> = new Set(["b", "strong", "i", "em", "sup", "sub"]);
+/** The elements after which the XHTML handler writes a line break. */
+const LINE_ENDING_ELEMENTS: ReadonlySet<string> = new Set([
+  "p", "h1", "h2", "h3", "h4", "h5", "h6", "div", "ul", "ol", "dl", "pre", "hr", "blockquote", "address", "fieldset", "table",
+  "form", "noscript", "li", "dt", "dd", "noframes", "br", "tr", "select", "option", "link", "script",
+]);
 
 export interface HtmlParserOptions {
   /**
@@ -116,6 +134,10 @@ export class HtmlDocumentParser implements Parser {
     // Tika drops the whitespace-only text that follows an end of the body or html element, up to the first element or text
     // with a character in it (measured on 4.2.0: "</body>\n</html>\n" adds nothing, "</html>\n<p>y</p>" starts at the p).
     let afterEnd = false;
+    // Whether the XHTML has begun its body: text has been written, or an element that starts it.
+    let bodyWritten = false;
+    // Per open element: whether its start was written. One that was not (dropped ahead of the body) writes no end either.
+    const written: boolean[] = [];
 
     const parser = new HtmlParser(
       {
@@ -143,6 +165,13 @@ export class HtmlDocumentParser implements Parser {
           if (!HEAD_ELEMENTS.has(name)) bodyStarted = true;
           if (name === "html") htmlOpen = true;
           if (name === "body") bodyOpen = true;
+          // The XHTML writes its own html, head and body: those of the page are not elements of it. Any other element that does
+          // not begin the body is dropped ahead of it, as Tika drops it.
+          const starts = BODY_STARTING_ELEMENTS.has(name);
+          const send = name !== "html" && name !== "body" && (bodyWritten || starts || HELD_INLINE_ELEMENTS.has(name));
+          if (name !== "html" && name !== "body") written.push(send);
+          if (!send) return;
+          if (starts) bodyWritten = true;
 
           const atts = new AttributesImpl();
           for (const [key, value] of Object.entries(attributes)) {
@@ -164,6 +193,7 @@ export class HtmlDocumentParser implements Parser {
             bodyStarted = true;
             afterEnd = false;
           }
+          bodyWritten = true;
           events.push({ type: "text", text });
         },
         onclosetag(name) {
@@ -191,7 +221,9 @@ export class HtmlDocumentParser implements Parser {
             inHeadTitle = false;
             return;
           }
-          events.push({ type: "close", name });
+          const sent = written.pop() ?? true;
+          if (sent) events.push({ type: "close", name });
+          else if (bodyWritten && LINE_ENDING_ELEMENTS.has(name)) events.push({ type: "newline" });
         },
       },
       {
@@ -211,8 +243,6 @@ export class HtmlDocumentParser implements Parser {
       await drain(events, xhtml, tick);
     }
     parser.end();
-    if (bodyOpen) events.push({ type: "close", name: "body" });
-    if (htmlOpen) events.push({ type: "close", name: "html" });
     await drain(events, xhtml, tick);
 
     await xhtml.endDocument();
@@ -233,6 +263,8 @@ async function drain(
       result = handler.startElement(XHTML_NAMESPACE, event.name, event.name, event.attributes);
     } else if (event.type === "close") {
       result = handler.endElement(XHTML_NAMESPACE, event.name, event.name);
+    } else if (event.type === "newline") {
+      result = handler.newline();
     } else {
       result = handler.characters(event.text);
     }

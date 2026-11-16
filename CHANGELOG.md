@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### HTML: the head writes no line breaks, and the XHTML begins its body as Tika's does (`tikajs-x1cd`)
+
+Fixed, checked against Tika 4.2.0's `/rmeta/body` on the fixtures and on synthetic pages (27 HTML fixtures equal): the `link`, `meta`,
+`base` and `script` elements of a head, and any element Tika's mapper drops (`div`, `form`, `fieldset`, `br`, `hr`, `select`, ...)
+that ends before the body has begun, wrote a line break each (`test_blog.html` began with eight extra ones). The body of the XHTML
+begins at the first text or the first element Tika keeps (`a`, `p`, a heading, a list, a table, `img`, ...), and the page's own `html`,
+`head` and `body` elements are no longer written inside it (the XHTML handler writes its own). After the body has begun nothing
+changes. A bare `tr`, `td`, `th` or `hr` outside a table, which Tika's HTML5 parser restructures, still differs.
+
 ### PDF: the predefined CJK CMaps are loaded (`tikajs-4xj6`)
 
 Fixed: a PDF font that is not embedded, or has no ToUnicode map, and takes its codes from a predefined CMap (UniGB-UCS2-H, GBK-EUC-H,

@@ -116,3 +116,4 @@ Files under files/ (source path in test_documents, size in bytes, sha256):
   unstructured-test-rfc2822-date.eml  <- test_documents/vendored/unstructured/eml/test-rfc2822-date.eml  151  6756207d8ad2a459ed9ccd0e8335a9be1ca8e9a51ca6976b07cc53ab65be75c1
   unstructured-fake-email-utf-16-be.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-be.eml  1614  4a32768db09f17c22b0a6f8eb0d620065e176103f75d2eeadcb6dc07f0c7e5f0
   unstructured-fake-email-utf-16-le.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-le.eml  1614  6b44e55a96d15e7d7a53f0146a23d06d43bf8a7fe631a9de2c30efcfe8e6ce14
+  markitdown-test_blog.html  <- test_documents/vendored/markitdown/html/test_blog.html  41310  6a52707b7faa4b15e151a89dca68f74885c3356d99ff58705f827dc3bfce7f2f
