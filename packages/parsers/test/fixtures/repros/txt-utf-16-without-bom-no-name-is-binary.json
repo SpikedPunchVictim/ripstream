@@ -1,0 +1,22 @@
+{
+  "description": "A UTF-16LE text with no mark and no name is application/octet-stream, and has no text (tikajs-z5j5). Tika 4.2.0 oracle (PUT /rmeta/body, no name).",
+  "tags": [
+    "repro",
+    "detection"
+  ],
+  "input": {
+    "base64": "UwB1AGIAagBlAGMAdAA6ACAASABlAGwAbABvAAoARgByAG8AbQA6ACAAYQBAAGUAeABhAG0AcABsAGUALgBjAG8AbQAKAFQAbwA6ACAAYgBAAGUAeABhAG0AcABsAGUALgBjAG8AbQAKAAoAQgBvAGQAeQAgAHQAZQB4AHQAIABoAGUAcgBlAC4ACgA="
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/octet-stream"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    }
+  ]
+}

@@ -11,8 +11,6 @@ Suggested NOTICE entry: 'Test inputs adapted from xberg (MIT, Kreuzberg, Inc.), 
 
 A JSON input is stored with the extension .input, because the fixture walker validates every .json file under its root; the fixture's filename field still names it as it was.
 Files under files/ (source path in test_documents, size in bytes, sha256, cause):
-  unstructured-fake-email-utf-16-be.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-be.eml  1614  4a32768db09f17c22b0a6f8eb0d620065e176103f75d2eeadcb6dc07f0c7e5f0  eml-utf16
-  unstructured-fake-email-utf-16-le.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-le.eml  1614  6b44e55a96d15e7d7a53f0146a23d06d43bf8a7fe631a9de2c30efcfe8e6ce14  eml-utf16
   docling-table_with_heading_01.html.md  <- test_documents/vendored/docling/md/table_with_heading_01.html.md  83  0898a5e28e1f6a60ed6d245b28fd0b126a5c30bf5b49bf7e423c46d1140e0fe6  md-table
   docling-table_with_heading_02.html.md  <- test_documents/vendored/docling/md/table_with_heading_02.html.md  130  4e889d69beb8b81f41b23b12f37ad06ca3e7ec2ae345b86a36b3cb25bbfd571f  md-table
   docling-csv-comma-in-cell.csv.md  <- test_documents/vendored/docling/md/csv-comma-in-cell.csv.md  156  9409caf611bdd76600ca23b5c2523eca060bc7943e1914a07ba72eaf5f9dda39  md-table

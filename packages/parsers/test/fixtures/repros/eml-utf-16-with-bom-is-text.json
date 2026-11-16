@@ -1,0 +1,23 @@
+{
+  "description": "A UTF-16LE .eml with a byte order mark is text/plain whatever its name: Tika reads it as text (tikajs-z5j5). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "tags": [
+    "repro",
+    "detection"
+  ],
+  "input": {
+    "base64": "//5TAHUAYgBqAGUAYwB0ADoAIABIAGUAbABsAG8ACgBGAHIAbwBtADoAIABhAEAAZQB4AGEAbQBwAGwAZQAuAGMAbwBtAAoAVABvADoAIABiAEAAZQB4AGEAbQBwAGwAZQAuAGMAbwBtAAoACgBCAG8AZAB5ACAAdABlAHgAdAAgAGgAZQByAGUALgAKAA==",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=UTF-16LE"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Subject: Hello\nFrom: a@example.com\nTo: b@example.com\n\nBody text here.\n\n"
+    }
+  ]
+}

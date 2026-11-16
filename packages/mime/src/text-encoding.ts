@@ -104,6 +104,16 @@ export function isBinaryBytes(data: Uint8Array): boolean {
   return isBinary(data);
 }
 
+/**
+ * Whether Tika's type sniff (MimeTypes, with no magic hit) takes the bytes for binary: a byte order mark says text, and
+ * otherwise a NUL or too many control bytes say binary, so a UTF-16 text without a mark is binary here (measured against
+ * Tika 4.2.0: it is application/octet-stream with no name, and a name settles the type; the encoding of a type that is text is
+ * found later, by the parser, and it does find UTF-16 without a mark).
+ */
+export function isBinaryForTypeSniff(data: Uint8Array): boolean {
+  return detectBom(data) === null && isBinary(data);
+}
+
 export function decodeText(data: Uint8Array, charset: string): string {
   const normalized = normalizeCharset(charset);
   if (/^UTF-32(LE|BE)?$/i.test(normalized)) return decodeUtf32(data, normalized);

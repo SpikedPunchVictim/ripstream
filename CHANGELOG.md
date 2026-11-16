@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### A UTF-16 text without a byte order mark is binary to the type sniff (`tikajs-z5j5`)
+
+Fixed, checked against Tika 4.2.0's `/rmeta/body`: a UTF-16 text with no byte order mark has NULs, so Tika's type sniff finds binary
+bytes. With no name it is `application/octet-stream` (ripstream said `text/plain; charset=UTF-16`), and a name settles the type: `.eml` is
+`message/rfc822` with no text (the RFC822 parser reads no headers from it), `.emlx` is `message/x-emlx`, `.xml` is `application/xml`;
+`.txt`, `.csv`, `.json`, `.md` and `.html` keep their type and the text is decoded as UTF-16, as before. A UTF-16 text with a mark is
+text whatever its name (`text/plain` even for `.eml`), as before.
+
 ### RTF: no header needed, reading stops at the first group, pictures are embedded documents (`tikajs-3b5g`)
 
 Fixed, to match Tika 4.2.0's RTFParser (corpus `rtf/tables.rtf` was refused as "Not an RTF document" and `rtf/image.rtf` gave no text):

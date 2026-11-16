@@ -1,0 +1,23 @@
+{
+  "description": "A UTF-16LE .eml with no byte order mark has NULs: the type sniff finds binary, the name settles message/rfc822, and the RFC822 parser reads no headers from it, so the text is empty (tikajs-z5j5). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "tags": [
+    "repro",
+    "detection"
+  ],
+  "input": {
+    "base64": "UwB1AGIAagBlAGMAdAA6ACAASABlAGwAbABvAAoARgByAG8AbQA6ACAAYQBAAGUAeABhAG0AcABsAGUALgBjAG8AbQAKAFQAbwA6ACAAYgBAAGUAeABhAG0AcABsAGUALgBjAG8AbQAKAAoAQgBvAGQAeQAgAHQAZQB4AHQAIABoAGUAcgBlAC4ACgA=",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "message/rfc822"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    }
+  ]
+}

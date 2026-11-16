@@ -17,7 +17,7 @@ import {
   type CustomMimeType,
   type MimeTypesOptions,
 } from "./mime-types.ts";
-import { isBinaryBytes } from "./text-encoding.ts";
+import { isBinaryForTypeSniff } from "./text-encoding.ts";
 import { extractXmlRoot } from "./xml-root.ts";
 import { detectZipContainer } from "./containers/zip.ts";
 import { detectOle2Container } from "./containers/ole2.ts";
@@ -264,7 +264,7 @@ export class DefaultDetector implements Detector {
  */
 function isBinaryPrefix(prefix: Uint8Array): boolean {
   if (prefix.length >= 4 && prefix[0] === 0 && prefix[1] === 0 && prefix[2] === 0xfe && prefix[3] === 0xff) return true;
-  return isBinaryBytes(prefix);
+  return isBinaryForTypeSniff(prefix);
 }
 
 /**

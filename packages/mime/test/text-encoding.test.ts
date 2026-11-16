@@ -270,6 +270,28 @@ test("an unnamed UTF-32BE text is octet-stream and a UTF-32LE one is text, as in
   assert.equal(await kind(be, "a.txt"), "text/plain");
 });
 
+// Tika 4.2.0 oracle (PUT /rmeta/body, tikajs-z5j5): a UTF-16 text with no byte order mark has NULs, so its type sniff finds
+// binary: no name is application/octet-stream, a name settles the type (.eml is message/rfc822, .txt text/plain). With a mark
+// it is text whatever the name (text/plain even for .eml).
+test("a UTF-16 text without a mark is binary to the type sniff, and with a mark it is text", async () => {
+  const detector = new DefaultDetector();
+  const kind = async (bytes: number[], filename?: string): Promise<string> => {
+    const metadata = new Metadata();
+    if (filename !== undefined) metadata.set("tk:resource-name", filename);
+    const stream = await RipstreamInputStream.from(Uint8Array.from(bytes));
+    return (await detector.detect(stream, metadata, new ParseContext())).toString();
+  };
+  const le = [...new TextEncoder().encode("Subject: hello\n\nbody text\n")].flatMap((byte) => [byte, 0]);
+  const be = [...new TextEncoder().encode("Subject: hello\n\nbody text\n")].flatMap((byte) => [0, byte]);
+  for (const bytes of [le, be]) {
+    assert.equal(await kind(bytes), "application/octet-stream");
+    assert.equal(await kind(bytes, "a.eml"), "message/rfc822");
+    assert.equal(await kind(bytes, "a.txt"), "text/plain");
+  }
+  assert.equal(await kind([0xff, 0xfe, ...le], "a.eml"), "text/plain");
+  assert.equal(await kind([0xfe, 0xff, ...be], "a.eml"), "text/plain");
+});
+
 // Tika 4.2.0 oracle (PUT /rmeta/body): Shift_JIS bytes with no kana (names and cities of a CSV), with kana, with ASCII
 // mixed in and of two characters are text/plain; charset=windows-31j; Western windows-1252 text with accents is not.
 const shiftJis = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex.replace(/\s+/g, ""), "hex"));
