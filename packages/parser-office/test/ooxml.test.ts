@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 import {
   BodyContentHandler,
+  CONTEXT_KEYS,
   LimitExceededError,
   MalformedDocumentError,
   Metadata,
@@ -450,4 +451,25 @@ test("docProps/app.xml: a document with no DocSecurity reads None, and an unlist
   const negative = await parseDocxWithApp("<DocSecurity>-1</DocSecurity>");
   assert.equal(negative.get("extended-properties:doc-security-string"), "None");
   assert.equal(negative.get("extended-properties:DocSecurity"), null);
+});
+
+// tikajs-69cs: a docx para= is Word's own paragraph number: empty paragraphs count, so a paragraph's location holds.
+test("docx para= counts Word's paragraphs, empty ones included", async () => {
+  const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const archive = zipSync({
+    "[Content_Types].xml": strToU8("<Types/>"),
+    "word/document.xml": strToU8(
+      `<w:document ${W}><w:body><w:p><w:r><w:t>A</w:t></w:r></w:p><w:p/><w:p><w:r><w:t>B</w:t></w:r></w:p></w:body></w:document>`,
+    ),
+  });
+  const seen: number[] = [];
+  const context = new ParseContext();
+  context.set(CONTEXT_KEYS.SEGMENT_HINTS, { para: (number: number) => seen.push(number) } as never);
+  const stream = await RipstreamInputStream.from(archive);
+  try {
+    await new OoxmlParser().parse(stream, new BodyContentHandler(), new Metadata(), context);
+  } finally {
+    await stream.close();
+  }
+  assert.deepEqual(seen, [1, 3]);
 });
