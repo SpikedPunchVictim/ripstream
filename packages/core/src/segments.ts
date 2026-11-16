@@ -49,6 +49,11 @@ export interface SegmentHints {
   line(number: number): void;
   /** The table row written next is this row (1-based) of the sheet: an `r` attribute, which may skip empty rows. */
   row(number: number): void;
+  /**
+   * The block written next is this paragraph (1-based) of the document: a parser that leaves empty paragraphs out says where the written
+   * ones are. The blocks after it, which have no hint, go on from it.
+   */
+  para(number: number): void;
   /** The table cell written next is this column (1-based) of its row: a parser that leaves empty cells out says where the written ones are. */
   col(number: number): void;
   /**
@@ -176,6 +181,8 @@ interface Pending {
   readonly headingTitle: string | undefined;
   /** The source line (lines layout, or a hint), 0 for none. */
   readonly line: number;
+  /** The paragraph number a hint gave the block, 0 for none (it goes on from the last). */
+  readonly para: number;
   readonly shape: string | undefined;
   /** An AcroForm field's segment: the location value (unique on the page), and the field's own full name. */
   readonly field: string | undefined;
@@ -265,6 +272,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #nextHeading = 0;
   #nextHeadingTitle: string | undefined;
   #nextLine = 0;
+  #nextPara = 0;
   #nextRow = 0;
   #nextCol = 0;
 
@@ -311,6 +319,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
 
   line(number: number): void {
     if (Number.isSafeInteger(number) && number > 0) this.#nextLine = number;
+  }
+
+  para(number: number): void {
+    if (Number.isSafeInteger(number) && number > 0) this.#nextPara = number;
   }
 
   row(number: number): void {
@@ -471,9 +483,11 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       this.#nextHeading = 0;
       this.#nextHeadingTitle = undefined;
       this.#nextLine = 0;
+      const para = this.#nextPara;
+      this.#nextPara = 0;
       if (this.#block === undefined && this.#cell === undefined && this.#shape === undefined) {
         const capture = heading > 0 || (this.#layout === "lines" && this.#textKind === "tsv");
-        this.#block = this.#open("block", depth, { heading, headingTitle, line, capture });
+        this.#block = this.#open("block", depth, { heading, headingTitle, line, para, capture });
       }
     }
   }
@@ -530,6 +544,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       readonly heading?: number;
       readonly headingTitle?: string | undefined;
       readonly line?: number;
+      readonly para?: number;
       readonly shape?: string;
       readonly field?: string;
       readonly fieldName?: string;
@@ -546,6 +561,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
       heading: fields.heading ?? 0,
       headingTitle: fields.headingTitle,
       line: fields.line ?? 0,
+      para: fields.para ?? 0,
       shape: fields.shape ?? this.#shape?.shape,
       field: fields.field,
       fieldName: fields.fieldName,
@@ -570,7 +586,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     const title = block.headingTitle ?? block.capture ?? "";
     if (block.heading === 1) this.#nameContainer(title);
     if (!block.hasText) return;
-    if (block.kind !== "title" && block.line === 0) this.#para++;
+    if (block.kind !== "title" && block.line === 0) this.#para = block.para > 0 ? block.para : this.#para + 1;
     let location: string;
     if (block.kind === "title") location = "part=title";
     else if (block.selector !== undefined) location = `selector=${escapeValue(block.selector)}`;

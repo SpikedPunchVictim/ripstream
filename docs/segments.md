@@ -148,8 +148,10 @@ Values escape `%`, `;`, `=`, CR and LF as `%25`, `%3B`, `%3D`, `%0D`, `%0A`. A s
 throws a RangeError for anything outside the grammar. `SEGMENT_LOCATION_KEYS` lists the keys.
 
 Counters start at 1. `para` and `table` count the blocks and tables as written, through the whole document, and restart
-at each page, slide and sheet. `(embeddedResourcePath, location)` names one segment of a parse. The round-trip test
-holds every fixture to that.
+at each page, slide and sheet. A docx `para` is Word's own count instead: empty paragraphs and the paragraphs in table cells count
+(a table is not one), through the body and then the headers, footers, notes and comments, so the number holds when a consumer
+maps a segment back to the document (the parser says it through `SegmentHints.para`).
+`(embeddedResourcePath, location)` names one segment of a parse. The round-trip test holds every fixture to that.
 
 ## How it works
 
@@ -198,7 +200,6 @@ encoding of a document with very many segments, and that is still a `LimitExceed
 
 - A PDF's page label is read only when segments are on, and a label longer than 64 characters is cut. A field of a form that the parser
   does not write as text (`extractAnnotationText` off) has no segment.
-- A docx `para` counts the paragraphs written, not Word's own count, which includes empty paragraphs.
 - A table's column headers are its first row, even when that row is a title spanning the sheet.
 - A spreadsheet's `sheet=` (or a slide's title) is repeated in every location it holds; a very long name is not counted against
   the allowance above, as a pointer is. Only xlsx sheet names, which Excel limits to 31 characters, were considered.

@@ -18,13 +18,20 @@ const paragraph = (id: string | undefined, text: string): string =>
   `<w:p>${id === undefined ? "" : `<w:pPr><w:pStyle w:val="${id}"/></w:pPr>`}<w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 /** The heading levels the parser says, in order; and the text written. */
-async function headings(body: string, styles: string | undefined, withHints = true): Promise<{ levels: string[]; text: string }> {
+async function headings(
+  body: string,
+  styles: string | undefined,
+  withHints = true,
+  extra: Record<string, string> = {},
+): Promise<{ levels: string[]; paras: number[]; text: string }> {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": strToU8("<Types/>"),
     "word/document.xml": strToU8(`<w:document ${W}><w:body>${body}</w:body></w:document>`),
   };
   if (styles !== undefined) files["word/styles.xml"] = strToU8(`<w:styles ${W}>${styles}</w:styles>`);
+  for (const [name, xml] of Object.entries(extra)) files[name] = strToU8(xml);
   const levels: string[] = [];
+  const paras: number[] = [];
   const hints = {
     layout() {},
     delimited() {},
@@ -32,6 +39,7 @@ async function headings(body: string, styles: string | undefined, withHints = tr
     row() {},
     col() {},
     shape() {},
+    para: (number: number) => paras.push(number),
     heading: (level: number) => levels.push(`${level}`),
   } satisfies SegmentHints;
   const ctx = new ParseContext();
@@ -43,7 +51,7 @@ async function headings(body: string, styles: string | undefined, withHints = tr
   } finally {
     await stream.close();
   }
-  return { levels, text: handler.toString() };
+  return { levels, paras, text: handler.toString() };
 }
 
 test("a paragraph style whose id is localized is a heading by the name styles.xml gives it (tikajs-bwjq)", async () => {
@@ -64,5 +72,23 @@ test("a style that is not named heading N is not a heading, and the text is the 
   const on = await headings(body, styles);
   const off = await headings(body, styles, false);
   assert.deepEqual(on.levels, []);
+  assert.equal(on.text, off.text);
+});
+
+const empty = "<w:p/>";
+
+test("the paragraph hints are Word's own numbers: empty paragraphs, table cells and the parts after the body count (tikajs-69cs)", async () => {
+  const cell = `<w:tbl><w:tr><w:tc>${empty}${paragraph(undefined, "cell")}</w:tc></w:tr></w:tbl>`;
+  const body = paragraph(undefined, "one") + empty + empty + paragraph(undefined, "four") + cell + paragraph(undefined, "eight");
+  const footer = `<w:ftr ${W}>${empty}${paragraph(undefined, "foot")}</w:ftr>`;
+  const { paras } = await headings(body, undefined, true, { "word/footer1.xml": footer });
+  // one=1, four=4, the cell's text is paragraph 6 (the table is not a paragraph), eight=7, the footer's text is 9.
+  assert.deepEqual(paras, [1, 4, 6, 7, 9]);
+});
+
+test("the text is the same with the paragraph hints on and off", async () => {
+  const body = paragraph(undefined, "one") + empty + paragraph(undefined, "three");
+  const on = await headings(body, undefined);
+  const off = await headings(body, undefined, false);
   assert.equal(on.text, off.text);
 });

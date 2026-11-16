@@ -467,6 +467,28 @@ test("a col hint gives a cell the sheet's column, and the header above it labels
   ]);
 });
 
+const PARA_GAPS = script("para-gaps", "application/x-para-gaps", async (xhtml, hints) => {
+  // A parser that leaves empty paragraphs out: the text is in Word's paragraphs 1, 4 and 5 (a heading), and not in 2 and 3.
+  for (const [number, text] of [[1, "first"], [4, "PLANTED-P4"]] as const) {
+    hints?.para(number);
+    await xhtml.element("p", text);
+  }
+  hints?.para(5);
+  await xhtml.element("h2", "Heading five");
+  // A block with no hint goes on from the last number.
+  await xhtml.element("p", "PLANTED-P6");
+});
+
+test("a para hint gives a block the document's own paragraph number, and blocks without one go on from it (tikajs-69cs)", async () => {
+  const [record] = await segmentsOf(PARA_GAPS);
+  assert.deepEqual(lines(record!.segments), [
+    "para=1 | first | ",
+    "para=4 | PLANTED-P4 | ",
+    "para=5 | Heading five | ",
+    "para=6 | PLANTED-P6 | Heading five",
+  ]);
+});
+
 const ODS = script("ods", "application/x-ods", async (xhtml, hints) => {
   await xhtml.startElement("table");
   for (const [number, cells] of [[1, [[1, "Name"], [3, "Tax ID"]]], [5, [[3, "PLANTED-C5"]]]] as const) {

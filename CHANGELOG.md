@@ -4,6 +4,14 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments: a docx `para` is Word's own paragraph number (`tikajs-69cs`)
+
+Changed: with `segments: true`, `para=N` of a docx counts every paragraph of the document in order, empty ones and those in table
+cells included, so a location stays the same for a consumer that maps a segment back to the document (it counted only the paragraphs
+that had text). Added: `SegmentHints.para(number)`, which says the block written next is that paragraph of the document, as `row` and
+`col` do for tables; a block with no hint goes on from the last number, so every other parser is unchanged. `content` and the
+metadata are unchanged.
+
 ### PDF: `pdf:contains-non-embedded-font` is emitted (`tikajs-j60e`)
 
 Added: `pdf:contains-non-embedded-font`, `true` when text is shown in a font with no font file (the standard 14 fonts without a

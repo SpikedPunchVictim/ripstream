@@ -343,8 +343,11 @@ async function renderWordParagraph(
   hints: SegmentHints | undefined,
 ): Promise<void> {
   const text = wordParagraphText(paragraph);
+  // Word's own paragraph number: empty paragraphs and those in table cells count, so a location holds when a consumer maps it back.
+  const number = hints === undefined ? 0 : nextWordParagraph(hints);
   if (text.length > 0) {
     if (hints !== undefined) {
+      hints.para(number);
       const level = headingLevel(paragraph, headingStyles.get(hints));
       if (level > 0) hints.heading(level);
     }
@@ -355,6 +358,15 @@ async function renderWordParagraph(
   for (const box of textBoxes(paragraph)) {
     await renderWordBlocks(box, xhtml, hints);
   }
+}
+
+/** How many paragraphs the parse that owns these hints has read so far. */
+const wordParagraphs = new WeakMap<SegmentHints, number>();
+
+function nextWordParagraph(hints: SegmentHints): number {
+  const number = (wordParagraphs.get(hints) ?? 0) + 1;
+  wordParagraphs.set(hints, number);
+  return number;
 }
 
 /**
