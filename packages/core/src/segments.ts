@@ -781,6 +781,8 @@ function jsonSegments(content: string, lineStarts: readonly number[], afford: (c
   let refused = false;
   const scalar = (start: number, end: number): void => {
     if (end <= start) return;
+    // A string of spaces holds no value, like an empty one (the other layouts drop blank segments too).
+    if (!/\S/.test(content.slice(start, end))) return;
     const path = stack.map((open) => open.key);
     // Charged before the pointer is built: its length (escapes aside) is the keys and a slash each.
     let cost = 0;

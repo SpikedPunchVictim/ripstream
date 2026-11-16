@@ -78,7 +78,7 @@ offsets stale, which is for whoever configured it to know.
 | pptx | a shape (all its paragraphs) | `slide=3;shape=Title 1`, `slide=3;part=notes;shape=Notes Placeholder 2`; a second shape of a slide with the same name is `Title 1~2` | the slide's title, notes included |
 | csv read as a table (see below) | a row, and each field | `row=3`, `row=3;col=2` (row 1 is the header row) | the header row's field |
 | tsv | a line as a row, and each tab-separated field | `row=3`, `row=3;col=2` | the first line's field |
-| json | each scalar value | `ptr=/customers/0/tax_id` (RFC 6901), with `line=N;` before it when the text holds several values | the object keys on the path |
+| json | each scalar value | `ptr=/customers/0/tax_id` (RFC 6901), with `line=N;` before it when the text holds several values | the object keys on the path; a string of only spaces holds no value and is no segment |
 | text, log, csv read as text | a line | `line=120` | none |
 | markdown | a block | `line=7`, the source line the block starts on (fences counted) | the heading chain, `#` and setext (`Title` over `===` or `---`) |
 | html, xhtml | each block, row and cell | `selector=body > table:nth-of-type(1) tr:nth-of-type(2) > td:nth-of-type(2)`, `selector=#footer > span:nth-of-type(1)` | headings (`h1`-`h6`), the column header |

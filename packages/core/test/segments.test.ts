@@ -268,6 +268,11 @@ test("text lines are numbered; tsv lines are rows of tab-separated cells labelle
   ]);
 });
 
+test("json: a string of spaces is no segment, like an empty one (a blank segment holds no value)", async () => {
+  const [record] = await segmentsOf(textLines("json-blank", "application/json", '{"a":" ","b":"","c":" x ","n":0}'));
+  assert.deepEqual(lines(record!.segments), ["ptr=/c |  x  | c", "ptr=/n | 0 | n"]);
+});
+
 test("json text gives a segment per scalar, by JSON Pointer; text that is not JSON falls back to lines", async () => {
   const json = '{"a":[{"b~/":"PLANTED"}],"n":1}';
   const [record] = await segmentsOf(textLines("json", "application/json", json));
