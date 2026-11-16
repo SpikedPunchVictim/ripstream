@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-8uhs: emphasis marks are removed by CommonMark's delimiter rules: intraword underscores and unmatched stars stay, strikethrough takes one or two tildes. Expected text is what Tika 4.2.0 /rmeta/body returned for the same bytes.",
+  "tags": [
+    "markdown",
+    "repro"
+  ],
+  "input": {
+    "text": "*USE the *OBJ list and $_{s}$ x\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "*USE the *OBJ list and $_{s}$ x\n"
+    }
+  ]
+}

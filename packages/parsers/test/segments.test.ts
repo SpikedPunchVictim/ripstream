@@ -199,9 +199,10 @@ test("a markdown setext heading is a heading: it labels what follows, by its tit
   const [record] = await ripstream.parseRecursive(new TextEncoder().encode(markdown), { filename: "s.md", segments: true });
   const found = record!.segments!.map((segment) => [segment.text, segment.labels.join(" > ")]);
   assert.deepEqual(found.slice(0, 4), [
-    ["Intro =====", ""],
+    // Tika writes a setext heading as its title alone (tikajs-8uhs): the underline is not text.
+    ["Intro", ""],
     ["body one", "Intro"],
-    ["Part two --------", "Intro"],
+    ["Part two", "Intro"],
     ["body two", "Intro > Part two"],
   ]);
   // A rule and front matter are not underlines: they stay body text under the last heading.

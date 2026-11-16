@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-8uhs] Tika 4.2.0 oracle (PUT /rmeta/body, filename list_after_num_headers.docx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/list_after_num_headers.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename list_after_num_headers.docx.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/list_after_num_headers.docx.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f; fixed by tikajs-8uhs.",
   "tags": [
     "xberg",
     "oracle",
-    "markdown",
-    "xfail"
+    "markdown"
   ],
   "input": {
     "file": "../files/docling-gt-list_after_num_headers.docx.md",

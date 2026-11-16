@@ -107,6 +107,25 @@ test("markdown: unclosed fences and inline markers parse in linear time", { time
   }
 });
 
+test("markdown: nested containers, tables and delimiter runs parse in linear time (tikajs-8uhs)", { timeout: 60_000 }, async () => {
+  const inputs = [
+    // Quotes and list markers nested far past any real document: the nesting is capped, the rest is text.
+    "> ".repeat(100_000) + "x\n",
+    "- ".repeat(100_000) + "x\n",
+    "> - ".repeat(50_000) + "x\n",
+    // One line per level of indentation, and a lazy line under each.
+    Array.from({ length: 5_000 }, (_, i) => `${" ".repeat(Math.min(i, 3))}- item\nlazy`).join("\n"),
+    // A table row of many cells, and many rows that each need padding.
+    `|${"a|".repeat(50_000)}\n|${"-|".repeat(50_000)}\n`,
+    "| a | b |\n|---|---|\n" + "| x |\n".repeat(50_000),
+    // Delimiter runs that never pair, and ones that pair at the far end.
+    "*a _b ".repeat(50_000),
+    "*".repeat(100_000) + "a" + "*".repeat(100_000),
+    "&amp;".repeat(100_000),
+  ];
+  for (const input of inputs) await timed(() => run(new MarkdownParser(), encoder.encode(`Start\n${input}`)));
+});
+
 test("markdown: fenced code and inline markup still render", async () => {
   const result = await run(
     new MarkdownParser(),

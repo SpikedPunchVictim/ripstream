@@ -104,6 +104,27 @@ named `windows-31j` (what Tika 4.2.0 answers, and what `shift_jis` decodes in WH
 differs for the other CJK charsets: it names them `x-eucJP-Open`, `x-windows-949`, `Big5-HKSCS` and `GB18030`, and ripstream reads a short
 EUC-JP text as Big5.
 
+### Markdown is read as CommonMark and written as Tika writes it: lists, quotes, code, headings (`tikajs-8uhs`)
+
+Changed: the Markdown parser was a line-by-line regex that joined every block's lines with spaces. It now reads blocks the way
+CommonMark and GFM draw them (paragraphs, ATX and setext headings, fenced and indented code, HTML blocks, thematic breaks, quotes,
+bullet and ordered lists, nested to 32 levels) and writes the XHTML elements Tika's `MarkdownParser` writes, so the text has Tika's
+line breaks. Checked against Tika 4.2.0's `/rmeta/body` on the corpus fixtures and on several thousand random and hand-made documents:
+
+- A list item is one line with a tab in front, a list is followed by a blank line, and a loose list's items are paragraphs. A
+  quote is its lines' text. A setext heading is its title (the `===` and `---` underline is not text). A soft line break inside a
+  paragraph is a line break, not a space.
+- Fenced and indented code give their lines as written (tabs kept); an HTML block is its text as written. An image is nothing (Tika
+  writes no alt text) and an `<https://...>` autolink is its address.
+- Emphasis marks are removed by CommonMark's delimiter rules: `snake_case_name`, `2*3*4` and an unmatched `*USE ... *OBJ` are what
+  CommonMark makes of them, and strikethrough takes one or two tildes.
+- Segments (`ParseOptions.segments`): a block's text is Tika's text, so a two-line paragraph's segment keeps its line break and a
+  setext heading's segment is `Title`, not `Title =====`; a code block's `line=` is the line of its first line of code.
+
+Not the same as Tika's: link reference definitions and `[text][ref]` links are left as written and a link whose text holds brackets is
+not a link (`tikajs-ow96`); a few unusual nestings of containers (a fence inside an empty list item next to blank lines, a table header
+and its delimiter row in different containers) differ in a blank line or a tab (`tikajs-nf2b`).
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as

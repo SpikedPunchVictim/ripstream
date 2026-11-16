@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-8uhs: a list item is a tab-indented line and a list ends with a blank line, a quote and a setext heading are their text, fenced and indented code their lines. Expected text is what Tika 4.2.0 /rmeta/body returned for the same bytes.",
+  "tags": [
+    "markdown",
+    "repro"
+  ],
+  "input": {
+    "text": "Intro\n\n- one\n- two\n  - nested\n\n1. first\n2. second\n\nafter\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Intro\n\tone\n\ttwo\tnested\n\n\n\n\tfirst\n\tsecond\n\nafter\n"
+    }
+  ]
+}
