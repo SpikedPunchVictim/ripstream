@@ -66,7 +66,8 @@ export class XlsbParser implements Parser {
       await xhtml.startElement("div", "class", "sheet");
       if (sheet.name.length > 0) await xhtml.element("h1", sheet.name);
       await xhtml.startElement("table");
-      for (const row of sheetRows(data, shared)) {
+      const rows = sheetRows(data, shared);
+      for (const [rowIndex, row] of rows.entries()) {
         // Segments only: the row's number in the sheet, which skips the rows the file does not write.
         hints?.row(row.number + 1);
         await xhtml.startElement("tr");
@@ -84,7 +85,9 @@ export class XlsbParser implements Parser {
           await xhtml.endElement("td");
           next = cell.col + 1;
         }
-        await xhtml.endElement("tr");
+        // Tika leaves the sheet's last row open: the next row's start (or the table's end) closes it, so the sheet does
+        // not end in one more line break than Tika's (tikajs-jg5y).
+        if (rowIndex + 1 < rows.length) await xhtml.endElement("tr");
       }
       await xhtml.endElement("table");
       await xhtml.endElement("div");

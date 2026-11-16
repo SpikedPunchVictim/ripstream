@@ -59,16 +59,21 @@ const CASES: readonly { readonly name: string; readonly sheets: XlsbSheet[]; rea
 ];
 
 /*
- * Only the cells and rows are compared: after a sheet that has rows ripstream writes one more line break than Tika (the table's end
- * as well as the sheet's), which is the framing of the page and is left as it was.
+ * The sheet's rows are compared whole, framing included: Tika leaves the sheet's last row open, so a sheet that has rows
+ * ends in two line breaks and an empty one in three (tikajs-jg5y).
  */
-const cells = (text: string): string => text.replace(/\n+$/, "");
-
 for (const { name, sheets, text } of CASES) {
   test(`xlsb text, as Tika writes it: ${name} (tikajs-bwjq)`, async () => {
-    assert.equal(cells(await parse(sheets)), cells(text));
+    assert.equal(await parse(sheets), text);
   });
 }
+
+test("a sheet with rows ends in two line breaks, an empty one in three (tikajs-jg5y)", async () => {
+  assert.equal(
+    await parse([sheet([{ row: 0, cells: [s(0, "x")] }], "A"), sheet([], "B")]),
+    "A\n\tx\n\nB\n\n\n",
+  );
+});
 
 test("segment hints give each cell the sheet's own row and column, with the columns and rows left out counted", async () => {
   const calls: string[] = [];
