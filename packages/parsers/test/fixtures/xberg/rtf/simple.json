@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 Hello World}",
+    "text": "{\\rtf1\\pard Hello World}",
     "filename": "a.rtf"
   },
   "options": {

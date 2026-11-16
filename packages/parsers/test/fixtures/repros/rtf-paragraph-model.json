@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-jl3m: Tika 4.2.0 writes the RTF text as one paragraph, so a closing \\par adds an empty paragraph (a newline) and a trailing space is kept. Oracle: PUT /rmeta/body, filename t.rtf.",
+  "tags": ["repro", "rtf"],
+  "input": {
+    "text": "{\\rtf1\\ansi\\pard A\\par B\\par}",
+    "filename": "t.rtf"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "A\nB\n\n" }
+  ]
+}

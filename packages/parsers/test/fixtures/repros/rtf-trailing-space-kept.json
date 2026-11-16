@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-jl3m: a paragraph's trailing space is kept by Tika 4.2.0 (it is not trimmed). Oracle: PUT /rmeta/body, filename t.rtf.",
+  "tags": ["repro", "rtf"],
+  "input": {
+    "text": "{\\rtf1\\ansi\\pard x \\par}",
+    "filename": "t.rtf"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "x \n\n" }
+  ]
+}

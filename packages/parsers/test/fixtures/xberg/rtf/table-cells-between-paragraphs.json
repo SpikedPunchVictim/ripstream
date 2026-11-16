@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 Before\\par\\trowd\\intbl A\\cell B\\cell\\row After}",
+    "text": "{\\rtf1\\pard Before\\par\\trowd\\intbl A\\cell B\\cell\\row After}",
     "filename": "a.rtf"
   },
   "options": {

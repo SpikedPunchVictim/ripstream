@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 \\b A{\\i \\u233?}B\\b0}",
+    "text": "{\\rtf1\\pard \\b A{\\i \\u233?}B\\b0}",
     "filename": "a.rtf"
   },
   "options": {

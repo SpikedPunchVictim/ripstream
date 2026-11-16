@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 Before image {\\pict\\jpegblip\\picw100\\pich100 ffd8ffe0} After image}",
+    "text": "{\\rtf1\\pard Before image {\\pict\\jpegblip\\picw100\\pich100 ffd8ffe0} After image}",
     "filename": "a.rtf"
   },
   "options": {

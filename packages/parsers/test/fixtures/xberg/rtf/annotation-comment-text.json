@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1\\ansi\nBody text.\\par\n{\\annotation{\\*\\atnid7}Reviewer comment here}\n}",
+    "text": "{\\rtf1\\pard\\ansi\nBody text.\\par\n{\\annotation{\\*\\atnid7}Reviewer comment here}\n}",
     "filename": "a.rtf"
   },
   "options": {

@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 A {\\field{\\*\\fldinst HYPERLINK \"https://example.test\"}{\\fldrslt \\b \\u233?}} Z}",
+    "text": "{\\rtf1\\pard A {\\field{\\*\\fldinst HYPERLINK \"https://example.test\"}{\\fldrslt \\b \\u233?}} Z}",
     "filename": "a.rtf"
   },
   "options": {

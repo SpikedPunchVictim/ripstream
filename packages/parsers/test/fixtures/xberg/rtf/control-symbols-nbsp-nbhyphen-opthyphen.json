@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1\\ansi 5\\~kg, non\\_stop, co\\-operate\\par}",
+    "text": "{\\rtf1\\pard\\ansi 5\\~kg, non\\_stop, co\\-operate\\par}",
     "filename": "a.rtf"
   },
   "options": {

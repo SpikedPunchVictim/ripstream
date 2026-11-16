@@ -111,39 +111,59 @@ export class RtfParser implements Parser {
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
-    // A paragraph is a line of the text. The tail is the unfinished last line, held until its newline arrives.
-    let tail: string[] = [];
-    const writeParagraph = async (line: string): Promise<void> => {
-      const value = line.trimEnd();
-      if (value.length === 0) return;
+    // Tika's RTF text is one paragraph whose content is held until the document ends: \par and \line are line breaks in
+    // it, and only a \pard or a \par opens it (text before one is dropped unless it is still there when one opens). A
+    // paragraph that holds no character but white space is not written at all (tikajs-jl3m).
+    let active = false;
+    let written = false;
+    let content = false;
+    let pending: string[] = [];
+    const isContent = (text: string): boolean => /[^ \t\r\n]/.test(text);
+    const openParagraph = async (): Promise<void> => {
+      if (written) return;
+      written = true;
       await xhtml.startElement("p");
-      await xhtml.characters(value);
-      await xhtml.endElement("p");
+      await xhtml.characters(pending.join(""));
+      pending = [];
+    };
+    const writeText = async (text: string): Promise<void> => {
+      if (written) {
+        await xhtml.characters(text);
+        return;
+      }
+      pending.push(text);
+      if (!content && isContent(text)) content = true;
+      if (active && content) await openParagraph();
+    };
+    const paragraphBreak = async (): Promise<void> => {
+      active = true;
+      await writeText("\n");
+    };
+    const paragraphStart = async (): Promise<void> => {
+      active = true;
+      if (content) await openParagraph();
     };
     let pictures = 0;
     for (const piece of tokenize(source, true, data.subarray(decoded.length - source.length))) {
-      if (typeof piece !== "string") {
-        await writeParagraph(tail.join(""));
-        tail = [];
+      if (typeof piece === "string") {
+        await writeText(piece);
+      } else if (piece.kind === "par") {
+        await paragraphBreak();
+      } else if (piece.kind === "pard") {
+        await paragraphStart();
+      } else {
         await writePicture(piece, pictures++, xhtml, metadata, ctx);
-        continue;
       }
-      const lastNewline = piece.lastIndexOf("\n");
-      if (lastNewline < 0) {
-        tail.push(piece);
-        continue;
-      }
-      const lines = (tail.join("") + piece.slice(0, lastNewline)).split("\n");
-      tail = [piece.slice(lastNewline + 1)];
-      for (const line of lines) await writeParagraph(line);
     }
-    await writeParagraph(tail.join(""));
+    if (active && content) await openParagraph();
+    if (written) await xhtml.endElement("p");
     await xhtml.endDocument();
   }
 }
 
 /** A \pict group's data, with the blip type word it named (none when it named none). */
 interface Picture {
+  readonly kind: "picture";
   readonly bytes: Uint8Array;
 }
 
@@ -247,13 +267,23 @@ function scanInfo(rtf: string): InfoValues {
   return scan.value as InfoValues;
 }
 
+/** A \par: it opens the paragraph if none is open and writes a line break in it. */
+interface ParagraphBreak {
+  readonly kind: "par";
+}
+
+/** A \pard: it opens the paragraph if none is open. */
+interface ParagraphStart {
+  readonly kind: "pard";
+}
+
 /**
  * Yields the document text in pieces of up to OUTPUT_PIECE appended values and returns the \info values. With
  * `collectText` false it yields nothing and, at the nesting limit, returns what it has instead of throwing: the text
  * pass reaches the same point, having written what came before it. A \pict group is yielded as a Picture where it closes
  * (`bytes` is the source as bytes, which `rtf` is not above 0x7f).
  */
-function* tokenize(rtf: string, collectText = true, bytes?: Uint8Array): Generator<string | Picture, InfoValues, undefined> {
+function* tokenize(rtf: string, collectText = true, bytes?: Uint8Array): Generator<string | Picture | ParagraphBreak | ParagraphStart, InfoValues, undefined> {
   const stack: Frame[] = [
     { skip: false, destination: "body", unicodeFallback: 0, uc: 1, font: null },
   ];
@@ -320,7 +350,7 @@ function* tokenize(rtf: string, collectText = true, bytes?: Uint8Array): Generat
           yield pending.join("");
           pending = [];
         }
-        yield { bytes: pictureBytes(finished) };
+        yield { kind: "picture", bytes: pictureBytes(finished) };
       }
       if (stack.length > 1) stack.pop();
       position++;
@@ -479,11 +509,32 @@ function* tokenize(rtf: string, collectText = true, bytes?: Uint8Array): Generat
         frame.unicodeFallback = frame.uc;
         break;
       }
-      case "par":
+      case "pard": {
+        const frame = top();
+        if (!collectText || frame.skip || frame.destination === "info") break;
+        if (pending.length > 0) {
+          yield pending.join("");
+          pending = [];
+        }
+        yield { kind: "pard" };
+        break;
+      }
+      case "par": {
+        const frame = top();
+        if (!collectText || frame.skip || frame.destination === "info") break;
+        if (pending.length > 0) {
+          yield pending.join("");
+          pending = [];
+        }
+        yield { kind: "par" };
+        break;
+      }
       case "line":
       case "page":
-      case "sect":
         append("\n");
+        break;
+      case "sect":
+        // A section break is no text and no paragraph break in Tika 4.2.0 (tikajs-jl3m).
         break;
       case "tab":
         append("\t");

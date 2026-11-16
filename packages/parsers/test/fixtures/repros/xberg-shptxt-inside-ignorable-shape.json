@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1\\ansi\n{\\*\\shp{\\*\\shpinst{\\sp{\\sn shapeType}{\\sv202}}{\\shptxt Text box content}}}\nBody text after the shape.\\par\n}",
+    "text": "{\\rtf1\\pard\\ansi\n{\\*\\shp{\\*\\shpinst{\\sp{\\sn shapeType}{\\sv202}}{\\shptxt Text box content}}}\nBody text after the shape.\\par\n}",
     "filename": "a.rtf"
   },
   "options": {

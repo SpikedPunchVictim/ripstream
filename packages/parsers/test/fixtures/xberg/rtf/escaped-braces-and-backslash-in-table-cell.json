@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1\\ansi\\trowd\\cellx1000\\cellx2000 set \\{x\\} here\\cell C:\\\\tmp, 5\\~kg\\cell\\row}",
+    "text": "{\\rtf1\\pard\\ansi\\trowd\\cellx1000\\cellx2000 set \\{x\\} here\\cell C:\\\\tmp, 5\\~kg\\cell\\row}",
     "filename": "a.rtf"
   },
   "options": {

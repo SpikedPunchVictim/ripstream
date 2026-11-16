@@ -1,0 +1,11 @@
+{
+  "description": "tikajs-jl3m: text that no \\pard or \\par opens is not written by Tika 4.2.0. Oracle: PUT /rmeta/body, filename t.rtf.",
+  "tags": ["repro", "rtf"],
+  "input": {
+    "text": "{\\rtf1\\ansi A}",
+    "filename": "t.rtf"
+  },
+  "assertions": [
+    { "type": "equals", "field": "text", "value": "" }
+  ]
+}

@@ -64,30 +64,35 @@ test("rejects excessively nested RTF groups", async () => {
   await assert.rejects(parse("{\\rtf1 " + "{".repeat(5000)), MalformedDocumentError);
 });
 
+test("text with no \\pard or \\par is not written", async () => {
+  // Tika 4.2.0 /rmeta/body has no text for a document whose text no paragraph marker opens (tikajs-jl3m).
+  assert.equal((await parse(String.raw`{\rtf1\ansi A}`)).text, "");
+});
+
 test("negative \\bin does not hang", async () => {
-  const result = await parse("{\\rtf1 \\bin-7 x}");
+  const result = await parse("{\\rtf1 \\pard\\bin-7 x}");
   assert.match(result.text, /x/);
 });
 
 test("decodes double-byte code page escapes as a run (cp932)", async () => {
-  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 \'82\'a0\'82\'a2}`);
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 \pard\'82\'a0\'82\'a2}`);
   assert.match(result.text, /あい/);
 });
 
 test("decodes cp936 and cp949 multibyte escapes", async () => {
-  const gbk = await parse(String.raw`{\rtf1\ansi\ansicpg936 \'c4\'e3\'ba\'c3}`);
+  const gbk = await parse(String.raw`{\rtf1\ansi\ansicpg936 \pard\'c4\'e3\'ba\'c3}`);
   assert.match(gbk.text, /你好/);
-  const kr = await parse(String.raw`{\rtf1\ansi\ansicpg949 \'b0\'a1}`);
+  const kr = await parse(String.raw`{\rtf1\ansi\ansicpg949 \pard\'b0\'a1}`);
   assert.match(kr.text, /가/);
 });
 
 test("single-byte cp1252 escapes still decode", async () => {
-  const result = await parse(String.raw`{\rtf1\ansi\ansicpg1252 caf\'e9 \'e9\'e8}`);
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg1252 \pard caf\'e9 \'e9\'e8}`);
   assert.match(result.text, /café éè/);
 });
 
 test("multibyte run interleaved with text and a \\u fallback", async () => {
-  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 a\'82\'a0b \uc1\u233\'e9c}`);
+  const result = await parse(String.raw`{\rtf1\ansi\ansicpg932 \pard a\'82\'a0b \uc1\u233\'e9c}`);
   assert.match(result.text, /aあb é/);
   assert.match(result.text, /éc/);
 });
@@ -186,48 +191,48 @@ function spread(value: string): string {
 test("an \\info group after more than one output piece still fills the head", async () => {
   const result = await record("{\\rtf1 " + spread("x".repeat(30000)) + String.raw`\par {\info{\title Far}}}`);
   assert.ok(result.head.includes("dc:title=Far"), result.head.join("|"));
-  assert.deepEqual(result.paragraphs, ["x".repeat(30000)]);
+  assert.equal(result.paragraphs.join(""), "x".repeat(30000) + "\n");
 });
 
 test("paragraphs are intact wherever an output piece ends", async () => {
   // Over the offsets a piece boundary lands in, just before and just after a \par.
   for (let offset = 0; offset < 40; offset++) {
-    const expected: string[] = [];
+    let expected = "q".repeat(offset) + "\n";
     let doc = "{\\rtf1 " + spread("q".repeat(offset)) + "\\par ";
-    expected.push("q".repeat(offset));
     for (let index = 0; index < 500; index++) {
       const value = String.fromCharCode(97 + (index % 26)).repeat(1 + ((index * 37) % 90));
       doc += `${spread(value)}\\par `;
-      expected.push(value);
+      expected += value + "\n";
     }
     const result = await record(doc + "}");
-    assert.deepEqual(result.paragraphs, expected.filter((value) => value.length > 0), `offset ${offset}`);
+    assert.equal(result.paragraphs.join(""), expected, `offset ${offset}`);
   }
 });
 
-test("blank paragraphs are dropped and trailing space is trimmed from the rest", async () => {
+test("line breaks stay in one paragraph, which keeps its trailing space and drops a white-space-only one", async () => {
   const result = await record(String.raw`{\rtf1 a  \par \par  \par b \par c\line d}`);
-  assert.deepEqual(result.paragraphs, ["a", "b", "c", "d"]);
+  assert.equal(result.paragraphs.join(""), "a  \n\n \nb \nc\nd");
 });
 
 test("the last paragraph is written when the document has no closing \\par", async () => {
   const result = await record("{\\rtf1 first\\par " + spread("z".repeat(25000)) + "}");
-  assert.deepEqual(result.paragraphs, ["first", "z".repeat(25000)]);
+  assert.equal(result.paragraphs.join(""), "first\n" + "z".repeat(25000));
 });
 
 test("a source line break inside a run of text is not a paragraph break", async () => {
   const result = await record("{\\rtf1 Hel\r\nlo\nwo\\par next}");
-  assert.deepEqual(result.paragraphs, ["Hellowo", "next"]);
+  assert.equal(result.paragraphs.join(""), "Hellowo\nnext");
 });
 
 test("a \\u fallback is dropped from a run of plain text and the rest of the run is kept", async () => {
-  const result = await record(String.raw`{\rtf1\uc1\u233?abc\uc3\u8364 xyzabc}`);
-  assert.deepEqual(result.paragraphs, ["éabc€abc"]);
+  const result = await record(String.raw`{\rtf1\pard\uc1\u233?abc\uc3\u8364 xyzabc}`);
+  assert.equal(result.paragraphs.join(""), "éabc€abc");
+
 });
 
 test("text in a skipped group and in \\info is not written to the body", async () => {
-  const result = await record(String.raw`{\rtf1 {\fonttbl Arial;}{\*\generator Word;}{\info{\title T}Stray}shown}`);
-  assert.deepEqual(result.paragraphs, ["shown"]);
+  const result = await record(String.raw`{\rtf1 {\fonttbl Arial;}{\*\generator Word;}{\info{\title T}Stray}\pard shown}`);
+  assert.equal(result.paragraphs.join(""), "shown");
 });
 
 // tikajs-gz44: control words that stand for a character were dropped, fusing words ("Dont") and table cells.

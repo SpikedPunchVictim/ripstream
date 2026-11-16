@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1 A{\\footnote Note}{\\shptxt Box}{\\annotation{\\*\\atnid7}Comment}}",
+    "text": "{\\rtf1\\pard A{\\footnote Note}{\\shptxt Box}{\\annotation{\\*\\atnid7}Comment}}",
     "filename": "a.rtf"
   },
   "options": {

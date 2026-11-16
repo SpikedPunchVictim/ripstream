@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1\\ansi\\ansicpg874 \\'a1}",
+    "text": "{\\rtf1\\pard\\ansi\\ansicpg874 \\'a1}",
     "filename": "a.rtf"
   },
   "options": {

@@ -7,7 +7,7 @@
     "bom"
   ],
   "input": {
-    "base64": "77u/e1xydGYxXGFuc2kgVGl0bGUgQm9keSB0ZXh0Ln0=",
+    "base64": "77u/e1xydGYxXHBhcmRcYW5zaSBUaXRsZSBCb2R5IHRleHQufQ==",
     "filename": "a.rtf"
   },
   "assertions": [

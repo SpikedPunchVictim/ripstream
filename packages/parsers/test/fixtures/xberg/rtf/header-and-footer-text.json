@@ -5,7 +5,7 @@
     "rtf"
   ],
   "input": {
-    "text": "{\\rtf1{\\header My Header Text}{\\footer My Footer Text}Body text}",
+    "text": "{\\rtf1\\pard{\\header My Header Text}{\\footer My Footer Text}Body text}",
     "filename": "a.rtf"
   },
   "options": {
