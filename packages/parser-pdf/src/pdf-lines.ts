@@ -98,8 +98,39 @@ function withoutDuplicateText(items: PdfTextItem[]): PdfTextItem[] {
 /** A vertical gap wider than this many font heights is a paragraph break: a blank line, as PDFBox's extractor writes. */
 const PARAGRAPH_GAP = 2;
 
+/**
+ * The items turned so that the page's text runs left to right. pdf.js reports positions in the page's own coordinates, ahead of
+ * its /Rotate, so on a page rotated to show text that runs up (or down) the page, a line of text is a column of positions and
+ * the grouping by baseline below reads the page a column at a time. When most of the text runs up (the matrix 0 1 -1 0) or
+ * down (0 -1 1 0), every position is turned a quarter turn the other way, which is how Tika's PDFBox reads such a page (its
+ * lines are the text's own). A page whose text is upright, with some sideways items (a margin stamp), is left as it is.
+ */
+function inTextFrame(items: PdfTextItem[]): PdfTextItem[] {
+  let up = 0;
+  let down = 0;
+  let across = 0;
+  for (const item of items) {
+    const [a, b] = item.transform ?? [];
+    if (a === undefined || b === undefined || typeof item.str !== "string") continue;
+    const size = item.str.length;
+    if (Math.abs(b) <= Math.abs(a)) across += size;
+    else if (b > 0) up += size;
+    else down += size;
+  }
+  if (up <= across + down && down <= across + up) return items;
+  // Up: x' = y, y' = -x. Down: x' = -y, y' = x.
+  const sign = up > down ? 1 : -1;
+  return items.map((item) => {
+    const transform = item.transform;
+    if (transform === undefined || transform.length < 6) return item;
+    const [a, b, c, d, e, f] = transform as [number, number, number, number, number, number];
+    return { ...item, transform: [sign * b, -sign * a, sign * d, -sign * c, sign * f, -sign * e] };
+  });
+}
+
+/** Groups pdf.js text items into visual lines by baseline. */
 export function lines(items: PdfTextItem[], sortByPosition = false): string[] {
-  items = withoutDuplicateText(items);
+  items = withoutDuplicateText(inTextFrame(items));
   if (sortByPosition) items = sortedByPosition(items);
   const result: string[] = [];
   let current = "";

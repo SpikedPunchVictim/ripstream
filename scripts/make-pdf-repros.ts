@@ -39,6 +39,27 @@ function onePage(content: string, ...fontObjects: string[]): Buffer {
   return pageWith(content, "/F1 5 0 R", ...fontObjects);
 }
 
+/**
+ * A one-page document of a table whose text runs up the page (the matrix `0 1 -1 0`), as on a landscape page: two columns, two
+ * text runs a row, a row to every 40 points of x.
+ */
+function rotatedPageTable(): Buffer {
+  const cell = (x: number, y: number, text: string): string => `BT /F1 10 Tf 0 1 -1 0 ${x} ${y} Tm (${text}) Tj ET`;
+  const rows = [
+    ["Name", "Alice"],
+    ["City", "Paris"],
+    ["Total", "42"],
+  ];
+  const content = rows.map(([first, second], row) => `${cell(40 + 40 * row, 40, first!)} ${cell(40 + 40 * row, 100, second!)}`).join("\n");
+  return pdf([
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Rotate 90 /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>`,
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ]);
+}
+
 const HELVETICA = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
 /** A Type3 font (its glyphs are drawn by the file itself, so it counts as embedded) whose one glyph H is object `glyph`. */
 const type3 = (glyph: number): string =>
@@ -67,6 +88,9 @@ const FILES: Record<string, Buffer> = {
   // The Type3 font is selected, Helvetica is selected inside q ... Q, and the text is shown after Q: false.
   "pdf-font-restored-by-q.pdf": pageWith("/F1 12 Tf q /F2 12 Tf Q BT (H) Tj ET", "/F1 5 0 R /F2 6 0 R", type3(7), HELVETICA, GLYPH),
   "pdf-cjk-predefined-cmap.pdf": CJK_PREDEFINED_CMAP,
+  // tikajs-jmd0: a table on a page rotated by /Rotate 90 whose text runs up the page. Tika 4.2.0 reads the rows upright:
+  // "Name Alice", "City Paris", "Total 42".
+  "pdf-rotated-page-table.pdf": rotatedPageTable(),
   // tikajs-xxud: a TrueType font whose /FontFile2 is ten junk bytes. Tika 4.2.0 (PDFBox) cannot read the program, so it
   // is a damaged font and also counts as not embedded: both keys true.
   "pdf-damaged-font-program.pdf": onePage(

@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-jmd0: a table on a page with /Rotate 90 whose text runs up the page (matrix 0 1 -1 0), so the page shows it upright: two columns, two text runs a row. ripstream grouped the runs by the baseline of the unrotated page, which is the column, and read the page a column at a time ('Alice', 'Paris', '42', then 'Name City Total'); Apache Tika 4.2.0 (/tika) reads the rows 'Name Alice', 'City Paris', 'Total 42'. Written by scripts/make-pdf-repros.ts.",
+  "tags": [
+    "repro",
+    "pdf"
+  ],
+  "input": {
+    "file": "pdf-rotated-page-table.pdf",
+    "filename": "pdf-rotated-page-table.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Name Alice"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "City Paris"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "Total 42"
+    }
+  ]
+}
