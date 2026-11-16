@@ -750,6 +750,10 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           entry.queued = false;
         }
         releaseBody = reserveBody(request);
+        // The server begins to read the body now. The idle clock ran while the request waited for its slot (the timeout
+        // listener below let it), so a stretch that was the server's to spend must not count against the client: start
+        // it afresh, or a deadline falling just after admission closes an upload the server has not yet read from.
+        if (options.idleTimeoutMillis !== undefined) request.socket.setTimeout(options.idleTimeoutMillis);
         await route(request, response, gone.signal, () => {
           const held = release;
           release = null;

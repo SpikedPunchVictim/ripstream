@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Server: `idleTimeoutMillis` no longer closes an upload the server has only just begun to read (`tikajs-dizt`)
+
+Fixed: a request that waited for a concurrency slot with its body unread is exempt from the idle timeout, but the idle clock kept
+running meanwhile. If it fired just after the request was admitted, before the server had read from the connection again, the
+upload was closed (the client saw `EPIPE` or a reset) though nothing was wrong. The clock now starts afresh when the server begins
+to read the body.
+
 ### Server: query parameters and `X-Tika-*` headers that no route reads are ignored, as Tika ignores them (`tikajs-x2t6`)
 
 Changed: the server answered 400 to any query parameter or `X-Tika-*` header it did not read (`/tika?foo=1`, `/rmeta?handler=json`,
