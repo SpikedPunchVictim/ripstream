@@ -64,6 +64,16 @@ test("flags binary data", () => {
   assert.equal(result.binary, true);
 });
 
+test("binary-looking bytes that are valid UTF-8 are UTF-8, as Tika 4.2.0 has them", () => {
+  const result = detectEncoding(utf8("Polarization ( \u03a9 ) | \u0000 0.9393 |\n"));
+  assert.equal(result.charset, "UTF-8");
+  assert.equal(result.binary, true);
+});
+
+test("binary-looking bytes that are not valid UTF-8 stay ISO-8859-1", () => {
+  assert.equal(detectEncoding(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0d, 0x0a, 0x1a, 0x0a])).charset, "ISO-8859-1");
+});
+
 test("detects UTF-16 without BOM", () => {
   const text = "hello world hello world";
   const bytes = new Uint8Array(text.length * 2);

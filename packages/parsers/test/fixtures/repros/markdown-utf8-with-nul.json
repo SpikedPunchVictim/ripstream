@@ -1,0 +1,24 @@
+{
+  "description": "A Markdown with a NUL byte and a non-ASCII letter is UTF-8, as in the Tika 4.2.0 oracle (tikajs-zms6)",
+  "tags": [
+    "repro",
+    "encoding",
+    "markdown"
+  ],
+  "input": {
+    "base64": "SGVsbG8gzqkgeAB5Cg==",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/markdown; charset=UTF-8"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Hello Ω x�y\n"
+    }
+  ]
+}

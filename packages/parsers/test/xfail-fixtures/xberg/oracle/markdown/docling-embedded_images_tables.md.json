@@ -1,5 +1,5 @@
 {
-  "description": "[xfail tikajs-zms6] Tika 4.2.0 oracle (PUT /rmeta/body, filename embedded_images_tables.md) text and Content-Type for test_documents/vendored/docling/md/embedded_images_tables.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "[xfail tikajs-pbkf; charset fixed by tikajs-zms6] Tika 4.2.0 oracle (PUT /rmeta/body, filename embedded_images_tables.md) text and Content-Type for test_documents/vendored/docling/md/embedded_images_tables.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
   "tags": [
     "xberg",
     "oracle",

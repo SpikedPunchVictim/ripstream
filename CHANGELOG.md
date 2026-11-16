@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
+
+Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as
+mojibake and its `Content-Type` carried the wrong charset. Bytes that are valid UTF-8 are UTF-8, as in Tika 4.2.0, whatever
+control bytes they hold. Bytes that are not valid UTF-8 and look binary stay ISO-8859-1 (Tika's answer there is a statistical
+guess that varies from file to file), and ASCII with a lone NUL is not yet windows-1258 as Tika has it.
+
 ### Excel: the SummaryInformation stream is metadata (`tikajs-n83j`)
 
 Fixed: an `.xls` gave none of the properties its OLE2 container holds (`dc:title`, `dc:creator`, `meta:last-author`,

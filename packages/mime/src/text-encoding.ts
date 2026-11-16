@@ -40,7 +40,10 @@ export function detectEncoding(data: Uint8Array, declared?: string): EncodingDet
   // text, since binary data can hold the bytes of either. Which charset the text is in comes after.
   if (!looksLikeText(data)) {
     // A caller's charset is kept for binary-looking bytes, as before: it never decided whether they are text.
-    return { charset: declared === undefined ? "ISO-8859-1" : canonicalLabel(declared), confidence: 0.1, bom: false, binary: true };
+    // Without one, Tika 4.2.0 answers UTF-8 for bytes that are valid UTF-8 even when they hold NULs or other control bytes
+    // (a Markdown table with a stray NUL and one non-ASCII letter), and a single-byte charset for the rest.
+    const undeclared = isValidUtf8(data) ? "UTF-8" : "ISO-8859-1";
+    return { charset: declared === undefined ? undeclared : canonicalLabel(declared), confidence: 0.1, bom: false, binary: true };
   }
 
   const chosen = chooseDeclared(data, declared);
