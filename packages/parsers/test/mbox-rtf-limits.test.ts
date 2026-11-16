@@ -258,7 +258,7 @@ test("mbox starts the document once, with the first message, and ends it last", 
 });
 
 function rtfOfLength(length: number): Uint8Array {
-  const head = "{\\rtf1 ";
+  const head = "{\\rtf1\\pard ";
   return encoder.encode(head + "a".repeat(length - head.length - 1) + "}");
 }
 
@@ -297,6 +297,6 @@ function rtfText(length: number): string {
 test("rtf keeps all of its text across the 8192-character output pieces", async () => {
   for (const length of [8191, 8192, 8193, 16384, 20000]) {
     const text = rtfText(length);
-    assert.equal((await parseRtf(encoder.encode(`{\\rtf1 ${text}}`), 1_000_000)).trim(), text, `length ${length}`);
+    assert.equal((await parseRtf(encoder.encode(`{\\rtf1\\pard ${text}}`), 1_000_000)).trim(), text, `length ${length}`);
   }
 });
