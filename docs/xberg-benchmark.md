@@ -70,8 +70,110 @@ were extracted by every lane and the tables cover exactly those. Ripstream extra
 are license-restricted. xberg never publishes their bytes: they are materialised into `.corpus-cache/` from the
 pinned upstream datasets, or restored from a private GCS bucket (`tools/benchmark-harness/CORPUS.md`). `corpus.lock.json`
 has no entry for them, so they cannot be fetched or sha256-verified here. Everything else is in the run or accounted
-for under "Skipped fixtures" (46 OCR fixtures are skipped on purpose). To include the 92, materialise the cache in
-`test_documents/.corpus-cache` and pass that clone as `XBERG_CORPUS`.
+for under "Skipped fixtures" (46 OCR fixtures are skipped on purpose). They were run separately, local only, in the next
+section.
+
+## Reference-tier PDFs (92), quality only, local only (tikajs-0qqm follow-up)
+
+**License situation.** The 92 PDFs are third-party documents (58 arXiv papers from the READoc dataset, whose MIT tag cannot
+license the bundled arXiv PDFs; 34 single pages from ParseBench, whose Apache-2.0 covers the annotations and not the
+bundled PDFs). xberg's own `test_documents/LICENSES.md` classes them `reference`: not committed, fetched on demand, each
+document keeps its upstream license. This run therefore used them for local, non-commercial benchmarking only. The PDFs and
+their ground truth were materialised outside this repository, parsed only inside the network-less Docker container
+(read-only mounts) and are not redistributed: not in git, not in a fixture, not in the Docker image, not in any artifact.
+This section carries aggregate scores and fixture ids only.
+
+**Provenance.** Run of 2026-11-16 03:06 to 03:10 UTC. ripstream at commit `027d7ad` (committed sources, built in the
+image), Tika 4.2.0, xberg 1.4.0. Harness: xberg `df13c1f` (`tools/benchmark-harness`); `xberg-io/test_documents` at
+`385ddd5` ("require Python 3.11", no corpus change against `8760ed6`). The reference cache was built with xberg's own
+`build_corpus.py --stage normalize` and `--stage materialize` from READoc `lazyc/READoc@782bf954` (`arxiv.zip` 1.19 GB, the
+58 papers extracted from it) and ParseBench `llamaindex/ParseBench@2805a1d9` (`table.jsonl` plus the 34 page PDFs), the
+revisions the xberg manifest records. Download in all about 1.3 GB.
+
+**Verification against the xberg manifest** (`ground_truth/corpus_manifest.json`): all 92 PDFs match `pdf_sha256`; the 58
+READoc ground-truth Markdown files match `out_gt_md_sha256`; the 34 raw ParseBench annotations match `src_gt_sha256`.
+Mismatches: the converted Markdown (and text) ground truth of **12 of the 34 ParseBench fixtures** differs from the
+manifest hash, because the HTML-to-Markdown step uses xberg's Rust `html-to-markdown` CLI, which was not available, and
+the PyPI `html-to-markdown` 3.22.2 was used instead (other 22 are identical). The ids: `pb_1948bb0c-...-page2`,
+`pb_203924_...page11`, `page26`, `pb_AZ_LIC_Rate_Tables_2.0.v2_page47`, `page48`, `pb_DLR.2004.page_61.pdf_21918_page1`,
+`pb_FBLB-134215544_page147`, `pb_SERFF_CA_random_pages_1_page{1414,2467,408,756}` and `pb_SERFF_TX_random_pages_1_page706`.
+All three lanes are scored against the same files, so the comparison holds, but the absolute TF1 of those 12 may differ
+slightly from xberg's published numbers.
+
+**Run.** `scripts/bench/docker/run.sh --cohort <cohort of the 92 ids> -i 1 -w 0 --frameworks ripstream-cli,tika,xberg
+--batch ""`, `XBERG_CORPUS` pointing at the `test_documents` clone that holds `.corpus-cache` (nothing under `scripts/bench`
+was changed). Quality only: one iteration, no warmup, and **no timings are reported** because the host was loaded by other
+agents' work. TF1 is scored as in the rest of this document (plaintext, 0.6 text + 0.4 numeric F1).
+
+| Lane | Extracted | Failures / timeouts | TF1 mean | TF1 median | TF1 >= 0.95 | TF1 < 0.5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ripstream-cli | 92 / 92 | 0 / 0 | 0.810 | 0.855 | 20 | 6 |
+| tika | 92 / 92 | 0 / 0 | 0.822 | 0.857 | 19 | 5 |
+| xberg | 92 / 92 | 0 / 0 | 0.827 | 0.873 | 21 | 4 |
+
+| Source | Fixtures | ripstream TF1 mean (median) | Tika | xberg | At TF1 >= 0.95 (ripstream / Tika / xberg) |
+| --- | ---: | --- | --- | --- | --- |
+| READoc arXiv papers | 58 | 0.759 (0.794) | 0.776 (0.800) | 0.784 (0.797) | 0 / 0 / 1 |
+| ParseBench table pages | 34 | 0.898 (0.959) | 0.901 (0.959) | 0.901 (0.959) | 20 / 19 / 20 |
+
+Reading it:
+
+- **Ripstream is 0.012 TF1 behind Tika and 0.017 behind xberg overall**, all of it on the arXiv papers (-0.017 against
+  Tika, -0.025 against xberg). On the ParseBench pages the three tools are level (within 0.003). By fixture, ripstream is
+  behind Tika on 50, ahead on 17 and level on the other 25, and behind xberg on 60.
+- **No gap is larger than 0.1**: the worst ripstream-vs-Tika gap is -0.087. 52 of the 92 fixtures differ by less than
+  0.01; 8 are 0.05 or more behind Tika and 1 is 0.05 or more ahead (`pb_1_timetable_1__page2`, +0.053).
+- **Text F1 / numeric F1 means** over the 92: ripstream 0.856 / 0.742, Tika 0.870 / 0.750, xberg 0.874 / 0.758. Ripstream
+  extracts about 1.39x the ground-truth token count, Tika 1.35x, xberg 1.33x: the arXiv ground truth is the author's LaTeX
+  converted by pandoc (no tables, per xberg's `build_corpus.py`), so every tool is penalised for extracting text the
+  ground truth lacks. TF1 on these is bounded well below 1 (no arXiv paper reaches 0.95 for ripstream or Tika).
+- Four papers are below 0.5 for all three tools (`1304.6413`, `1602.03238`, `1904.07444`, `2211.13451`): the ground truth
+  is far shorter than the paper (for `1602.03238` 2,387 ground-truth tokens against about 14,000 extracted).
+
+The 15 largest ripstream deficits against Tika (TF1, ripstream / Tika / xberg):
+
+| Fixture | Gap | ripstream | Tika | xberg |
+| --- | ---: | ---: | ---: | ---: |
+| `1401.4991` | -0.087 | 0.828 | 0.915 | 0.891 |
+| `0910.1571` | -0.079 | 0.493 | 0.572 | 0.560 |
+| `1904.07444` | -0.058 | 0.346 | 0.404 | 0.403 |
+| `pb_fqr-retail-blackrock-global-allocation-fund-inc_page4` | -0.057 | 0.597 | 0.654 | 0.654 |
+| `1304.6413` | -0.057 | 0.400 | 0.457 | 0.474 |
+| `pb_1948bb0c-01f1-aa67-a1bd-4d54323f4f0d_page2` | -0.056 | 0.543 | 0.599 | 0.600 |
+| `1409.7193` | -0.054 | 0.701 | 0.755 | 0.755 |
+| `math0601436` | -0.052 | 0.439 | 0.491 | 0.508 |
+| `2211.13451` | -0.048 | 0.274 | 0.322 | 0.322 |
+| `1610.09400` | -0.047 | 0.676 | 0.723 | 0.741 |
+| `2004.08365` | -0.042 | 0.721 | 0.763 | 0.763 |
+| `2007.06510` | -0.041 | 0.665 | 0.706 | 0.729 |
+| `2204.04480` | -0.041 | 0.749 | 0.789 | 0.794 |
+| `2301.02744` | -0.040 | 0.577 | 0.617 | 0.623 |
+| `1211.0443` | -0.040 | 0.642 | 0.682 | 0.716 |
+
+Ripstream's best fixtures against Tika: `pb_1_timetable_1__page2` (+0.053), `1310.3692` (+0.025), `1501.05144` (+0.015),
+`2103.17067` and `2312.15797` (+0.012).
+
+**Weaknesses seen** (a token-multiset comparison of ripstream's and Tika's output for the largest gaps, run in the same
+container; beads filed at P3, ids only, nothing fixed here):
+
+- Math-heavy papers (`0910.1571`, `1904.07444`, `1304.6413`, `1409.7193`, `math0601436`, `2211.13451`, `1610.09400`,
+  `2007.06510`, `1211.0443`): ripstream emits 1.2 to 1.4x Tika's token count, the surplus being single letters and digits
+  (sub- and superscripts as tokens of their own). `tikajs-yt4g`.
+- Table pages `pb_1948bb0c-01f1-aa67-a1bd-4d54323f4f0d_page2` and `pb_fqr-retail-blackrock-global-allocation-fund-inc_page4`:
+  adjacent text in table cells is glued without a separator (fewer tokens than Tika, long concatenated words and digit
+  strings). `tikajs-jmd0`.
+- `1401.4991`, the largest gap: word fragments and extra digit tokens, a different pattern from the math papers.
+  `tikajs-p5a4`.
+
+Raw results (`results.json`, 176 KB, scores only) and the log are in the session scratchpad of the run, if it still
+exists: `/private/tmp/claude-501/-Users-spikedpunchvictim-projects-tikajs/d25af458-a0f9-4572-ad89-e79c09805e70/scratchpad/xberg-ref/out/`.
+The PDFs and ground truth sit in the same scratchpad under `xberg-ref/td/.corpus-cache/` and are never to be copied into
+the repository.
+
+To repeat it locally (the owner's machine, local use only): materialise the cache, pass `--cohort` with the 92 fixture
+ids (fixtures whose `metadata.redistribute` is `reference`), and set `XBERG_CORPUS` to the `test_documents` clone that
+holds `.corpus-cache`. `build_corpus.py` expects `/tmp/corpus_src` and `/tmp/parsebench` as staging directories and
+the `html-to-markdown` CLI on `PATH`; keep the downloaded PDFs outside the repository and out of every image.
 
 **Noise.** The host had a load average of 40 to 45 for the whole run (other agents' builds and tests), on an 8 vCPU VM.
 The cold p50s sit close to the first run's (ripstream 254 ms against 236 to 257; Tika 1032 against 939 to 976 ms, 6 to
