@@ -1,0 +1,12 @@
+{
+  "description": "tikajs-wr9i: a short EUC-JP CSV is read as Japanese, not Big5, and Tika 4.2.0 names the charset x-eucJP-Open (a Java name, not a WHATWG label). Tika 4.2.0 oracle (PUT /rmeta/body, filename names.csv).",
+  "tags": ["repro", "charset", "csv"],
+  "input": {
+    "base64": "zL7BsCzHr87wLMXUu9QKu7PFxMLAz7osMzAsxey1/gq6tMajsta70iwyNSzC57rlCs7rzNqw7M+6LDQxLMy+uMWysAo=",
+    "filename": "names.csv"
+  },
+  "assertions": [
+    { "type": "equals", "field": "metadata.Content-Encoding", "value": "x-eucJP-Open" },
+    { "type": "equals", "field": "text", "value": "名前,年齢,都市\n山田太郎,30,東京\n佐藤花子,25,大阪\n鈴木一郎,41,名古屋\n\n" }
+  ]
+}

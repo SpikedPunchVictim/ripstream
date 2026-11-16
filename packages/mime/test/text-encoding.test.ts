@@ -312,3 +312,21 @@ test("windows-1252 text with accents followed by letters is not taken for Shift_
   const text = "Il était une fois un petit garçon qui habitait près de Paris. Séverine était là aussi, très contente.\n";
   assert.equal(detectEncoding(Uint8Array.from(Buffer.from(text, "latin1"))).charset, "windows-1252");
 });
+
+// tikajs-wr9i: Tika 4.2.0's Mojibuster answers Java charset names for short East Asian text (PUT /rmeta/body, a short
+// names/ages/cities CSV in each charset), and its names for EUC-JP, EUC-KR, Big5 and GBK are not WHATWG labels.
+const EAST_ASIAN: readonly (readonly [string, string, string])[] = [
+  ["zL7BsCzHr87wLMXUu9QKu7PFxMLAz7osMzAsxey1/gq6tMajsta70iwyNSzC57rlCs7rzNqw7M+6LDQxLMy+uMWysAo=", "x-eucJP-Open", "名前,年齢,都市"],
+  ["wMy4pyyzqsDMLLW1vcMKsei5zsHYLDMwLLytv+8KwMy8rb+sLDI1LLrOu+oKudrB9sjGLDQxLLTrsbgK", "x-windows-949", "이름,나이,도시"],
+  ["qW2mVyymfsTWLKuwpasKs6+kaqTlLDMwLLtPpV8KqkykcKz8LDI1LLCqtq8KpP2kcKn6LDQxLLtPpKQK", "Big5-HKSCS", "姓名,年齡,城市"],
+  ["0NXD+yzE6sHkLLPHytAK1cXOsCwzMCyxsb6pCs31t7wsMjUsyc+6owrA7se/LDQxLLnj1t0K", "GB18030", "姓名,年龄,城市"],
+  ["lryRTyyUTpfuLJNzjnMKjlKTY5G+mFksMzAsk4yLngqNspOhidSOcSwyNSyR5Y3jCpfpltiI6phZLDQxLJa8jMOJrgo=", "windows-31j", "名前,年齢,都市"],
+];
+
+test("East Asian short text: Tika's charset names, and the bytes decode in them", () => {
+  for (const [base64, charset, text] of EAST_ASIAN) {
+    const bytes = Buffer.from(base64, "base64");
+    assert.equal(detectEncoding(bytes).charset, charset);
+    assert.ok(decodeText(bytes, charset).startsWith(text), charset);
+  }
+});

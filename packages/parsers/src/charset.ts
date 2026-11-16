@@ -1,4 +1,5 @@
 import { MediaType, type Metadata } from "@spikedpunch/ripstream-core";
+import { textDecoderLabel } from "@spikedpunch/ripstream-mime";
 
 export const FALLBACK_CHARSET = "utf-8";
 
@@ -20,7 +21,7 @@ export interface CharsetDecoder {
 export function createDecoder(label: string): CharsetDecoder {
   if (/^utf-?32(le|be)?$/i.test(label)) return { decoder: new Utf32Decoder(label), charset: label };
   try {
-    return { decoder: new TextDecoder(label, { fatal: false }), charset: label };
+    return { decoder: new TextDecoder(textDecoderLabel(label), { fatal: false }), charset: label };
   } catch {
     return {
       decoder: new TextDecoder(FALLBACK_CHARSET, { fatal: false }),

@@ -72,9 +72,11 @@ export function detectEncoding(data: Uint8Array, declared?: string): EncodingDet
     // The statistics rank a short Japanese text (a CSV of a few names) under a Western charset, and chardet answers
     // Shift_JIS where Tika says windows-31j, its Microsoft superset, which is also what WHATWG's `shift_jis` decodes.
     const shiftJis = best.name === "Shift_JIS" || (isSingleByteCharset(best.name) && isStrictShiftJis(data.subarray(0, 65_536)));
-    const label = shiftJis ? "windows-31j" : best.name;
+    // A short EUC-JP text ties Big5 and EUC-JP; its bytes are also readable as Big5, so the structure decides.
+    const eucJp = !shiftJis && /^Big5$/i.test(best.name) && best.confidence <= 20 && isStrictEucJp(data.subarray(0, 65_536));
+    const label = shiftJis ? "windows-31j" : eucJp ? "EUC-JP" : best.name;
     return {
-      charset: canonicalLabel(normalizeCharset(label)),
+      charset: canonicalLabel(tikaCharsetLabel(normalizeCharset(label))),
       confidence: best.confidence / 100,
       bom: false,
       binary: false,
@@ -118,7 +120,7 @@ export function decodeText(data: Uint8Array, charset: string): string {
   const normalized = normalizeCharset(charset);
   if (/^UTF-32(LE|BE)?$/i.test(normalized)) return decodeUtf32(data, normalized);
   try {
-    return new TextDecoder(normalizeCharset(charset), { fatal: false }).decode(data);
+    return new TextDecoder(textDecoderLabel(normalized), { fatal: false }).decode(data);
   } catch {
     return new TextDecoder("utf-8", { fatal: false }).decode(data);
   }
@@ -252,6 +254,47 @@ function chooseDeclared(data: Uint8Array, declared: string | undefined): string 
   return null;
 }
 
+/** The label Tika 4.2.0 reports for the charsets chardet names differently (Mojibuster's Java names). */
+function tikaCharsetLabel(label: string): string {
+  switch (label.toUpperCase()) {
+    case "EUC-JP":
+      return "x-eucJP-Open";
+    case "EUC-KR":
+      return "x-windows-949";
+    case "BIG5":
+      return "Big5-HKSCS";
+    case "GBK":
+      return "GB18030";
+    default:
+      return label;
+  }
+}
+
+/**
+ * The WHATWG/TextDecoder label for a charset Tika names: the Java names x-eucJP-Open, x-windows-949 and Big5-HKSCS are
+ * not WHATWG labels, and windows-31j is what the standard calls shift_jis. Any other label is returned as it is.
+ */
+export function textDecoderLabel(charset: string): string {
+  switch (charset.trim().toUpperCase()) {
+    case "X-EUCJP-OPEN":
+    case "EUC-JP":
+      return "euc-jp";
+    case "X-WINDOWS-949":
+    case "EUC-KR":
+      return "euc-kr";
+    case "BIG5-HKSCS":
+    case "BIG5":
+      return "big5";
+    case "GB18030":
+    case "GBK":
+      return "gb18030";
+    case "WINDOWS-31J":
+      return "shift_jis";
+    default:
+      return charset;
+  }
+}
+
 /** Whether `charset` is one TextDecoder knows and `data` holds no malformed sequence in it. */
 function decodesCleanly(data: Uint8Array, charset: string): boolean {
   try {
@@ -335,6 +378,51 @@ function isStrictShiftJis(data: Uint8Array): boolean {
   if (pairs < 2 || common * 5 < pairs * 4) return false;
   try {
     new TextDecoder("shift_jis", { fatal: true }).decode(data, { stream: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether the bytes are Japanese text in EUC-JP, as far as the structure can say: every byte over 0x7f is a two-byte
+ * character whose bytes are both in 0xA1-0xFE, or one of the 0x8E/0x8F three-byte forms, at least two characters are
+ * there, and most of them are kana or first-level kanji (lead 0xA4 or 0xB0-0xCF). A short Big5 text meets the pair ranges
+ * less often (its trail bytes go down to 0x40) and a Korean text is caught by chardet's stronger EUC-KR answer.
+ */
+function isStrictEucJp(data: Uint8Array): boolean {
+  const cut = data.length >= 65_536;
+  let pairs = 0;
+  let common = 0;
+  for (let index = 0; index < data.length; index++) {
+    const lead = data[index]!;
+    if (lead < 0x80) continue;
+    if (lead === 0x8e) {
+      if (index + 1 >= data.length) return cut;
+      if (data[index + 1]! < 0xa1 || data[index + 1]! > 0xdf) return false;
+      pairs++;
+      common++;
+      index++;
+      continue;
+    }
+    if (lead === 0x8f) {
+      if (index + 2 >= data.length) return cut;
+      if (data[index + 1]! < 0xa1 || data[index + 2]! < 0xa1) return false;
+      pairs++;
+      index += 2;
+      continue;
+    }
+    if (lead < 0xa1 || lead > 0xfe) return false;
+    if (index + 1 >= data.length) return cut;
+    const trail = data[index + 1]!;
+    if (trail < 0xa1 || trail > 0xfe) return false;
+    pairs++;
+    if (lead === 0xa4 || (lead >= 0xb0 && lead <= 0xcf)) common++;
+    index++;
+  }
+  if (pairs < 2 || common * 5 < pairs * 4) return false;
+  try {
+    new TextDecoder("euc-jp", { fatal: true }).decode(data, { stream: true });
     return true;
   } catch {
     return false;

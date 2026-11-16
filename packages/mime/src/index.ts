@@ -13,6 +13,7 @@ export { NamespaceScope as XmlNamespaceScope } from "./containers/xml-parse.ts";
 export {
   decodeText,
   detectEncoding,
+  textDecoderLabel,
   type EncodingDetection,
 } from "./text-encoding.ts";
 export { detectZipContainer } from "./containers/zip.ts";
