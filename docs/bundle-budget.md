@@ -25,6 +25,7 @@ measured size plus about five percent (KiB).
 | package | measured | cap | what grew it |
 |---|---|---|---|
 | parsers | 1,112,011 | 1100 (was 1000) | a hand-written CommonMark/GFM block and inline parser for Markdown (tikajs-8uhs, no new dependency); RTF `\pict` embedded documents (tikajs-3b5g); Tika-exact email body text (tikajs-w12u); the HTML body start (tikajs-x1cd); XML UTF-16 detection (tikajs-dmp7); unversioned WordPerfect as empty (tikajs-mic4). Per-feature bytes not measured |
+| parser-office | 749,322 | 740 (was 725) | the streaming path for a very large docx `document.xml` now reads tables, wrappers, text boxes, CDATA and `moveFrom` as the normal path does and gives the same segment hints (tikajs-ne73), about 7.3 KB of dist |
 | parser-office | 733,235 | 725 (was 710) | `.msg` body selection and compressed RTF (tikajs-8vzf); ODT notes, lists, headers and footers (tikajs-uay4); xlsb and ods segment fidelity (tikajs-bwjq); OLE2 property-set keys (tikajs-nb4y). Per-feature bytes not measured |
 | core | 1,604,924 | 1650 (was 1500) | segments, labels, location, `pathParts`, `leafSegments` and the segment allowance; `onEmbeddedLimit`; email header block; `handlerType` validation |
 | parser-office | 692,687 | 710 (was 650) | segment hints for office formats; email headers; RDF blank-node labels |
