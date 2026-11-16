@@ -4,6 +4,15 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### A short Shift_JIS text is windows-31j (`tikajs-9imn`)
+
+Fixed: a short Japanese text in Shift_JIS (a CSV of a few names and cities, with no kana) was read as windows-1252, so its text came
+out as mojibake. Bytes whose every high byte belongs to a double-byte Shift_JIS character, at least two of them and four in five
+of them kana, symbols or first-level kanji, are Shift_JIS even when the statistics rank a Western charset first. The charset is
+named `windows-31j` (what Tika 4.2.0 answers, and what `shift_jis` decodes in WHATWG) where it was `Shift_JIS`. The oracle still
+differs for the other CJK charsets: it names them `x-eucJP-Open`, `x-windows-949`, `Big5-HKSCS` and `GB18030`, and ripstream reads a short
+EUC-JP text as Big5.
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as

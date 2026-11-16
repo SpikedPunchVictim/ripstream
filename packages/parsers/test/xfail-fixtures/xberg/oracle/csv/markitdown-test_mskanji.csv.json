@@ -1,5 +1,5 @@
 {
-  "description": "[xfail tikajs-9imn] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_mskanji.csv) text and Content-Type for test_documents/vendored/markitdown/csv/test_mskanji.csv from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f.",
+  "description": "[xfail tikajs-d31m] Tika 4.2.0 oracle (PUT /rmeta/body, filename test_mskanji.csv) text and Content-Type for test_documents/vendored/markitdown/csv/test_mskanji.csv from the xberg corpus (markitdown, MIT, Copyright (c) Microsoft Corporation); bead tikajs-qw7f. The charset (tikajs-9imn) passes; the CRLF line endings (tikajs-d31m) do not yet.",
   "tags": [
     "xberg",
     "oracle",

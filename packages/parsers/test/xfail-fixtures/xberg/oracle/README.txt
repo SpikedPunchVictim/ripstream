@@ -49,7 +49,7 @@ Files under files/ (source path in test_documents, size in bytes, sha256, cause)
   docling-csv-semicolon.csv  <- test_documents/vendored/docling/csv/csv-semicolon.csv  997  26912eaca8f5a50fb8c3e8f17c081e280f121759fae6e0c1e8ae1cfb5045c689  csv-crlf
   docling-csv-tab.csv  <- test_documents/vendored/docling/csv/csv-tab.csv  997  8071cda34f80e7690b00f4bbef6af7a96a86175c4d4ba1fb7f8d0f28593c3487  csv-crlf
   docling-csv-comma.csv  <- test_documents/vendored/docling/csv/csv-comma.csv  1005  0f3643115a0a1d4b748b93ad9ab2a02ad1fde6a7a9506ce90422792e17244824  csv-crlf
-  markitdown-test_mskanji.csv  <- test_documents/vendored/markitdown/csv/test_mskanji.csv  70  184c3dbe4c92d80c0ffef7141dc2401d6ed2fed2e001d444dffb3c3414ce5ff9  sjis-detect
+  markitdown-test_mskanji.csv  <- test_documents/vendored/markitdown/csv/test_mskanji.csv  70  184c3dbe4c92d80c0ffef7141dc2401d6ed2fed2e001d444dffb3c3414ce5ff9  csv-crlf
   markitdown-test_blog.html  <- test_documents/vendored/markitdown/html/test_blog.html  41310  6a52707b7faa4b15e151a89dca68f74885c3356d99ff58705f827dc3bfce7f2f  html-head-newlines
   myst-nb-basic_unrun.md  <- test_documents/vendored/executablebooks-myst-nb/basic_unrun.md  248  b03b173651637a8078447b35f96256c06f2d709854e5af4541753b5ff10c5cb4  md-frontmatter
   myst-nb-with_eval.md  <- test_documents/vendored/executablebooks-myst-nb/with_eval.md  1967  84d12b04fbe3d9c50a885c91e000860ed948cde55e72c503c887b6a04f86ff7a  md-frontmatter

@@ -269,3 +269,24 @@ test("an unnamed UTF-32BE text is octet-stream and a UTF-32LE one is text, as in
   assert.equal(await kind(le), "text/plain");
   assert.equal(await kind(be, "a.txt"), "text/plain");
 });
+
+// Tika 4.2.0 oracle (PUT /rmeta/body): Shift_JIS bytes with no kana (names and cities of a CSV), with kana, with ASCII
+// mixed in and of two characters are text/plain; charset=windows-31j; Western windows-1252 text with accents is not.
+const shiftJis = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex.replace(/\s+/g, ""), "hex"));
+
+test("short Shift_JIS text with no kana is windows-31j, as Tika has it", () => {
+  // 名前,年齢,住所 CRLF 佐藤太郎,30,東京 CRLF
+  const bytes = shiftJis("96bc914f2c944e97ee2c8f5a8f8a0d0a 8db293a191be98592c33302c938c8b9e0d0a");
+  assert.equal(detectEncoding(bytes).charset, "windows-31j");
+});
+
+test("Shift_JIS text with kana, and two kanji alone, are windows-31j", () => {
+  assert.equal(detectEncoding(shiftJis("82a082e882aa82c682a4")).charset, "windows-31j"); // ありがとう
+  assert.equal(detectEncoding(shiftJis("93fa967b")).charset, "windows-31j"); // 日本
+});
+
+test("windows-1252 text with accents followed by letters is not taken for Shift_JIS", () => {
+  // Tika 4.2.0 answers windows-1252 for this sentence.
+  const text = "Il était une fois un petit garçon qui habitait près de Paris. Séverine était là aussi, très contente.\n";
+  assert.equal(detectEncoding(Uint8Array.from(Buffer.from(text, "latin1"))).charset, "windows-1252");
+});

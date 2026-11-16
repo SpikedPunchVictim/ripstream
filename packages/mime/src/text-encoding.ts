@@ -69,8 +69,12 @@ export function detectEncoding(data: Uint8Array, declared?: string): EncodingDet
   const matches = analyse(data.subarray(0, 65_536));
   const best = matches[0];
   if (best !== undefined) {
+    // The statistics rank a short Japanese text (a CSV of a few names) under a Western charset, and chardet answers
+    // Shift_JIS where Tika says windows-31j, its Microsoft superset, which is also what WHATWG's `shift_jis` decodes.
+    const shiftJis = best.name === "Shift_JIS" || (isSingleByteCharset(best.name) && isStrictShiftJis(data.subarray(0, 65_536)));
+    const label = shiftJis ? "windows-31j" : best.name;
     return {
-      charset: canonicalLabel(normalizeCharset(best.name)),
+      charset: canonicalLabel(normalizeCharset(label)),
       confidence: best.confidence / 100,
       bom: false,
       binary: false,
@@ -287,6 +291,44 @@ function isBinary(data: Uint8Array): boolean {
   }
   if (nul > 0) return true;
   return control / data.length > 0.02;
+}
+
+const MULTI_BYTE_CHARSETS = /^(utf-|big5|gb|euc-|shift_jis|iso-2022-)/i;
+
+function isSingleByteCharset(name: string): boolean {
+  return !MULTI_BYTE_CHARSETS.test(name);
+}
+
+/**
+ * Whether the bytes are Japanese text in Shift_JIS (code page 932), as far as the structure can say: every byte over 0x7f is
+ * the lead or trail of a double-byte character the code page assigns, there are at least two, and four in five of them are
+ * kana, symbols, fullwidth forms or first-level kanji (lead bytes 0x81-0x84, 0x87 and 0x88-0x98). A Western text in
+ * windows-1252 meets the first two tests only by chance (an accented letter and a letter after it), and a lead byte of an
+ * accented letter (0xe0-0xfc) is never one of the common ones.
+ */
+function isStrictShiftJis(data: Uint8Array): boolean {
+  // A sample cut from a longer file may end between the two bytes of a character.
+  const cut = data.length >= 65_536;
+  let pairs = 0;
+  let common = 0;
+  for (let index = 0; index < data.length; index++) {
+    const lead = data[index]!;
+    if (lead < 0x80) continue;
+    if (!((lead >= 0x81 && lead <= 0x9f) || (lead >= 0xe0 && lead <= 0xfc))) return false;
+    if (index + 1 >= data.length) return cut;
+    const trail = data[index + 1]!;
+    if (trail < 0x40 || trail === 0x7f || trail > 0xfc) return false;
+    pairs++;
+    if (lead <= 0x84 || lead === 0x87 || (lead >= 0x88 && lead <= 0x98)) common++;
+    index++;
+  }
+  if (pairs < 2 || common * 5 < pairs * 4) return false;
+  try {
+    new TextDecoder("shift_jis", { fatal: true }).decode(data, { stream: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isPureAscii(data: Uint8Array): boolean {

@@ -1,0 +1,23 @@
+{
+  "description": "Five kana in Shift_JIS are windows-31j (tikajs-9imn). Tika 4.2.0 oracle (PUT /rmeta/body, filename a.txt): Content-Type text/plain; charset=windows-31j, text with one trailing newline.",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "base64": "gqCC6IKqgsaCpA==",
+    "filename": "a.txt"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-31j"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "ありがとう\n"
+    }
+  ]
+}

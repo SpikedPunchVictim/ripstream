@@ -1,0 +1,28 @@
+{
+  "description": "A short Shift_JIS CSV with no kana is windows-31j (tikajs-9imn): the statistics ranked it windows-1252. Tika 4.2.0 oracle (PUT /rmeta/body, filename test_mskanji.csv) Content-Type text/plain; charset=windows-31j. The CRLF of its text is the fixture xberg/oracle/csv/markitdown-test_mskanji.csv.",
+  "tags": [
+    "repro",
+    "encoding"
+  ],
+  "input": {
+    "base64": "lryRTyyUTpfuLI9aj4oNCo2yk6GRvphZLDMwLJOMi54NCo5PltiJcI5xLDI1LJHljeMNCu7gi7SPfiwzNSyWvIzDia4NCg==",
+    "filename": "test_mskanji.csv"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "text/plain; charset=windows-31j"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "名前,年齢,住所"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "髙橋淳,35,名古屋"
+    }
+  ]
+}
