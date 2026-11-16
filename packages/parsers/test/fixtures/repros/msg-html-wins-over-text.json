@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-8vzf: PR_BODY and PR_HTML both present: Tika writes the HTML, not the plain text. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes; the message is synthetic, written by scripts/make-msg-repros.ts.",
+  "tags": [
+    "msg",
+    "outlook"
+  ],
+  "input": {
+    "file": "msg-html-wins-over-text.msg",
+    "filename": "msg-html-wins-over-text.msg"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "html body\n\n"
+    }
+  ]
+}

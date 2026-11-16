@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-8vzf: a body that is only RTF stored raw ('MELA' in PR_RTF_COMPRESSED), the case of the corpus's fake-encrypted.msg. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes; the message is synthetic, written by scripts/make-msg-repros.ts.",
+  "tags": [
+    "msg",
+    "outlook"
+  ],
+  "input": {
+    "file": "msg-rtf-mela-body.msg",
+    "filename": "msg-rtf-mela-body.msg"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "Hello\nWorld\n"
+    }
+  ]
+}

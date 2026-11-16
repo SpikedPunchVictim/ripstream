@@ -1,0 +1,63 @@
+{
+  "description": "tikajs-8vzf: each attachment with data is an attachment-entry (named by its long file name, else its display name, else its short name) and an embedded document; an attachment with no data is skipped. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes; the message is synthetic, written by scripts/make-msg-repros.ts. Tika: the container's text is 'html body\\n\\na.txt\\n\\nDisplay\\n\\n', the embedded ones 'first text\\n' and 'second text\\n'.",
+  "tags": [
+    "msg",
+    "outlook"
+  ],
+  "operation": "parseRecursive",
+  "input": {
+    "file": "msg-attachments.msg",
+    "filename": "msg-attachments.msg"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.text",
+      "value": "html body\n\na.txt\n\nDisplay\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.tk:resource-name",
+      "value": "a.txt"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.mapi:attach:long-file-name",
+      "value": "a.txt"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.mapi:attach:file-name",
+      "value": "A.TXT"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.mapi:attach:mime",
+      "value": "text/plain"
+    },
+    {
+      "type": "contains",
+      "field": "records.1.text",
+      "value": "first text\n"
+    },
+    {
+      "type": "equals",
+      "field": "records.2.metadata.tk:resource-name",
+      "value": "Display"
+    },
+    {
+      "type": "equals",
+      "field": "records.2.metadata.mapi:attach:display-name",
+      "value": "Display"
+    },
+    {
+      "type": "contains",
+      "field": "records.2.text",
+      "value": "second text\n"
+    },
+    {
+      "type": "absent",
+      "field": "records.3.text"
+    }
+  ]
+}

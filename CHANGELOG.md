@@ -4,6 +4,19 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Outlook .msg: the body is the HTML, the RTF or the text, and attachments are read (`tikajs-8vzf`)
+
+Fixed: an Outlook `.msg` whose body is not in `PR_BODY` gave no text. Outlook keeps an HTML or RTF body in `PR_HTML` or
+`PR_RTF_COMPRESSED` and often leaves `PR_BODY` empty; four corpus messages came out empty. The body is now what Tika 4.2.0 writes:
+the HTML if the message has one (a present but empty one included), else the compressed RTF if it holds anything, else the plain
+text. HTML and RTF go through the HTML and RTF parsers; a plain-text body is one paragraph with its line breaks kept (it was split
+into trimmed lines with the blank ones dropped). Compressed RTF (LZFu, and the raw "MELA" form) is decompressed, with the header's
+size bounded by the embedded-resource limit; an RTF value with another signature fails the message, as Tika does.
+Each attachment that has data is written as an attachment-entry (its long file name, else display name, else short name) and handed
+to the embedded-document extractor, with most of the `mapi:attach:*` keys Tika sets (not `mapi:attach:flags`). The message's own properties are now read from its
+root streams only (the recipient and attachment storages hold substreams of the same names). An RTF body ends a paragraph with one
+newline where Tika writes two after a trailing `\par` (see the RTF notes).
+
 ### OLE2 property sets give Tika's keys and date format (`tikajs-nb4y`)
 
 Fixed: the SummaryInformation and DocumentSummaryInformation streams of a `.doc`, `.xls`, `.ppt` and the other OLE2 formats (Publisher,

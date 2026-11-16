@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-8vzf: a plain-text body (PR_BODY alone) is one paragraph with its own line breaks, blank lines and spaces kept; it was split into trimmed lines with the blank ones dropped. Expected text read off Apache Tika 4.2.0 (/rmeta/body) for the same bytes; the message is synthetic, written by scripts/make-msg-repros.ts.",
+  "tags": [
+    "msg",
+    "outlook"
+  ],
+  "input": {
+    "file": "msg-text-body.msg",
+    "filename": "msg-text-body.msg"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "line one\r\n\r\nline  three\n  indented\n"
+    }
+  ]
+}
