@@ -381,7 +381,10 @@ export class PdfSession {
       useSystemFonts: false,
       // Errors only: pdf.js's warnings go to stdout through console.log, into the output of a command line tool.
       verbosity: 0,
-      standardFontDataUrl: standardFontsUrl(),
+      standardFontDataUrl: pdfjsDataUrl("standard_fonts"),
+      // The predefined CMaps (UniGB-UCS2-H, GBK-EUC-H, Adobe-GB1-UCS2, ...): a CJK font with no ToUnicode map reads as nothing without them.
+      cMapUrl: pdfjsDataUrl("cmaps"),
+      cMapPacked: true,
       password: input.password ?? "",
     };
     if (input.path !== undefined) {
@@ -723,11 +726,12 @@ async function readRange(path: string, length: number, start: number, end: numbe
   }
 }
 
-function standardFontsUrl(): string | undefined {
+/** A data directory of the pdfjs-dist package (its standard fonts, its CMaps), as the URL form pdf.js takes. */
+function pdfjsDataUrl(directory: string): string | undefined {
   try {
     const require = createRequire(import.meta.url);
     const packageJson = require.resolve("pdfjs-dist/package.json");
-    return `${join(dirname(packageJson), "standard_fonts")}/`;
+    return `${join(dirname(packageJson), directory)}/`;
   } catch {
     return undefined;
   }

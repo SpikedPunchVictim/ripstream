@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-4xj6: a Type0 font that is not embedded and has no ToUnicode map, whose codes are those of the predefined CMap UniGB-UCS2-H, needs the CMap files of pdf.js to be read; without them the text was empty (corpus pdf/pdfa_045 0.155 and vendored pr-136-example 0.424 against Tika's 0.903 and 0.955). Apache Tika 4.2.0 (/rmeta/body) for the same bytes: '\\n关于\\n\\n\\n'. The file is hand-written by scripts/make-pdf-repros.ts.",
+  "tags": [
+    "repro",
+    "pdf"
+  ],
+  "input": {
+    "file": "pdf-cjk-predefined-cmap.pdf",
+    "filename": "pdf-cjk-predefined-cmap.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "关于"
+    }
+  ]
+}

@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF: the predefined CJK CMaps are loaded (`tikajs-4xj6`)
+
+Fixed: a PDF font that is not embedded, or has no ToUnicode map, and takes its codes from a predefined CMap (UniGB-UCS2-H, GBK-EUC-H,
+Adobe-GB1-UCS2, ...) read as no text, because pdf.js was not given the CMap files it ships (`cMapUrl`). Corpus `pdf/pdfa_045` (body
+text missing) and `pr-136-example` (every Chinese character missing) now carry Tika's text. The CMaps are read from the installed
+`pdfjs-dist` package as its standard fonts already are, and are not bundled.
+
 ### OpenDocument text: notes, nested lists, header and footer regions as Tika writes them (`tikajs-uay4`)
 
 Fixed, to match Tika 4.2.0's OpenDocumentContentHandler (corpus `odt/footnote`, `endnote`, `unorderedList` and `unicode` lost text):
