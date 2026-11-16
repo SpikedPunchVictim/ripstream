@@ -735,8 +735,8 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
         // Liveness/version endpoints must not be gated by the concurrency semaphore.
         try {
           await route(request, response, gone.signal, () => () => undefined);
-        } catch {
-          if (!response.headersSent) send(response, 500, "text/plain", "Internal error");
+        } catch (error) {
+          answerError(request, response, error);
         }
         return;
       }
@@ -756,18 +756,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
           return held ?? (() => undefined);
         });
       } catch (error) {
-        const { status, headers, code, message } = errorResponse(error);
-        if (!response.headersSent && !response.writableEnded && !response.destroyed) {
-          for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
-          // A body refused unread leaves the rest of it on the wire, so the connection cannot carry another request.
-          if (status === 413 && !request.complete) response.setHeader("Connection", "close");
-          const wantsJson = (request.headers.accept ?? "").includes("application/json");
-          if (wantsJson) {
-            sendJson(response, status, { error: message, code });
-          } else {
-            send(response, status, "text/plain", message);
-          }
-        }
+        answerError(request, response, error);
       } finally {
         releaseBody?.();
         release?.();
@@ -785,6 +774,22 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       }
     });
   };
+
+  /** Answers a request whose handling threw: an HttpError or RipstreamError keeps its status, anything else is a 500. */
+  function answerError(request: IncomingMessage, response: ServerResponse, error: unknown): void {
+    const { status, headers, code, message } = errorResponse(error);
+    if (!response.headersSent && !response.writableEnded && !response.destroyed) {
+      for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
+      // A body refused unread leaves the rest of it on the wire, so the connection cannot carry another request.
+      if (status === 413 && !request.complete) response.setHeader("Connection", "close");
+      const wantsJson = (request.headers.accept ?? "").includes("application/json");
+      if (wantsJson) {
+        sendJson(response, status, { error: message, code });
+      } else {
+        send(response, status, "text/plain", message);
+      }
+    }
+  }
 
   async function route(
     request: IncomingMessage,

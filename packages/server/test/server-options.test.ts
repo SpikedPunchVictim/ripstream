@@ -191,3 +191,41 @@ test("a default above the ceiling is refused at construction", () => {
     (error) => error instanceof RangeError && /defaultLimits.maxOutputChars \(2000\) is above maxLimits.maxOutputChars \(1000\)/.test(error.message),
   );
 });
+
+/*
+ * The /health, /version and /status branch skips the concurrency gate, not the error mapping: a refusal thrown while
+ * answering them keeps its status, as it does on the gated routes. No request can make them throw today, so the test
+ * makes /status throw: it reads `isolation.status()` on every call, and startup reads it once.
+ */
+function isolationWhoseStatusThrowsAfterStartup(failure: Error) {
+  let reads = 0;
+  return {
+    status() {
+      reads += 1;
+      if (reads > 1) throw failure;
+      return { mode: "off", degraded: false, pool: null, defaultReservationMb: null };
+    },
+  };
+}
+
+test("an HttpError thrown while answering /status keeps its status, headers and message", async () => {
+  const { HttpError } = await import("../src/http-error.ts");
+  await withServer(
+    async (base) => {
+      const response = await fetch(`${base}/status`);
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("retry-after"), "7");
+      assert.equal(await response.text(), "status unavailable");
+    },
+    { isolation: isolationWhoseStatusThrowsAfterStartup(new HttpError(503, "status unavailable", { "Retry-After": "7" })) },
+  );
+});
+
+test("any other error thrown while answering /status is a 500", async () => {
+  await withServer(
+    async (base) => {
+      assert.equal((await fetch(`${base}/status`)).status, 500);
+    },
+    { isolation: isolationWhoseStatusThrowsAfterStartup(new Error("boom")) },
+  );
+});
