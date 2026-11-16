@@ -1,0 +1,28 @@
+{
+  "description": "(tikajs-mic4) A binary file named .wpd with no WordPerfect header (the corpus's wp_mac1.wpd, a Mac WordPerfect 3 file): Tika 4.2.0 detects application/vnd.wordperfect with no version and its EmptyParser returns no content and no error; its WordPerfectParser is registered for the versions only. ripstream threw 'Not a WordPerfect document'. The 20 bytes are synthetic.",
+  "tags": [
+    "wordperfect",
+    "repro"
+  ],
+  "input": {
+    "base64": "zgBIAM7QAEgA2NDAAEgASAEgACQ=",
+    "filename": "a.wpd"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
+    },
+    {
+      "type": "equals",
+      "field": "metadata.Content-Type",
+      "value": "application/vnd.wordperfect"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.tk:parsed-by",
+      "value": "EmptyParser"
+    }
+  ]
+}

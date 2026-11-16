@@ -4,6 +4,13 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### WordPerfect: a file with no version is an empty document (`tikajs-mic4`)
+
+Fixed: a binary file detected as `application/vnd.wordperfect` with no version (a name or type says WordPerfect and the content has no
+`\xffWPC` header to read one from: the corpus's Mac WordPerfect 3 `wp_mac1.wpd`) threw "Not a WordPerfect document". Tika 4.2.0's
+WordPerfectParser is registered for the versions (5.0, 5.1, 6.x) only and its EmptyParser answers the type with no version: empty
+content, no error. ripstream's now does the same, as it already did for version 4.2.
+
 ### HTML: the head writes no line breaks, and the XHTML begins its body as Tika's does (`tikajs-x1cd`)
 
 Fixed, checked against Tika 4.2.0's `/rmeta/body` on the fixtures and on synthetic pages (27 HTML fixtures equal): the `link`, `meta`,

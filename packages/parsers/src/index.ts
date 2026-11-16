@@ -153,6 +153,8 @@ export function createDefaultParser(options: DefaultParserOptions = {}): Composi
         "application/vnd.lotus-1-2-3",
         "application/x-mobipocket-ebook",
         "application/vnd.wordperfect; version=4.2",
+        // No version: a name or a type said WordPerfect and the content has no header to read one from (a Mac WordPerfect 3 file).
+        "application/vnd.wordperfect",
       ]),
       new TextParser(),
       new CsvParser(options.csv),

@@ -38,7 +38,8 @@ export class WordPerfectParser implements Parser {
   getSupportedTypes(): ReadonlySet<MediaType> {
     return new Set(
       [
-        "application/vnd.wordperfect",
+        // Not the type with no version: Tika's WordPerfectParser is registered for the versions and the type without one is
+        // answered by its EmptyParser (tikajs-mic4).
         "application/vnd.wordperfect; version=5.0",
         "application/vnd.wordperfect; version=5.1",
         "application/vnd.wordperfect; version=6.x",
