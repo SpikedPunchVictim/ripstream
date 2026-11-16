@@ -165,8 +165,9 @@ only when segments are on, and a hint never touches the SAX stream:
 | `layout("lines")` | TextParser and CSV read as text: a `p` per source line |
 | `delimited(delimiter)` | CsvParser, for a document declared `text/csv` that it reads as text: the lines are rows of cells |
 | `layout("table")` | CsvParser's table: the document is one table, so no `table=` |
-| `row(n)` | OOXML spreadsheet: `<row r>`; xls: the row's index |
-| `heading(level, title?)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`), markdown `#` and setext (`title` is the text without the underline) |
+| `row(n)` | the sheet's own row number: OOXML spreadsheet `<row r>`; xls the row's index; xlsb the row header's number; ods the count of rows before it, with `number-rows-repeated` |
+| `col(n)` | the sheet's own column number of the next cell, when it is not the one after the last: xlsb (empty cells are not written), ods (`number-columns-repeated` and covered cells) |
+| `heading(level, title?)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`, or a style whose `word/styles.xml` name is `heading N` or `Title`, whatever its localized id), markdown `#` and setext (`title` is the text without the underline) |
 | `line(n)` | markdown: a block's source line |
 | `shape(name, title)` | OOXML presentation: `cNvPr@name`, title placeholders |
 | `pageLabel(label)` | PDF: the next page's `/PageLabels` label, an additive first label of its segments (the location still counts pages from 1) |
@@ -198,9 +199,6 @@ encoding of a document with very many segments, and that is still a `LimitExceed
 - A PDF's page label is read only when segments are on, and a label longer than 64 characters is cut. A field of a form that the parser
   does not write as text (`extractAnnotationText` off) has no segment.
 - A docx `para` counts the paragraphs written, not Word's own count, which includes empty paragraphs.
-- Localized heading style ids (`berschrift1`, `Titre1`) are not recognized as headings.
-- xlsb and ods number rows as written, so an empty row is not counted; xlsb also leaves empty cells out of its row, so its `col=` can be
-  short. Only xlsx and xls take the sheet's own numbers.
 - A table's column headers are its first row, even when that row is a title spanning the sheet.
 - A spreadsheet's `sheet=` (or a slide's title) is repeated in every location it holds; a very long name is not counted against
   the allowance above, as a pointer is. Only xlsx sheet names, which Excel limits to 31 characters, were considered.

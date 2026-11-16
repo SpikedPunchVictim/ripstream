@@ -86,7 +86,7 @@ export class OoxmlParser implements Parser {
       if (packageFile.has("EncryptedPackage") || packageFile.has("EncryptionInfo")) {
         throw new EncryptedDocumentError("OOXML document is encrypted");
       }
-      files = await collectParts(packageFile);
+      files = await collectParts(packageFile, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS) !== undefined);
       if (
         packageFile.has("word/vbaProject.bin") ||
         packageFile.has("xl/vbaProject.bin") ||
@@ -122,11 +122,13 @@ export class OoxmlParser implements Parser {
 
 async function collectParts(
   packageFile: OpcPackage,
+  withStyles: boolean,
 ): Promise<Record<string, Uint8Array>> {
   const files: Record<string, Uint8Array> = {};
   for (const entry of packageFile.names) {
     const name = canonicalPartName(entry);
-    if (!neededPart(name)) continue;
+    // word/styles.xml names the heading styles whose ids are localized; only the segments' labels use it.
+    if (!neededPart(name) && !(withStyles && name === WORD_STYLES)) continue;
     const bytes = await packageFile.read(entry);
     // A DTD entity declaration is refused before any XML parser sees it: expansion is the billion-laughs vector, and
     // ripstream never expands DTD entities. Tika's limit trips on the expansion; this names the same limit up front.
@@ -137,6 +139,8 @@ async function collectParts(
   }
   return files;
 }
+
+const WORD_STYLES = "word/styles.xml";
 
 /** Whether the bytes contain an ASCII needle, without decoding them. */
 function containsAscii(bytes: Uint8Array, needle: string): boolean {
@@ -165,7 +169,7 @@ const FIXED_PART_NAMES = new Map(
   [
     "docProps/core.xml", "docProps/app.xml", "docProps/custom.xml",
     "word/document.xml", "word/comments.xml", "word/footnotes.xml", "word/endnotes.xml", "word/glossary/document.xml",
-    "word/_rels/document.xml.rels",
+    "word/_rels/document.xml.rels", WORD_STYLES,
     "xl/workbook.xml", "xl/sharedStrings.xml", "xl/styles.xml", "xl/_rels/workbook.xml.rels",
     "ppt/presentation.xml", "ppt/_rels/presentation.xml.rels",
     "visio/document.xml",
@@ -215,6 +219,7 @@ async function renderWord(
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
 ): Promise<void> {
+  if (hints !== undefined) headingStyles.set(hints, wordHeadingStyles(parsePart(files, WORD_STYLES)));
   const raw = files["word/document.xml"];
   if (raw !== undefined && raw.byteLength > LARGE_WORD_DOCUMENT_BYTES) {
     await renderLargeWordDocument(decode(raw), xhtml);
@@ -340,7 +345,7 @@ async function renderWordParagraph(
   const text = wordParagraphText(paragraph);
   if (text.length > 0) {
     if (hints !== undefined) {
-      const level = headingLevel(paragraph);
+      const level = headingLevel(paragraph, headingStyles.get(hints));
       if (level > 0) hints.heading(level);
     }
     await xhtml.startElement("p");
@@ -352,15 +357,41 @@ async function renderWordParagraph(
   }
 }
 
-/** The level of a paragraph in a heading style (`Heading1`-`Heading6`; `Title` is 1), for segment labels; 0 otherwise. */
-function headingLevel(paragraph: XmlNode): number {
+/**
+ * The heading level of each paragraph style whose id Word localized (`berschrift1`, `Titre1`), by the name word/styles.xml gives it
+ * (`heading 1`: the names of the built-in styles are English in every language). Kept by the hints of the parse that read it.
+ */
+const headingStyles = new WeakMap<SegmentHints, ReadonlyMap<string, number>>();
+
+function wordHeadingStyles(styles: XmlNode | undefined): ReadonlyMap<string, number> {
+  const levels = new Map<string, number>();
+  if (styles === undefined) return levels;
+  for (const style of descendantsNamed(styles, "style")) {
+    const id = attribute(style, "styleId");
+    const name = childrenNamed(style, "name")[0];
+    const level = name === undefined ? 0 : styleNameLevel(attribute(name, "val") ?? "");
+    if (id !== undefined && level > 0) levels.set(id, level);
+  }
+  return levels;
+}
+
+function styleNameLevel(name: string): number {
+  if (/^title$/i.test(name)) return 1;
+  const match = /^heading\s?([1-6])$/i.exec(name);
+  return match === null ? 0 : Number(match[1]);
+}
+
+/**
+ * The level of a paragraph in a heading style (`Heading1`-`Heading6`; `Title` is 1), for segment labels; 0 otherwise. The id says
+ * so for the English ids; `styles` (see headingStyles) for the others.
+ */
+function headingLevel(paragraph: XmlNode, styles: ReadonlyMap<string, number> | undefined): number {
   const properties = childrenNamed(paragraph, "pPr")[0];
   const style = properties === undefined ? undefined : childrenNamed(properties, "pStyle")[0];
   const id = style === undefined ? undefined : attribute(style, "val");
   if (id === undefined) return 0;
-  if (/^title$/i.test(id)) return 1;
-  const match = /^heading\s?([1-6])$/i.exec(id);
-  return match === null ? 0 : Number(match[1]);
+  const level = styleNameLevel(id);
+  return level > 0 ? level : styles?.get(id) ?? 0;
 }
 
 /**

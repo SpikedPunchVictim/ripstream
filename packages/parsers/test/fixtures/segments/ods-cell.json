@@ -1,0 +1,23 @@
+{
+  "description": "tikajs-bwjq: an ods cell is located by the sheet's own row and column: repeated rows and columns and covered cells are counted, though the table writes one row or cell for each",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/budget.ods",
+    "filename": "budget.ods"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "table=1;row=6;col=4 | PLANTED-ODS-D6 | Cost"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "table=1;row=2;col=4 | 1200 | Cost"
+    }
+  ]
+}

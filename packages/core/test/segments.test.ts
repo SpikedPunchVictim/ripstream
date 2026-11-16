@@ -439,3 +439,52 @@ test("a truncated parse keeps segments within the content it kept", async () => 
     assert.equal(record!.content.slice(segment.start, segment.end), segment.text);
   }
 });
+
+const GAPS = script("gaps", "application/x-gaps", async (xhtml, hints) => {
+  await xhtml.startElement("div", "class", "sheet");
+  await xhtml.element("h1", "Gaps");
+  await xhtml.startElement("table");
+  // Cells the table leaves out: the hints say which row and column each written cell is.
+  for (const [number, cells] of [[1, [[1, "Name"], [4, "Tax ID"]]], [7, [[2, "PLANTED-B7"], [4, "PLANTED-D7"]]]] as const) {
+    hints?.row(number);
+    await xhtml.startElement("tr");
+    for (const [column, text] of cells) {
+      hints?.col(column);
+      await xhtml.element("td", text);
+    }
+    await xhtml.endElement("tr");
+  }
+  await xhtml.endElement("table");
+  await xhtml.endElement("div");
+});
+
+test("a col hint gives a cell the sheet's column, and the header above it labels it (tikajs-bwjq)", async () => {
+  const [record] = await segmentsOf(GAPS);
+  assert.deepEqual(lines(record!.segments).filter((line) => line.includes("PLANTED")), [
+    "sheet=Gaps;row=7 | PLANTED-B7\tPLANTED-D7 | Gaps",
+    "sheet=Gaps;cell=B7 | PLANTED-B7 | Gaps",
+    "sheet=Gaps;cell=D7 | PLANTED-D7 | Gaps > Tax ID",
+  ]);
+});
+
+const ODS = script("ods", "application/x-ods", async (xhtml, hints) => {
+  await xhtml.startElement("table");
+  for (const [number, cells] of [[1, [[1, "Name"], [3, "Tax ID"]]], [5, [[3, "PLANTED-C5"]]]] as const) {
+    hints?.row(number);
+    await xhtml.startElement("tr");
+    for (const [column, text] of cells) {
+      hints?.col(column);
+      await xhtml.element("td", text);
+    }
+    await xhtml.endElement("tr");
+  }
+  await xhtml.endElement("table");
+});
+
+test("row and col hints of a table outside a sheet give its own row and column numbers, not an A1 reference (tikajs-bwjq)", async () => {
+  const [record] = await segmentsOf(ODS);
+  assert.deepEqual(lines(record!.segments).filter((line) => line.includes("PLANTED")), [
+    "table=1;row=5 | PLANTED-C5 | ",
+    "table=1;row=5;col=3 | PLANTED-C5 | Tax ID",
+  ]);
+});

@@ -1,0 +1,28 @@
+{
+  "description": "tikajs-bwjq: an xlsb cell is located by the sheet's own row and column (the rows and columns the file does not write are counted), labelled with its column header; Tika writes the empty columns as empty cells",
+  "operation": "parseRecursive",
+  "input": {
+    "file": "files/vendors.xlsb",
+    "filename": "vendors.xlsb"
+  },
+  "options": {
+    "segments": true
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Vendors;cell=C7 | PLANTED-XLSB-C7 | Vendors > Tax ID"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Vendors;cell=E7 | PLANTED-XLSB-E7 | Vendors"
+    },
+    {
+      "type": "contains",
+      "field": "records.0.segments",
+      "value": "sheet=Notes;cell=B3 | PLANTED-XLSB-NOTES-B3 | Notes > Comment"
+    }
+  ]
+}

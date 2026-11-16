@@ -115,6 +115,34 @@ with zipfile.ZipFile("suppliers.odt", "w") as z:
         info.compress_type = zipfile.ZIP_DEFLATED
         z.writestr(info, data)
 
+# --- ods: a spreadsheet whose rows and columns are repeated or covered, so its own numbers differ from the cells it writes -------
+ODS_NS = ('xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+          'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.2"')
+
+def ods_cell(text):
+    return f'<table:table-cell office:value-type="string"><text:p>{text}</text:p></table:table-cell>'
+
+ODS_CONTENT = f"""<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content {ODS_NS}><office:body><office:spreadsheet>
+<table:table table:name="Budget">
+<table:table-row>{ods_cell("Item")}<table:table-cell table:number-columns-repeated="2"/>{ods_cell("Cost")}</table:table-row>
+<table:table-row>{ods_cell("Rent")}<table:table-cell table:number-columns-repeated="2"/>{ods_cell("1200")}</table:table-row>
+<table:table-row table:number-rows-repeated="3"><table:table-cell/></table:table-row>
+<table:table-row>{ods_cell("Audit")}<table:covered-table-cell table:number-columns-repeated="2"/>{ods_cell("PLANTED-ODS-D6")}</table:table-row>
+</table:table></office:spreadsheet></office:body></office:document-content>
+"""
+ODS_MANIFEST = ODT_MANIFEST.replace("opendocument.text", "opendocument.spreadsheet")
+with zipfile.ZipFile("budget.ods", "w") as z:
+    z.writestr(zipfile.ZipInfo("mimetype", (2026, 1, 1, 0, 0, 0)), "application/vnd.oasis.opendocument.spreadsheet")
+    for name, data in [("content.xml", ODS_CONTENT), ("META-INF/manifest.xml", ODS_MANIFEST)]:
+        info = zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        z.writestr(info, data)
+
+# --- xlsb: vendors.xlsb is not written here; it is the output of buildXlsb (packages/parser-office/test/xlsb-builder.ts) for the
+# sheets Vendors (header row 1, row 7 holds PLANTED-XLSB-C7 in column C and PLANTED-XLSB-E7 in column E, rows 2-6 are not written) and
+# Notes (B1 header, PLANTED-XLSB-NOTES-B3). Regenerate it from a test script that calls buildXlsb with those rows.
+
 # --- text formats -------------------------------------------------------------------------------------------------------
 def write(name, text):
     with open(name, "w", encoding="utf-8", newline="") as f:

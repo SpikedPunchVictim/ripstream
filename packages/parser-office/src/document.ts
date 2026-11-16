@@ -1,4 +1,5 @@
 import {
+  CONTEXT_KEYS,
   EncryptedDocumentError,
   MalformedDocumentError,
   MediaType,
@@ -10,6 +11,7 @@ import {
   type ParseContext,
   type Parser,
   type RipstreamInputStream,
+  type SegmentHints,
 } from "@spikedpunch/ripstream-core";
 import { boundedUnzip, type BoundedZip } from "./bounded-unzip.ts";
 import { decodeChapter } from "./epub-chapter.ts";
@@ -96,7 +98,7 @@ export class OpenDocumentParser implements Parser {
 
     const root = parseXmlTree(decode(files.get("content.xml")!));
     const body = findBody(root);
-    if (body !== undefined) await renderOdfBody(body, xhtml);
+    if (body !== undefined) await renderOdfBody(body, xhtml, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
 
     const styles = files.get("styles.xml");
     if (styles !== undefined) {
@@ -138,23 +140,26 @@ async function renderStyleRegion(
 async function renderOdfBody(
   body: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
-  await renderOdfBlocks(body, xhtml);
+  await renderOdfBlocks(body, xhtml, hints);
 }
 
+/** `hints`: the body's tables say their own row and column numbers to the segments (the header and footer regions get none). */
 async function renderOdfBlocks(
   node: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   for (const child of node.children) {
     const name = localName(child.name);
     if (name === "p" || name === "h") await renderOdfParagraph(child, xhtml);
     else if (name === "list") await renderOdfList(child, xhtml);
-    else if (name === "table") await renderOdfTable(child, xhtml);
-    else if (name === "page") await renderOdfPage(child, xhtml);
+    else if (name === "table") await renderOdfTable(child, xhtml, hints);
+    else if (name === "page") await renderOdfPage(child, xhtml, hints);
     else if (name === "notes") {
       await xhtml.startElement("div", "class", "notes");
-      await renderOdfBlocks(child, xhtml);
+      await renderOdfBlocks(child, xhtml, hints);
       await xhtml.endElement("div");
     } else if (
       name === "text-box" ||
@@ -177,7 +182,7 @@ async function renderOdfBlocks(
       name === "title" ||
       name === "subtitle"
     ) {
-      await renderOdfBlocks(child, xhtml);
+      await renderOdfBlocks(child, xhtml, hints);
     }
   }
 }
@@ -293,11 +298,23 @@ async function renderOdfList(
 async function renderOdfTable(
   table: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   await xhtml.startElement("table");
+  // Segments only: the sheet's own numbers. A row or a cell may stand for several (`number-rows-repeated`,
+  // `number-columns-repeated`) and a covered cell is a column the merged cell before it spans: the table writes none of those.
+  let rowNumber = 1;
   for (const row of odfTableRows(table)) {
+    hints?.row(rowNumber);
+    rowNumber += odfRepeat(row, "number-rows-repeated");
     await xhtml.startElement("tr");
-    for (const cell of childrenNamed(row, "table-cell")) {
+    let column = 1;
+    for (const cell of row.children) {
+      const name = localName(cell.name);
+      if (name === "covered-table-cell") column += odfRepeat(cell, "number-columns-repeated");
+      if (name !== "table-cell") continue;
+      hints?.col(column);
+      column += odfRepeat(cell, "number-columns-repeated");
       await xhtml.startElement("td");
       const text = cell.children
         .map((child) => odfText(child))
@@ -309,6 +326,12 @@ async function renderOdfTable(
     await xhtml.endElement("tr");
   }
   await xhtml.endElement("table");
+}
+
+/** How many rows or columns an element stands for: its repeat attribute, 1 when absent or not a count. */
+function odfRepeat(node: XmlNode, attributeName: string): number {
+  const count = Number(attribute(node, attributeName) ?? "1");
+  return Number.isSafeInteger(count) && count > 1 ? count : 1;
 }
 
 const ODF_ROW_WRAPPERS = new Set(["table-header-rows", "table-rows", "table-row-group"]);
@@ -327,9 +350,10 @@ function odfTableRows(node: XmlNode): XmlNode[] {
 async function renderOdfPage(
   page: XmlNode,
   xhtml: XHTMLContentHandler,
+  hints?: SegmentHints,
 ): Promise<void> {
   await xhtml.startElement("div", "class", "slide");
-  await renderOdfBlocks(page, xhtml);
+  await renderOdfBlocks(page, xhtml, hints);
   await xhtml.endElement("div");
 }
 

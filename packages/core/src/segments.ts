@@ -49,6 +49,8 @@ export interface SegmentHints {
   line(number: number): void;
   /** The table row written next is this row (1-based) of the sheet: an `r` attribute, which may skip empty rows. */
   row(number: number): void;
+  /** The table cell written next is this column (1-based) of its row: a parser that leaves empty cells out says where the written ones are. */
+  col(number: number): void;
   /**
    * The blocks written from now on are a shape's, until the next call or the end of the slide; `undefined` ends the
    * shape. A title shape's text is the heading of what follows it on the slide.
@@ -264,6 +266,7 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
   #nextHeadingTitle: string | undefined;
   #nextLine = 0;
   #nextRow = 0;
+  #nextCol = 0;
 
   /** What is left of the record's location allowance; see `segmentLocationAllowance`. */
   #allowance: number;
@@ -312,6 +315,10 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
 
   row(number: number): void {
     if (Number.isSafeInteger(number) && number > 0) this.#nextRow = number;
+  }
+
+  col(number: number): void {
+    if (Number.isSafeInteger(number) && number > 0) this.#nextCol = number;
   }
 
   shape(name: string | undefined, title = false): void {
@@ -447,7 +454,8 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     } else if (name === "td" || name === "th") {
       const current = this.#tables.at(-1);
       if (current !== undefined) {
-        current.col++;
+        current.col = this.#nextCol > 0 ? this.#nextCol : current.col + 1;
+        this.#nextCol = 0;
         if (this.#cell === undefined && this.#block === undefined && this.#row?.table === current) {
           this.#cell = this.#open("cell", depth, { table: current, capture: current.row === 1 });
         }
@@ -579,8 +587,12 @@ export class SegmentTap extends ContentHandlerDecorator implements SegmentHints 
     if (!cell.hasText) return;
     let location: string;
     if (cell.selector !== undefined) location = `selector=${escapeValue(cell.selector)}`;
-    else if (table.rowNumber > 0) location = `${this.#prefix(cell.shape)}cell=${columnLetters(table.col)}${table.rowNumber}`;
-    else location = `${this.#prefix(cell.shape)}${this.#tablePart(table)}row=${table.row};col=${table.col}`;
+    else if (table.rowNumber > 0 && this.#tablePart(table) === "") {
+      location = `${this.#prefix(cell.shape)}cell=${columnLetters(table.col)}${table.rowNumber}`;
+    } else {
+      const row = table.rowNumber > 0 ? table.rowNumber : table.row;
+      location = `${this.#prefix(cell.shape)}${this.#tablePart(table)}row=${row};col=${table.col}`;
+    }
     this.#push(cell, location, table.row > 1 ? this.#columnLabels(table, table.col) : this.#baseLabels());
   }
 

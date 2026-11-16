@@ -4,6 +4,20 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Segments: xlsb and ods numbers, localized Word headings (`tikajs-bwjq`)
+
+Fixed, with segments on (`ParseOptions.segments`):
+
+- An `.xlsb` cell is located by the sheet's own row and column (`sheet=Vendors;cell=C7`), as an `.xlsx` is: the rows and the columns the
+  file does not write are counted. It was `sheet=Vendors;row=3` and a column short by the cells left out.
+- An `.ods` cell is located by the sheet's own numbers too (`table=1;row=6;col=4`): `number-rows-repeated`, `number-columns-repeated`
+  and covered cells are counted.
+- A Word paragraph style is a heading by the name `word/styles.xml` gives it (`heading 1`, `Title`), so `berschrift1`, `Titre1` and the
+  like label what follows them as `Heading1` does.
+
+The same `.xlsb` text fixes, checked against Tika 4.2.0's `/rmeta/body`: a string cell was read from the wrong offset and came out garbled, a skipped column is an empty cell (`\t\t`), a cell holding an empty string and a row with no cells are written, and an
+error cell is `ERROR`. Not the same as Tika's: ripstream ends a sheet that has rows with one more line break than Tika.
+
 ### Outlook .msg: the body is the HTML, the RTF or the text, and attachments are read (`tikajs-8vzf`)
 
 Fixed: an Outlook `.msg` whose body is not in `PR_BODY` gave no text. Outlook keeps an HTML or RTF body in `PR_HTML` or

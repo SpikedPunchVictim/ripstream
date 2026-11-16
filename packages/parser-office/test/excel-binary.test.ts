@@ -256,7 +256,7 @@ for (const [kind, filepass] of [["RC4", [...u16(1), ...u16(1), ...u16(1), ...new
 test("an xls's rows are told to the segments by their own numbers, so empty rows are counted (tikajs-57wb)", async () => {
   // buildWorkbook holds cells in rows 1 and 2, and one more at row 10 (0-based 9).
   const rows: number[] = [];
-  const hints = { layout() {}, delimited() {}, heading() {}, line() {}, row: (number: number) => rows.push(number), shape() {} } satisfies SegmentHints;
+  const hints = { layout() {}, delimited() {}, heading() {}, line() {}, row: (number: number) => rows.push(number), col() {}, shape() {} } satisfies SegmentHints;
   const ctx = new ParseContext();
   ctx.set(CONTEXT_KEYS.SEGMENT_HINTS, hints);
   const stream = await RipstreamInputStream.from(buildWorkbook(1, 1));

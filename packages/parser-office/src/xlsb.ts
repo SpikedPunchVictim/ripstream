@@ -1,4 +1,5 @@
 import {
+  CONTEXT_KEYS,
   MediaType,
   XHTMLContentHandler,
   type ContentHandler,
@@ -13,6 +14,7 @@ const XLSB = "application/vnd.ms-excel.sheet.binary.macroenabled.12";
 
 /** BIFF12 record ids used here (POI's XSSFBRecordType). */
 const BRT_ROW_HDR = 0;
+const BRT_CELL_ERROR = 3;
 const BRT_CELL_RK = 2;
 const BRT_CELL_BOOL = 4;
 const BRT_CELL_REAL = 5;
@@ -56,6 +58,7 @@ export class XlsbParser implements Parser {
     const shared = sharedStrings(files.get("xl/sharedStrings.bin"));
     const sheets = workbookSheets(files.get("xl/workbook.bin"), files.get("xl/_rels/workbook.bin.rels"));
     const xhtml = new XHTMLContentHandler(handler, metadata);
+    const hints = ctx.get(CONTEXT_KEYS.SEGMENT_HINTS);
     await xhtml.startDocument();
     for (const sheet of sheets) {
       const data = files.get(sheet.part);
@@ -64,8 +67,23 @@ export class XlsbParser implements Parser {
       if (sheet.name.length > 0) await xhtml.element("h1", sheet.name);
       await xhtml.startElement("table");
       for (const row of sheetRows(data, shared)) {
+        // Segments only: the row's number in the sheet, which skips the rows the file does not write.
+        hints?.row(row.number + 1);
         await xhtml.startElement("tr");
-        for (const value of row) await xhtml.element("td", value);
+        // As POI's XSSFBSheetHandler writes them (Tika 4.2.0, tikajs-bwjq): a cell is a td in record order, preceded by an
+        // empty td for each column left out since the last cell; a cell with no text is still a td.
+        let next = 0;
+        for (const cell of row.cells) {
+          for (; next < cell.col; next++) {
+            await xhtml.startElement("td");
+            await xhtml.endElement("td");
+          }
+          hints?.col(cell.col + 1);
+          await xhtml.startElement("td");
+          if (cell.value.length > 0) await xhtml.characters(cell.value);
+          await xhtml.endElement("td");
+          next = cell.col + 1;
+        }
         await xhtml.endElement("tr");
       }
       await xhtml.endElement("table");
@@ -167,20 +185,34 @@ function workbookSheets(workbook: Uint8Array | undefined, relationships: Uint8Ar
   return sheets;
 }
 
-function sheetRows(data: Uint8Array, shared: readonly string[]): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
+interface SheetCell {
+  /** The cell's column in the sheet, 0-based. */
+  readonly col: number;
+  readonly value: string;
+}
+
+interface SheetRow {
+  /** The row's number in the sheet, 0-based. */
+  readonly number: number;
+  readonly cells: SheetCell[];
+}
+
+/**
+ * The rows the sheet writes, a row for each row header (an empty one too), in file order. A header with the number of the row
+ * before it adds to that row (checked against Tika 4.2.0); a cell that holds nothing the parser reads is left out.
+ */
+function sheetRows(data: Uint8Array, shared: readonly string[]): SheetRow[] {
+  const rows: SheetRow[] = [];
   for (const record of records(data)) {
     if (record.type === BRT_ROW_HDR) {
-      if (row.length > 0) rows.push(row);
-      row = [];
+      const number = readU32(record.data, 0) >>> 0;
+      if (rows.at(-1)?.number !== number) rows.push({ number, cells: [] });
       continue;
     }
     if (record.data.length < 8) continue;
     const value = cellValue(record, shared);
-    if (value !== null && value.length > 0) row.push(value);
+    if (value !== null) rows.at(-1)?.cells.push({ col: readU32(record.data, 0) >>> 0, value });
   }
-  if (row.length > 0) rows.push(row);
   return rows;
 }
 
@@ -188,7 +220,7 @@ function cellValue(record: Record, shared: readonly string[]): string | null {
   const data = record.data;
   switch (record.type) {
     case BRT_CELL_ST:
-      return readWideString(data, 9).value;
+      return readWideString(data, 8).value;
     case BRT_CELL_ISST: {
       const index = readU32(data, 8);
       return shared[index] ?? null;
@@ -199,6 +231,9 @@ function cellValue(record: Record, shared: readonly string[]): string | null {
       return numberText(readRk(readU32(data, 8)));
     case BRT_CELL_BOOL:
       return data[8] === 1 ? "true" : "false";
+    case BRT_CELL_ERROR:
+      // Tika writes every error cell as ERROR (the oracle, tikajs-bwjq), not the code's #DIV/0! and the like.
+      return "ERROR";
     case BRT_FMLA_STRING:
       return readCachedFormulaString(data);
     default:
