@@ -1,0 +1,23 @@
+{
+  "description": "tikajs-3b5g: Tika's RTFParser does not need the {\\rtf header (the corpus's rtf/tables.rtf starts {\\pard and was rejected as 'Not an RTF document') and stops reading where the first group closes: Tika 4.2.0 (/rmeta/body) answers 'A\\n\\n' for these bytes, the second group is not read. ripstream writes 'A\\n' (it has no empty paragraph after a final \\par).",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "input": {
+    "text": "{\\pard A\\par}\n{\\pard B\\par}\n",
+    "filename": "a.rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "A"
+    },
+    {
+      "type": "not_contains",
+      "field": "text",
+      "value": "B"
+    }
+  ]
+}

@@ -1,12 +1,18 @@
 import {
+  CONTEXT_KEYS,
+  isFatalParseError,
   MalformedDocumentError,
   MediaType,
   Metadata,
+  ParsingEmbeddedDocumentExtractor,
+  recordStreamException,
+  RipstreamInputStream,
+  TIKA_KEYS,
   XHTMLContentHandler,
   type ContentHandler,
+  type EmbeddedDocumentExtractor,
   type ParseContext,
   type Parser,
-  type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 
 interface Frame {
@@ -96,9 +102,8 @@ export class RtfParser implements Parser {
     // read as latin1 below, so it shows as these three characters.
     const decoded = new TextDecoder("latin1").decode(data);
     const source = decoded.startsWith("\u00ef\u00bb\u00bf") ? decoded.slice(3) : decoded;
-    if (!source.trimStart().startsWith("{\\rtf")) {
-      throw new MalformedDocumentError("Not an RTF document");
-    }
+    // Tika's RTFParser does not look for the {\rtf header: the name or type that routed the bytes here is enough, and text with
+    // no group in it gives no text (tikajs-3b5g).
     // The XHTML head is written with the first paragraph and holds every \info value, and \info can come after the
     // body. A first pass reads the metadata alone, so the second can write each paragraph as it is tokenized and an
     // output cap or an error stops it there (tikajs-68os.73).
@@ -115,7 +120,14 @@ export class RtfParser implements Parser {
       await xhtml.characters(value);
       await xhtml.endElement("p");
     };
-    for (const piece of tokenize(source)) {
+    let pictures = 0;
+    for (const piece of tokenize(source, true, data.subarray(decoded.length - source.length))) {
+      if (typeof piece !== "string") {
+        await writeParagraph(tail.join(""));
+        tail = [];
+        await writePicture(piece, pictures++, xhtml, metadata, ctx);
+        continue;
+      }
       const lastNewline = piece.lastIndexOf("\n");
       if (lastNewline < 0) {
         tail.push(piece);
@@ -130,10 +142,77 @@ export class RtfParser implements Parser {
   }
 }
 
+/** A \pict group's data, with the blip type word it named (none when it named none). */
+interface Picture {
+  readonly bytes: Uint8Array;
+}
+
+/**
+ * A picture is an embedded document named embedded-N and an extension for what its bytes are (a \jpegblip holding a PNG is
+ * embedded-0.png), written as the name in a heading: Tika 4.2.0's output for each of these (tikajs-3b5g). A picture is only
+ * handled with a parser in the context to parse it, and an empty one is skipped.
+ */
+async function writePicture(
+  picture: Picture,
+  index: number,
+  xhtml: XHTMLContentHandler,
+  metadata: Metadata,
+  ctx: ParseContext,
+): Promise<void> {
+  if (picture.bytes.byteLength === 0 || ctx.get(CONTEXT_KEYS.PARSER) === undefined) return;
+  const name = `embedded-${index}${pictureExtension(picture.bytes)}`;
+  const part = new Metadata();
+  part.set(TIKA_KEYS.RESOURCE_NAME, name);
+  const extractor =
+    (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor | undefined) ??
+    new ParsingEmbeddedDocumentExtractor();
+  if (!extractor.shouldParseEmbedded(part)) return;
+  const stream = await RipstreamInputStream.from(picture.bytes, { context: ctx });
+  try {
+    await xhtml.startElement("div", "class", "embedded");
+    await xhtml.element("h1", name);
+    try {
+      await extractor.parseEmbedded(stream, xhtml, part, ctx);
+    } catch (error) {
+      if (isFatalParseError(error, ctx)) throw error;
+      recordStreamException(metadata, error);
+    }
+    await xhtml.endElement("div");
+  } finally {
+    await stream.close();
+  }
+}
+
+/** The extension of the formats a picture holds: its first bytes say, and anything else is .bin. */
+function pictureExtension(bytes: Uint8Array): string {
+  const startsWith = (...prefix: number[]): boolean => prefix.every((value, index) => bytes[index] === value);
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return ".png";
+  if (startsWith(0xff, 0xd8, 0xff)) return ".jpg";
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return ".gif";
+  if (startsWith(0x42, 0x4d)) return ".bmp";
+  if (startsWith(0xd7, 0xcd, 0xc6, 0x9a)) return ".wmf";
+  if (startsWith(0x01, 0x00, 0x00, 0x00) && bytes[40] === 0x20 && bytes[41] === 0x45 && bytes[42] === 0x4d && bytes[43] === 0x46) return ".emf";
+  return ".bin";
+}
+
 const HEX_ESCAPE = /^[0-9a-fA-F]{2}$/;
 /** The characters the tokenizer handles itself; every other character is text. */
 const DELIMITER = /[{}\\\r\n]/g;
+const NOT_HEX = /[^0-9a-fA-F]/g;
 const MAX_GROUP_DEPTH = 1_000;
+
+/** The data of a finished picture: its \bin runs and its hex text, in the order the group gave the kinds (runs first, as Tika's). */
+function pictureBytes(finished: { hex: string[]; raw: Uint8Array[] }): Uint8Array {
+  const hex = Buffer.from(finished.hex.join(""), "hex");
+  const parts = [...finished.raw, hex];
+  const bytes = new Uint8Array(parts.reduce((sum, part) => sum + part.byteLength, 0));
+  let offset = 0;
+  for (const part of parts) {
+    bytes.set(part, offset);
+    offset += part.byteLength;
+  }
+  return bytes;
+}
 
 function isAsciiLetter(code: number): boolean {
   return (code >= 97 && code <= 122) || (code >= 65 && code <= 90);
@@ -171,9 +250,10 @@ function scanInfo(rtf: string): InfoValues {
 /**
  * Yields the document text in pieces of up to OUTPUT_PIECE appended values and returns the \info values. With
  * `collectText` false it yields nothing and, at the nesting limit, returns what it has instead of throwing: the text
- * pass reaches the same point, having written what came before it.
+ * pass reaches the same point, having written what came before it. A \pict group is yielded as a Picture where it closes
+ * (`bytes` is the source as bytes, which `rtf` is not above 0x7f).
  */
-function* tokenize(rtf: string, collectText = true): Generator<string, InfoValues, undefined> {
+function* tokenize(rtf: string, collectText = true, bytes?: Uint8Array): Generator<string | Picture, InfoValues, undefined> {
   const stack: Frame[] = [
     { skip: false, destination: "body", unicodeFallback: 0, uc: 1, font: null },
   ];
@@ -189,6 +269,8 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
   const info: InfoValues = {};
   const dateParts: Record<string, number> = {};
   let position = 0;
+  // The \pict group being read: the stack depth it opened at and its data, which only the group's own text and \bin add to.
+  let picture: { depth: number; hex: string[]; raw: Uint8Array[] } | null = null;
 
   const top = (): Frame => stack[stack.length - 1]!;
   /** The code page of the active font's charset when it has one, else the document's \ansicpg. */
@@ -231,8 +313,19 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
       continue;
     }
     if (char === "}") {
+      if (picture !== null && stack.length === picture.depth) {
+        const finished = picture;
+        picture = null;
+        if (pending.length > 0) {
+          yield pending.join("");
+          pending = [];
+        }
+        yield { bytes: pictureBytes(finished) };
+      }
       if (stack.length > 1) stack.pop();
       position++;
+      // Tika's extractor stops where the document's first group closes: what follows is not read.
+      if (stack.length === 1) break;
       if (top().destination === "info") {
         finalizeInfoDate();
         infoField = "";
@@ -251,6 +344,7 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
         DELIMITER.lastIndex = position;
         const end = DELIMITER.test(rtf) ? DELIMITER.lastIndex - 1 : rtf.length;
         if (frame.destination === "info") append(rtf.slice(position, end));
+        else if (picture !== null && stack.length === picture.depth) picture.hex.push(rtf.slice(position, end).replace(NOT_HEX, ""));
         else if (collectText && !frame.skip) pending.push(rtf.slice(position, end));
         position = end;
         continue;
@@ -331,6 +425,7 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
     }
     if (rtf[position] === " ") position++;
 
+    if (word === "pict" && collectText && picture === null) picture = { depth: stack.length, hex: [], raw: [] };
     if (SKIP_DESTINATIONS.has(word)) {
       top().skip = true;
       top().destination = word;
@@ -394,7 +489,13 @@ function* tokenize(rtf: string, collectText = true): Generator<string, InfoValue
         append("\t");
         break;
       case "bin":
-        if (parameter !== null && parameter > 0) position += parameter;
+        if (parameter !== null && parameter > 0) {
+          if (picture !== null && stack.length === picture.depth) {
+            // `rtf` is the bytes read as windows-1252, which is not byte for byte above 0x7f: the run is read from the bytes.
+            if (bytes !== undefined) picture.raw.push(bytes.subarray(position, position + parameter));
+          }
+          position += parameter;
+        }
         break;
       case "title":
       case "author":

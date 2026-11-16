@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### RTF: no header needed, reading stops at the first group, pictures are embedded documents (`tikajs-3b5g`)
+
+Fixed, to match Tika 4.2.0's RTFParser (corpus `rtf/tables.rtf` was refused as "Not an RTF document" and `rtf/image.rtf` gave no text):
+
+- A document that does not start with `{\rtf` is read as RTF instead of refused (`{\pard ...}` is what pandoc writes for a table). Text with
+  no group in it gives the text outside a paragraph as before; Tika drops it (see the paragraph gap below).
+- Reading stops where the document's first group closes, as Tika's does: a second top-level group is not read.
+- A `\pict` group is an embedded document, from its hex data or its `\binN` bytes, named `embedded-N` and the extension of what the bytes
+  are (a `\jpegblip` holding a PNG is `embedded-0.png`), and its name is written as a heading, as Tika writes it. Known gap: Tika keeps the
+  paragraph open around the picture and ripstream splits it (`x\nembedded-0.png\n\n y\n`, Tika `x embedded-0.png\n\n y\n\n`).
+
 ### Email bodies end as Tika's do: paragraph breaks, quoted-printable CRLF, divs around parts (`tikajs-w12u`)
 
 Fixed, checked against Tika 4.2.0's `/rmeta/body` on the fixtures and on synthetic messages:

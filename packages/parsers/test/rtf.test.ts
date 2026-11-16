@@ -50,8 +50,14 @@ test("maps RTF info metadata", async () => {
   assert.match(result.metadata.get("dcterms:created") ?? "", /^2024-01-02T03:04/);
 });
 
-test("rejects non-RTF input", async () => {
-  await assert.rejects(parse("plain text"), MalformedDocumentError);
+// tikajs-3b5g: Tika 4.2.0 reads a document with no {\rtf header as RTF (answering no text for "plain text") and stops where the
+// first group closes.
+test("a document without the {\\rtf header is read as RTF", async () => {
+  assert.equal((await parse(String.raw`{\pard A\par}`)).text.trim(), "A");
+});
+
+test("reading stops where the first group closes", async () => {
+  assert.equal((await parse(String.raw`{\rtf1 {\pard A\par}}{\pard B\par}`)).text.trim(), "A");
 });
 
 test("rejects excessively nested RTF groups", async () => {

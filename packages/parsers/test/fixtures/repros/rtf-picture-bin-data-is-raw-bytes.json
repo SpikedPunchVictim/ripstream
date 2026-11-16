@@ -1,0 +1,24 @@
+{
+  "description": "tikajs-3b5g: the data of a \\pict group can be N raw bytes after \\binN (Tika 4.2.0 gives embedded-0.png for a PNG here, as it does for the hex form). The bytes here are the PNG's with no byte above 0x7f replaced, written in the fixture as base64 of the whole document.",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "operation": "parseRecursive",
+  "input": {
+    "base64": "e1xydGYxXGFuc2l7XHBhcmQgeCB7XHBpY3RccG5nYmxpcFxiaW43MCCJUE5HDQoaCgAAAA1JSERSAAAAAQAAAAEIBgAAAB8VxIkAAAANSURBVHjaY2Rg+F8PAAKHAYDrR7qSAAAAAElFTkSuQmCCfSB5XHBhcn19",
+    "filename": "a.rtf"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "records.1.metadata.tk:resource-name",
+      "value": "embedded-0.png"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.Content-Type",
+      "value": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "description": "tikajs-3b5g: a \\pict group is an embedded document, named embedded-N and the extension of what its hex data is (a \\jpegblip holding a PNG is embedded-0.png), and its name is written as a heading. Apache Tika 4.2.0 (/rmeta/body) for the same bytes: the container's text is 'x embedded-0.png\\n\\n y\\n\\n' and a second record embedded-0.png of type image/png. The 1x1 PNG is synthetic. ripstream splits the paragraph around the picture, so its text is 'x\\nembedded-0.png\\n\\n y\\n'.",
+  "tags": [
+    "repro",
+    "rtf"
+  ],
+  "operation": "parseRecursive",
+  "input": {
+    "text": "{\\rtf1\\ansi{\\pard x {\\pict\\jpegblip\\picw1\\pich1 89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da636460f85f0f0002870180eb47ba920000000049454e44ae426082} y\\par}}",
+    "filename": "a.rtf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "records.0.text",
+      "value": "embedded-0.png\n\n"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.tk:resource-name",
+      "value": "embedded-0.png"
+    },
+    {
+      "type": "equals",
+      "field": "records.1.metadata.Content-Type",
+      "value": "image/png"
+    },
+    {
+      "type": "absent",
+      "field": "records.2.text"
+    }
+  ]
+}
