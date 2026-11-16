@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: No recipients\nFrom: sender@example.com\n\nJust a body.\n"
+      "value": "Subject: No recipients\nFrom: sender@example.com\n\nJust a body.\n\n\n"
     }
   ]
 }

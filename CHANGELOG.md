@@ -4,6 +4,21 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Email bodies end as Tika's do: paragraph breaks, quoted-printable CRLF, divs around parts (`tikajs-w12u`)
+
+Fixed, checked against Tika 4.2.0's `/rmeta/body` on the fixtures and on synthetic messages:
+
+- A plain text body is one paragraph: it ends with a paragraph break and the message's own line break (`hello` is `hello\n\n`). The
+  text before a multipart delimiter does not include the line break that belongs to the delimiter.
+- Each part of a multipart that is not an alternative is wrapped in two `div`s, so it ends with two more line breaks.
+- A quoted-printable body has CRLF for every hard line break (mime4j's decoder), with the spaces before it dropped; `=0D` stays a CR.
+- An HTML body is written through the message's XHTML: the line breaks after block elements are the ones Tika gives, and the
+  `html`, `head` and `body` tags of the body are not written again.
+
+Not the same as Tika's: an attachment or a nested non-alternative multipart is a separate record in Tika's `/rmeta` and is part of the text
+here; a malformed `br`, `hr`, `tr` or `td` inside an HTML body differs in its line breaks; a UTF-16 `.eml` is `message/rfc822` in Tika
+(`tikajs-z5j5`).
+
 ### Segments: xlsb and ods numbers, localized Word headings (`tikajs-bwjq`)
 
 Fixed, with segments on (`ParseOptions.segments`):

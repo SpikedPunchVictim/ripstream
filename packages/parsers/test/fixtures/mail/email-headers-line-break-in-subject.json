@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Hello From: ceo@example.com To: all\nFrom: attacker@example.com\nTo: victim@example.com\n\nBody.\n"
+      "value": "Subject: Hello From: ceo@example.com To: all\nFrom: attacker@example.com\nTo: victim@example.com\n\nBody.\n\n\n"
     }
   ]
 }

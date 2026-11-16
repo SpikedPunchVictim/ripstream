@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename email-no-html-content-1.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-no-html-content-1.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename email-no-html-content-1.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-no-html-content-1.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
   "tags": [
     "xberg",
     "oracle",
-    "mail",
-    "xfail"
+    "mail"
   ],
   "input": {
     "file": "../files/unstructured-email-no-html-content-1.eml",

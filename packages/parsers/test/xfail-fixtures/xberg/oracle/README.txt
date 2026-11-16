@@ -11,23 +11,8 @@ Suggested NOTICE entry: 'Test inputs adapted from xberg (MIT, Kreuzberg, Inc.), 
 
 A JSON input is stored with the extension .input, because the fixture walker validates every .json file under its root; the fixture's filename field still names it as it was.
 Files under files/ (source path in test_documents, size in bytes, sha256, cause):
-  unstructured-test-iso-8601-date.eml  <- test_documents/vendored/unstructured/eml/test-iso-8601-date.eml  135  075625d098b578456bbf35d1f603ed11518fd531f403cc9105a432907ea5e24c  eml-trailing
-  unstructured-test-rfc2822-date.eml  <- test_documents/vendored/unstructured/eml/test-rfc2822-date.eml  151  6756207d8ad2a459ed9ccd0e8335a9be1ca8e9a51ca6976b07cc53ab65be75c1  eml-trailing
-  unstructured-mime-no-subject.eml  <- test_documents/vendored/unstructured/eml/mime-no-subject.eml  162  0fa470bf3467d0f561a402447640d7f7ff9526aa3b39d9e4f8a1aeee87e2e6c1  eml-trailing
-  unstructured-rfc822-no-date.eml  <- test_documents/vendored/unstructured/eml/rfc822-no-date.eml  232  abece92894e91278391f6b8e96f0e2817cdca030076b8ebf8ed3a62cdd517d4c  eml-trailing
-  unstructured-mime-no-to.eml  <- test_documents/vendored/unstructured/eml/mime-no-to.eml  264  adc994f48937a8c71b8ad7f7686bc6a4c68c3fef7af21c0f844f7d8ce01f14e5  eml-trailing
-  unstructured-mime-simple.eml  <- test_documents/vendored/unstructured/eml/mime-simple.eml  452  990c658aa64b6fbd5c482b8424ca65bde764f380194050e58ffaebe09f2dad93  eml-trailing
-  unstructured-fake-email.eml  <- test_documents/vendored/unstructured/eml/fake-email.eml  807  1c1c433ff5d0f5439f23336bb53c690b445095ed601523c6bf52162e91d6a9cb  eml-trailing
-  unstructured-fake-email-header.eml  <- test_documents/vendored/unstructured/eml/fake-email-header.eml  1207  7e6d1f9998e690d58eff63754259a4a0d0d04bf33e26dab5a73cab322eb4aa97  eml-trailing
-  unstructured-family-day.eml  <- test_documents/vendored/unstructured/eml/family-day.eml  1291  9766c9026f78e3f8f645a9fd541a4e5e1d5143048801641c5ebf1456a6d52730  eml-trailing
-  unstructured-mime-different-plain-html.eml  <- test_documents/vendored/unstructured/eml/mime-different-plain-html.eml  1397  83794f939640428956fceae2a5ff2b0f7910869881fe8b990a491d326399be25  eml-trailing
   unstructured-fake-email-utf-16-be.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-be.eml  1614  4a32768db09f17c22b0a6f8eb0d620065e176103f75d2eeadcb6dc07f0c7e5f0  eml-utf16
   unstructured-fake-email-utf-16-le.eml  <- test_documents/vendored/unstructured/eml/fake-email-utf-16-le.eml  1614  6b44e55a96d15e7d7a53f0146a23d06d43bf8a7fe631a9de2c30efcfe8e6ce14  eml-utf16
-  unstructured-email-no-html-content-1.eml  <- test_documents/vendored/unstructured/eml/email-no-html-content-1.eml  7721  2bf98c517395831e6d9ae25b43d8cd4946697fccc18ce304c42189d182b43399  eml-trailing
-  unstructured-email-replace-mime-encodings-error-5.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-5.eml  14567  9a67b5b6b8f46a62d7e081dd9258c7eba15257780fa6f87b438c977eeb831878  eml-trailing
-  unstructured-email-replace-mime-encodings-error-1.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-1.eml  16085  3ba135c81bfdcb41c7f7342ff7dc337de194386d4c9607c56c835a3ad12c8406  eml-trailing
-  unstructured-email-replace-mime-encodings-error-4.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-4.eml  34433  7cb01667ff0bae89d9f4cf4c9c49d039113d9591433ad8064746640b9f933a8c  eml-trailing
-  unstructured-email-replace-mime-encodings-error-3.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-3.eml  56028  fa25ebbac36b7add83bdd209f2e309ef274f0808b43e019d6ac5b34ecf132fa8  eml-trailing
   docling-table_with_heading_01.html.md  <- test_documents/vendored/docling/md/table_with_heading_01.html.md  83  0898a5e28e1f6a60ed6d245b28fd0b126a5c30bf5b49bf7e423c46d1140e0fe6  md-table
   docling-table_with_heading_02.html.md  <- test_documents/vendored/docling/md/table_with_heading_02.html.md  130  4e889d69beb8b81f41b23b12f37ad06ca3e7ec2ae345b86a36b3cb25bbfd571f  md-table
   docling-csv-comma-in-cell.csv.md  <- test_documents/vendored/docling/md/csv-comma-in-cell.csv.md  156  9409caf611bdd76600ca23b5c2523eca060bc7943e1914a07ba72eaf5f9dda39  md-table

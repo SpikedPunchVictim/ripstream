@@ -1,14 +1,13 @@
 {
-  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename fake-email-header.eml) text and Content-Type for test_documents/vendored/unstructured/eml/fake-email-header.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename fake-email.eml) text and Content-Type for test_documents/vendored/unstructured/eml/fake-email.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
   "tags": [
     "xberg",
     "oracle",
-    "mail",
-    "xfail"
+    "mail"
   ],
   "input": {
-    "file": "../files/unstructured-fake-email-header.eml",
-    "filename": "fake-email-header.eml"
+    "file": "../files/unstructured-fake-email.eml",
+    "filename": "fake-email.eml"
   },
   "assertions": [
     {
@@ -19,7 +18,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "This is a test email to use for unit tests.\n\n\nImportant points:\n\t\tRoses are red\n\n\t\tViolets are blue\n\n\n\n\n\n\r\n"
+      "value": "This is a test email to use for unit tests.\n\n\nImportant points:\n\t\tRoses are red\n\n\t\tViolets are blue\n\n\n\n\n\n\n"
     },
     {
       "type": "equals",
@@ -49,7 +48,7 @@
     {
       "type": "equals",
       "field": "metadata.message:to",
-      "value": "Matthew Robinson <mrobinson@unstructured.io>"
+      "value": "NotMatthew <NotMatthew@notunstructured.com>"
     },
     {
       "type": "equals",

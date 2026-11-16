@@ -1,0 +1,18 @@
+{
+  "description": "mime4j decodes every hard line break of a quoted-printable body to CRLF, drops the spaces before it, and removes a soft break (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "tags": [
+    "repro",
+    "mail"
+  ],
+  "input": {
+    "text": "Subject: s\nContent-Type: text/plain\nContent-Transfer-Encoding: quoted-printable\n\nabc   \ndef=\nghi\nlast",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "abc\r\ndefghi\r\nlast\n\n"
+    }
+  ]
+}

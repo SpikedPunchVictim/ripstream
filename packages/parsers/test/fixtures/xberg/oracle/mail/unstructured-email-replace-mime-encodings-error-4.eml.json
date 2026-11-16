@@ -1,14 +1,13 @@
 {
-  "description": "[xfail tikajs-w12u] Tika 4.2.0 oracle (PUT /rmeta/body, filename email-replace-mime-encodings-error-1.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-1.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename email-replace-mime-encodings-error-4.eml) text and Content-Type for test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-4.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
   "tags": [
     "xberg",
     "oracle",
-    "mail",
-    "xfail"
+    "mail"
   ],
   "input": {
-    "file": "../files/unstructured-email-replace-mime-encodings-error-1.eml",
-    "filename": "email-replace-mime-encodings-error-1.eml"
+    "file": "../files/unstructured-email-replace-mime-encodings-error-4.eml",
+    "filename": "email-replace-mime-encodings-error-4.eml"
   },
   "assertions": [
     {
@@ -19,42 +18,42 @@
     {
       "type": "min_length",
       "field": "text",
-      "value": 5468
+      "value": 2650
     },
     {
       "type": "max_length",
       "field": "text",
-      "value": 5468
+      "value": 2650
     },
     {
       "type": "contains",
       "field": "text",
-      "value": "                                 Copyright ©2022 Zoom Video "
+      "value": "u are a great startup with a powerful product that has to be"
     },
     {
       "type": "equals",
       "field": "metadata.dc:title",
-      "value": "Someone has joined your meeting - Someone: 45 Minute Meeting"
+      "value": "Intellectual Property Protection for startups"
     },
     {
       "type": "equals",
       "field": "metadata.dc:creator",
-      "value": "Zoom <email@domain.com>"
+      "value": "Someone K <email@domain.com>"
     },
     {
       "type": "equals",
       "field": "metadata.dc:subject",
-      "value": "Someone has joined your meeting - Someone: 45 Minute Meeting"
+      "value": "Intellectual Property Protection for startups"
     },
     {
       "type": "equals",
       "field": "metadata.dcterms:created",
-      "value": "2022-10-28T08:59:12Z"
+      "value": "2022-09-02T14:11:33Z"
     },
     {
       "type": "equals",
       "field": "metadata.message:from",
-      "value": "Zoom <email@domain.com>"
+      "value": "Someone K <email@domain.com>"
     },
     {
       "type": "equals",

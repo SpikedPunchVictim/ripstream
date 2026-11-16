@@ -99,3 +99,18 @@ Files under files/ (source path in test_documents, size in bytes, sha256):
   docling-csv-too-few-columns.csv  <- test_documents/vendored/docling/csv/csv-too-few-columns.csv  44  192be2a77124929ac1dc560b1dd178627ce681aad7fc3c10384d14ff967aabab
   docling-csv-too-many-columns.csv  <- test_documents/vendored/docling/csv/csv-too-many-columns.csv  46  f87b302f0905323f6660e2deec90af183d77dfa8c45e05026f028b71e1dd2e1f
   markitdown-test_mskanji.csv  <- test_documents/vendored/markitdown/csv/test_mskanji.csv  70  184c3dbe4c92d80c0ffef7141dc2401d6ed2fed2e001d444dffb3c3414ce5ff9
+  unstructured-email-no-html-content-1.eml  <- test_documents/vendored/unstructured/eml/email-no-html-content-1.eml  7721  2bf98c517395831e6d9ae25b43d8cd4946697fccc18ce304c42189d182b43399
+  unstructured-email-replace-mime-encodings-error-1.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-1.eml  16085  3ba135c81bfdcb41c7f7342ff7dc337de194386d4c9607c56c835a3ad12c8406
+  unstructured-email-replace-mime-encodings-error-3.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-3.eml  56028  fa25ebbac36b7add83bdd209f2e309ef274f0808b43e019d6ac5b34ecf132fa8
+  unstructured-email-replace-mime-encodings-error-4.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-4.eml  34433  7cb01667ff0bae89d9f4cf4c9c49d039113d9591433ad8064746640b9f933a8c
+  unstructured-email-replace-mime-encodings-error-5.eml  <- test_documents/vendored/unstructured/eml/email-replace-mime-encodings-error-5.eml  14567  9a67b5b6b8f46a62d7e081dd9258c7eba15257780fa6f87b438c977eeb831878
+  unstructured-fake-email-header.eml  <- test_documents/vendored/unstructured/eml/fake-email-header.eml  1207  7e6d1f9998e690d58eff63754259a4a0d0d04bf33e26dab5a73cab322eb4aa97
+  unstructured-fake-email.eml  <- test_documents/vendored/unstructured/eml/fake-email.eml  807  1c1c433ff5d0f5439f23336bb53c690b445095ed601523c6bf52162e91d6a9cb
+  unstructured-family-day.eml  <- test_documents/vendored/unstructured/eml/family-day.eml  1291  9766c9026f78e3f8f645a9fd541a4e5e1d5143048801641c5ebf1456a6d52730
+  unstructured-mime-different-plain-html.eml  <- test_documents/vendored/unstructured/eml/mime-different-plain-html.eml  1397  83794f939640428956fceae2a5ff2b0f7910869881fe8b990a491d326399be25
+  unstructured-mime-no-subject.eml  <- test_documents/vendored/unstructured/eml/mime-no-subject.eml  162  0fa470bf3467d0f561a402447640d7f7ff9526aa3b39d9e4f8a1aeee87e2e6c1
+  unstructured-mime-no-to.eml  <- test_documents/vendored/unstructured/eml/mime-no-to.eml  264  adc994f48937a8c71b8ad7f7686bc6a4c68c3fef7af21c0f844f7d8ce01f14e5
+  unstructured-mime-simple.eml  <- test_documents/vendored/unstructured/eml/mime-simple.eml  452  990c658aa64b6fbd5c482b8424ca65bde764f380194050e58ffaebe09f2dad93
+  unstructured-rfc822-no-date.eml  <- test_documents/vendored/unstructured/eml/rfc822-no-date.eml  232  abece92894e91278391f6b8e96f0e2817cdca030076b8ebf8ed3a62cdd517d4c
+  unstructured-test-iso-8601-date.eml  <- test_documents/vendored/unstructured/eml/test-iso-8601-date.eml  135  075625d098b578456bbf35d1f603ed11518fd531f403cc9105a432907ea5e24c
+  unstructured-test-rfc2822-date.eml  <- test_documents/vendored/unstructured/eml/test-rfc2822-date.eml  151  6756207d8ad2a459ed9ccd0e8335a9be1ca8e9a51ca6976b07cc53ab65be75c1

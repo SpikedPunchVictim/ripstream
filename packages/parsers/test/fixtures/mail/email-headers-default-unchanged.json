@@ -13,7 +13,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "This is an RFC 822 email message.\n"
+      "value": "This is an RFC 822 email message.\n\n\n"
     },
     {
       "type": "not_contains",

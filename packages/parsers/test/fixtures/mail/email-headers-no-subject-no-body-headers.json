@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Date: Mon, 07 Aug 2006 12:34:56 -0700 (PDT)\n\nbody\n"
+      "value": "Date: Mon, 07 Aug 2006 12:34:56 -0700 (PDT)\n\nbody\n\n\n"
     },
     {
       "type": "equals",

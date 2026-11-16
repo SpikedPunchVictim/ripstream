@@ -245,25 +245,25 @@ test("headers in UTF-8 bytes are decoded as UTF-8", async () => {
 });
 
 test("a body after an LF header end is not cut by a CRLF blank line inside the body, and the other way round", async () => {
-  assert.equal((await parse("A: b\n\nbody\r\n\r\nmore")).text, "body\r\n\r\nmore");
-  assert.equal((await parse("A: b\r\n\r\nbody\n\nmore")).text, "body\n\nmore");
+  assert.equal((await parse("A: b\n\nbody\r\n\r\nmore")).text, "body\r\n\r\nmore\n\n");
+  assert.equal((await parse("A: b\r\n\r\nbody\n\nmore")).text, "body\n\nmore\n\n");
 });
 
 test("the body starts right after the blank line, with no line break of its own", async () => {
-  assert.equal((await parse("A: b\r\n\r\nx")).text, "x");
-  assert.equal((await parse("A: b\n\nx")).text, "x");
+  assert.equal((await parse("A: b\r\n\r\nx")).text, "x\n\n");
+  assert.equal((await parse("A: b\n\nx")).text, "x\n\n");
 });
 
 test("a part with no headers, its blank line right after the delimiter, is a text/plain part with its body (RFC 2046 5.1.1)", async () => {
   const crlfMessage = crlf("Subject: s", 'Content-Type: multipart/mixed; boundary="b"', "", "--b", "", "headerless body", "--b--", "");
-  assert.equal((await parse(crlfMessage)).text, "headerless body\r\n");
+  assert.equal((await parse(crlfMessage)).text, "headerless body\n\n\n\n");
   const lfMessage = 'Subject: s\nContent-Type: multipart/mixed; boundary="b"\n\n--b\n\nheaderless lf\n--b--\n';
-  assert.equal((await parse(lfMessage)).text, "headerless lf\n");
+  assert.equal((await parse(lfMessage)).text, "headerless lf\n\n\n\n");
 });
 
 test("a part that starts with a CR that is not a line break is not a part with no headers", async () => {
   const message = 'Subject: s\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\r\nContent-Type: text/plain\r\n\r\nx\r\n--b--\r\n';
-  assert.equal((await parse(message)).text, "x\r\n");
+  assert.equal((await parse(message)).text, "x\n\n\n\n");
 });
 
 test("the closing delimiter ends the multipart: its epilogue is not text", async () => {
@@ -277,7 +277,7 @@ test("a delimiter followed by one dash is not the closing delimiter", async () =
 
 test("a multipart with no closing delimiter keeps the last byte of its last part", async () => {
   const message = 'Subject: s\r\nContent-Type: multipart/mixed; boundary="b"\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nlast';
-  assert.equal((await parse(message)).text, "last");
+  assert.equal((await parse(message)).text, "last\n\n\n\n");
 });
 
 test("an empty segment between two delimiters is not a part", async () => {
@@ -413,16 +413,16 @@ test("a message/rfc822 part with an empty header block is not read (port)", asyn
 });
 
 test("an empty Content-Type is text/plain", async () => {
-  assert.equal((await parse("Subject: s\r\nContent-Type: ;\r\n\r\nsemi")).text, "semi");
+  assert.equal((await parse("Subject: s\r\nContent-Type: ;\r\n\r\nsemi")).text, "semi\n\n");
 });
 
 test("a text part with no charset is read as UTF-8 (port)", async () => {
-  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain\r\n\r\ncafé")).text, "café");
+  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain\r\n\r\ncafé")).text, "café\n\n");
 });
 
 test("a part of charset us-ascii or ascii is read as UTF-8, and an unknown charset as UTF-8 (port)", async () => {
   for (const charset of ["us-ascii", "ASCII", "x-no-such-charset"]) {
-    assert.equal((await parse(`Subject: s\r\nContent-Type: text/plain; charset=${charset}\r\n\r\ncafé`)).text, "café", charset);
+    assert.equal((await parse(`Subject: s\r\nContent-Type: text/plain; charset=${charset}\r\n\r\ncafé`)).text, "café\n\n", charset);
   }
 });
 
@@ -432,13 +432,13 @@ test("a charset of iso-8859-1 or latin1 reads bytes above 0x7f as windows-1252",
   const handler = new BodyContentHandler();
   await new MailParser().parse(stream, handler, new Metadata(), new ParseContext());
   await stream.close();
-  assert.equal(handler.toString(), "\u0192\u2122");
+  assert.equal(handler.toString(), "\u0192\u2122\n\n");
 });
 
 // Tika 4.2.0 (PUT /tika/text, filename a.eml, tikajs-w7xw): a text part's label is a hint the bytes must agree with. Valid
 // non-ASCII UTF-8 under a latin1 label is UTF-8; lone high bytes under a UTF-8 label fall back to the bytes' own charset.
 test("a text part's charset label gives way to what its bytes are", async () => {
-  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain; charset=iso-8859-1\r\n\r\ncafé")).text, "café");
+  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain; charset=iso-8859-1\r\n\r\ncafé")).text, "café\n\n");
   const latin = Uint8Array.from([
     ...new TextEncoder().encode("Subject: s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\ncaf"),
     0xe9,
@@ -452,25 +452,25 @@ test("a text part's charset label gives way to what its bytes are", async () => 
 });
 
 test("the first Content-Type header is the entity's (port)", async () => {
-  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain\r\nContent-Type: text/html\r\n\r\n<b>x</b>")).text, "<b>x</b>");
+  assert.equal((await parse("Subject: s\r\nContent-Type: text/plain\r\nContent-Type: text/html\r\n\r\n<b>x</b>")).text, "<b>x</b>\n\n");
 });
 
 test("quoted-printable: a soft line break is removed whether it is CRLF or LF, and =xx takes either case of hex", async () => {
   const qp = (body: string, eol: string): Promise<{ text: string }> =>
     parse(["Subject: s", "Content-Type: text/plain", "Content-Transfer-Encoding: quoted-printable", "", body].join(eol));
-  assert.equal((await qp("long=\r\nline", "\r\n")).text, "longline");
-  assert.equal((await qp("long=\nline", "\n")).text, "longline");
-  assert.equal((await qp("=4f=4F=c3=A9", "\r\n")).text, "OOé");
+  assert.equal((await qp("long=\r\nline", "\r\n")).text, "longline\n\n");
+  assert.equal((await qp("long=\nline", "\n")).text, "longline\n\n");
+  assert.equal((await qp("=4f=4F=c3=A9", "\r\n")).text, "OOé\n\n");
 });
 
 test("quoted-printable: an = that is not followed by two hex digits is kept", async () => {
   const { text } = await parse("Subject: s\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\na=4Zb=");
-  assert.equal(text, "a=4Zb=");
+  assert.equal(text, "a=4Zb=\n\n");
 });
 
 test("base64 stops at the first padding character", async () => {
   const { text } = await parse("Subject: s\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: base64\r\n\r\nQQ==\r\nQUI=");
-  assert.equal(text, "A");
+  assert.equal(text, "A\n\n");
 });
 
 test("Message:Security is smime, pgp or unknown-binary by the top-level type, whatever its case", async () => {
@@ -634,7 +634,7 @@ async function parseWithHeaders(parser: { parse: MailParser["parse"] }, value: s
 }
 
 test("the header block is off unless the context asks for it", async () => {
-  assert.equal(await parseWithHeaders(new MailParser(), "Subject: S\nFrom: a@example.com\n\nBody\n", false), "Body\n");
+  assert.equal(await parseWithHeaders(new MailParser(), "Subject: S\nFrom: a@example.com\n\nBody\n", false), "Body\n\n\n");
 });
 
 test("a header that occurs twice: the last Subject and Date, every From, To, CC and BCC", async () => {
@@ -651,12 +651,12 @@ test("a header that occurs twice: the last Subject and Date, every From, To, CC 
   );
   assert.equal(
     text,
-    "Subject: second\nFrom: a@example.com, b@example.com\nTo: c@example.com, d@example.com\nDate: Tue, 02 Jan 2024 00:00:00 +0000\n\nBody\n",
+    "Subject: second\nFrom: a@example.com, b@example.com\nTo: c@example.com, d@example.com\nDate: Tue, 02 Jan 2024 00:00:00 +0000\n\nBody\n\n\n",
   );
 });
 
 test("a header with nothing in it has no line, and a message with no header to show has no block", async () => {
-  assert.equal(await parseWithHeaders(new MailParser(), "Subject:\nTo:   \nX-Other: 1\n\nBody\n", true), "Body\n");
+  assert.equal(await parseWithHeaders(new MailParser(), "Subject:\nTo:   \nX-Other: 1\n\nBody\n", true), "Body\n\n\n");
 });
 
 test("an mbox writes each message's own header block, as paragraphs like the rest of the message (the mbox parser drops blank lines)", async () => {
@@ -668,4 +668,21 @@ test("an mbox writes each message's own header block, as paragraphs like the res
   assert.match(text, /Subject: One\nFrom: a@example.com\nFirst body\./);
   assert.match(text, /Subject: Two\nFrom: b@example.com\nSecond body\./);
   assert.doesNotMatch(await parseWithHeaders(new MboxParser(), mbox, false), /Subject:/);
+});
+
+// Tika 4.2.0 (PUT /rmeta/body, filename a.eml, tikajs-w12u): mime4j decodes every hard line break of a quoted-printable body
+// to CRLF, drops the white space before it, and a soft break is removed.
+test("quoted-printable: a hard line break is a CRLF, and the spaces before it are dropped", async () => {
+  const qp = (body: string): Promise<{ text: string }> =>
+    parse(`Subject: s\nContent-Type: text/plain\nContent-Transfer-Encoding: quoted-printable\n\n${body}`);
+  assert.equal((await qp("a\nb\n\nc")).text, "a\r\nb\r\n\r\nc\n\n");
+  assert.equal((await qp("abc   \ndef=20\nghi")).text, "abc\r\ndef \r\nghi\n\n");
+  assert.equal((await qp("a=0D\nb")).text, "a\r\r\nb\n\n");
+});
+
+// A multipart part that is not an alternative is wrapped in two divs by Tika, and the line break before a delimiter is the
+// delimiter's: a plain text part ends with its text, one paragraph break, and the two divs' line breaks.
+test("text parts of a multipart/mixed are each wrapped in two divs; the line break before a delimiter is not text", async () => {
+  const message = 'Subject: s\nContent-Type: multipart/mixed; boundary="b"\n\n--b\nContent-Type: text/plain\n\nfirst\n\n--b\nContent-Type: text/plain\n\nsecond\n--b--\n';
+  assert.equal((await parse(message)).text, "first\n\n\n\n\nsecond\n\n\n\n");
 });

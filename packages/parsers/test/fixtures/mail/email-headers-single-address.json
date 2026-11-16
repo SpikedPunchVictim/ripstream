@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Example RFC 822 Email\nFrom: sender@example.com\nTo: recipient@example.com\nDate: Tue, 01 Oct 2024 12:34:56 -0500\n\nThis is an RFC 822 email message.\n"
+      "value": "Subject: Example RFC 822 Email\nFrom: sender@example.com\nTo: recipient@example.com\nDate: Tue, 01 Oct 2024 12:34:56 -0500\n\nThis is an RFC 822 email message.\n\n\n"
     },
     {
       "type": "equals",

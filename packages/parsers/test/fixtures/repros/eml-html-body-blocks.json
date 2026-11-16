@@ -1,0 +1,18 @@
+{
+  "description": "The HTML body of an email is written through the message's XHTML: block ends take the line breaks Tika gives them, and the HTML's own head and body tags are not written again (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "tags": [
+    "repro",
+    "mail"
+  ],
+  "input": {
+    "text": "Subject: s\nContent-Type: text/html\n\n<html><body><div><p>x</p><p>&nbsp;</p></div></body></html>",
+    "filename": "message.eml"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "x\n\n \n\n\n"
+    }
+  ]
+}

@@ -1,5 +1,4 @@
 import {
-  BodyContentHandler,
   CONTEXT_KEYS,
   MalformedDocumentError,
   MediaType,
@@ -11,7 +10,9 @@ import {
   LimitExceededError,
   ParseTimeoutError,
   AbortError,
+  type Attributes,
   type ContentHandler,
+  type MaybePromise,
   type EmbeddedDocumentExtractor,
   type ParseContext,
   type Parser,
@@ -201,26 +202,19 @@ async function renderEntity(entity: Entity, output: Output, depth: number, conta
   const decoded = decodeTransfer(entity.body, entity.headers);
   if (type === "text/plain" || type === "") {
     const text = decodeBodyText(decoded, contentType.parameters.get("charset"));
-    if (text.length > 0) await xhtml.characters(text);
+    // A message with no body at all has no text; an empty part of a multipart is an empty paragraph, as Tika's TXTParser writes it.
+    if (text.length > 0 || container !== undefined) await writeTextBody(xhtml, text);
     return;
   }
   if (type === "text/html") {
     const childMetadata = new Metadata();
     childMetadata.set("Content-Type", type);
-    const captured = new BodyContentHandler();
     const stream = await RipstreamInputStream.from(decoded, { context: ctx });
     try {
-      await new HtmlDocumentParser().parse(
-        stream,
-        captured,
-        childMetadata,
-        ctx.createChild(),
-      );
+      await new HtmlDocumentParser().parse(stream, new BodyEvents(xhtml), childMetadata, ctx.createChild());
     } finally {
       await stream.close();
     }
-    const text = captured.toString();
-    if (text.length > 0) await xhtml.characters(text);
     return;
   }
 
@@ -238,7 +232,86 @@ async function renderMultipart(entity: Entity, type: string, boundary: string | 
   const parts = splitMultipart(entity.body, boundary, output.maxHeaderBytes);
   const chosen = type === "multipart/alternative" && !output.extractAllAlternatives ? bestAlternative(parts) : parts;
   for (const part of chosen) {
+    // Outside an alternative, which is a choice, Tika writes each part inside two divs, each of which ends with a newline.
+    const wrapped = type !== "multipart/alternative";
+    if (wrapped) await output.xhtml.startElement("div");
+    if (wrapped) await output.xhtml.startElement("div");
     await renderEntity(part, output, depth + 1, container);
+    if (wrapped) await output.xhtml.endElement("div");
+    if (wrapped) await output.xhtml.endElement("div");
+  }
+}
+
+/**
+ * A text/plain body as Tika writes it: its TXTParser puts the text in one paragraph of its own XHTML, and that XHTML is
+ * written through the message's, which adds a line break after the paragraph again (so a body ends with two more newlines
+ * than its text), then the parser's own line break comes after the paragraph's end.
+ */
+async function writeTextBody(xhtml: XHTMLContentHandler, text: string): Promise<void> {
+  await xhtml.startElement("p");
+  if (text.length > 0) await xhtml.characters(text);
+  await xhtml.endElement("p");
+  await xhtml.ignorableWhitespace("\n", 0, 1);
+}
+
+/**
+ * The block elements after which a text/html body's own line break is the only one in Tika's output: the message's XHTML adds
+ * a second line break after every other block element (`p`, `h1`-`h6`, `ul`, `ol`, `dl`, `pre`, `blockquote`, `address`,
+ * `table`, `tr`, `li`, `dt`, `dd`), measured with the Tika 4.2.0 oracle on one message for each tag.
+ */
+const SINGLE_BREAK_ELEMENTS = new Set(["div", "hr", "fieldset", "form", "noscript", "br", "select", "option", "link", "script"]);
+
+/** The `html`, `head` and `body` tags that a source document has inside its own `body` are no elements of the message's XHTML. */
+const NESTED_DOCUMENT_ELEMENTS = new Set(["html", "head", "body"]);
+
+/**
+ * Tika's BodyContentHandler over a parent's handler: the events of a document's `body` element, without the element itself,
+ * written to the parent as they come. A text/html body is parsed with this so that the message's own XHTML adds its line
+ * breaks and indents to the body's, as it does in Tika.
+ */
+class BodyEvents implements ContentHandler {
+  readonly #target: XHTMLContentHandler;
+  #depth = 0;
+  #swallowBreak = false;
+
+  constructor(target: XHTMLContentHandler) {
+    this.#target = target;
+  }
+
+  startDocument(): void {}
+  endDocument(): void {}
+
+  startElement(uri: string, localName: string, qName: string, attributes: Attributes): MaybePromise<void> {
+    this.#swallowBreak = false;
+    if (this.#depth > 0) {
+      this.#depth++;
+      return NESTED_DOCUMENT_ELEMENTS.has(localName) ? undefined : this.#target.startElement(uri, localName, qName, attributes);
+    }
+    if (localName === "body") this.#depth = 1;
+    return undefined;
+  }
+
+  endElement(uri: string, localName: string, qName: string): MaybePromise<void> {
+    if (this.#depth === 0) return undefined;
+    this.#depth--;
+    if (this.#depth === 0 || NESTED_DOCUMENT_ELEMENTS.has(localName)) return undefined;
+    // The parser's own line break follows this event, and the message's XHTML has just written one for it.
+    this.#swallowBreak = SINGLE_BREAK_ELEMENTS.has(localName);
+    return this.#target.endElement(uri, localName, qName);
+  }
+
+  characters(ch: string, start: number, length: number): MaybePromise<void> {
+    this.#swallowBreak = false;
+    return this.#depth > 0 ? this.#target.characters(ch, start, length) : undefined;
+  }
+
+  ignorableWhitespace(ch: string, start: number, length: number): MaybePromise<void> {
+    if (this.#depth === 0) return undefined;
+    if (this.#swallowBreak) {
+      this.#swallowBreak = false;
+      if (ch.slice(start, start + length) === "\n") return undefined;
+    }
+    return this.#target.ignorableWhitespace(ch, start, length);
   }
 }
 
@@ -464,7 +537,11 @@ function splitMultipart(body: Uint8Array, boundary: string, maxHeaderBytes: numb
     // Closing delimiter ("--boundary--") ends the multipart body.
     if (body[segmentStart] === 0x2d && body[segmentStart + 1] === 0x2d) break;
     const next = findDelimiter(body, marker, segmentStart);
-    const segmentEnd = next === -1 ? body.length : next;
+    let segmentEnd = next === -1 ? body.length : next;
+    // The line break before a delimiter belongs to the delimiter (RFC 2046 5.1.1), not to the part that precedes it.
+    if (next !== -1 && segmentEnd > 0 && body[segmentEnd - 1] === 0x0a) {
+      segmentEnd -= segmentEnd > 1 && body[segmentEnd - 2] === 0x0d ? 2 : 1;
+    }
     // Spaces after the delimiter are transport padding, not part of the part.
     while (body[segmentStart] === 0x20 || body[segmentStart] === 0x09) segmentStart++;
     if (body[segmentStart] === 0x0d && body[segmentStart + 1] === 0x0a) {
@@ -520,10 +597,24 @@ function decodeBase64(text: string): Uint8Array {
   return new Uint8Array(output);
 }
 
+/**
+ * Quoted-printable as mime4j decodes it: a soft line break (`=` at the end of a line) is dropped, and a hard line break, LF
+ * or CRLF, is written as CRLF with the spaces and tabs before it dropped (an encoded `=20` before it stays), so a CR that
+ * the text has as `=0D` comes out before a CRLF.
+ */
 function decodeQuotedPrintable(body: Uint8Array): Uint8Array {
   const output: number[] = [];
+  // Output below this index is a decoded escape, or the end of a line: trailing white space is only that of the encoded text.
+  let keep = 0;
   for (let index = 0; index < body.length; index++) {
     const byte = body[index]!;
+    if (byte === 0x0a || (byte === 0x0d && body[index + 1] === 0x0a)) {
+      while (output.length > keep && (output[output.length - 1] === 0x20 || output[output.length - 1] === 0x09)) output.pop();
+      output.push(0x0d, 0x0a);
+      keep = output.length;
+      if (byte === 0x0d) index++;
+      continue;
+    }
     if (byte !== 0x3d) {
       output.push(byte);
       continue;
@@ -541,6 +632,7 @@ function decodeQuotedPrintable(body: Uint8Array): Uint8Array {
     const low = hexValue(body[index + 2]);
     if (high >= 0 && low >= 0) {
       output.push(high * 16 + low);
+      keep = output.length;
       index += 2;
     } else {
       output.push(byte);
