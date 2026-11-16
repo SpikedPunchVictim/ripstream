@@ -59,9 +59,18 @@ export class XmlParser implements Parser {
     stream: RipstreamInputStream,
     handler: ContentHandler,
     metadata: Metadata,
-    _ctx: ParseContext,
+    ctx: ParseContext,
   ): Promise<void> {
     const prefix = await stream.peek(64 * 1024);
+    const { decoder, charset } = createDecoder(detectXmlEncoding(prefix));
+    // Tika's Xerces reads a UTF-16/32 document a buffer at a time and fails on a stray last byte before it reports any
+    // SAX event, so the body is empty (tikajs-bhvl). A parser error of any other kind keeps what was read (Tika does).
+    // The text of such a document is held until its length is known: one whose bytes do not come in whole units keeps
+    // none of it. Past the output limit the hold is given up rather than growing without bound.
+    const unit = /^utf-16/i.test(charset) ? 2 : /^utf-32/i.test(charset) ? 4 : 0;
+    let hold = unit !== 0;
+    let totalBytes = 0;
+    let heldChars = 0;
 
     const pending: string[] = [];
     const stack: Array<{ localName: string; namespaceURI: string; text: string }> = [];
@@ -104,21 +113,41 @@ export class XmlParser implements Parser {
     await xhtml.startElement("p");
 
     // Tika's XMLParser writes no Content-Encoding and no charset in Content-Type.
-    const { decoder } = createDecoder(detectXmlEncoding(prefix));
     try {
       for await (const chunk of stream) {
+        totalBytes += chunk.byteLength;
+        // The failure's kind is not known until the bytes are counted; the rest of the input is only read.
+        if (failed !== null) continue;
         parser.write(decoder.decode(chunk, { stream: true }));
-        await drain(pending, xhtml);
+        if (hold) {
+          for (const text of pending) heldChars += text.length;
+          if (heldChars > ctx.limits.maxOutputChars) {
+            await drain(pending, xhtml);
+            hold = false;
+          }
+        } else {
+          await drain(pending, xhtml);
+        }
       }
-      parser.write(decoder.decode());
-      parser.close();
-      await drain(pending, xhtml);
+      if (failed === null) {
+        parser.write(decoder.decode());
+        parser.close();
+      }
     } catch (error) {
       if (error instanceof RipstreamError) throw error;
       throw new MalformedDocumentError("Malformed XML", { cause: error });
     }
 
-    if (failed !== null) throw new MalformedDocumentError("Malformed XML", { cause: failed });
+    if (failed !== null) {
+      // A document of whole units keeps its text; one with a stray last byte writes none, as Tika's parser fails before it
+      // reports an event. A hold given up at the output limit has written part already.
+      if (!hold || unit === 0 || totalBytes % unit === 0) {
+        await drain(pending, xhtml);
+        await xhtml.endElement("p");
+      }
+      throw new MalformedDocumentError("Malformed XML", { cause: failed });
+    }
+    await drain(pending, xhtml);
     await xhtml.endElement("p");
     await xhtml.endDocument();
   }

@@ -1,5 +1,5 @@
 {
-  "description": "A UTF-16 .xml with a stray last byte fails in Tika (XML parse error, no text, as the xberg factbook-utf-16.xml does) and in ripstream (Malformed XML) (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml).",
+  "description": "A UTF-16 .xml with a stray last byte fails in Tika (XML parse error, no text, as the xberg factbook-utf-16.xml does) and in ripstream (Malformed XML) (tikajs-dmp7). Tika 4.2.0 oracle (PUT /rmeta/body, filename page.xml). The body is empty: Tika fails before it reports an event (tikajs-bhvl).",
   "tags": [
     "repro",
     "xml",
@@ -17,6 +17,11 @@
       "type": "contains",
       "field": "metadata.tk:exception:container-exception",
       "value": "Malformed XML"
+    },
+    {
+      "type": "equals",
+      "field": "text",
+      "value": ""
     }
   ]
 }
