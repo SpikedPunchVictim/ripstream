@@ -144,6 +144,11 @@ Fixed: `&amp;`, `&lt;`, `&gt;`, `&quot;` and the other named and numeric referen
 decodes them, except in code spans and code blocks and after a backslash; an unknown name (`&bogus;`) stays as written and `&#0;`
 is U+FFFD. The named references come from the tables of `htmlparser2`, which the package already depends on.
 
+### A Markdown heading keeps its number (`tikajs-9c7z`)
+
+Fixed: `# 1. Introduction` lost its `1.`: the number was taken for a list marker once the `#` was off. A heading is its text whole, as
+Tika writes it.
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as
