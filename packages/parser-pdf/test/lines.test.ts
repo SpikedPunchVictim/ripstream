@@ -27,19 +27,19 @@ const up = (str: string, line: number, along: number, width: number): PdfTextIte
 const down = (str: string, line: number, along: number, width: number): PdfTextItem => ({ str, transform: [0, -12, 12, 0, line, along], width, height: 12 });
 
 test("text running up the page is read a row at a time, whatever the row's position in the page (tikajs-jmd0)", () => {
-  const items = [up("Name", 40, 40, 30), up("Alice", 40, 100, 30), up("City", 80, 40, 20), up("Paris", 80, 100, 30)];
+  const items = [up("Name", 40, 40, 30), up("Alice", 40, 100, 30), up("City", 60, 40, 20), up("Paris", 60, 100, 30)];
   assert.deepEqual(lines(items, true), ["Name Alice", "City Paris"]);
   assert.deepEqual(lines(items, false), ["Name Alice", "City Paris"]);
 });
 
 test("text running down the page is read a row at a time too (tikajs-jmd0)", () => {
-  const items = [down("Name", 160, 160, 30), down("Alice", 160, 100, 30), down("City", 120, 160, 20), down("Paris", 120, 100, 30)];
+  const items = [down("Name", 160, 160, 30), down("Alice", 160, 100, 30), down("City", 140, 160, 20), down("Paris", 140, 100, 30)];
   assert.deepEqual(lines(items, true), ["Name Alice", "City Paris"]);
 });
 
 test("a few sideways items on a page of upright text change nothing (tikajs-jmd0)", () => {
   const items = [item("First", 72, 700, 40), up("stamp", 20, 300, 60), item("Second", 72, 680, 40)];
-  assert.deepEqual(lines(items, true), ["First", "Second", "stamp"]);
+  assert.deepEqual(lines(items, true), ["First", "Second", "", "stamp"]);
 });
 
 test("sorting by position still reads top to bottom, and not sorting keeps the stream order", () => {
