@@ -39,6 +39,11 @@
       "type": "contains",
       "field": "text",
       "value": "Lab A"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.msoffice:ppt:has-animations",
+      "value": "true"
     }
   ]
 }

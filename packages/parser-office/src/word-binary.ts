@@ -76,7 +76,8 @@ export class WordBinaryParser implements Parser {
     }
 
     const wordDocument = compound.read("WordDocument");
-    const text = extractText(wordDocument, compound);
+    const { text, hasComments } = extractText(wordDocument, compound);
+    if (hasComments) metadata.set("msoffice:has-comments", "true");
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const paragraph of text.split(/\n/)) {
@@ -93,7 +94,7 @@ export class WordBinaryParser implements Parser {
 function extractText(
   wordDocument: Uint8Array,
   compound: CompoundFile,
-): string {
+): { readonly text: string; readonly hasComments: boolean } {
   if (wordDocument.byteLength < 32 || readUInt16(wordDocument, 0) !== 0xa5ec) {
     throw new MalformedDocumentError("Invalid Word document FIB");
   }
@@ -103,7 +104,7 @@ function extractText(
   }
 
   const nFib = readUInt16(wordDocument, 2);
-  if (nFib < 0x00c1) return extractWord95(wordDocument);
+  if (nFib < 0x00c1) return { text: extractWord95(wordDocument), hasComments: false };
 
   const tableName = (flags & 0x0200) !== 0 ? "1Table" : "0Table";
   if (!compound.has(tableName)) {
@@ -130,7 +131,24 @@ function extractText(
     }
     text += decoded;
   }
-  return cleanWordText(text);
+  const cleaned = cleanWordText(text);
+  return { text: cleaned, hasComments: hasComments(wordDocument, pieces, cleaned) };
+}
+
+/**
+ * Whether the document's comments hold text, as Tika's WordExtractor sets msoffice:has-comments: the annotation story is
+ * the CP range after main text, footnotes, headers and macros, of length ccpAtn (FIB FibRgLw97). A story with a non-blank
+ * character is a comment. Word 6/95 has no such story (and Tika's Word6 path does not set the key).
+ */
+function hasComments(wordDocument: Uint8Array, pieces: readonly Piece[], text: string): boolean {
+  const before = readUInt32(wordDocument, 0x4c) + readUInt32(wordDocument, 0x50) + readUInt32(wordDocument, 0x54) + readUInt32(wordDocument, 0x58);
+  const length = readUInt32(wordDocument, 0x5c);
+  if (length === 0) return false;
+  const base = pieces[0]?.cpStart ?? 0;
+  const start = before - base;
+  const end = start + length;
+  if (start < 0 || end > text.length) return false;
+  return /\S/.test(text.slice(start, end));
 }
 
 function extractWord95(wordDocument: Uint8Array): string {

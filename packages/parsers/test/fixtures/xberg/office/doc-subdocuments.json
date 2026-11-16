@@ -64,6 +64,11 @@
       "type": "contains",
       "field": "text",
       "value": "TEXT BOX TEXT"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.msoffice:has-comments",
+      "value": "true"
     }
   ]
 }

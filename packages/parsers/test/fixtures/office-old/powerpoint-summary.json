@@ -1,25 +1,103 @@
 {
   "description": "Tika 4.2.0 /rmeta on testPPT.ppt (tikajs-nb4y): TotalTime is the edit time's FILETIME ticks (62070000000), the slide count is also xmpTPg:NPages, dates are to the second, and the keys Tika does not give (meta:editTime, meta:note-count, meta:hidden-slide-count, meta:multimedia-clip-count, extended-properties:AppVersion) are not set",
-  "tags": ["office", "powerpoint", "ole2", "metadata"],
-  "input": { "file": "testPPT.ppt" },
+  "tags": [
+    "office",
+    "powerpoint",
+    "ole2",
+    "metadata"
+  ],
+  "input": {
+    "file": "testPPT.ppt"
+  },
   "assertions": [
-    { "type": "equals", "field": "metadata.dc:title", "value": "Sample Powerpoint Slide" },
-    { "type": "equals", "field": "metadata.dc:creator", "value": "Keith Bennett" },
-    { "type": "equals", "field": "metadata.meta:last-author", "value": "Keith Bennett" },
-    { "type": "equals", "field": "metadata.cp:revision", "value": "1" },
-    { "type": "equals", "field": "metadata.dcterms:created", "value": "2007-09-14T17:33:12Z" },
-    { "type": "equals", "field": "metadata.dcterms:modified", "value": "2007-09-14T19:16:39Z" },
-    { "type": "equals", "field": "metadata.extended-properties:TotalTime", "value": "62070000000" },
-    { "type": "equals", "field": "metadata.extended-properties:Application", "value": "Microsoft PowerPoint" },
-    { "type": "equals", "field": "metadata.extended-properties:Company", "value": "-" },
-    { "type": "equals", "field": "metadata.meta:slide-count", "value": "1" },
-    { "type": "equals", "field": "metadata.xmpTPg:NPages", "value": "1" },
-    { "type": "equals", "field": "metadata.meta:word-count", "value": "13" },
-    { "type": "equals", "field": "metadata.meta:paragraph-count", "value": "4" },
-    { "type": "absent", "field": "metadata.meta:editTime" },
-    { "type": "absent", "field": "metadata.meta:note-count" },
-    { "type": "absent", "field": "metadata.meta:hidden-slide-count" },
-    { "type": "absent", "field": "metadata.meta:multimedia-clip-count" },
-    { "type": "absent", "field": "metadata.extended-properties:AppVersion" }
+    {
+      "type": "equals",
+      "field": "metadata.dc:title",
+      "value": "Sample Powerpoint Slide"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dc:creator",
+      "value": "Keith Bennett"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:last-author",
+      "value": "Keith Bennett"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.cp:revision",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:created",
+      "value": "2007-09-14T17:33:12Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.dcterms:modified",
+      "value": "2007-09-14T19:16:39Z"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:TotalTime",
+      "value": "62070000000"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:Application",
+      "value": "Microsoft PowerPoint"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.extended-properties:Company",
+      "value": "-"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:slide-count",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.xmpTPg:NPages",
+      "value": "1"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:word-count",
+      "value": "13"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.meta:paragraph-count",
+      "value": "4"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:editTime"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:note-count"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:hidden-slide-count"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.meta:multimedia-clip-count"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.extended-properties:AppVersion"
+    },
+    {
+      "type": "absent",
+      "field": "metadata.msoffice:ppt:has-animations"
+    }
   ]
 }

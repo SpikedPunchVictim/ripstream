@@ -22,6 +22,12 @@ const NOTES_CONTAINER = 0x03f0;
 const MAIN_MASTER_CONTAINER = 0x03f8;
 const SLIDE_LIST_WITH_TEXT = 0x0ff0;
 const HEADERS_FOOTERS = 0x0fd9;
+// The records Tika's HSLFExtractor.findAnimations walks, and the timing container it looks for under them.
+const PROG_TAGS = 5000;
+const PROG_BINARY_TAG = 5002;
+const BINARY_TAG_DATA = 5003;
+const EXT_TIME_NODE_CONTAINER = 0xf144;
+const TIMING_RECORD_PATH = [PROG_TAGS, PROG_BINARY_TAG, BINARY_TAG_DATA];
 const CONTAINER_VERSION = 0x000f;
 const MAX_CONTAINER_DEPTH = 64;
 
@@ -73,7 +79,8 @@ export class PowerPointBinaryParser implements Parser {
       }
     }
 
-    const text = extractText(compound.read("PowerPoint Document"), metadata.get("dc:title"));
+    const { text, hasAnimations } = extractText(compound.read("PowerPoint Document"), metadata.get("dc:title"));
+    if (hasAnimations) metadata.set("msoffice:ppt:has-animations", "true");
     const xhtml = new XHTMLContentHandler(handler, metadata);
     await xhtml.startDocument();
     for (const paragraph of text.split("\n")) {
@@ -93,19 +100,22 @@ export class PowerPointBinaryParser implements Parser {
  * stream edited in PowerPoint has gaps of zeroes between the records of one edit and the next: the newest edit's records
  * are the ones Tika reads, so the slide text is taken from the last block after a gap.
  */
-function extractText(stream: Uint8Array, title: string | null): string {
-  const state: WalkState = { documentTexts: new Set(), masterPrompts: new Set(), masterText: [], lastGap: -1 };
+function extractText(stream: Uint8Array, title: string | null): { readonly text: string; readonly hasAnimations: boolean } {
+  const state: WalkState = { documentTexts: new Set(), masterPrompts: new Set(), masterText: [], lastGap: -1, hasAnimations: false };
   walk(stream, 0, stream.byteLength, 0, "document", [], title, state, false, false, 0);
   const parts: string[] = [];
   if (title !== null && title.trim().length > 0) parts.push(title.trim());
   // The records after the last gap are the current edit; if there is none, the whole stream is current.
   const start = state.lastGap > 0 ? state.lastGap : 0;
   walk(stream, start, stream.byteLength, 0, "document", parts, title, state, true, false, 0);
-  return parts
-    .join("\n")
-    .replace(/[\u000b\u000c]/g, "\r")
-    .replace(/\r/g, "\n")
-    .replace(/[\u0000-\u0008\u000e-\u001f]/g, "");
+  return {
+    text: parts
+      .join("\n")
+      .replace(/[\u000b\u000c]/g, "\r")
+      .replace(/\r/g, "\n")
+      .replace(/[\u0000-\u0008\u000e-\u001f]/g, ""),
+    hasAnimations: state.hasAnimations,
+  };
 }
 
 type TextContext = "document" | "slide" | "notes" | "master";
@@ -119,6 +129,8 @@ interface WalkState {
   readonly masterText: string[];
   /** Where the last zero-filled gap ended, or -1 when the stream has none. Mutated by the collecting pass only. */
   lastGap: number;
+  /** A slide's timing tree holds an ExtTimeNodeContainer (msoffice:ppt:has-animations). */
+  hasAnimations: boolean;
 }
 
 /** Returns the number of text atoms emitted under this range, so an empty slide list can present its prompt. */
@@ -201,6 +213,9 @@ function walk(
       const childPlaceholder = type === 0xf004 ? hasPlaceholderInShape(payload) : placeholder;
       const childMask = type === HEADERS_FOOTERS ? headerFooterMaskOf(payload) : headerFooterMask;
       // A master's non-placeholder text is written before each slide's own text.
+      if (emitting && type === SLIDE_CONTAINER && !state.hasAnimations && hasTimingTree(payload)) {
+        state.hasAnimations = true;
+      }
       if (emitting && type === SLIDE_CONTAINER && state.masterText.length > 0) {
         for (const value of state.masterText) emit.push(value);
         emitted += state.masterText.length;
@@ -211,6 +226,35 @@ function walk(
     position += 8 + length;
   }
   return emitted;
+}
+
+/**
+ * Whether a slide's records hold Tika's animation path: ProgTags > ProgBinaryTag > BinaryTagData, with an
+ * ExtTimeNodeContainer somewhere under it (HSLFExtractor.findAnimations).
+ */
+function hasTimingTree(data: Uint8Array): boolean {
+  return searchTiming(data, 0, 0);
+}
+
+function searchTiming(data: Uint8Array, stage: number, depth: number): boolean {
+  if (depth > MAX_CONTAINER_DEPTH) return false;
+  let position = 0;
+  while (position + 8 <= data.byteLength) {
+    const versionInstance = readUInt16(data, position);
+    const type = readUInt16(data, position + 2);
+    const length = readUInt32(data, position + 4);
+    if (length > data.byteLength - position - 8) return false;
+    const container = (versionInstance & 0x000f) === CONTAINER_VERSION;
+    const payload = data.subarray(position + 8, position + 8 + length);
+    if (stage === TIMING_RECORD_PATH.length) {
+      if (type === EXT_TIME_NODE_CONTAINER) return true;
+    } else if (type === TIMING_RECORD_PATH[stage] && searchTiming(payload, stage + 1, depth + 1)) {
+      return true;
+    }
+    if (container && searchTiming(payload, stage, depth + 1)) return true;
+    position += 8 + length;
+  }
+  return false;
 }
 
 /** The mask of a HeadersFootersAtom (fda) in a headers/footers container, or null when it has none. */

@@ -29,6 +29,11 @@
       "type": "contains",
       "field": "text",
       "value": "Closing slide"
+    },
+    {
+      "type": "equals",
+      "field": "metadata.msoffice:ppt:has-animations",
+      "value": "true"
     }
   ]
 }
