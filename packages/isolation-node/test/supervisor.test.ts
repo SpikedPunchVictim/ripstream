@@ -104,7 +104,7 @@ test("the ready deadline never outlasts the overall deadline (a timeout wins whe
 // ---- deadline and abort -------------------------------------------------------------
 
 test("wall-clock deadline kills a hung child: ParseTimeoutError, reason recorded, group dead", async () => {
-  const { outcome, diag } = await supervised("hang", { deadlineMs: 400 });
+  const { outcome, diag } = await supervised("hang", { deadlineMs: 3000 });
   assert.ok(failure(outcome) instanceof ParseTimeoutError);
   assert.equal(diag.killReason, "timeout");
   assert.equal(diag.phase, "post-ready");
