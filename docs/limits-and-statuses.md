@@ -184,7 +184,7 @@ explained here.
 
 ## Not covered
 
-- Password fixtures for pptx and for encrypted zip or 7z: ripstream has no password path for zip (an encrypted entry is
-  recorded, never decrypted) and does not open 7z, so there is nothing to test beyond the entry record above. A pptx
-  with a password goes through the OOXML path in `ole-container.ts` and is not fixtured separately.
+- Password fixtures: a pptx (right password, wrong password, none) is in `office-protected.test.ts` and an encrypted zip entry in
+  `fixtures/archive-samples/zip-encrypted-entry.json` (`tikajs-2gsr`). ripstream has no password path for zip (an encrypted entry
+  is recorded, never decrypted) and does not open 7z, so there is nothing to test beyond the entry record.
 - The XXE and depth rows were run on the library API, not on `serve`; `serve` maps the same errors per the table.

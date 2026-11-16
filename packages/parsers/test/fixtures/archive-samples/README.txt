@@ -20,3 +20,8 @@ layout by packages/parser-archive/test/dump-builder.ts (volume header, CLRI and 
 two inodes, the end record, padded to a 10-record block). It proves the reader's own reading order, not that real dump
 output reads the same; that layout is from memory of commons-compress (tikajs-68os.47). To replace it with a real volume, run
 dump(8) on a small file system and add a fixture beside it.
+
+synthetic-encrypted-entry.zip (297 bytes) is not a Tika file: made with Info-ZIP `zip -X` from two files with the date 2026-01-01,
+plain.txt ("PLAINTEXT-ENTRY readable", stored) and secret.txt ("PLANTED-SECRET-ENTRY not readable", ZipCrypto, password hunter2).
+Tika 4.2.0 (/rmeta) gives the container "tk:exception:embedded-stream-exception" = "EncryptedDocumentException: stream
+(secret.txt) is encrypted" and a record for plain.txt only; zip-encrypted-entry.json carries that (tikajs-2gsr).
