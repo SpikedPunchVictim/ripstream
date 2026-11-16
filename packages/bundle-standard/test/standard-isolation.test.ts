@@ -208,8 +208,9 @@ test("text/plain is parsed in this process; a DOCX, a zip and a PDF each get a c
 });
 
 test("an xml handler's markup beyond maxOutputChars does not fail the isolated parse the in-process one answers (tikajs-n89x)", async () => {
-  // 1.26 million empty spans: 16.4 million characters of content, none of them counted against maxOutputChars.
-  const html = encoder.encode(`<html><body>${"<span></span>".repeat(1_260_000)}hello</body></html>`);
+  // Text first (an empty element before any text does not begin the body, as in Tika), then 1.26 million empty
+  // spans: 16.4 million characters of content, none of them counted against maxOutputChars.
+  const html = encoder.encode(`<html><body>hello${"<span></span>".repeat(1_260_000)}</body></html>`);
   const expected = await reference.parse(html, { handlerType: "xml", filename: "markup.html" });
   assert.ok(expected.text.length > 16_000_000, "the fixture is markup, not text");
   await withStandard({ inProcessTypes: new Set() }, async ({ ripstream }) => {

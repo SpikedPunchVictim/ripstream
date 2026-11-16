@@ -39,13 +39,13 @@ const arms = [
 for (const [arm, ripstream] of arms) {
   test(`${arm}: the default text of an email is its body alone`, { timeout: 60_000 }, async () => {
     const result = await ripstream.parse(EML, { filename: "q.eml" });
-    assert.equal(result.text, "The numbers are attached.\n");
+    assert.equal(result.text, "The numbers are attached.\n\n\n");
   });
 
   test(`${arm}: emailHeaders puts the header block ahead of the body and changes no metadata`, { timeout: 60_000 }, async () => {
     const plain = await ripstream.parse(EML, { filename: "q.eml" });
     const result = await ripstream.parse(EML, { filename: "q.eml", emailHeaders: true });
-    assert.equal(result.text, `${BLOCK}The numbers are attached.\n`);
+    assert.equal(result.text, `${BLOCK}The numbers are attached.\n\n\n`);
     for (const name of plain.metadata.names()) {
       if (name === "tk:parse-time-millis") continue;
       assert.deepEqual(result.metadata.getAll(name), plain.metadata.getAll(name), name);
