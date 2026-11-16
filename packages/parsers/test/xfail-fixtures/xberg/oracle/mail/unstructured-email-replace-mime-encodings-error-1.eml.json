@@ -6,7 +6,7 @@
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-email-replace-mime-encodings-error-1.eml",
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-email-replace-mime-encodings-error-1.eml",
     "filename": "email-replace-mime-encodings-error-1.eml"
   },
   "assertions": [

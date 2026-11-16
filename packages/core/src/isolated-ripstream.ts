@@ -113,7 +113,7 @@ function toRequest(
     ...(options.onDocumentFailure === "record" ? { recordFailures: true } : {}),
     ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
     ...(options.onEmbeddedLimit === "truncate" ? { truncateEmbedded: true } : {}),
-    ...(options.emailHeaders === true ? { emailHeaders: true } : {}),
+    ...(options.emailHeaders === undefined ? {} : { emailHeaders: options.emailHeaders }),
     ...(handlerType === undefined ? {} : { handlerType }),
     // Only a records answer has records to hang bytes on.
     ...(options.unpackBytes === undefined || output !== "records" ? {} : { unpackBytes: options.unpackBytes }),

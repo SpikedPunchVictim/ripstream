@@ -149,7 +149,7 @@ async function checkSegmentInvariants(
   }
 }
 
-const HEADER_BLOCK = /^(?:(?:Subject|From|To|CC|BCC|Date): [^\n]+\n)+\n/m;
+const HEADER_BLOCK = /^(?:(?:Subject|From|To|CC|BCC|Reply-To|Date|Message-ID|In-Reply-To|References|List-Id|List-Unsubscribe): [^\n]+\n)+\n/m;
 
 /**
  * What holds for any parse with emailHeaders: the metadata is the same, and the content is the content without it with

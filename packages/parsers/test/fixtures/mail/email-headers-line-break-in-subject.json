@@ -1,5 +1,5 @@
 {
-  "description": "emailHeaders: an encoded word that decodes to a line break cannot start a forged header line; it is one line of the block (tikajs-5qkk).",
+  "description": "emailHeaders: an encoded word that decodes to a line break cannot start a forged header line; ripstream collapses it to one line (xberg writes the line breaks through, which this keeps safe; tikajs-5qkk, tikajs-26ut).",
   "tags": [
     "mail",
     "rfc822",
@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Hello From: ceo@example.com To: all\nFrom: attacker@example.com\nTo: victim@example.com\n\nBody.\n\n\n"
+      "value": "Subject: Hello From: ceo@example.com To: all\nFrom: attacker@example.com\nTo: victim@example.com\n\nBody."
     }
   ]
 }

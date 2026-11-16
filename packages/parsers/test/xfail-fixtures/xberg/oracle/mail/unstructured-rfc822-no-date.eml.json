@@ -1,13 +1,13 @@
 {
-  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test-iso-8601-date.eml) text and Content-Type for test_documents/vendored/unstructured/eml/test-iso-8601-date.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename rfc822-no-date.eml) text and Content-Type for test_documents/vendored/unstructured/eml/rfc822-no-date.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
   "tags": [
     "xberg",
     "oracle",
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-test-iso-8601-date.eml",
-    "filename": "test-iso-8601-date.eml"
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-rfc822-no-date.eml",
+    "filename": "rfc822-no-date.eml"
   },
   "assertions": [
     {
@@ -18,12 +18,12 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "This is a test-email.\n\n\n"
+      "value": "This is an example email message without a Date header. Note that this is non-standard and may be flagged or corrected by email servers.\n\n\n"
     },
     {
       "type": "equals",
       "field": "metadata.dc:title",
-      "value": "Test a Z-suffix date"
+      "value": "Example Email Without Date Header"
     },
     {
       "type": "equals",
@@ -33,12 +33,7 @@
     {
       "type": "equals",
       "field": "metadata.dc:subject",
-      "value": "Test a Z-suffix date"
-    },
-    {
-      "type": "equals",
-      "field": "metadata.dcterms:created",
-      "value": "2025-07-29T12:42:06Z"
+      "value": "Example Email Without Date Header"
     },
     {
       "type": "equals",

@@ -14,14 +14,9 @@
   },
   "assertions": [
     {
-      "type": "contains",
+      "type": "equals",
       "field": "text",
-      "value": "Intro."
-    },
-    {
-      "type": "contains",
-      "field": "text",
-      "value": "World"
+      "value": "Subject: Figures\nFrom: alice@example.com\n\nIntro.\n\nWorld"
     }
   ]
 }

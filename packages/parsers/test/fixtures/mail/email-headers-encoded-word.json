@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Simple email with ☸☿ Unicode subject\nFrom: Jürgen Müller <jm@example.com>\nTo: recipient@example.com\n\nBody text.\n\n\n"
+      "value": "Subject: Simple email with ☸☿ Unicode subject\nFrom: Jürgen Müller <jm@example.com>\nTo: recipient@example.com\n\nBody text."
     }
   ]
 }

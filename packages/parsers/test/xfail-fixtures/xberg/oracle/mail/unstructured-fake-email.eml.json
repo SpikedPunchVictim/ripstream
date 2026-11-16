@@ -6,7 +6,7 @@
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-fake-email.eml",
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-fake-email.eml",
     "filename": "fake-email.eml"
   },
   "assertions": [

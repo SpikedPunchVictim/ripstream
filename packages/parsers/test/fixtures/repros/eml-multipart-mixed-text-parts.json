@@ -1,5 +1,5 @@
 {
-  "description": "Each part of a multipart/mixed is wrapped in two divs, and the line break before a delimiter belongs to the delimiter (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "description": "Each part of a multipart/mixed is wrapped in two divs, and the line break before a delimiter belongs to the delimiter (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml). Email content follows xberg (tikajs-26ut).",
   "tags": [
     "repro",
     "mail"
@@ -12,7 +12,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "first\n\n\n\n\nsecond\n\n\n\n"
+      "value": "Subject: s\n\nfirst\n\nsecond"
     }
   ]
 }

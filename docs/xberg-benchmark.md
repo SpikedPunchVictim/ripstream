@@ -376,10 +376,10 @@ fixtures.
   text and returns the Markdown source, while ripstream picks its Markdown parser by extension and returns the text
   without the markers (so ordered-list numbers, which the ground truth keeps, are gone).
 - **The ground truth is not neutral.** It comes from `python_email`, pandoc and xberg's own exporters. For email it
-  includes the Subject/From/To/Date header block, which xberg writes into the content and Tika and ripstream keep in
-  metadata, so every Tika-style extractor scores about 0.55 on `eml`. Ripstream's opt-in `emailHeaders` writes that block into the
-  text (`docs/migration.md`, "The email header block"); `node scripts/bench/run.ts ... --ripstream-email-headers` scores it in
-  the worker lanes: 0.567 to 0.968 on the 37 common `eml` fixtures. The default stays Tika's output. For CSV, raw comma-separated output is one token
+  includes the Subject/From/To/Date header block, which xberg writes into the content and Tika keeps in metadata, so every
+  Tika-style extractor scores about 0.55 on `eml`. Ripstream writes xberg's email content by default now (the header
+  block, the body, an Attachments summary and the inlined attachment text; `docs/migration.md`, "The email header
+  block"), so it is scored on that strategy rather than Tika's body-only output. For CSV, raw comma-separated output is one token
   per line (commas are kept inside tokens), which drives several CSV fixtures to zero overlap for Tika and ripstream.
   TF1 is best read as "how close to xberg's notion of plain text", and the ripstream-to-Tika gap as the parity signal.
 - **xberg batch may use several cores.** `xberg batch` runs with a thread budget (8 here, per its own log line); the

@@ -55,7 +55,7 @@ export interface InputHeader {
   readonly truncateOutput?: boolean;
   /** ParseOptions.onEmbeddedLimit "truncate": an entry-count limit ends the read with the entries so far, flagged. Omitted: false. */
   readonly truncateEmbedded?: boolean;
-  /** ParseOptions.emailHeaders: an email's header block is written ahead of its body text. Omitted: false. */
+  /** ParseOptions.emailHeaders: false leaves out the header block an email writes ahead of its body text. */
   readonly emailHeaders?: boolean;
   /** ParseOptions.handlerType: the shape the content is written in. Omitted: "text". */
   readonly handlerType?: HandlerType;

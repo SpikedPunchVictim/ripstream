@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Test invalid date format\nFrom: sender@example.com\nTo: recipient@example.com\nDate: INVALID-DATE-FORMAT\n\nBody.\n\n\n"
+      "value": "Subject: Test invalid date format\nFrom: sender@example.com\nTo: recipient@example.com\nDate: INVALID-DATE-FORMAT\n\nBody."
     },
     {
       "type": "absent",

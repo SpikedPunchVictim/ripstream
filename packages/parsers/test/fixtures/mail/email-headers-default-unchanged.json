@@ -1,5 +1,5 @@
 {
-  "description": "Default parse of an email is the body alone, as Tika gives it; the headers are metadata only, and the original Date string is not kept (Tika's RFC822Parser does not either). Guards ParseOptions.emailHeaders being opt-in (tikajs-5qkk).",
+  "description": "Default parse of an email is the body alone, as Tika gives it; the headers are metadata only, and the original Date string is not kept (Tika's RFC822Parser does not either). Guards ParseOptions.emailHeaders being opt-in (tikajs-5qkk). Email content follows xberg (tikajs-26ut).",
   "tags": [
     "mail",
     "rfc822",
@@ -13,12 +13,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "This is an RFC 822 email message.\n\n\n"
-    },
-    {
-      "type": "not_contains",
-      "field": "text",
-      "value": "Subject:"
+      "value": "Subject: Example RFC 822 Email\nFrom: sender@example.com\nTo: recipient@example.com\nDate: Tue, 01 Oct 2024 12:34:56 -0500\nMessage-ID: 1@example.com\n\nThis is an RFC 822 email message."
     },
     {
       "type": "equals",

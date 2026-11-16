@@ -44,3 +44,8 @@ Files under files/ (source path in test_documents, size in bytes, sha256, cause)
   docling-gt-elife-56337.nxml.md  <- test_documents/vendored/docling/groundtruth/docling_v2/elife-56337.nxml.md  77682  30b988d339def601c70106da8c6f474f9d41b267e3f4d43c6fe63de9f1c833fd  md-entities
   docling-gt-redp5110_sampled.md  <- test_documents/vendored/docling/groundtruth/docling_v1/redp5110_sampled.md  31596  ee5082f07c23b194c423be5bc7aa4a5ed704612be7a75c0bb7af2b047a4f2a2a  md-entities
   docling-gt-2203.01017v2.md  <- test_documents/vendored/docling/groundtruth/docling_v1/2203.01017v2.md  56943  385f4cae40cedc73f9b28b7bd6361b84b94afa27715a5f55914f781bee1c3303  md-heading-number
+
+tikajs-26ut  Email content follows xberg's strategy, not Tika's /rmeta/body: the header block, the body, an Attachments:
+             summary and the inlined attachment text. The mail/*.json fixtures here are the Tika 4.2.0 body texts that no
+             longer apply (the three fake-email-utf-16* fixtures stay in fixtures/xberg/oracle/mail because their MIME
+             type detection, not the body strategy, is what they test).

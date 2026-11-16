@@ -6,7 +6,7 @@
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-mime-no-to.eml",
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-mime-no-to.eml",
     "filename": "mime-no-to.eml"
   },
   "assertions": [

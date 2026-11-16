@@ -107,12 +107,9 @@ export interface ParseOptions {
   readonly segments?: boolean;
   /**
    * Email only (RFC 822 and emlx messages, and each message of an mbox): write the message's header block ahead of its
-   * body text, as `Name: value` lines in the order Subject, From, To, CC, BCC, Date, then a blank line. A header the
-   * message lacks has no line. Each value is the header as the message wrote it, unfolded, with RFC 2047 words decoded
-   * (an address list keeps its quoting; the Date is the sender's string, not the normalised `dcterms:created`).
-   * Default false: the text is the body alone, as Tika gives it, and metadata is the same either way. Meant for text
-   * that must stand on its own, such as a search index or a model prompt, where the sender and subject are content.
-   * See "The email header block" in docs/migration.md.
+   * body text, as xberg writes it: `Name: value` lines in the order Subject, From, To, CC, BCC, Reply-To, Date,
+   * Message-ID, In-Reply-To, References, List-Id, List-Unsubscribe. Default true (xberg's email content); false writes
+   * the body alone. Metadata is the same either way. See "The email header block" in docs/migration.md.
    */
   readonly emailHeaders?: boolean;
 }
@@ -431,7 +428,7 @@ export class Ripstream {
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
     if (this.digest !== undefined) ctx.set(CONTEXT_KEYS.DIGESTS, this.digest);
-    if (options.emailHeaders === true) ctx.set(CONTEXT_KEYS.EMAIL_HEADER_BLOCK, true);
+    if (options.emailHeaders !== undefined) ctx.set(CONTEXT_KEYS.EMAIL_HEADER_BLOCK, options.emailHeaders);
     const charset = charsetHint(options.contentType);
     if (charset !== undefined) ctx.set(CONTEXT_KEYS.CHARSET_HINT, charset);
     if (options.password !== undefined) {

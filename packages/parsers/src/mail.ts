@@ -1,26 +1,27 @@
 import {
+  AbortError,
+  BodyContentHandler,
   CONTEXT_KEYS,
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
+  OutputLimitContentHandler,
+  ParseTimeoutError,
   ParsingEmbeddedDocumentExtractor,
   RipstreamInputStream,
   TIKA_KEYS,
   XHTMLContentHandler,
-  LimitExceededError,
-  ParseTimeoutError,
-  AbortError,
-  type Attributes,
   type ContentHandler,
-  type MaybePromise,
+  type Detector,
   type EmbeddedDocumentExtractor,
   type ParseContext,
   type Parser,
 } from "@spikedpunch/ripstream-core";
 import { detectEncoding } from "@spikedpunch/ripstream-mime";
 import { createDecoder } from "./charset.ts";
-import { HtmlDocumentParser } from "./html.ts";
 import { mailHeaderBlock } from "./mail-header-block.ts";
+import { renderEmailHtml } from "./mail-html.ts";
 import { applyMailMetadata, type HeaderField } from "./mail-metadata.ts";
 import { parseStructured } from "./mail-structured.ts";
 
@@ -123,6 +124,7 @@ export class MailParser implements Parser {
     classifySecurity(root.headers, metadata);
 
     const xhtml = new XHTMLContentHandler(handler, metadata);
+    await xhtml.startDocument();
     const output: Output = {
       xhtml,
       metadata,
@@ -130,14 +132,274 @@ export class MailParser implements Parser {
       extractAllAlternatives: this.#extractAllAlternatives,
       maxHeaderBytes: this.#maxHeaderBytes,
     };
-    await xhtml.startDocument();
-    // `ParseOptions.emailHeaders`: the message's own header block, ahead of its body. Not Tika's output, so it is opt-in.
-    if (ctx.get(CONTEXT_KEYS.EMAIL_HEADER_BLOCK) === true) {
+    const collected: Collected = { bodies: [], attachments: [], nextIndex: 0, nextNested: 0 };
+    collectEntity(root, output, 0, undefined, collected, true);
+
+    // xberg's email content: the header block, the body, then an Attachments: summary and the text of each attachment
+    // inlined under its name (extractors/email.rs, tikajs-26ut).
+    const blocks: string[] = [];
+    if (ctx.get(CONTEXT_KEYS.EMAIL_HEADER_BLOCK) !== false) {
       const block = mailHeaderBlock(root.headers, decodeHeader);
-      if (block.length > 0) await xhtml.characters(block);
+      if (block.length > 0) blocks.push(block);
     }
-    await renderEntity(root, output, 0, undefined);
+    const body = renderBody(collected);
+    if (body.length > 0) blocks.push(body);
+    if (collected.attachments.length > 0) {
+      blocks.push("Attachments:");
+      for (const attachment of collected.attachments) blocks.push(`  ${summaryName(attachment)} (${attachment.size}B)`);
+      for (const attachment of collected.attachments) {
+        if (attachment.nested) continue;
+        const text = await inlineAttachmentText(attachment, output);
+        if (text.length > 0) blocks.push(`  ${childName(attachment)}\n${text}`);
+      }
+    }
+    const content = blocks.filter((block) => block.length > 0).join("\n\n");
+    if (content.length > 0) await xhtml.characters(content);
+    await registerAttachmentChildren(collected.attachments, output);
     await xhtml.endDocument();
+  }
+}
+
+/** One body part: plain text, or the raw text/html that the renderer turns into xberg's plain body text. */
+interface BodyPart {
+  readonly kind: "text" | "html";
+  readonly text: string;
+}
+
+/** A part that is not body text: an attachment, or a message/rfc822 part (child-only in xberg). */
+interface AttachmentPart {
+  readonly entity: Entity;
+  readonly type: string;
+  readonly name: string | undefined;
+  readonly bytes: Uint8Array;
+  readonly size: number;
+  readonly nested: boolean;
+  readonly container: Container | undefined;
+  readonly index: number;
+  readonly nestedIndex: number;
+  detected?: string;
+}
+
+/** What an email's parts hold: body parts in the order they came, and the attachments. */
+interface Collected {
+  bodies: BodyPart[];
+  attachments: AttachmentPart[];
+  nextIndex: number;
+  nextNested: number;
+}
+
+const IGNORE_HANDLER: ContentHandler = {
+  startDocument: () => undefined,
+  endDocument: () => undefined,
+  startElement: () => undefined,
+  endElement: () => undefined,
+  characters: () => undefined,
+};
+
+/**
+ * Walks the message's parts the way xberg does: body text from the non-attachment text/plain and text/html parts (a
+ * multipart/alternative contributes its best part), everything else as an attachment. A message/rfc822 part is a
+ * child-only attachment and its body text is folded into the parent's body. `foldOnly` collects body text alone
+ * (for that fold), never attachments.
+ */
+function collectEntity(
+  entity: Entity,
+  output: Output,
+  depth: number,
+  container: Container | undefined,
+  collected: Collected,
+  isRoot: boolean,
+  foldOnly = false,
+): void {
+  if (depth > output.ctx.limits.maxNodeDepth) {
+    throw new LimitExceededError(`Mail nesting depth ${depth} exceeds ${output.ctx.limits.maxNodeDepth}`);
+  }
+  const contentType = contentTypeOf(entity.headers);
+  const type = contentType.type;
+
+  if (type === "message/rfc822") {
+    if (!foldOnly) collected.attachments.push(makeAttachment(entity, type, container, collected, true));
+    const nested = splitEntity(entity.body, output.maxHeaderBytes);
+    if (nested.headers.length > 0) collectEntity(nested, output, depth + 1, undefined, collected, true, true);
+    return;
+  }
+
+  const attachment = !isRoot && isAttachment(entity, type, contentType.parameters);
+  if (attachment) {
+    if (!foldOnly) collected.attachments.push(makeAttachment(entity, type, container, collected, false));
+    return;
+  }
+
+  if (type.startsWith("multipart/")) {
+    const boundary = contentType.parameters.get("boundary");
+    if (boundary === undefined) return;
+    if (boundary.length > 70) throw new MalformedDocumentError("Multipart boundary exceeds 70 characters");
+    const childContainer: Container = { subtype: type.slice("multipart/".length), boundary };
+    const parts = splitMultipart(entity.body, boundary, output.maxHeaderBytes);
+    const chosen = type === "multipart/alternative" && !output.extractAllAlternatives ? bestAlternative(parts) : parts;
+    for (const part of chosen) collectEntity(part, output, depth + 1, childContainer, collected, false, foldOnly);
+    return;
+  }
+
+  const decoded = decodeTransfer(entity.body, entity.headers);
+  collected.bodies.push({
+    kind: type === "text/html" ? "html" : "text",
+    text: decodeBodyText(decoded, contentType.parameters.get("charset")),
+  });
+}
+
+/** A part xberg calls an attachment: a disposition or a name says so, or it is not body text. */
+function isAttachment(entity: Entity, type: string, parameters: ReadonlyMap<string, string>): boolean {
+  if (dispositionType(entity.headers) === "attachment") return true;
+  if (parameters.get("name") !== undefined || dispositionParams(entity.headers).get("filename") !== undefined) return true;
+  return !(type.startsWith("text/") || type.startsWith("multipart/") || type === "message/rfc822");
+}
+
+function makeAttachment(
+  entity: Entity,
+  type: string,
+  container: Container | undefined,
+  collected: Collected,
+  nested: boolean,
+): AttachmentPart {
+  const bytes = decodeTransfer(entity.body, entity.headers);
+  const name = dispositionParams(entity.headers).get("filename") ?? contentTypeParams(entity.headers).get("name");
+  const attachment: AttachmentPart = {
+    entity,
+    type,
+    name,
+    bytes,
+    size: bytes.byteLength,
+    nested,
+    container,
+    index: collected.nextIndex,
+    nestedIndex: collected.nextNested,
+  };
+  if (nested) collected.nextNested++;
+  else collected.nextIndex++;
+  return attachment;
+}
+
+function summaryName(attachment: AttachmentPart): string {
+  return attachment.name ?? "unnamed";
+}
+
+/** The name of the attachment's record (and of its inlined section): the file's name, or a synthetic one. */
+function childName(attachment: AttachmentPart): string {
+  if (attachment.nested) return `nested_message_${attachment.nestedIndex}.eml`;
+  return attachment.name ?? `attachment_${attachment.index}`;
+}
+
+/** xberg's plain body text: paragraphs split at a blank line, each trimmed, empty ones dropped (rendering/plain.rs). */
+function plainText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split("\n\n")
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .join("\n\n");
+}
+
+/**
+ * The body as xberg writes it: every body part in order, each plain part as paragraphs and each HTML part through the
+ * renderer, separated by a blank line. An alternative already contributed only its chosen part.
+ */
+function renderBody(collected: Collected): string {
+  return collected.bodies
+    .map((body) => (body.kind === "html" ? renderEmailHtml(body.text) : plainText(body.text)))
+    .filter((text) => text.length > 0)
+    .join("\n\n");
+}
+
+/** The type the bytes are, by the detector when one is in the context (xberg detects before the declared type). */
+async function detectedType(attachment: AttachmentPart, output: Output): Promise<string> {
+  if (attachment.detected !== undefined) return attachment.detected;
+  const detector = output.ctx.get(CONTEXT_KEYS.DETECTOR) as Detector | undefined;
+  if (detector === undefined) return (attachment.detected = attachment.type);
+  const metadata = new Metadata();
+  if (attachment.name !== undefined) metadata.set(TIKA_KEYS.RESOURCE_NAME, attachment.name);
+  const stream = await RipstreamInputStream.from(attachment.bytes, { context: output.ctx });
+  try {
+    return (attachment.detected = (await detector.detect(stream, metadata, output.ctx)).toString());
+  } catch {
+    return (attachment.detected = attachment.type);
+  } finally {
+    await stream.close();
+  }
+}
+
+/** The text xberg inlines under an attachment's name: its own text, or what a parser reads from it. */
+async function inlineAttachmentText(attachment: AttachmentPart, output: Output): Promise<string> {
+  if (attachment.nested) return "";
+  const type = await detectedType(attachment, output);
+  const parameters = contentTypeParams(attachment.entity.headers);
+  if (type === "" || type.startsWith("text/plain")) return plainText(decodeBodyText(attachment.bytes, parameters.get("charset")));
+  if (type.startsWith("text/html")) return renderEmailHtml(decodeBodyText(attachment.bytes, parameters.get("charset")));
+  const parser = output.ctx.get(CONTEXT_KEYS.PARSER) as Parser | undefined;
+  if (parser === undefined) return "";
+  const partMetadata = new Metadata();
+  partMetadata.set("Content-Type", type);
+  partMetadata.set(TIKA_KEYS.RESOURCE_NAME, childName(attachment));
+  const stream = await RipstreamInputStream.from(attachment.bytes, { context: output.ctx });
+  const body = new BodyContentHandler();
+  const limited = new OutputLimitContentHandler(body, output.ctx.limits.maxOutputChars);
+  try {
+    const child = output.ctx.createChild();
+    child.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, new ParsingEmbeddedDocumentExtractor());
+    await parser.parse(stream, limited, partMetadata, child);
+    return body.toString().trim();
+  } catch (error) {
+    rethrowResiliency(error, output.ctx);
+    return "";
+  } finally {
+    await stream.close();
+  }
+}
+
+/** Attachments are the message's embedded records; xberg keeps them as children under their own paths. */
+async function registerAttachmentChildren(attachments: readonly AttachmentPart[], output: Output): Promise<void> {
+  const extractor = output.ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as EmbeddedDocumentExtractor | undefined;
+  if (extractor === undefined) return;
+  for (const attachment of attachments) {
+    const type = attachment.nested ? "message/rfc822" : await detectedType(attachment, output);
+    const partMetadata = new Metadata();
+    partMetadata.set("Content-Type", type);
+    partMetadata.set(TIKA_KEYS.RESOURCE_NAME, childName(attachment));
+    partMetadata.set(TIKA_KEYS.EMBEDDED_RESOURCE_TYPE, "ATTACHMENT");
+    if (attachment.container !== undefined) {
+      partMetadata.set("multipart:subtype", attachment.container.subtype);
+      if (attachment.container.boundary !== undefined) partMetadata.set("multipart:boundary", attachment.container.boundary);
+    }
+    const stream = await RipstreamInputStream.from(attachment.bytes, { context: output.ctx });
+    try {
+      await extractor.parseEmbedded(stream, IGNORE_HANDLER, partMetadata, output.ctx);
+      const known = new Set(output.metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION));
+      for (const failure of partMetadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION)) {
+        if (!known.has(failure)) {
+          output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+          known.add(failure);
+        }
+      }
+    } catch (error) {
+      rethrowResiliency(error, output.ctx);
+      const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      partMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+      output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
+    } finally {
+      await stream.close();
+    }
+  }
+}
+
+/** A resiliency error reaches the server (422/408); an attachment's ordinary failure is a warning xberg skips. */
+function rethrowResiliency(error: unknown, ctx: ParseContext): void {
+  if (
+    error instanceof LimitExceededError ||
+    error instanceof ParseTimeoutError ||
+    error instanceof AbortError ||
+    ctx.signal.aborted
+  ) {
+    throw error;
   }
 }
 
@@ -176,142 +438,6 @@ function stripEmlxFraming(data: Uint8Array): Uint8Array {
   return verified ? data.subarray(lineLength, plistAt) : data.subarray(lineLength);
 }
 
-async function renderEntity(entity: Entity, output: Output, depth: number, container: Container | undefined): Promise<void> {
-  const { xhtml, ctx } = output;
-  if (depth > ctx.limits.maxNodeDepth) {
-    throw new LimitExceededError(
-      `Mail nesting depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`,
-    );
-  }
-  const contentType = contentTypeOf(entity.headers);
-  const type = contentType.type;
-
-  if (type.startsWith("multipart/")) {
-    await renderMultipart(entity, type, contentType.parameters.get("boundary"), output, depth);
-    return;
-  }
-
-  if (type === "message/rfc822") {
-    const nested = splitEntity(entity.body, output.maxHeaderBytes);
-    if (nested.headers.length > 0) {
-      await renderEntity(nested, output, depth + 1, container);
-    }
-    return;
-  }
-
-  const decoded = decodeTransfer(entity.body, entity.headers);
-  if (type === "text/plain" || type === "") {
-    const text = decodeBodyText(decoded, contentType.parameters.get("charset"));
-    // A message with no body at all has no text; an empty part of a multipart is an empty paragraph, as Tika's TXTParser writes it.
-    if (text.length > 0 || container !== undefined) await writeTextBody(xhtml, text);
-    return;
-  }
-  if (type === "text/html") {
-    const childMetadata = new Metadata();
-    childMetadata.set("Content-Type", type);
-    const stream = await RipstreamInputStream.from(decoded, { context: ctx });
-    try {
-      await new HtmlDocumentParser().parse(stream, new BodyEvents(xhtml), childMetadata, ctx.createChild());
-    } finally {
-      await stream.close();
-    }
-    return;
-  }
-
-  await dispatchEmbedded(entity, decoded, type, output, depth, container);
-}
-
-async function renderMultipart(entity: Entity, type: string, boundary: string | undefined, output: Output, depth: number): Promise<void> {
-  if (boundary === undefined) return;
-  // RFC 2046 section 5.1.1 caps boundaries at 70 characters; longer ones make
-  // the naive byte search O(body * boundary).
-  if (boundary.length > 70) {
-    throw new MalformedDocumentError("Multipart boundary exceeds 70 characters");
-  }
-  const container: Container = { subtype: type.slice("multipart/".length), boundary };
-  const parts = splitMultipart(entity.body, boundary, output.maxHeaderBytes);
-  const chosen = type === "multipart/alternative" && !output.extractAllAlternatives ? bestAlternative(parts) : parts;
-  for (const part of chosen) {
-    // Outside an alternative, which is a choice, Tika writes each part inside two divs, each of which ends with a newline.
-    const wrapped = type !== "multipart/alternative";
-    if (wrapped) await output.xhtml.startElement("div");
-    if (wrapped) await output.xhtml.startElement("div");
-    await renderEntity(part, output, depth + 1, container);
-    if (wrapped) await output.xhtml.endElement("div");
-    if (wrapped) await output.xhtml.endElement("div");
-  }
-}
-
-/**
- * A text/plain body as Tika writes it: its TXTParser puts the text in one paragraph of its own XHTML, and that XHTML is
- * written through the message's, which adds a line break after the paragraph again (so a body ends with two more newlines
- * than its text), then the parser's own line break comes after the paragraph's end.
- */
-async function writeTextBody(xhtml: XHTMLContentHandler, text: string): Promise<void> {
-  await xhtml.startElement("p");
-  if (text.length > 0) await xhtml.characters(text);
-  await xhtml.endElement("p");
-  await xhtml.ignorableWhitespace("\n", 0, 1);
-}
-
-/**
- * The block elements after which a text/html body's own line break is the only one in Tika's output: the message's XHTML adds
- * a second line break after every other block element (`p`, `h1`-`h6`, `ul`, `ol`, `dl`, `pre`, `blockquote`, `address`,
- * `table`, `tr`, `li`, `dt`, `dd`), measured with the Tika 4.2.0 oracle on one message for each tag.
- */
-const SINGLE_BREAK_ELEMENTS = new Set(["div", "hr", "fieldset", "form", "noscript", "br", "select", "option", "link", "script"]);
-
-/**
- * Tika's BodyContentHandler over a parent's handler: the events of a document's `body` element, without the element itself,
- * written to the parent as they come. A text/html body is parsed with this so that the message's own XHTML adds its line
- * breaks and indents to the body's, as it does in Tika.
- */
-class BodyEvents implements ContentHandler {
-  readonly #target: XHTMLContentHandler;
-  #depth = 0;
-  #swallowBreak = false;
-
-  constructor(target: XHTMLContentHandler) {
-    this.#target = target;
-  }
-
-  startDocument(): void {}
-  endDocument(): void {}
-
-  startElement(uri: string, localName: string, qName: string, attributes: Attributes): MaybePromise<void> {
-    this.#swallowBreak = false;
-    if (this.#depth > 0) {
-      this.#depth++;
-      return this.#target.startElement(uri, localName, qName, attributes);
-    }
-    if (localName === "body") this.#depth = 1;
-    return undefined;
-  }
-
-  endElement(uri: string, localName: string, qName: string): MaybePromise<void> {
-    if (this.#depth === 0) return undefined;
-    this.#depth--;
-    if (this.#depth === 0) return undefined;
-    // The parser's own line break follows this event, and the message's XHTML has just written one for it.
-    this.#swallowBreak = SINGLE_BREAK_ELEMENTS.has(localName);
-    return this.#target.endElement(uri, localName, qName);
-  }
-
-  characters(ch: string, start: number, length: number): MaybePromise<void> {
-    this.#swallowBreak = false;
-    return this.#depth > 0 ? this.#target.characters(ch, start, length) : undefined;
-  }
-
-  ignorableWhitespace(ch: string, start: number, length: number): MaybePromise<void> {
-    if (this.#depth === 0) return undefined;
-    if (this.#swallowBreak) {
-      this.#swallowBreak = false;
-      if (ch.slice(start, start + length) === "\n") return undefined;
-    }
-    return this.#target.ignorableWhitespace(ch, start, length);
-  }
-}
-
 /** The parts of an alternative that MailContentHandler reads: only the first with the top score. */
 function bestAlternative(parts: readonly Entity[]): Entity[] {
   let best: Entity | undefined;
@@ -340,70 +466,6 @@ function alternativeScore(part: Entity): number {
       return 3;
     default:
       return 4;
-  }
-}
-
-async function dispatchEmbedded(
-  entity: Entity,
-  body: Uint8Array,
-  type: string,
-  output: Output,
-  depth: number,
-  container: Container | undefined,
-): Promise<void> {
-  const { xhtml, ctx } = output;
-  const partMetadata = new Metadata();
-  partMetadata.set("Content-Type", type);
-  if (container !== undefined) {
-    partMetadata.set("multipart:subtype", container.subtype);
-    if (container.boundary !== undefined) partMetadata.set("multipart:boundary", container.boundary);
-  }
-  const name =
-    contentTypeParams(entity.headers).get("name") ??
-    dispositionParams(entity.headers).get("filename") ??
-    `part-${depth}`;
-  partMetadata.set("tk:resource-name", name);
-  // Tika's MailContentHandler: `inline` is INLINE; `attachment`, no disposition and any other fall to ATTACHMENT.
-  partMetadata.set(
-    TIKA_KEYS.EMBEDDED_RESOURCE_TYPE,
-    dispositionType(entity.headers) === "inline" ? "INLINE" : "ATTACHMENT",
-  );
-  const subject = headerValue(entity.headers, "subject");
-  if (subject !== undefined) partMetadata.set("dc:title", decodeHeader(subject));
-
-  const extractor =
-    (ctx.get(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR) as
-      | EmbeddedDocumentExtractor
-      | undefined) ?? new ParsingEmbeddedDocumentExtractor();
-  const stream = await RipstreamInputStream.from(body, { context: ctx });
-  try {
-    await extractor.parseEmbedded(stream, xhtml, partMetadata, ctx);
-    // A part that is itself a container (a zip in a mail) records its own children's failures on its own metadata and
-    // does not throw; a plain parse of the message drops that metadata, so the message carries the markers too.
-    const known = new Set(output.metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION));
-    for (const failure of partMetadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION)) {
-      if (!known.has(failure)) {
-        output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
-        known.add(failure);
-      }
-    }
-  } catch (error) {
-    // Resiliency errors must reach the server (422/408) instead of becoming a 200.
-    if (
-      error instanceof LimitExceededError ||
-      error instanceof ParseTimeoutError ||
-      error instanceof AbortError ||
-      ctx.signal.aborted
-    ) {
-      throw error;
-    }
-    // The part's metadata is dropped by a plain parse, so the message carries the marker too, as Tika's
-    // CompositeParser.recordEmbeddedMetadata puts each failed child's exception on the container.
-    const failure = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    partMetadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
-    output.metadata.add(TIKA_KEYS.EMBEDDED_EXCEPTION, failure);
-  } finally {
-    await stream.close();
   }
 }
 

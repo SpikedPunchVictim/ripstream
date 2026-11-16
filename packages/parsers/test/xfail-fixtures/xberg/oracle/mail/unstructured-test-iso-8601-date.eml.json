@@ -1,13 +1,13 @@
 {
-  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test-rfc2822-date.eml) text and Content-Type for test_documents/vendored/unstructured/eml/test-rfc2822-date.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename test-iso-8601-date.eml) text and Content-Type for test_documents/vendored/unstructured/eml/test-iso-8601-date.eml from the xberg corpus (unstructured, Apache-2.0); bead tikajs-qw7f; fixed by tikajs-w12u.",
   "tags": [
     "xberg",
     "oracle",
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-test-rfc2822-date.eml",
-    "filename": "test-rfc2822-date.eml"
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-test-iso-8601-date.eml",
+    "filename": "test-iso-8601-date.eml"
   },
   "assertions": [
     {
@@ -23,7 +23,7 @@
     {
       "type": "equals",
       "field": "metadata.dc:title",
-      "value": "Test a standard RFC-2822 date"
+      "value": "Test a Z-suffix date"
     },
     {
       "type": "equals",
@@ -33,7 +33,7 @@
     {
       "type": "equals",
       "field": "metadata.dc:subject",
-      "value": "Test a standard RFC-2822 date"
+      "value": "Test a Z-suffix date"
     },
     {
       "type": "equals",

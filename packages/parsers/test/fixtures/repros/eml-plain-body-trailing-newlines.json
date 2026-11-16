@@ -1,5 +1,5 @@
 {
-  "description": "A plain text body of an email is one paragraph: Tika 4.2.0 ends it with a paragraph break and the message's own line break, so a body 'hello' reads 'hello\\n\\n' (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml).",
+  "description": "A plain text body of an email is one paragraph: Tika 4.2.0 ends it with a paragraph break and the message's own line break, so a body 'hello' reads 'hello\\n\\n' (tikajs-w12u). Tika 4.2.0 oracle (PUT /rmeta/body, filename message.eml). Email content follows xberg (tikajs-26ut).",
   "tags": [
     "repro",
     "mail"
@@ -12,7 +12,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "hello\n\n"
+      "value": "Subject: s\nFrom: a@example.com\n\nhello"
     }
   ]
 }

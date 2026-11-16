@@ -68,9 +68,11 @@ async function parseWith(parser: Parser, text: string, extractor: EmbeddedDocume
   return { text: handler.toString(), metadata };
 }
 
-test("mail: a part that fails after writing text is marked on the message's metadata, and its partial text stays", async () => {
+test("mail: a part that fails while its record is written is marked on the message's metadata", async () => {
+  // The record is the attachment's extraction (xberg keeps it as a child); its handler is not the message's text.
   const { text, metadata } = await parseWith(new MailParser(), eml(attachment), new PartialThenFail(FAILURE));
-  assert.match(text, /partial text/);
+  assert.match(text, /Attachments:/);
+  assert.doesNotMatch(text, /partial text/);
   assert.deepEqual(metadata.getAll(TIKA_KEYS.EMBEDDED_EXCEPTION), ["MalformedDocumentError: child is cut short"]);
 });
 

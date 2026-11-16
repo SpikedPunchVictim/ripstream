@@ -217,7 +217,7 @@ function parseOptionsFor(header: InputHeader): ParseOptions {
     ...(header.recordFailures === true ? { onDocumentFailure: "record" as const } : {}),
     ...(header.truncateOutput === true ? { onOutputLimit: "truncate" as const } : {}),
     ...(header.truncateEmbedded === true ? { onEmbeddedLimit: "truncate" as const } : {}),
-    ...(header.emailHeaders === true ? { emailHeaders: true } : {}),
+    ...(header.emailHeaders === undefined ? {} : { emailHeaders: header.emailHeaders }),
     ...(header.handlerType === undefined ? {} : { handlerType: header.handlerType }),
     ...(header.unpackBytes === undefined ? {} : { unpackBytes: header.unpackBytes }),
     ...(header.segments === true ? { segments: true } : {}),

@@ -16,7 +16,7 @@
     {
       "type": "equals",
       "field": "text",
-      "value": "Subject: Example Plain-Text MIME Message\nFrom: \"Sender, Example\" <sender@example.com>\nTo: \"Bob\" <bob@example.com>, \"Sue\" <sue@example.com>\nCC: \"Tom\" <tom@example.com>, alice@example.com\nBCC: \"John\" <john@example.com>, \"Mary\" <mary@example.com>\nDate: Wed, 15 Mar 2024 14:30:00 +0000\n\nThis is a plain-text message.\n\n\n"
+      "value": "Subject: Example Plain-Text MIME Message\nFrom: Sender, Example <sender@example.com>\nTo: bob@example.com, sue@example.com\nCC: tom@example.com, alice@example.com\nBCC: john@example.com, mary@example.com\nDate: Wed, 15 Mar 2024 14:30:00 +0000\n\nThis is a plain-text message."
     }
   ]
 }

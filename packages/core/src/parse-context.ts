@@ -300,8 +300,8 @@ export const CONTEXT_KEYS = {
    */
   TRUNCATE_EMBEDDED_LIMIT: new ParseContextKey<boolean>("truncate-embedded-limit"),
   /**
-   * `ParseOptions.emailHeaders`: an email parser writes the message's header block (Subject, From, To, CC, BCC, Date) ahead
-   * of its body text. Absent: it does not, which is what Tika's RFC822Parser does.
+   * `ParseOptions.emailHeaders`: an email parser writes the message's header block ahead of its body text. Absent or true:
+   * it does (xberg's email content); false: it does not.
    */
   EMAIL_HEADER_BLOCK: new ParseContextKey<boolean>("email-header-block"),
 } as const;

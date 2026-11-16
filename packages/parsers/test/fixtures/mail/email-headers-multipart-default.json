@@ -11,19 +11,9 @@
   },
   "assertions": [
     {
-      "type": "not_contains",
+      "type": "equals",
       "field": "text",
-      "value": "Subject:"
-    },
-    {
-      "type": "not_contains",
-      "field": "text",
-      "value": "From:"
-    },
-    {
-      "type": "contains",
-      "field": "text",
-      "value": "html"
+      "value": "Subject: Multipart Email Test\nFrom: sender@example.com\nTo: recipient@example.com\nDate: Wed, 15 Mar 2024 14:30:00 +0000\n\nThis is the html version.\n\nAttachments:\n\n  notes.txt (16B)\n\n  notes.txt\nAttachment text."
     }
   ]
 }

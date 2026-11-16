@@ -278,7 +278,7 @@ export function inputHeaderFor(
     ...(request.recordFailures === true ? { recordFailures: true } : {}),
     ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
     ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
-    ...(request.emailHeaders === true ? { emailHeaders: true } : {}),
+    ...(request.emailHeaders === undefined ? {} : { emailHeaders: request.emailHeaders }),
     ...(request.handlerType === undefined ? {} : { handlerType: request.handlerType }),
     ...(request.unpackBytes === undefined ? {} : { unpackBytes: request.unpackBytes }),
     ...(request.segments === true ? { segments: true } : {}),

@@ -6,7 +6,7 @@
     "mail"
   ],
   "input": {
-    "file": "../files/unstructured-mime-different-plain-html.eml",
+    "file": "../../../fixtures/xberg/oracle/files/unstructured-mime-different-plain-html.eml",
     "filename": "mime-different-plain-html.eml"
   },
   "assertions": [

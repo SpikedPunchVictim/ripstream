@@ -108,7 +108,7 @@ test("parse and parseRecursive: onEmbeddedLimit truncate crosses as truncateEmbe
   assert.equal("truncateEmbedded" in (plain.calls[0]?.request ?? {}), false);
 });
 
-test("parse and parseRecursive: emailHeaders crosses in the request, false sends nothing, a non-boolean is refused", async () => {
+test("parse and parseRecursive: emailHeaders crosses in the request either way, and a non-boolean is refused", async () => {
   const text = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator: text.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: true });
   assert.equal(text.calls[0]?.request.emailHeaders, true);
@@ -117,7 +117,7 @@ test("parse and parseRecursive: emailHeaders crosses in the request, false sends
   assert.equal(records.calls[0]?.request.emailHeaders, true);
   const plain = fakeIsolator(TEXT);
   await createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: false });
-  assert.equal("emailHeaders" in (plain.calls[0]?.request ?? {}), false);
+  assert.equal(plain.calls[0]?.request.emailHeaders, false);
   await assert.rejects(
     createIsolatedRipstream({ isolator: plain.isolator, detector }).parse(new Uint8Array(1), { emailHeaders: "yes" as never }),
     /emailHeaders must be a boolean/,
