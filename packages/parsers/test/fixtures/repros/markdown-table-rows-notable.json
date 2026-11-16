@@ -1,0 +1,18 @@
+{
+  "description": "tikajs-pbkf: a pipe table is rows of tab-separated cells: a short row is padded, a long one cut to the header's width, an escaped pipe is a cell's text, a table with no body is the header; two lines with no delimiter row are a paragraph. Expected text is what Tika 4.2.0 /rmeta/body returned for the same bytes.",
+  "tags": [
+    "markdown",
+    "repro"
+  ],
+  "input": {
+    "text": "| A | B |\n| 1 | 2 |\n",
+    "filename": "t.md"
+  },
+  "assertions": [
+    {
+      "type": "equals",
+      "field": "text",
+      "value": "| A | B |\n| 1 | 2 |\n"
+    }
+  ]
+}

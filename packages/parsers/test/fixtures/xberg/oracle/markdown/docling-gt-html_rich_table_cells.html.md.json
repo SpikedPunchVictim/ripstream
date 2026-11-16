@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename html_rich_table_cells.html.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/html_rich_table_cells.html.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename html_rich_table_cells.html.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/html_rich_table_cells.html.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f; fixed by tikajs-pbkf.",
   "tags": [
     "xberg",
     "oracle",
-    "markdown",
-    "xfail"
+    "markdown"
   ],
   "input": {
     "file": "../files/docling-gt-html_rich_table_cells.html.md",

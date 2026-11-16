@@ -1,10 +1,9 @@
 {
-  "description": "[xfail tikajs-pbkf] Tika 4.2.0 oracle (PUT /rmeta/body, filename pone.0234687.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/pone.0234687.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f.",
+  "description": "Tika 4.2.0 oracle (PUT /rmeta/body, filename pone.0234687.nxml.md) text and Content-Type for test_documents/vendored/docling/groundtruth/docling_v2/pone.0234687.nxml.md from the xberg corpus (docling, MIT, Copyright (c) 2024 IBM); bead tikajs-qw7f; fixed by tikajs-pbkf.",
   "tags": [
     "xberg",
     "oracle",
-    "markdown",
-    "xfail"
+    "markdown"
   ],
   "input": {
     "file": "../files/docling-gt-pone.0234687.nxml.md",

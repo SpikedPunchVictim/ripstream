@@ -131,6 +131,13 @@ Fixed: a `---` YAML front matter block was written as `--- key: value ...` on on
 a setext heading, so Tika writes the keys on their own lines and no fences: `---\nfile_format: mystnb\n---` is
 `\nfile_format: mystnb\n`.
 
+### Markdown pipe tables are rows of tab-separated cells (`tikajs-pbkf`)
+
+Fixed: a GFM pipe table was flattened to one line and kept its `|---|---|` row. It is now a table as Tika writes it: a tab in front
+of each cell, a line per row, a blank line after the table. A header row can interrupt a paragraph; a delimiter row with fewer
+cells than the header makes no table; a row is padded or cut to the header's width; the table goes on until a blank line, an
+indented line or another block; `\|` is a pipe in a cell.
+
 ### Markdown: valid UTF-8 with a NUL byte is UTF-8 (`tikajs-zms6`)
 
 Fixed: a `.md` file holding a NUL (or other control) byte and a non-ASCII letter was read as ISO-8859-1, so its text came out as
