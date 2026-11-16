@@ -183,12 +183,13 @@ test("/tika?handler= takes Tika's spellings, in any case, and a preset can name 
   );
 });
 
-test("a route that fixes its handler refuses ?handler=", async () => {
+test("a route that fixes its handler ignores ?handler=, as Tika ignores every query parameter", async () => {
   await withServer(async (base) => {
-    for (const path of ["/tika/text?handler=html", "/tika/json?handler=html"]) {
-      const response = await put(base, path);
-      assert.equal(response.status, 400, path);
-      assert.match(await response.text(), /names its handler in the path/, path);
+    for (const path of ["/tika/text", "/tika/json"]) {
+      const plain = await put(base, path);
+      const response = await put(base, `${path}?handler=html`);
+      assert.equal(response.status, plain.status, path);
+      assert.equal(response.headers.get("content-type"), plain.headers.get("content-type"), path);
     }
   });
 });
@@ -428,7 +429,7 @@ test("/mime-types: a type nobody registered is 404, a path with another shape is
       assert.equal(post.status, 405);
       assert.equal(post.headers.get("allow"), "GET, HEAD");
       const stray = await get(base, "/mime-types?x=1");
-      assert.equal(stray.status, 400);
+      assert.equal(stray.status, 200, "a parameter the route does not read is ignored");
     },
     { mimeTypes: MIME_TYPES },
   );

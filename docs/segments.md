@@ -64,7 +64,7 @@ offsets stale, which is for whoever configured it to know.
 - **Under workers and isolation:** the flag crosses to a worker thread and to an isolated child like any other option.
 - **Server:** `PUT /rmeta?segments=true` (and `/rmeta/text`, `/rmeta/body`) writes the key as the CLI does, and
   `/unpack?segments=true` writes it into the package's `rmeta.json`. It is a query parameter like `maxOutputChars` and `preset`,
-  and takes `true` or `false` (any case, once; anything else is a 400); the other routes refuse it as an unknown parameter. It
+  and takes `true` or `false` (any case, once; anything else is a 400); the other routes ignore it, as they ignore any parameter they do not read (Tika does the same). It
   needs a text or body handler: `/rmeta/html`, `/xml`, `/markdown`, `/ignore`, or a preset whose handler is one of them, is a 400
   before the document is read. Without it the answer is what it was.
 

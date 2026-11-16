@@ -105,10 +105,11 @@ test("segments takes true or false, once, and only on /rmeta and /unpack", async
       assert.match(await response.text(), /Invalid segments: expected true or false/);
     }
     assert.equal((await put(base, "/rmeta?segments=true&segments=true")).status, 400);
-    for (const path of ["/tika", "/meta", "/detect", "/rmeta/text?bogus=1"]) {
-      const response = await put(base, `${path}${path.includes("?") ? "&" : "?"}segments=true`);
-      assert.equal(response.status, 400, path);
-      assert.match(await response.text(), /Unknown query parameter/);
+    // A route that does not read it ignores it, as Tika ignores any parameter it does not read: nothing is added to the answer.
+    for (const path of ["/tika", "/meta", "/detect"]) {
+      const response = await put(base, `${path}?segments=true`);
+      assert.equal(response.status, 200, path);
+      assert.equal(await response.text(), await (await put(base, path)).text(), path);
     }
     assert.equal((await put(base, "/rmeta?segments=TRUE")).status, 200);
   });

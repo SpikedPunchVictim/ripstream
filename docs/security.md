@@ -103,12 +103,15 @@ to GET (303 for non-GET/HEAD, 301/302 for POST).
   container's emit key, the embedded id and a suffix, and the suffix is the registry's extension or, with `EXISTING`, 1 to 4
   ASCII letters or digits taken from the document's name (never a path). `packageRoot`, `emitKeyBase` and `packageName`
   are the operator's, and an emitter still refuses a key that leaves its `basePath`.
-- A request can set only what its route reads, and anything else is a 400 that names it, not a 200 that drops it:
-  an unknown or repeated query parameter (`/tika` reads `filename`, `preset`, `handler`, `maxOutputChars` and
+- A request can set only what its route reads, and what it does not read changes nothing: a query parameter or an
+  `X-Tika-*` header that no route reads is ignored, as Tika 4.2.0 ignores it (it reads none; `tikajs-x2t6`), so a hostile
+  `?isolation=off`, `?perChildMb=1` or `?maxQueue=0` is not a setting and the request is the one without it. What a route
+  reads is 400 when it is wrong: a repeated parameter (`/tika` reads `filename`, `preset`, `handler`, `maxOutputChars` and
   `maxEmbeddedResources`; `/meta` the same without `handler`, `/rmeta` and `/unpack` too and also `segments` (`true` or `false`); `/detect` and `/async` only
   `filename`; `/language` and `/mime-types` none), an unknown `?preset=` or `?handler=` (`meta`, `json`, or a content type: `text`,
-  `txt`, `html`, `xml`, `body`, `markdown`, `md`, `ignore`), any `X-Tika-*` header, and a multipart part
-  other than the one file (Tika's per-request parse context is not accepted).
+  `txt`, `html`, `xml`, `body`, `markdown`, `md`, `ignore`), and a multipart part other than the one file (Tika's per-request
+  parse context is not accepted). A parameter that a route does not read is ignored there even when another route reads
+  it (`/detect?maxOutputChars=5`, `/meta?handler=json`, `/tika?segments=true`).
 - `maxJobs` (default 1000): maximum retained `/async` jobs. Finished jobs are evicted first; new
   jobs get 503 when all retained jobs are still running.
 - `jobTtlMs` (default 10 minutes): how long finished `/async` jobs are retained.

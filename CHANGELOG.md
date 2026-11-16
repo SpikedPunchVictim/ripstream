@@ -4,6 +4,17 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Server: query parameters and `X-Tika-*` headers that no route reads are ignored, as Tika ignores them (`tikajs-x2t6`)
+
+Changed: the server answered 400 to any query parameter or `X-Tika-*` header it did not read (`/tika?foo=1`, `/rmeta?handler=json`,
+`X-Tika-OCRLanguage`); Tika 4.2.0 answers 200. Tika 4.2.0 reads no query parameter and no `X-Tika-*` header at all (checked in
+its server jars and with 352 requests on the 4.2.0 oracle: no added parameter or header changed any answer), so there is nothing to
+keep refusing and the status for unknown extras is now Tika's 200 (the request is the one without them). What ripstream's own
+routes read (`filename`, `preset`, `handler` on `/tika`, `segments`, `maxOutputChars`, `maxEmbeddedResources`, `target`) is acted on
+only by the routes that list it, so `/detect?maxOutputChars=5`, `/meta?handler=json`, `/tika?segments=true` and
+`/tika/text?handler=html` are ignored too; a repeated parameter, an unknown preset or handler and a bad `segments` are still 400.
+A client that sent an option ripstream does not have now gets the document parsed without it, which is what Tika does with it.
+
 ### Server: a `/pipes` run ends when its client disconnects (`tikajs-q0ir`)
 
 Fixed: every route aborted its work when the client went away except `/pipes` (the batch job and Tika's tuple): its run went on and

@@ -33,19 +33,30 @@ async function refused(response: Response, pattern: RegExp): Promise<void> {
   assert.match(body, pattern);
 }
 
-test("a query parameter the route does not read is refused by name", async () => {
+test("a query parameter the route does not read is ignored, as Tika ignores it", async () => {
   await withServer(async (base) => {
     for (const path of ["/detect", "/tika", "/meta", "/rmeta", "/unpack"]) {
-      await refused(await put(base, `${path}?bogus=1`), /Unknown query parameter "bogus"/);
+      const plain = await put(base, path);
+      const extra = await put(base, `${path}?bogus=1`);
+      assert.equal(extra.status, plain.status, path);
+      assert.equal(extra.status, 200, path);
     }
-    await refused(await fetch(`${base}/async?bogus=1`, { method: "POST", body: TEXT }), /Unknown query parameter "bogus"/);
-    await refused(await fetch(`${base}/language?bogus=1`, { method: "PUT", body: TEXT }), /Unknown query parameter "bogus"/);
-    await refused(await fetch(`${base}/translate?bogus=1`, { method: "PUT", body: TEXT }), /Unknown query parameter "bogus"/);
+    assert.equal((await fetch(`${base}/language?bogus=1`, { method: "PUT", body: TEXT })).status, 200);
+    // A parameter another route reads is ignored here too: /detect has no limit, /meta and /rmeta no handler, /tika no segments.
+    assert.equal(await (await put(base, "/detect?maxOutputChars=5")).text(), await (await put(base, "/detect")).text());
+    assert.equal((await put(base, "/meta?handler=json")).status, 200);
+    assert.equal((await put(base, "/rmeta?handler=json")).status, 200);
+    assert.equal(await (await put(base, "/tika?segments=true")).text(), await (await put(base, "/tika")).text());
+    assert.equal((await put(base, "/detect?preset=nothing-like-it")).status, 200, "/detect has no presets to look in");
+  });
+});
+
+test("a parameter the route reads is refused when it is given twice", async () => {
+  await withServer(async (base) => {
     await refused(await put(base, "/detect?filename=a.txt&filename=b.txt"), /"filename" was given more than once/);
-    // A parameter another route reads is still unknown here.
-    await refused(await put(base, "/detect?maxOutputChars=5"), /Unknown query parameter "maxOutputChars"/);
-    await refused(await put(base, "/meta?handler=json"), /Unknown query parameter "handler"/);
-    await refused(await put(base, "/rmeta?handler=json"), /Unknown query parameter "handler"/);
+    await refused(await put(base, "/tika?maxOutputChars=5&maxOutputChars=6"), /"maxOutputChars" was given more than once/);
+    // Read by no route that is named here, so there is nothing to disagree about.
+    assert.equal((await put(base, "/detect?bogus=1&bogus=2")).status, 200);
   });
 });
 
@@ -59,11 +70,17 @@ test("the parameters a route reads still work", async () => {
   });
 });
 
-test("a header that Tika reads and this server does not is refused, not ignored", async () => {
+test("an x-tika-* header is ignored: Tika 4.2.0 reads none (its per-request settings are routes and the multipart config part)", async () => {
   await withServer(async (base) => {
-    await refused(await put(base, "/tika", { headers: { "X-Tika-Skip-Embedded": "true" } }), /X-Tika-Skip-Embedded/i);
-    await refused(await put(base, "/rmeta", { headers: { "x-tika-ocrlanguage": "eng" } }), /x-tika-ocrlanguage/i);
-    await refused(await put(base, "/detect", { headers: { "X-Tika-PDFsortByPosition": "true" } }), /X-Tika-PDFsortByPosition/i);
+    for (const [path, name] of [
+      ["/tika", "X-Tika-Skip-Embedded"],
+      ["/rmeta", "x-tika-ocrlanguage"],
+      ["/detect", "X-Tika-PDFsortByPosition"],
+      ["/meta", "X-Tika-Foo"],
+      ["/unpack", "X-Tika-writeLimit"],
+    ] as const) {
+      assert.equal((await put(base, path, { headers: { [name]: "true" } })).status, 200, `${path} ${name}`);
+    }
     assert.equal((await put(base, "/tika", { headers: { "Content-Type": "text/plain", Accept: "text/plain" } })).status, 200);
   });
 });

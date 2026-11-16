@@ -729,12 +729,15 @@ test("request parameters cannot change the isolation settings or the engine used
     async (base) => {
       const before = await readStatus(base);
       for (const path of ["/tika", "/meta", "/rmeta", "/unpack", "/detect"]) {
+        const plain = await fetch(`${base}${path}?filename=a.txt`, { method: "PUT", body: "hello" });
+        await plain.arrayBuffer();
         for (const parameter of hostile) {
-          // Refused outright (400), never read as a setting and never passed on: the engine sees no request.
-          const calls = engine.calls.length;
+          // Not a setting of the request, so it is ignored as Tika ignores what it does not read: the request is the one
+          // without it. Only /tika's own `handler` is read, and a handler that does not exist is refused.
           const response = await fetch(`${base}${path}?filename=a.txt&${parameter}`, { method: "PUT", body: "hello" });
-          assert.equal(response.status, 400, `${path}?${parameter}`);
-          assert.equal(engine.calls.length, calls, `${path}?${parameter}: the request reached the engine`);
+          await response.arrayBuffer();
+          const read = path === "/tika" && parameter === "handler=not-a-handler";
+          assert.equal(response.status, read ? 400 : plain.status, `${path}?${parameter}`);
         }
       }
       assert.deepEqual(await readStatus(base), before);

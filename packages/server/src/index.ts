@@ -447,8 +447,10 @@ function metadataCsv(metadata: Metadata): string {
 
 const LIMIT_PARAMS = ["maxOutputChars", "maxEmbeddedResources"] as const;
 /**
- * The query parameters each route reads. Any other is refused: a parameter the server does not act on would be
- * dropped with a 200, and the client would believe it had set a limit, a handler or a preset.
+ * The query parameters each route reads. They are ripstream's own: Tika 4.2.0 reads no query parameter and no `x-tika-*`
+ * header at all (its per-request settings are path routes, `/rmeta/preset/{name}`, and the multipart `config` part), so any
+ * other parameter or header is ignored, as Tika ignores it (tikajs-x2t6; checked against the 4.2.0 server, see
+ * docs/migration.md). A parameter named here may be given once only: two values would be a guess.
  */
 const QUERY_PARAMS: Readonly<Record<string, readonly string[]>> = {
   "/detect": ["filename"],
@@ -463,21 +465,13 @@ const QUERY_PARAMS: Readonly<Record<string, readonly string[]>> = {
   "/pipes": [],
 };
 
-function rejectUnreadRequestInput(request: IncomingMessage, url: URL): void {
-  for (const name of Object.keys(request.headers)) {
-    // Tika's per-request knobs (OCR language, skip-embedded, PDF options...). None is implemented: ignoring one
-    // would parse the document under settings the client did not ask for.
-    if (name.startsWith("x-tika-")) throw new HttpError(400, `Header ${name} is not supported`);
-  }
+function rejectRepeatedQueryParameters(url: URL): void {
   // /tika/json and /rmeta/text read what /tika and /rmeta do: the parameters are the endpoint's, not the path's.
   const root = `/${url.pathname.split("/")[1] ?? ""}`;
-  const allowed = Object.hasOwn(QUERY_PARAMS, root) ? QUERY_PARAMS[root] : undefined;
-  if (allowed === undefined) return;
+  const read = Object.hasOwn(QUERY_PARAMS, root) ? QUERY_PARAMS[root] : undefined;
+  if (read === undefined) return;
   for (const name of new Set(url.searchParams.keys())) {
-    if (!allowed.includes(name)) {
-      throw new HttpError(400, `Unknown query parameter "${name}"; ${root} reads: ${allowed.join(", ") || "none"}`);
-    }
-    if (url.searchParams.getAll(name).length > 1) {
+    if (read.includes(name) && url.searchParams.getAll(name).length > 1) {
       throw new HttpError(400, `Query parameter "${name}" was given more than once`);
     }
   }
@@ -806,7 +800,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       send(response, 404, "text/plain", "Not found");
       return;
     }
-    rejectUnreadRequestInput(request, url);
+    rejectRepeatedQueryParameters(url);
     if (method === "GET" && url.pathname.startsWith("/status/")) {
       pruneJobs();
       const job = jobs.get(url.pathname.slice("/status/".length));
@@ -978,26 +972,30 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
       send(response, 404, "text/plain", "Not found");
       return;
     }
+    // A query parameter is read by the route that has it in QUERY_PARAMS, and by nothing else: Tika ignores what it does not read.
+    // `?handler=` is /tika's alone, not that of the routes that name their handler in the path (`/tika/text`, `/tika/json`).
+    const query = (name: string): string | null => {
+      if (!(QUERY_PARAMS[target.endpoint]?.includes(name) ?? false)) return null;
+      if (name === "handler" && (target.fixedType !== null || target.json)) return null;
+      return url.searchParams.get(name);
+    };
     const presets = options.presets ?? {};
-    const presetName = url.searchParams.get("preset");
+    const presetName = query("preset");
     if (presetName !== null && !Object.hasOwn(presets, presetName)) {
       throw new HttpError(400, `Unknown preset ${JSON.stringify(presetName)}`);
     }
     const preset = presetName === null ? undefined : presets[presetName];
     const limits: Record<string, number> = { ...(preset?.limits ?? {}) };
     for (const key of ["maxOutputChars", "maxEmbeddedResources"] as const) {
-      const requested = clientLimit(url.searchParams.get(key), key);
+      const requested = clientLimit(query(key), key);
       const ceiling = options.maxLimits?.[key];
       const value = requested ?? limits[key] ?? options.defaultLimits?.[key];
       if (ceiling !== undefined) limits[key] = capLimit(value, ceiling);
       else if (value !== undefined) limits[key] = value;
     }
-    const requestedHandler = url.searchParams.get("handler")?.toLowerCase() ?? null;
+    const requestedHandler = query("handler")?.toLowerCase() ?? null;
     if (requestedHandler !== null && !HANDLERS.includes(requestedHandler)) {
       throw new HttpError(400, `Unknown handler ${JSON.stringify(requestedHandler)}; handlers are: ${HANDLERS.join(", ")}`);
-    }
-    if (requestedHandler !== null && (target.fixedType !== null || target.json)) {
-      throw new HttpError(400, `${url.pathname} names its handler in the path; ?handler= is read by /tika alone`);
     }
     // What the request names, most specific first: ?handler=, then the preset's. (The path's own handler is read below.)
     const handlerOverride = requestedHandler ?? preset?.handler?.toLowerCase();
@@ -1023,7 +1021,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     const pathType = target.handler === null ? null : formatOf(target.handler, "text", true);
     // `?segments=true` (ripstream's own, off by default): each record's segments as `tk:segments` (docs/segments.md). They point
     // into the content a text or body handler writes, so any other is refused here, before the document is read.
-    const segments = clientFlag(url.searchParams.get("segments"), "segments");
+    const segments = clientFlag(query("segments"), "segments");
     if (segments && (target.endpoint === "/rmeta" || target.endpoint === "/unpack")) {
       const type = pathType ?? formatOf(handlerOverride, "text");
       if (type !== "text" && type !== "body") {
@@ -1070,7 +1068,7 @@ export function createRipstreamServer(options: RipstreamServerOptions = {}): Rip
     } else if (target.form || (target.endpoint === "/unpack" && method === "POST")) {
       throw new HttpError(415, "A form route takes a multipart/form-data request");
     }
-    const name = multipartName ?? url.searchParams.get("filename") ?? dispositionName;
+    const name = multipartName ?? query("filename") ?? dispositionName;
     // The parse ends at the deadline, or when the client that wants its answer is gone.
     const signal = AbortSignal.any([AbortSignal.timeout(requestTimeoutMs), gone]);
     const parseOptions =

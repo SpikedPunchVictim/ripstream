@@ -497,7 +497,20 @@ Not the same:
   `EMITTER_NOT_FOUND`, `TIMEOUT`, `UNSPECIFIED_CRASH`, `CLIENT_UNAVAILABLE_WITHIN_MS` and `PAYLOAD_LIMIT_EXCEEDED`. The last is the nearest status for a document over a
   limit (Tika's is a frame too large to send to its forked client), and a child that ran out of memory is reported as
   that too: `OOM` is in the table but never produced.
-- `?handler=` on a route that names its handler in the path (`/tika/text`, `/tika/json`) is a 400.
+- **Query parameters and `X-Tika-*` headers (`tikajs-x2t6`).** Tika 4.2.0 reads no query parameter and no `X-Tika-*` header: its
+  server classes use the path (`/rmeta/text`, `/rmeta/preset/{name}`), `Content-Disposition` (the file name), `Content-Type`,
+  `Accept` and the multipart `config` part, and nothing else (read from the 4.2.0 jars and checked on the oracle: 352 requests,
+  11 routes by 32 added parameters or headers, among them `?foo=1`, `?handler=json`, `?writeLimit=`, `?maxEmbeddedResources=0`,
+  `X-Tika-OCRLanguage`, `X-Tika-PDFextractInlineImages`, `X-Tika-Skip-Embedded`, `writeLimit`, `password` and `fileUrl`: every one
+  gave the answer the request without it gives). ripstream now does the same: an unread parameter or header is **ignored (200)**
+  where it used to be a 400. This changes the status for unknown extras from 400 to Tika's 200, and a client that sets an
+  option ripstream does not have (OCR language, PDF flags, `skipEmbedded`) gets the document parsed without it, as it does from
+  Tika. There is no list of Tika parameters that ripstream refuses, because Tika has none. What ripstream's own routes read
+  (`filename`, `preset`, `handler` on `/tika`, `segments`, `maxOutputChars`, `maxEmbeddedResources`, `target`) is its own
+  extension: Tika ignores it, ripstream acts on it, and a value that is wrong (a repeated parameter, an unknown preset or
+  handler, a non-boolean `segments`) is still a 400. A parameter is read by the routes that list it only (`/detect?maxOutputChars=5`,
+  `/meta?handler=json` and `/tika?segments=true` are ignored), and `?handler=` is ignored on routes that name their handler in
+  the path (`/tika/text`, `/tika/json`), where it used to be a 400.
 
 Read from Tika source and its saved responses, not checked against a live Tika.
 

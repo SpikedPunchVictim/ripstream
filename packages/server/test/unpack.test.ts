@@ -265,12 +265,14 @@ test("maxUnpackBytes 0 keeps only the documents that have no bytes", async () =>
   );
 });
 
-test("a client cannot ask for more than maxUnpackBytes: there is no parameter for it", async () => {
-  await withServer(async (base) => {
-    const response = await put(base, "/unpack?maxUnpackBytes=999999999");
-    assert.equal(response.status, 400);
-    assert.match(await response.text(), /Unknown query parameter "maxUnpackBytes"/);
-  });
+test("a client cannot ask for more than maxUnpackBytes: there is no parameter for it, and one that is sent is ignored", async () => {
+  await withServer(
+    async (base) => {
+      const { manifest } = await unpacked(await put(base, "/unpack?maxUnpackBytes=999999999", storedZip({ "a.txt": "text", "empty.txt": "" })));
+      assert.deepEqual(manifest.resources.slice(1).map((resource) => resource["tk:resource-name"]), ["empty.txt"], "the server's limit still holds");
+    },
+    { maxUnpackBytes: 0 },
+  );
 });
 
 test("maxUnpackBytes must be a whole number up to 2 GiB", () => {
