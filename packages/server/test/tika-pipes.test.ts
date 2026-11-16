@@ -537,14 +537,13 @@ test("/pipes aborts the parse of a tuple whose client goes away and frees the sl
       parse: (...args) => real.parse(...args),
       parseRecursive: (_source, options) =>
         new Promise((_resolve, reject) => {
-          options?.signal?.addEventListener(
-            "abort",
-            () => {
-              aborted = true;
-              reject(options.signal?.reason);
-            },
-            { once: true },
-          );
+          const stop = (): void => {
+            aborted = true;
+            reject(options?.signal?.reason);
+          };
+          // The client can be gone before the parse starts, and an abort listener never hears a signal that has fired.
+          if (options?.signal?.aborted === true) stop();
+          else options?.signal?.addEventListener("abort", stop, { once: true });
         }),
     };
     await serving({ ripstream, pipes: { settings: settingsFor(paths) }, maxConcurrent: 1 }, async ({ port }) => {

@@ -206,14 +206,12 @@ function slowEngine(ms: number): ServerRipstream {
   const wait = (options: ParseOptions | undefined): Promise<void> =>
     new Promise<void>((resolve, reject) => {
       const timer = setTimeout(resolve, ms);
-      options?.signal?.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          reject(options.signal?.reason);
-        },
-        { once: true },
-      );
+      const stop = (): void => {
+        clearTimeout(timer);
+        reject(options?.signal?.reason);
+      };
+      if (options?.signal?.aborted === true) stop();
+      else options?.signal?.addEventListener("abort", stop, { once: true });
     });
   return {
     ...base,

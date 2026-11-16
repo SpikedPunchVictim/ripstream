@@ -359,15 +359,13 @@ function slowParser(ms: number, started: string[] = [], aborted: string[] = []):
     new Promise<void>((resolve, reject) => {
       started.push(name);
       const timer = setTimeout(resolve, ms);
-      signal?.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          aborted.push(name);
-          reject(signal.reason);
-        },
-        { once: true },
-      );
+      const stop = (): void => {
+        clearTimeout(timer);
+        aborted.push(name);
+        reject(signal?.reason);
+      };
+      if (signal?.aborted === true) stop();
+      else signal?.addEventListener("abort", stop, { once: true });
     });
   return {
     parse: async (_source, options) => {
