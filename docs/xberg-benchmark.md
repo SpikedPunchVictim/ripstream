@@ -1,6 +1,7 @@
 # ripstream vs xberg vs Apache Tika: xberg's benchmark methodology
 
-Measured 2026-11-14 for bead `tikajs-12zz`. Ripstream at commit `95d44dd` (committed sources only), xberg 1.4.0
+Two runs. The first, 2026-11-14 for bead `tikajs-12zz`, had no office, PDF, ebook or Outlook binaries; the second,
+2026-11-16 (UTC) for bead `tikajs-0qqm`, has them. Both are below, the second first. The first run: ripstream at commit `95d44dd` (committed sources only), xberg 1.4.0
 (the `xberg-cli-aarch64-unknown-linux-musl` release), Apache Tika 4.2.0, all in one Linux container. The fixtures and
 ground truth are xberg's own (`tools/benchmark-harness/fixtures` at xberg `df13c1f`, corpus `xberg-io/test_documents`
 at `8760ed6`).
@@ -10,7 +11,80 @@ decide the numbers: a fresh process per file, warmup and iteration counts, timeo
 percentiles and the TF1 quality score. It runs ripstream next to the two tools on the fixtures that every tool can
 handle without OCR, layout or ML models.
 
-## Where ripstream sits
+## Where ripstream sits, with the corpus binaries (tikajs-0qqm)
+
+Run of 2026-11-16 00:03 to 02:09 UTC (2 h 6 min), ripstream at commit `a4346f5` (committed sources only), the same xberg
+1.4.0, Tika 4.2.0, harness and corpus as below, plus the 215 binaries fetched by `fetch-corpus.ts` (102.1 MB, every
+object sha256-checked against `corpus.lock.json`, none mismatched). **5 measured runs and 1 warmup per fixture, so
+every per-file figure is a median of 5**; the table percentiles are over all those runs. 602 fixtures were selected, 578
+were extracted by every lane and the tables cover exactly those. Ripstream extracted 583 of 602, Tika 584, xberg 601.
+
+- **Cold process (one process per file)**: ripstream's CLI is **4.1x faster than a fresh Tika JVM** (p50 254 ms vs
+  1032 ms) and **9.3x slower than xberg** (27 ms). Per group the ratio to Tika is 3.1x (PDF, 334 vs 1043 ms) to 4.7x
+  (email, 392 vs 1839 ms); mostly process start-up, as before.
+- **Warm process**: ripstream and Tika are level, p50 3.7 ms vs 3.6 ms, p95 51.5 vs 48.5 ms. By group ripstream is faster
+  on text, markup, email, ebook and archive, level on data (2.8 vs 2.7 ms), and slower on **PDF (30.0 vs 17.5 ms p50, 2.9 vs
+  6.2 MB/s)** and office (8.6 vs 6.7 ms). The first run's 2.5x warm gap (4.6 vs 1.8 ms) is gone, on a different and
+  larger fixture set: the data group went from 12.2 vs 2.4 ms to 2.8 vs 2.7 ms (the warm-JSON work of `tikajs-r8rv`, see
+  the next section). No warm xberg lane.
+- **Memory**: ripstream CLI p50 115 MB (max 307, an EPUB), Tika 235 MB (max 406), xberg 57 MB (max 119). PDF is the
+  heaviest group: 143 / 292 / 66 MB. Warm processes: ripstream 455 MB, Tika 947 MB after the whole run.
+- **Batches** (one cold process per batch of 8, 97 batches, 602 files, 120 MB): xberg 26.2 files/s, ripstream 14.8,
+  Tika 2.8. On the 87 PDFs (55.7 MB) ripstream is ahead of xberg: 8.8 vs 5.7 files/s, 5.6 vs 3.6 MB/s (Tika 2.3 and
+  1.5), because xberg's batch spends 15.4 s on them.
+- **Quality (TF1, 578 common)**: ripstream **0.871**, Tika **0.872**, xberg **0.892**; at TF1 >= 0.95, 356, 365 and
+  293 fixtures. Ripstream and Tika are level overall. xberg leads on email (0.883 vs 0.550/0.541, the header block, see
+  caveats), ebook (0.901 vs 0.778/0.786) and archive (0.978 vs 0.484/0.513); ripstream and Tika lead on text (0.977/0.995
+  vs 0.944) and data (0.942 vs 0.900).
+
+| Group (fixtures) | Cold p50 ms, ripstream / Tika / xberg | Warm p50 ms, ripstream / Tika | RSS p50 MB, ripstream / Tika / xberg | TF1, ripstream / Tika / xberg |
+| --- | --- | --- | --- | --- |
+| text (125) | 220.2 / 959.7 / 23.1 | 1.2 / 1.4 | 113 / 235 / 56 | 0.977 / 0.995 / 0.944 |
+| markup (69) | 237.1 / 996.3 / 25.1 | 1.4 / 1.8 | 114 / 233 / 58 | 0.901 / 0.902 / 0.883 |
+| data (138) | 241.0 / 1063.8 / 25.3 | 2.8 / 2.7 | 114 / 235 / 56 | 0.942 / 0.942 / 0.900 |
+| email (42: eml, msg) | 392.0 / 1839.1 / 39.9 | 4.8 / 8.9 | 113 / 226 / 59 | 0.550 / 0.541 / 0.883 |
+| office (107) | 261.8 / 956.9 / 27.5 | 8.6 / 6.7 | 116 / 235 / 58 | 0.907 / 0.900 / 0.946 |
+| ebook (6: epub) | 273.2 / 1063.1 / 25.7 | 8.3 / 31.8 | 117 / 236 / 59 | 0.778 / 0.786 / 0.901 |
+| pdf (87) | 333.7 / 1043.0 / 70.9 | 30.0 / 17.5 | 143 / 292 / 66 | 0.717 / 0.708 / 0.744 |
+| archive (4) | 357.8 / 1411.5 / 39.3 | 9.4 / 14.8 | 124 / 256 / 65 | 0.484 / 0.513 / 0.978 |
+| **all (578)** | **254.0 / 1031.8 / 27.4** | **3.7 / 3.6** | **115 / 235 / 57** | **0.871 / 0.872 / 0.892** |
+
+**What the new groups show.**
+
+- **Failures only ripstream has** (benchmark-level, not minimised; beads filed): four Outlook `.msg` files with empty text
+  where Tika returns some (`tikajs-8vzf`), `rtf/tables` rejected as "Not an RTF document" and `rtf/image` empty
+  (`tikajs-3b5g`), `wpd_wp_mac1` rejected where Tika answers empty (`tikajs-mic4`). Both tools fail the two encrypted
+  EPUBs (`OpenSans.TTF` is obfuscated), `odt/formula` and `eml/mime-no-body`; Tika alone fails `rtf/accent`, and ripstream
+  alone parses the two UTF-16 `.eml` files that Tika answers empty.
+- **Fixtures where ripstream and Tika differ by 0.05 TF1 or more: 57** (31 with ripstream behind, 26 ahead; the table is in
+  the run's `summary.md`). The largest ripstream deficits are two PDFs (`pdfa_045` 0.155 vs 0.903, `pr-136-example` 0.424 vs
+  0.955; `tikajs-4xj6`), ODT footnotes, endnotes, lists and a unicode file (-0.33 to -0.40; `tikajs-uay4`) and Markdown
+  fixtures, which are the file-name effect described under the caveats (Tika is given no name and returns the source).
+  Ripstream is ahead on ODT headers and metadata, RTF lists, several XLSX files (+0.15) and the PDF charts.
+- **The csv zero-overlap failures** (`csv-comma-in-cell`, `csv-inconsistent-header`, `csv-too-few-columns`,
+  `csv-too-many-columns`) hit ripstream and Tika alike: the ground truth is one token per cell, not a plain-text file.
+- **PDF is where ripstream is weakest per file when warm** (30 ms vs 17.5 ms for Tika). It is also the largest group by
+  bytes (55.7 MB of 120), so it dominates MB/s.
+
+**Not in this run.** 92 PDF fixtures (the `reference` tier of xberg's corpus: arXiv papers via ReaDoc and ParseBench)
+are license-restricted. xberg never publishes their bytes: they are materialised into `.corpus-cache/` from the
+pinned upstream datasets, or restored from a private GCS bucket (`tools/benchmark-harness/CORPUS.md`). `corpus.lock.json`
+has no entry for them, so they cannot be fetched or sha256-verified here. Everything else is in the run or accounted
+for under "Skipped fixtures" (46 OCR fixtures are skipped on purpose). To include the 92, materialise the cache in
+`test_documents/.corpus-cache` and pass that clone as `XBERG_CORPUS`.
+
+**Noise.** The host had a load average of 40 to 45 for the whole run (other agents' builds and tests), on an 8 vCPU VM.
+The cold p50s sit close to the first run's (ripstream 254 ms against 236 to 257; Tika 1032 against 939 to 976 ms, 6 to
+10 % slow; xberg 27 against 21 to 22 ms, 25 % slow), so the absolute numbers of this run are somewhat inflated by load and
+the ratios are the signal. The warm numbers are a few milliseconds and moved by up to 27 % between earlier runs; a 1.04x
+gap (3.7 vs 3.6 ms) is parity, not a win. First-extraction ("cold start") times in this run (ripstream CLI 1107 ms,
+Tika 4086 ms, xberg 922 ms) are the load-inflated first call of the first fixture and say little.
+
+Raw results: `results.json` (3.6 MB) and `summary.md` are in the session scratchpad of the run, if it still exists:
+`/private/tmp/claude-501/-Users-spikedpunchvictim-projects-tikajs/d25af458-a0f9-4572-ad89-e79c09805e70/scratchpad/bench-out/corpus5/`.
+The command was `scripts/bench/docker/run.sh -i 5 -w 1` with `XBERG_CORPUS_BIN` set.
+
+## First run: text formats only (tikajs-12zz)
 
 Run of 2026-11-14 22:40 to 23:21 UTC: 387 fixtures, 5 per-file lanes, 3 batch lanes, about 42 minutes. 373 fixtures
 were extracted by every lane; the tables cover exactly those, so each row is over the same files.
@@ -166,7 +240,12 @@ Taken from `tools/benchmark-harness` (single-file mode); deviations are listed f
 
 ## Skipped fixtures
 
-387 of the harness's 801 fixtures are in the run. The other 414:
+**With the corpus binaries (tikajs-0qqm)**: 602 of 801 are in the run and 199 are skipped. 92 are the license-restricted
+`reference` PDFs (document not present under any corpus root), 46 need OCR (jpg 17, png 12, pdf 10, one each of bmp, gif,
+jp2, jpeg, tif, tiff, webp), 59 are formats outside the harness's Tika list (as below) and 2 PDFs have no ground truth.
+The 307 fixtures that the first run could not read are now 215 fetched documents plus the 92 above.
+
+**First run (tikajs-12zz)**: 387 of the harness's 801 fixtures are in the run. The other 414:
 
 | Reason | Fixtures | File types |
 | --- | ---: | --- |
