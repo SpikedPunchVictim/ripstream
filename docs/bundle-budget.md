@@ -24,6 +24,8 @@ measured size plus about five percent (KiB).
 
 | package | measured | cap | what grew it |
 |---|---|---|---|
+| parsers | 1,112,011 | 1100 (was 1000) | a hand-written CommonMark/GFM block and inline parser for Markdown (tikajs-8uhs, no new dependency); RTF `\pict` embedded documents (tikajs-3b5g); Tika-exact email body text (tikajs-w12u); the HTML body start (tikajs-x1cd); XML UTF-16 detection (tikajs-dmp7); unversioned WordPerfect as empty (tikajs-mic4). Per-feature bytes not measured |
+| parser-office | 733,235 | 725 (was 710) | `.msg` body selection and compressed RTF (tikajs-8vzf); ODT notes, lists, headers and footers (tikajs-uay4); xlsb and ods segment fidelity (tikajs-bwjq); OLE2 property-set keys (tikajs-nb4y). Per-feature bytes not measured |
 | core | 1,604,924 | 1650 (was 1500) | segments, labels, location, `pathParts`, `leafSegments` and the segment allowance; `onEmbeddedLimit`; email header block; `handlerType` validation |
 | parser-office | 692,687 | 710 (was 650) | segment hints for office formats; email headers; RDF blank-node labels |
 | parser-pdf | 364,581 | 375 (was 345, 150 before recovery) | brute-force damaged-file recovery (xref and page-tree rebuild, font repair, Flate salvage), image-only page keys, key repair, pdf.js import filter (roughly doubled by design); then repair of intact-xref font damage (tikajs-w4ps), Tika-4 metadata keys: access permissions, marked content, EOF offsets, incremental updates (tikajs-p1qx), page labels and AcroForm field segments (tikajs-ex78) |

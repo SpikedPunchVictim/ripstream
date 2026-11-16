@@ -1,8 +1,8 @@
 {
   "core": 1650,
   "mime": 1100,
-  "parsers": 1000,
-  "parser-office": 710,
+  "parsers": 1100,
+  "parser-office": 725,
   "parser-archive": 250,
   "parser-pdf": 375,
   "parser-media": 450,
