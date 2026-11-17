@@ -6,6 +6,7 @@ import {
   EncryptedDocumentError,
   IsolationError,
   LimitExceededError,
+  LowYieldError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -183,6 +184,8 @@ const PARSE_OPTION_FIELDS = {
   unpackBytes: "copied",
   segments: "copied",
   emailHeaders: "copied",
+  // Applied by the pool to the warnings of the reply, as an isolating parent does: the worker only records them.
+  onLowYield: "parent",
   signal: "parent",
 } as const satisfies Record<keyof ParseOptions, "copied" | "parent">;
 
@@ -247,6 +250,9 @@ const ERROR_CLASSES = {
     make: (message: string, props: Props) => new IsolationError(text(props, "reason") as IsolationFailureReason, message),
   },
   LimitExceededError: { type: LimitExceededError, make: (message: string) => new LimitExceededError(message) },
+  // `onLowYield` is applied by the pool, on the warnings of the reply, so a worker never throws this; the class is here so
+  // that one built elsewhere keeps its name and code (its `warnings`, objects, do not cross as an error's props).
+  LowYieldError: { type: LowYieldError, make: (message: string) => new LowYieldError([], message) },
   MalformedDocumentError: { type: MalformedDocumentError, make: (message: string) => new MalformedDocumentError(message) },
   MissingDependencyError: {
     type: MissingDependencyError,
@@ -423,6 +429,7 @@ export function decodeMediaType(encoded: EncodedMediaType): MediaType {
 export interface EncodedParseResult {
   readonly metadata: EncodedMetadata;
   readonly text: string;
+  readonly warnings: ParseResult["warnings"];
   readonly exception?: EncodedError;
 }
 
@@ -430,6 +437,7 @@ export function encodeParseResult(result: ParseResult): EncodedParseResult {
   return {
     metadata: encodeMetadata(result.metadata),
     text: result.text,
+    warnings: result.warnings ?? [],
     ...(result.exception === undefined ? {} : { exception: encodeError(result.exception) }),
   };
 }
@@ -438,6 +446,7 @@ export function decodeParseResult(encoded: EncodedParseResult): ParseResult {
   return {
     metadata: decodeMetadata(encoded.metadata),
     text: encoded.text,
+    warnings: encoded.warnings,
     ...(encoded.exception === undefined ? {} : { exception: decodeError(encoded.exception) as Error }),
   };
 }

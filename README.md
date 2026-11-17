@@ -36,6 +36,7 @@ output/time/embedded limits, 0600 temp files, per-document parse isolation in a 
 [docs/security.md](docs/security.md).
 What a result means (ok, damaged, repaired, limit hit, nested depth, XXE) and how to derive a status from it:
 [docs/limits-and-statuses.md](docs/limits-and-statuses.md).
+What a result did not read (scans, repairs, failed archive entries) and `onLowYield`: [docs/warnings.md](docs/warnings.md).
 
 ## Development
 

@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import {
+  addParseWarning,
   AbortError,
   EncryptedDocumentError,
   LimitExceededError, limitError,
@@ -7,8 +8,10 @@ import {
   MediaType,
   Metadata,
   CONTEXT_KEYS,
+  MAX_PAGE_NUMBERS,
   MissingDependencyError,
   ParseTimeoutError,
+  tallyPart,
   TIKA_KEYS,
   tikaDateMetadataString,
   XHTMLContentHandler,
@@ -169,6 +172,7 @@ export class PdfParser implements Parser {
       let threeDAnnotations = 0;
       const pages = ready.numPages;
       const imageOnlyPages: number[] = [];
+      let totalChars = 0;
       const emptiness = new EmptyDocumentEvidence();
       for (let index = 1; index <= pages; index++) {
         ctx.throwIfAborted();
@@ -182,6 +186,7 @@ export class PdfParser implements Parser {
           // pdf:chars-per-page keeps one value per page.
           emptiness.pageFailed(index, message.message);
           metadata.add("pdf:chars-per-page", "0");
+          tallyPart(ctx, "pages-failed", false);
           continue;
         }
         if (message.type !== "page") {
@@ -202,6 +207,8 @@ export class PdfParser implements Parser {
           await xhtml.endElement("p");
         }
         metadata.add("pdf:chars-per-page", String(characters));
+        totalChars += characters;
+        tallyPart(ctx, "pages-failed", true);
         if (message.nonEmbeddedFont === true) nonEmbeddedFont = true;
         if (message.damagedFont === true) damagedFont = true;
         const hasText = message.lines.some((line) => line.trim().length > 0);
@@ -242,6 +249,17 @@ export class PdfParser implements Parser {
       if (imageOnlyPages.length > 0) {
         metadata.set("tk:pdf:image-only-page-count", String(imageOnlyPages.length));
         for (const page of imageOnlyPages) metadata.add("tk:pdf:image-only-pages", String(page));
+      }
+      // The same facts, typed, for a consumer that must not take a scan or a recovery for a document that has nothing to say.
+      if (repair !== undefined) addParseWarning(ctx, { kind: "repaired", steps: [...repair.steps], of: pages, chars: totalChars });
+      if (imageOnlyPages.length > 0) {
+        addParseWarning(ctx, {
+          kind: "image-only",
+          pages: imageOnlyPages.length,
+          of: pages,
+          pageNumbers: imageOnlyPages.slice(0, MAX_PAGE_NUMBERS),
+          chars: totalChars,
+        });
       }
 
       metadata.set("pdf:num-3d-annotations", String(threeDAnnotations));

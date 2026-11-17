@@ -23,6 +23,14 @@ import { TIKA_KEYS } from "./tika-keys.ts";
 import type { EventSink } from "./events.ts";
 import { RipstreamInputStream } from "./ripstream-input-stream.ts";
 import type { InputSource } from "./content-handler.ts";
+import {
+  assertLowYieldPolicy,
+  enforceLowYield,
+  recordWarnings,
+  WarningSink,
+  type LowYieldPolicy,
+  type ParseWarning,
+} from "./warnings.ts";
 
 export interface RipstreamOptions {
   readonly detector: Detector;
@@ -113,11 +121,25 @@ export interface ParseOptions {
    * the body alone. Metadata is the same either way. See "The email header block" in docs/migration.md.
    */
   readonly emailHeaders?: boolean;
+  /**
+   * What `parse` and `parseRecursive` do when the result carries a low-yield warning (`isLowYield`: parts of the
+   * document that could not be read, or a PDF that gave almost no text because it is a scan or was damaged). "record"
+   * (default): the warnings are on `ParseResult.warnings` / `ParseRecord.warnings` and the call resolves. "throw": the
+   * call rejects with a `LowYieldError` carrying the low-yield warnings. Nothing else changes: the text and the metadata
+   * are what they are either way. The other parse methods return no result to hold warnings and ignore it. See
+   * docs/warnings.md.
+   */
+  readonly onLowYield?: LowYieldPolicy;
 }
 
 export interface ParseResult {
   readonly metadata: Metadata;
   readonly text: string;
+  /**
+   * What the parse could not read, or read only in part (docs/warnings.md): empty when it read everything it was asked
+   * to. Warnings of the embedded documents of a plain `parse` are here too, each with its `path`.
+   */
+  readonly warnings: readonly ParseWarning[];
   /** The failure of a document that could not be read; only under `onDocumentFailure: "record"`. */
   readonly exception?: Error;
 }
@@ -162,12 +184,14 @@ export class Ripstream {
 
   async parse(source: InputSource, options: ParseOptions = {}): Promise<ParseResult> {
     const type = assertHandlerType(options.handlerType);
+    assertLowYieldPolicy(options.onLowYield);
     // `parse` filters to the body before the handler (see parseNoting), so a text handler gives a body handler's output
     // and a body handler would never see the body begin.
     const handler = createOutputHandler(type === "body" ? "text" : type);
     const counting = type === "ignore" ? "none" : type === "text" || type === "body" ? "body" : "all";
-    const { metadata, exception } = await this.parseNoting(source, handler, options, counting);
-    return { metadata, text: handler.toString(), ...(exception === null ? {} : { exception }) };
+    const { metadata, exception, warnings } = await this.parseNoting(source, handler, options, counting);
+    enforceLowYield(options.onLowYield, warnings);
+    return { metadata, text: handler.toString(), warnings, ...(exception === null ? {} : { exception }) };
   }
 
   async parseToString(source: InputSource, options: ParseOptions = {}): Promise<string> {
@@ -285,11 +309,13 @@ export class Ripstream {
     handler: ContentHandler,
     options: ParseOptions,
     counting: "all" | "body" | "none" = "all",
-  ): Promise<{ readonly metadata: Metadata; readonly exception: Error | null }> {
+  ): Promise<{ readonly metadata: Metadata; readonly exception: Error | null; readonly warnings: readonly ParseWarning[] }> {
     const recording = options.onDocumentFailure === "record";
     return this.withStream(source, options, async (stream, metadata, ctx) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
+      const sink = new WarningSink();
+      ctx.set(CONTEXT_KEYS.WARNINGS, sink);
       const truncateEmbedded = options.onEmbeddedLimit === "truncate";
       if (truncateEmbedded) ctx.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
       const started = performance.now();
@@ -334,7 +360,7 @@ export class Ripstream {
           if (failure !== "document") throw error;
           const exception = error instanceof Error ? error : new Error(String(error));
           recordFailure(metadata, TIKA_KEYS.CONTAINER_EXCEPTION, exception);
-          return { metadata, exception };
+          return { metadata, exception, warnings: sink.finish(metadata) };
         }
       }
       if (truncator?.isWriteLimitReached === true) metadata.set(TIKA_KEYS.WRITE_LIMIT_REACHED, "true");
@@ -346,7 +372,7 @@ export class Ripstream {
           : { mediaType: metadata.get("Content-Type")! }),
         durationMs: performance.now() - started,
       });
-      return { metadata, exception: null };
+      return { metadata, exception: null, warnings: sink.finish(metadata) };
     });
   }
 
@@ -361,6 +387,7 @@ export class Ripstream {
       throw new TypeError(`segments must be a boolean, got ${typeof options.segments}`);
     }
     const handlerType = assertHandlerType(options.handlerType);
+    assertLowYieldPolicy(options.onLowYield);
     if (options.segments === true && handlerType !== "text" && handlerType !== "body") {
       throw new RangeError(`segments need a handlerType of "text" or "body", got "${handlerType}"`);
     }
@@ -383,6 +410,9 @@ export class Ripstream {
         if (!recording || ctx.signal.aborted || classifyFailure(error) !== "document") throw error;
       }
       return wrapper.getRecords();
+    }).then((records) => {
+      enforceLowYield(options.onLowYield, recordWarnings(records));
+      return records;
     });
   }
 

@@ -4,6 +4,25 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Typed warnings on results, and `onLowYield: "throw"` (`tikajs-icjf`)
+
+Added: `ParseResult.warnings` and `ParseRecord.warnings`, a typed list of what a result did not read, so a consumer that must see every
+word does not take a scan, a recovery or a failed archive for a clean, empty document. Kinds: `image-only` (`pages`, `of`, `pageNumbers`,
+`chars`), `repaired` (`steps`, `of`, `chars`), `truncated` (`limit`) and `partial` (`reason`: `pages-failed`, `sheets-failed`,
+`entries-failed`, `embedded-failed`, `warnings-capped`; `failed`, `of`); an embedded document's warning in a plain `parse` has a `path`.
+`warnings` is always present and empty when the parse read everything. `ParseOptions.onLowYield` is `"record"` (default: nothing changes
+but the field) or `"throw"`, which raises the new `LowYieldError` (code `LOW_YIELD`, `warnings` attached; HTTP 422, CLI exit 3, pipes
+`PARSE_EXCEPTION_NO_EMIT`) when `isLowYield` is true of a warning: `partial` always, `image-only` and `repaired` below 20 characters a
+page (`LOW_YIELD_CHARS_PER_PAGE`), `truncated` never. Warnings cross the isolation boundary on the `meta` and `record` frames (checked
+field by field, at most 104 a result) and a worker-thread pool; the policy is applied in the caller's process, so in-process, child and
+worker give the same warnings and the same error. Raised by the PDF, OOXML (xlsx) and archive parsers and both embedded document
+extractors; `parse --json` writes `warnings` when there are any, and `parse --on-low-yield <record|throw>` is new. Exported from core:
+`ParseWarning` and its member types, `LowYieldError`, `isLowYield`, `lowYieldWarnings`, `enforceLowYield`,
+`recordWarnings`, `parseWireWarnings`, `WarningSink`, `addParseWarning`, `tallyPart` and the constants. Text, metadata and every `tk:` key
+are unchanged, and the Tika-compatible server routes, rmeta, jsonl and `-r` output gain nothing. Public API addition (`api-report.json`).
+docs/warnings.md says what low yield means, where each warning is raised and what is not covered (7z/RAR and picture-only office files
+raise none; an xlsx sheet that is present and unparseable still fails the document).
+
 ### BREAKING: `LimitExceededError` says which limit; `AdmissionRefusedError` is no longer a `LimitExceededError` (`tikajs-mz56`)
 
 Added: `LimitExceededError` has `limit` (a `LimitReason`: `outputChars`, `documentOutputChars`, `zipEntries`, `ratio`, `entryBytes`,

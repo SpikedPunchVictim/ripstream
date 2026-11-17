@@ -2,7 +2,8 @@
 
 ripstream returns **no status**. `parse` and `parseRecursive` resolve with text and metadata, or throw, or (with
 `onDocumentFailure: "record"`) resolve with the failure written on the metadata. A caller that needs a status derives
-it from those three things; [Mapping to a status](#mapping-to-a-status) gives a rule that follows from this page.
+it from those three things, and from `result.warnings`, the typed list of what an ok result did not read
+([warnings.md](warnings.md): image-only, repaired, truncated, partial; `onLowYield: "throw"` refuses the low-yield ones); [Mapping to a status](#mapping-to-a-status) gives a rule that follows from this page.
 
 Everything below was read from the code (the file is named) and, where a number is given, run: zip, tar and gzip
 nested 1 to 200 deep, DOCTYPE and entity payloads through eleven parsers, and damaged zip, gzip, docx, pdf, xml and rtf
@@ -56,8 +57,9 @@ document. A key is written only when it applies.
 | Unknown or unsupported type | An empty result, not an error | `tk:parsed-by` is `EmptyParser` and the text is empty (as Tika's fallback) | nothing; only a parser that is named and cannot read the file throws |
 
 A reading of this table that matters in practice: **empty text with no exception is not evidence of an empty
-document**. It is what a 7z, an unknown type and an image-only PDF give. Use `tk:parsed-by`, `tk:pdf:image-only-*` and
-the archive keys to tell them apart.
+document**. It is what a 7z, an unknown type and an image-only PDF give. Use `result.warnings` ([warnings.md](warnings.md):
+an `image-only` or `partial` warning is the answer for a scan or an archive whose entries all failed), `tk:parsed-by`,
+`tk:pdf:image-only-*` and the archive keys to tell them apart.
 
 ## Limits: which ones throw, which truncate
 
@@ -168,6 +170,7 @@ unknown, a child killed from outside), so `observed` and `max` are optional; `li
 | `MalformedDocumentError`, `EncryptedDocumentError`, `ZeroByteFileError` | `MALFORMED_DOCUMENT`, `ENCRYPTED_DOCUMENT` | 422 (JSON routes answer 200 with the exception in the metadata) | 3 | recorded: `*_PARSE_EXCEPTION` statuses, the input is not a crash |
 | `UnsupportedFormatError` | `UNSUPPORTED_FORMAT` | 415 | 3 | recorded as an empty parse |
 | `LimitExceededError`, `AdmissionRefusedError`, `WriteLimitReachedError`, `RequestTooLargeError` | `LIMIT_EXCEEDED`, `ADMISSION_REFUSED`, `WRITE_LIMIT_REACHED`, `REQUEST_TOO_LARGE` | 422, 422, 200, 413 | 3 | `PAYLOAD_LIMIT_EXCEEDED` |
+| `LowYieldError` (only with `onLowYield: "throw"`; [warnings.md](warnings.md)) | `LOW_YIELD` | 422 | 3 | `PARSE_EXCEPTION_NO_EMIT` |
 | `ParseTimeoutError` | `PARSE_TIMEOUT` | 408 | 1 | `TIMEOUT` |
 | `AbortError` | `ABORTED` | 500 | 1 | `UNSPECIFIED_CRASH` |
 | `IsolationError` `crash` / `queue_full` / `unavailable` | `ISOLATION_FAILED` | 500 / 503 / 503 | 1 / 4 / 4 | `UNSPECIFIED_CRASH` / `CLIENT_UNAVAILABLE_WITHIN_MS` |
@@ -192,11 +195,13 @@ first match:
    **damaged, nothing usable**.
 6. Resolved and any record has `exception`, or the root has `tk:exception:embedded-exception` /
    `embedded-stream-exception` / `tk:exception:warn`: **partial** (some documents or pages were not read; look at
-   which). A depth cut is this case.
+   which). A depth cut is this case. `warnings` has the same fact, with the counts: a `partial` warning (`failed` of `of`).
 7. Resolved with `tk:exception:write-limit-reached` or `tk:exception:embedded-resource-limit-reached`: **truncated**
    by a limit the caller opted into.
 8. Resolved with `tk:pdf:repaired`: **repaired** (ok, but not the file as written). `tk:pdf:image-only-pages` equal to
-   all pages: **needs OCR**. `tk:segments-degraded`: ok, segments coarser than asked.
+   all pages: **needs OCR**. (A `repaired` or `image-only` warning is the typed form; `isLowYield` says when it amounts to
+   a document that gave almost nothing, and `onLowYield: "throw"` turns that into a `LowYieldError`, a refusal the caller
+   never has to read off this list.) `tk:segments-degraded`: ok, segments coarser than asked.
 9. `tk:parsed-by` is only `EmptyParser`, or the type is 7z/RAR: **not read** (unsupported, or signature only).
 10. Otherwise: **ok**.
 

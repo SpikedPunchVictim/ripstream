@@ -2,6 +2,7 @@ import {
   IsolationError,
   AdmissionRefusedError,
   LimitExceededError,
+  LowYieldError,
   PIPES_RESULT_STATUSES,
   ParseTimeoutError,
   RequestTooLargeError,
@@ -115,6 +116,9 @@ export function describeError(error: unknown): string {
  */
 export function statusForParseError(error: unknown): PipesResultStatus {
   if (error instanceof ParseTimeoutError) return "TIMEOUT";
+  // The engine never asks for `onLowYield: "throw"`; a ripstream of the caller's that does has parsed the input, and what
+  // came out of it is the input's own result, not a crash: the nearest status is a parse exception that is not emitted.
+  if (error instanceof LowYieldError) return "PARSE_EXCEPTION_NO_EMIT";
   if (error instanceof IsolationError) {
     return error.reason === "crash" ? "UNSPECIFIED_CRASH" : "CLIENT_UNAVAILABLE_WITHIN_MS";
   }

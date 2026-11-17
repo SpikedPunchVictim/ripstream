@@ -7,6 +7,7 @@ import {
   Metadata,
   ParseTimeoutError,
   AbortError,
+  tallyPart,
   UnsupportedFormatError,
   XHTMLContentHandler,
   type ContentHandler,
@@ -107,7 +108,7 @@ export class OoxmlParser implements Parser {
     if (files["word/document.xml"] !== undefined) {
       await renderWord(files, xhtml, hints);
     } else if (files["xl/workbook.xml"] !== undefined) {
-      await renderWorkbook(files, xhtml, hints);
+      await renderWorkbook(files, xhtml, hints, ctx);
     } else if (files["ppt/presentation.xml"] !== undefined) {
       await renderPresentation(files, xhtml, hints);
     } else if (files["visio/document.xml"] !== undefined) {
@@ -830,6 +831,7 @@ async function renderWorkbook(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  ctx: ParseContext,
 ): Promise<void> {
   const shared = sharedStrings(parsePart(files, "xl/sharedStrings.xml"));
   const styles = parseStyles(
@@ -840,6 +842,10 @@ async function renderWorkbook(
 
   const workbook = parsePart(files, "xl/workbook.xml");
   const sheets = orderedSheets(files, workbook);
+  // A sheet the workbook lists and the package has no part for is not read, and says nothing in the text: a workbook whose
+  // sheets are all gone would read as an empty one.
+  const declared = workbook === undefined ? 0 : descendantsNamed(workbook, "sheet").length;
+  for (let index = 0; index < declared; index++) tallyPart(ctx, "sheets-failed", index < sheets.length);
 
   for (const sheet of sheets) {
     const name = sheet.name;

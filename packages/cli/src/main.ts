@@ -6,6 +6,7 @@ import {
   IsolationError,
   AdmissionRefusedError,
   LimitExceededError,
+  LowYieldError,
   MalformedDocumentError,
   MissingDependencyError,
   RipstreamConfigError,
@@ -102,6 +103,8 @@ interface Options {
   readonly workers: string | null;
   /** `--segments`: write the segments of each record (docs/segments.md) in the recursive output; parse -r and pipes. */
   readonly segments: boolean;
+  /** `--on-low-yield` as typed; validated by lowYieldPolicy. parse and parse -r only. */
+  readonly onLowYield: string | null;
 }
 
 /** Exit codes: 0 ok, 1 internal error, 2 usage error, 3 bad input data, 4 environment. */
@@ -116,7 +119,8 @@ function exitCodeFor(error: unknown): number {
     error instanceof UnsupportedFormatError ||
     error instanceof EncryptedDocumentError ||
     error instanceof LimitExceededError ||
-    error instanceof AdmissionRefusedError
+    error instanceof AdmissionRefusedError ||
+    error instanceof LowYieldError
   ) {
     return EXIT_DATA;
   }
@@ -254,6 +258,7 @@ export async function main(
       const records = await ripstream.parseRecursive(bytes, {
         ...(filename === undefined ? {} : { filename }),
         ...(options.segments ? { segments: true } : {}),
+        ...(options.onLowYield === null ? {} : { onLowYield: lowYieldPolicy(options)! }),
       });
       // Tika's CLI runs the configured `metadata-filters` over the list it writes as recursive JSON, and nowhere else.
       const metadataFilter =
@@ -267,7 +272,10 @@ export async function main(
       return 0;
     }
 
-    const result = await ripstream.parse(bytes, filename === undefined ? {} : { filename });
+    const result = await ripstream.parse(bytes, {
+      ...(filename === undefined ? {} : { filename }),
+      ...(options.onLowYield === null ? {} : { onLowYield: lowYieldPolicy(options)! }),
+    });
     if (options.metadataOnly) {
       io.stdout(`${JSON.stringify(metadataJson(result.metadata), null, options.json ? 2 : 0)}\n`);
     } else if (options.output === "jsonl") {
@@ -282,6 +290,8 @@ export async function main(
         `${JSON.stringify({
           text: result.text,
           metadata: metadataJson(result.metadata),
+          // Only when there is one: a clean document's output is what it was (docs/warnings.md).
+          ...(result.warnings === undefined || result.warnings.length === 0 ? {} : { warnings: result.warnings }),
         }, null, 2)}\n`,
       );
     } else {
@@ -641,6 +651,7 @@ async function resolveSettings(
       `ripstream: --segments applies to parse --recursive and pipes, not ${options.command === "parse" ? "parse without --recursive" : options.command}`,
     );
   }
+  lowYieldPolicy(options);
   const pipesOnly = [
     ...(options.checkpoint === null ? [] : ["--checkpoint"]),
     ...(options.retryAttempts === null ? [] : ["--retry-attempts"]),
@@ -736,6 +747,7 @@ function parseArgs(argv: readonly string[]): Options {
   let retryAttemptsFlag: string | null = null;
   let workers: string | null = null;
   let segments = false;
+  let onLowYield: string | null = null;
 
   for (let index = 0; index < rest.length; index++) {
     const written = rest[index]!;
@@ -781,6 +793,7 @@ function parseArgs(argv: readonly string[]): Options {
     else if (argument === "--checkpoint") checkpoint = takeValue();
     else if (argument === "--retry-attempts") retryAttemptsFlag = takeValue();
     else if (argument === "--workers") workers = takeValue();
+    else if (argument === "--on-low-yield") onLowYield = takeValue();
     else if (argument.startsWith("-") && argument !== "-") {
       throw new Error(`Unknown option: ${argument}`);
     } else if (file === null) file = argument;
@@ -794,7 +807,7 @@ function parseArgs(argv: readonly string[]): Options {
   }
   return {
     command, file, json, metadataOnly, recursive, output, config, password, port, host, isolation, isolationReuse, isolationReuseMaxRequests, maxOutputChars,
-    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers, segments,
+    maxEmbeddedDepth, maxEmbeddedCount, checkpoint, retryAttempts: retryAttemptsFlag, workers, segments, onLowYield,
   };
 }
 
@@ -803,14 +816,14 @@ const FLAGS: ReadonlySet<string> = new Set([
   "--json", "-j", "--metadata", "-m", "--recursive", "-r", "--segments", "--help", "-h", "-?", "--version", "-V",
   "--output", "-o", "--config", "-c", "--password", "-p", "--port", "--host", "--isolation", "--isolation-reuse",
   "--isolation-reuse-max-requests", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers", "--on-low-yield",
 ]);
 
 /** The long options that take a value: the ones `--name=value` is for. */
 const VALUE_FLAGS: ReadonlySet<string> = new Set([
   "--output", "--config", "--password", "--port", "--host", "--isolation", "--isolation-reuse",
   "--isolation-reuse-max-requests", "--max-output-chars",
-  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers",
+  "--maxEmbeddedDepth", "--maxEmbeddedCount", "--checkpoint", "--retry-attempts", "--workers", "--on-low-yield",
 ]);
 
 /** The value after a flag. A missing one, or another flag in its place, is an error: it must not become a default. */
@@ -819,6 +832,14 @@ function requireValue(value: string | undefined, flag: string): string {
   if (value === undefined) throw new Error(flag === "-h" ? "-h expects a value, the host (--help prints help)" : `${flag} expects a value`);
   if (FLAGS.has(value)) throw new Error(`${flag} expects a value, got the option ${value}`);
   return value;
+}
+
+/** `--on-low-yield`: record or throw, for the commands that parse one document and write what it gave. */
+function lowYieldPolicy(options: Options): "record" | "throw" | null {
+  if (options.onLowYield === null) return null;
+  if (options.onLowYield !== "record" && options.onLowYield !== "throw") throw new Error("ripstream: --on-low-yield expects record or throw");
+  if (options.command !== "parse") throw new Error(`ripstream: --on-low-yield applies to parse, not ${options.command}`);
+  return options.onLowYield;
 }
 
 /** Digits only: `Number("")` is 0 and `Number(" 80 ")` is 80, neither of which is what was typed. */
@@ -848,6 +869,7 @@ function defaultOptions(): Options {
     retryAttempts: null,
     workers: null,
     segments: false,
+    onLowYield: null,
   };
 }
 
@@ -885,6 +907,8 @@ function usage(): string {
     "                          Off parses inside this process, so a parser crash or out-of-memory ends the process:",
     "                          use --isolation strict for untrusted input and for batch jobs (parse, pipes)",
     "      --max-output-chars <n>  serve: ceiling on extracted characters per request",
+    "      --on-low-yield <record|throw>  parse: throw (exit 3) when the result is low yield: a scan, a repair that kept little, parts that",
+    "                              failed; the default, record, writes it (json output has a warnings list; docs/warnings.md)",
     "      --maxEmbeddedDepth <n>  parse, metadata: fail (exit 3) when an embedded document is nested deeper than n",
     "      --maxEmbeddedCount <n>  parse, metadata: fail (exit 3) when more than n documents are embedded",
     "      --checkpoint <file>     pipes: record the inputs that are done, and leave them out when the run is started again",

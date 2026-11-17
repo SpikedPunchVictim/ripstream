@@ -15,6 +15,7 @@ import { assertHandlerType, type HandlerType } from "./handler-type.ts";
 import type { ParseRecord } from "./recursive.ts";
 import type { Segment } from "./segments.ts";
 import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
+import { assertLowYieldPolicy, enforceLowYield, recordWarnings } from "./warnings.ts";
 import type { MediaTypeResult, ParseOptions, ParseResult } from "./ripstream.ts";
 
 /** The part of a Ripstream that servers, pipes and the CLI call. */
@@ -78,18 +79,26 @@ export function createIsolatedRipstream(options: IsolatedRipstreamOptions): Isol
   return {
     detect: (source, detectOptions) => detector.detect(source, detectOptions),
     async parse(source, parseOptions = {}) {
+      assertLowYieldPolicy(parseOptions.onLowYield);
       const answer = await isolate(source, parseOptions, "text");
       if (answer.kind !== "text") throw new TypeError(`The isolator answered a text request with "${answer.kind}"`);
+      // The child recorded the warnings and sent them; the policy is applied here, on what arrived, as in process.
+      const warnings = answer.warnings ?? [];
+      enforceLowYield(parseOptions.onLowYield, warnings);
       return {
         metadata: toMetadata(answer.metadata),
         text: answer.text,
+        warnings,
         ...(answer.exception === undefined ? {} : { exception: toException(answer.exception) }),
       };
     },
     async parseRecursive(source, parseOptions = {}) {
+      assertLowYieldPolicy(parseOptions.onLowYield);
       const answer = await isolate(source, parseOptions, "records");
       if (answer.kind !== "records") throw new TypeError(`The isolator answered a records request with "${answer.kind}"`);
-      return answer.records.map((record) => toParseRecord(record, parseOptions.handlerType));
+      const records = answer.records.map((record) => toParseRecord(record, parseOptions.handlerType));
+      enforceLowYield(parseOptions.onLowYield, recordWarnings(records));
+      return records;
     },
   };
 }
@@ -179,6 +188,7 @@ function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | u
     depth: record.depth,
     mediaType: MediaType.parse(record.mediaType) ?? MediaType.OCTET_STREAM,
     exception: record.exception === null ? null : toException(record.exception),
+    warnings: record.warnings ?? [],
     ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
     ...(record.segments === undefined ? {} : { segments: toSegments(record) }),
   };

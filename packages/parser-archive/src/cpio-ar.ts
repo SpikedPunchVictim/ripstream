@@ -6,11 +6,13 @@ import {
   type ParseContext,
   type Parser,
   type RipstreamInputStream,
+  tallyPart,
 } from "@spikedpunch/ripstream-core";
 import { EntryLimit, parseEntry, readAll, withXhtml } from "./util.ts";
 
 /** Records that the rest of an archive could not be read, at the offset its next header was expected. */
-function recordBrokenHeader(metadata: Metadata, format: string, offset: number, why: string): void {
+function recordBrokenHeader(ctx: ParseContext, metadata: Metadata, format: string, offset: number, why: string): void {
+  tallyPart(ctx, "entries-failed", false);
   metadata.add("tk:exception:embedded-stream-exception", `${MalformedDocumentError.name}: ${format} header at offset ${offset} ${why}; the rest of the archive was not read`);
 }
 
@@ -43,7 +45,7 @@ export class CpioParser implements Parser {
       while (position + 110 <= data.length) {
         const header = new TextDecoder("latin1").decode(data.subarray(position, position + 110));
         if (!["070701", "070702"].includes(header.slice(0, 6))) {
-          recordBrokenHeader(metadata, "CPIO", position, "is not a newc header");
+          recordBrokenHeader(ctx, metadata, "CPIO", position, "is not a newc header");
           break;
         }
         // A field is eight hex digits; parseInt would also accept "-0000074" (a size that walks back to this header, so the
@@ -55,7 +57,7 @@ export class CpioParser implements Parser {
         const size = field(6);
         const nameSize = field(11);
         if (Number.isNaN(size) || Number.isNaN(nameSize)) {
-          recordBrokenHeader(metadata, "CPIO", position, "has a size that is not a number");
+          recordBrokenHeader(ctx, metadata, "CPIO", position, "has a size that is not a number");
           break;
         }
         const nameStart = position + 110;
@@ -104,12 +106,12 @@ export class ArParser implements Parser {
         const name = header.slice(0, 16).trim().replace(/\/$/, "");
         const size = Number.parseInt(header.slice(48, 58).trim(), 10);
         if (!Number.isFinite(size) || size < 0) {
-          recordBrokenHeader(metadata, "ar", position, "has no valid size");
+          recordBrokenHeader(ctx, metadata, "ar", position, "has no valid size");
           break;
         }
         const start = position + 60;
         if (start + size > data.length) {
-          recordBrokenHeader(metadata, "ar", position, `claims ${size} bytes but the archive ends first`);
+          recordBrokenHeader(ctx, metadata, "ar", position, `claims ${size} bytes but the archive ends first`);
           break;
         }
         if (name.length > 0 && name !== "/" && entries.admit()) {

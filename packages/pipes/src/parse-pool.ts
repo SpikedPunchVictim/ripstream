@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Worker, type ResourceLimits } from "node:worker_threads";
 import {
+  assertLowYieldPolicy,
+  enforceLowYield,
   IsolationError,
   LimitExceededError,
   ParseContext,
@@ -11,6 +13,7 @@ import {
   type ParseOptions,
   type ParseRecord,
   type ParseResult,
+  recordWarnings,
 } from "@spikedpunch/ripstream-core";
 import {
   assertWireInput,
@@ -368,17 +371,28 @@ export class WorkerParsePool {
   }
 
   parse(source: InputSource, options: ParseOptions = {}): Promise<ParseResult> {
-    return this.#submit("parse", source, options, (reply) => {
-      if (reply.op !== "parse") throw new TypeError("a parseRecursive reply to a parse");
-      return decodeParseResult(reply.result);
-    }) as Promise<ParseResult>;
+    return (
+      this.#submit("parse", source, options, (reply) => {
+        if (reply.op !== "parse") throw new TypeError("a parseRecursive reply to a parse");
+        return decodeParseResult(reply.result);
+      }) as Promise<ParseResult>
+    ).then((result) => {
+      // After the worker's answer is read and the worker is free: a refusal is the caller's policy, not a bad reply.
+      enforceLowYield(options.onLowYield, result.warnings);
+      return result;
+    });
   }
 
   parseRecursive(source: InputSource, options: ParseOptions = {}): Promise<readonly ParseRecord[]> {
-    return this.#submit("parseRecursive", source, options, (reply) => {
-      if (reply.op !== "parseRecursive") throw new TypeError("a parse reply to a parseRecursive");
-      return decodeRecords(reply.records);
-    }) as Promise<readonly ParseRecord[]>;
+    return (
+      this.#submit("parseRecursive", source, options, (reply) => {
+        if (reply.op !== "parseRecursive") throw new TypeError("a parse reply to a parseRecursive");
+        return decodeRecords(reply.records);
+      }) as Promise<readonly ParseRecord[]>
+    ).then((records) => {
+      enforceLowYield(options.onLowYield, recordWarnings(records));
+      return records;
+    });
   }
 
   /**
@@ -416,6 +430,7 @@ export class WorkerParsePool {
       if (this.#closing !== null) throw new Error("the parse pool is closed");
       if (this.#failure !== null) throw this.#failure;
       assertWireInput(source);
+      assertLowYieldPolicy(options.onLowYield);
       const wire = wireOptions(options);
       const signal = options.signal;
       if (signal?.aborted === true) throw abortErrorFor(signal);

@@ -6,6 +6,8 @@ import {
   type IsolatedParseResult,
   type IsolatedSegment,
   parseSegmentLocation,
+  parseWireWarnings,
+  type ParseWarning,
   type PathPart,
   type PathPartKind,
 } from "@spikedpunch/ripstream-core";
@@ -108,7 +110,13 @@ export type Frame =
   | { readonly t: "ready"; readonly pid: number }
   /** Serving children only: the request was read whole and parsing begins (see FrameReaderOptions.acceptance). */
   | { readonly t: "accepted" }
-  | { readonly t: "meta"; readonly metadata: Record<string, string[]>; readonly exception?: IsolatedException }
+  /** `warnings`: `ParseResult.warnings`, at most MAX_WARNINGS_PER_RESULT of them, checked field by field; absent when there are none. */
+  | {
+      readonly t: "meta";
+      readonly metadata: Record<string, string[]>;
+      readonly exception?: IsolatedException;
+      readonly warnings?: ParseWarning[];
+    }
   | { readonly t: "text"; readonly chunk: string }
   /**
    * `contentLength`: the record's `content` (empty in `record`) follows in text frames of that many characters in
@@ -214,6 +222,7 @@ export class FrameReader {
   // The result, folded as the frames arrive. Frame objects themselves are not kept.
   #metadata: Record<string, string[]> | null = null;
   #exception: IsolatedException | null = null;
+  #warnings: ParseWarning[] | null = null;
   #chunks: string[] = [];
   #records: IsolatedParseRecord[] = [];
   #result: IsolatedParseResult | null = null;
@@ -489,6 +498,7 @@ export class FrameReader {
         if (this.#metadata !== null) return 'second "meta" frame';
         this.#metadata = frame.metadata;
         this.#exception = frame.exception ?? null;
+        this.#warnings = frame.warnings ?? null;
         return null;
       case "text":
         if (this.#output === "records") {
@@ -632,6 +642,7 @@ export class FrameReader {
         metadata: this.#metadata,
         text: this.#chunks.join(""),
         ...(this.#exception === null ? {} : { exception: this.#exception }),
+        ...(this.#warnings === null ? {} : { warnings: this.#warnings }),
       };
       this.#chunks = [];
     }
@@ -701,6 +712,7 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
     "depth",
     "mediaType",
     "exception",
+    "warnings",
   ]);
   if (extra !== null) return `record: ${extra}`;
   const metadata = validateMetadata(value.metadata, limits);
@@ -716,6 +728,8 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
   }
   const exception = value.exception === null ? null : validateException(value.exception, "record.exception");
   if (typeof exception === "string") return exception;
+  const warnings = value.warnings === undefined ? undefined : parseWireWarnings(value.warnings);
+  if (typeof warnings === "string") return `record.${warnings}`;
   return {
     metadata,
     content: value.content,
@@ -724,6 +738,7 @@ function validateRecord(value: unknown, limits: MetadataLimits, contentLength?: 
     depth: value.depth,
     mediaType: value.mediaType,
     exception,
+    ...(warnings === undefined || warnings.length === 0 ? {} : { warnings }),
   };
 }
 
@@ -807,13 +822,16 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return extra === null ? { t: "accepted" } : `accepted: ${extra}`;
     }
     case "meta": {
-      const extra = onlyKeys(value, ["t", "metadata", "exception"]);
+      const extra = onlyKeys(value, ["t", "metadata", "exception", "warnings"]);
       if (extra !== null) return `meta: ${extra}`;
       const metadata = validateMetadata(value.metadata, limits);
       if (typeof metadata === "string") return `meta: ${metadata}`;
-      if (value.exception === undefined) return { t: "meta", metadata };
+      const checked = value.warnings === undefined ? undefined : parseWireWarnings(value.warnings);
+      if (typeof checked === "string") return `meta: ${checked}`;
+      const warnings = checked === undefined || checked.length === 0 ? {} : { warnings: checked };
+      if (value.exception === undefined) return { t: "meta", metadata, ...warnings };
       const exception = validateException(value.exception, "meta.exception");
-      return typeof exception === "string" ? exception : { t: "meta", metadata, exception };
+      return typeof exception === "string" ? exception : { t: "meta", metadata, exception, ...warnings };
     }
     case "text": {
       const extra = onlyKeys(value, ["t", "chunk"]);

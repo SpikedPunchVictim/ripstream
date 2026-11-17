@@ -121,6 +121,8 @@ const CROSSINGS: Readonly<Record<RipstreamErrorCode, Crossing | null>> = {
   ADMISSION_REFUSED: null,
   // Infrastructure. A child must not be able to mint queue_full / unavailable, which callers treat specially.
   ISOLATION_FAILED: null,
+  // Applied by the parent to the warnings that arrive in the result (`onLowYield` never reaches the child).
+  LOW_YIELD: null,
 };
 
 /** Keyed by arbitrary strings from the wire, so a Map: "__proto__", "constructor" and friends are plain misses. */

@@ -5,6 +5,7 @@ import { outputLimitIssue } from "./handlers/limits.ts";
 import type { Metadata } from "./metadata.ts";
 import type { PathPart } from "./recursive.ts";
 import type { SegmentHints } from "./segments.ts";
+import type { WarningSink } from "./warnings.ts";
 
 /**
  * Typed context key. The optional phantom field gives TypeScript the value
@@ -313,4 +314,10 @@ export const CONTEXT_KEYS = {
    * it does (xberg's email content); false: it does not.
    */
   EMAIL_HEADER_BLOCK: new ParseContextKey<boolean>("email-header-block"),
+  /**
+   * Where the parse of this document collects its warnings (`ParseResult.warnings`, `ParseRecord.warnings`). Set by
+   * `Ripstream`; absent when a parser runs on its own, and then `addParseWarning` and `tallyPart` do nothing. A parser
+   * does not read it: it calls those two functions.
+   */
+  WARNINGS: new ParseContextKey<WarningSink>("warnings"),
 } as const;

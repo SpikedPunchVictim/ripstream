@@ -1,3 +1,5 @@
+import type { ParseWarning } from "./warnings.ts";
+
 export type RipstreamErrorCode =
   | "UNSUPPORTED_FORMAT"
   | "ENCRYPTED_DOCUMENT"
@@ -14,7 +16,8 @@ export type RipstreamErrorCode =
   | "ABORTED"
   | "UNSUPPORTED_RUNTIME"
   | "TRANSLATION_FAILED"
-  | "ISOLATION_FAILED";
+  | "ISOLATION_FAILED"
+  | "LOW_YIELD";
 
 export class RipstreamError extends Error {
   readonly code: RipstreamErrorCode;
@@ -57,6 +60,40 @@ export class MalformedDocumentError extends RipstreamError {
 export class ZeroByteFileError extends MalformedDocumentError {
   constructor() {
     super("InputStream must have > 0 bytes");
+  }
+}
+
+/**
+ * `ParseOptions.onLowYield: "throw"`, and the parse's result carries a low-yield warning (see `isLowYield` in
+ * warnings.ts): the document parsed, and mostly nothing came out of it (a scan, a repair that kept little, parts that
+ * failed). It is a policy outcome of the caller's choosing, not a malformed document, so it extends `RipstreamError`
+ * and not `MalformedDocumentError`: a handler for damaged input does not swallow it. `warnings` are the low-yield
+ * warnings, each with its `path` when it came from an embedded document. Raised in the parent, after the parse: it
+ * never crosses the isolation boundary as an error, the warnings cross in the result.
+ */
+export class LowYieldError extends RipstreamError {
+  readonly warnings: readonly ParseWarning[];
+
+  constructor(warnings: readonly ParseWarning[], message?: string) {
+    super("LOW_YIELD", message ?? lowYieldMessage(warnings));
+    this.warnings = warnings;
+  }
+}
+
+function lowYieldMessage(warnings: readonly ParseWarning[]): string {
+  const first = warnings[0];
+  if (first === undefined) return "Low-yield result";
+  const where = first.path === undefined ? "" : ` in ${first.path}`;
+  const rest = warnings.length > 1 ? ` (and ${warnings.length - 1} more)` : "";
+  switch (first.kind) {
+    case "image-only":
+      return `Low-yield result: ${first.pages} of ${first.of} pages are images with no text, ${first.chars} characters in all${where}${rest}`;
+    case "repaired":
+      return `Low-yield result: the file was repaired and gave ${first.chars} characters on ${first.of} pages${where}${rest}`;
+    case "partial":
+      return `Low-yield result: ${first.failed} of ${first.of} parts could not be read (${first.reason})${where}${rest}`;
+    case "truncated":
+      return `Low-yield result: truncated at ${first.limit}${where}${rest}`;
   }
 }
 
@@ -266,6 +303,7 @@ export function httpStatusForError(error: unknown): number {
     case "MALFORMED_DOCUMENT":
     case "LIMIT_EXCEEDED":
     case "ADMISSION_REFUSED":
+    case "LOW_YIELD":
       return 422;
     case "WRITE_LIMIT_REACHED":
     case "EMPTY_DOCUMENT":

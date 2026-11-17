@@ -335,6 +335,7 @@ function toIsolatedRecord(record: ParseRecord): IsolatedParseRecord {
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : toIsolatedException(record.exception),
+    ...(record.warnings === undefined || record.warnings.length === 0 ? {} : { warnings: record.warnings }),
     ...(record.segments === undefined ? {} : { segments: record.segments.map(isolatedSegment) }),
     ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
   };
@@ -549,12 +550,13 @@ class NodeIsolatorImpl implements NodeIsolator {
         const records = await inProcess.parseRecursive(request.input, parseOptions);
         return { kind: "records", records: records.map(toIsolatedRecord) };
       }
-      const { metadata, text, exception } = await inProcess.parse(request.input, parseOptions);
+      const { metadata, text, exception, warnings } = await inProcess.parse(request.input, parseOptions);
       return {
         kind: "text",
         metadata: metadataToRecord(metadata),
         text,
         ...(exception === undefined ? {} : { exception: toIsolatedException(exception) }),
+        ...(warnings === undefined || warnings.length === 0 ? {} : { warnings }),
       };
     } catch (error) {
       // The facade's rule for an aborted signal, whatever the parser threw because of it.

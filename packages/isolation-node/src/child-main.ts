@@ -196,6 +196,7 @@ function toWireRecord(record: ParseRecord, withoutContent = false): IsolatedPars
     depth: record.depth,
     mediaType: record.mediaType.toString(),
     exception: record.exception === null ? null : wireException(record.exception),
+    ...(record.warnings === undefined || record.warnings.length === 0 ? {} : { warnings: record.warnings }),
   };
 }
 
@@ -343,6 +344,7 @@ export async function runChildMain(options: ChildMainOptions): Promise<void> {
           t: "meta",
           metadata: metadataToRecord(result.metadata),
           ...(result.exception === undefined ? {} : { exception: wireException(result.exception) }),
+          ...(result.warnings === undefined || result.warnings.length === 0 ? {} : { warnings: result.warnings }),
         });
         for (const chunk of textChunks(result.text)) send({ t: "text", chunk });
       }

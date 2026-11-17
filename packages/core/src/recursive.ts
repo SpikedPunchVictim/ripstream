@@ -22,6 +22,7 @@ import { assertHandlerType, createOutputHandler, type HandlerType } from "./hand
 import { markParseTiming } from "./rmeta.ts";
 import { SegmentTap, segmentLocationAllowance, type Segment } from "./segments.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
+import { WarningSink, type ParseWarning } from "./warnings.ts";
 
 /**
  * How a document of a recursive parse is reached from the one that holds it:
@@ -68,6 +69,12 @@ export interface ParseRecord {
    * `ParseOptions.segments` asked. Each `text` is `content.slice(start, end)`. See docs/segments.md.
    */
   segments?: readonly Segment[];
+  /**
+   * What the parse could not read of this document, or read only in part (docs/warnings.md); empty when it read all of it.
+   * Every record of `parseRecursive` has it. The record's own warnings only: the failures of the documents embedded in it
+   * are on their records, and the count of them that failed is a `partial` warning here.
+   */
+  warnings?: readonly ParseWarning[];
 }
 
 /**
@@ -157,9 +164,12 @@ export class RecursiveParserWrapper implements Parser {
       mediaType: MediaType.OCTET_STREAM,
       exception: null,
       handlerType: this.handlerType,
+      warnings: NO_WARNINGS,
     };
     this.records.push(record);
 
+    const sink = new WarningSink();
+    ctx.set(CONTEXT_KEYS.WARNINGS, sink);
     ctx.set(CONTEXT_KEYS.EMBEDDED_BUDGET, { count: 0, bytes: 0 });
     if (this.truncateEmbedded) ctx.set(CONTEXT_KEYS.TRUNCATE_EMBEDDED_LIMIT, true);
     const counted = this.handlerType !== "ignore";
@@ -213,9 +223,12 @@ export class RecursiveParserWrapper implements Parser {
       if (tap !== undefined) record.segments = tap.finish(record.content);
       const type = metadata.get("Content-Type");
       if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
+      record.warnings = sink.finish(metadata);
     }
   }
 }
+
+const NO_WARNINGS: readonly ParseWarning[] = Object.freeze([]);
 
 /** What Tika's EmptyParser leaves behind: it is named as the parser, and nothing else. */
 export function noteEmptyParser(metadata: Metadata): void {
@@ -291,6 +304,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       mediaType: MediaType.OCTET_STREAM,
       exception: null,
       handlerType: this.handlerType,
+      warnings: NO_WARNINGS,
     };
     this.records.push(record);
 
@@ -316,6 +330,12 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     child.set(CONTEXT_KEYS.EMBEDDED_ID_PATH, idPath);
     child.set(CONTEXT_KEYS.EMBEDDED_DOCUMENT_EXTRACTOR, this);
 
+    // This document's warnings are its own record's; the failures of the parts inside it are counted in its sink, and the
+    // outcome of this one is counted in its container's.
+    const sink = new WarningSink();
+    child.set(CONTEXT_KEYS.WARNINGS, sink);
+    const part = ctx.get(CONTEXT_KEYS.ARCHIVE_ENTRY) === true ? "entries-failed" : "embedded-failed";
+    const container = ctx.get(CONTEXT_KEYS.WARNINGS);
     const body = createOutputHandler(this.handlerType === "text" ? "body" : this.handlerType);
     const tap = this.segments ? new SegmentTap(body, metadata, { locationAllowance: segmentLocationAllowance(ctx.limits.maxOutputChars) }) : undefined;
     if (tap !== undefined) child.set(CONTEXT_KEYS.SEGMENT_HINTS, tap);
@@ -328,6 +348,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     try {
       if (stream.length === null) source = await meterEmbeddedStream(stream, ctx);
       await parser.parse(source, capture, metadata, child);
+      container?.tally(part, true);
     } catch (error) {
       if (this.output.truncate && this.output.reached && isWriteLimitReached(error)) {
         // Not this document's failure: the parse as a whole is out of output. Flag the cut, and let it end the parse.
@@ -337,6 +358,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       // A whole-parse limit is not this document's failure: recorded here, the parse would go on past a limit that only
       // stopped it when it ran out in the container's own children.
       if (isWholeParseLimit(error)) throw error;
+      container?.tally(part, false);
       record.exception = error instanceof Error ? error : new Error(String(error));
       recordFailure(metadata, TIKA_KEYS.EMBEDDED_EXCEPTION, record.exception);
       if (ctx.signal.aborted) throw error; // propagate aborts; don't swallow a timeout as success
@@ -357,6 +379,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
       if (stream.length !== null && metadata.get(CONTENT_LENGTH) === null) {
         metadata.set(CONTENT_LENGTH, String(stream.length));
       }
+      record.warnings = sink.finish(metadata);
     }
 
     // The text belongs to the embedded record only. Forwarding it to the

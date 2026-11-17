@@ -4,6 +4,7 @@ import {
   MediaType,
   type ContentHandler,
   noteEmbeddedLimit,
+  tallyPart,
   truncatesEmbeddedLimit,
   type Metadata,
   type ParseContext,
@@ -114,6 +115,7 @@ export class ZipParser implements Parser {
           // Oracle (Tika 4.2.0 /rmeta): an entry that cannot be read (an encrypted one, or a method commons-compress does not
           // know: 14, 99) is recorded on the archive as embedded-stream-exception and listed by name; the others are read.
           metadata.add("tk:exception:embedded-stream-exception", failure);
+          tallyPart(ctx, "entries-failed", false);
           await xhtml.element("p", name);
           continue;
         }

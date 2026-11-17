@@ -10,6 +10,7 @@ import type { DigestSettings } from "./digest.ts";
 import type { HandlerType } from "./handler-type.ts";
 import { assertValidLimits, DEFAULT_LIMITS, type ParseLimits } from "./parse-context.ts";
 import type { PathPart } from "./recursive.ts";
+import type { ParseWarning } from "./warnings.ts";
 
 /**
  * What a configuration sets that the isolation child must apply too (plain data, so it crosses a process boundary as
@@ -108,6 +109,8 @@ export interface IsolatedParseRecord {
   readonly bytes?: Uint8Array;
   /** `ParseRecord.segments` without their text (it is `content.slice(start, end)`); only for a request with `segments`. */
   readonly segments?: readonly IsolatedSegment[];
+  /** `ParseRecord.warnings`; absent when there are none. Checked by the parent field by field (`parseWireWarnings`). */
+  readonly warnings?: readonly ParseWarning[];
 }
 
 /** A `Segment` as it crosses the boundary: its text is left out, being a slice of the record's content. */
@@ -264,6 +267,8 @@ export type IsolatedParseResult =
       readonly text: string;
       /** The failure of a document that could not be read; only for a request with `recordFailures`. */
       readonly exception?: IsolatedException;
+      /** `ParseResult.warnings`; absent when there are none. */
+      readonly warnings?: readonly ParseWarning[];
     }
   | { readonly kind: "records"; readonly records: readonly IsolatedParseRecord[] };
 

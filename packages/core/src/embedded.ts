@@ -199,6 +199,11 @@ export class ParsingEmbeddedDocumentExtractor
     child.remove(CONTEXT_KEYS.DIGESTS);
     child.remove(CONTEXT_KEYS.CHARSET_HINT);
     child.remove(CONTEXT_KEYS.ARCHIVE_ENTRY);
+    // What the embedded document warns about goes to the same result, named by its path; whether it parsed is counted
+    // on the container's side.
+    const container = ctx.get(CONTEXT_KEYS.WARNINGS);
+    const part = ctx.get(CONTEXT_KEYS.ARCHIVE_ENTRY) === true ? "entries-failed" : "embedded-failed";
+    if (container !== undefined) child.set(CONTEXT_KEYS.WARNINGS, container.scoped(path));
 
     metadata.setMaxValueChars(ctx.limits.maxMetadataValueChars);
     metadata.setMaxTotalChars(ctx.limits.maxMetadataTotalChars);
@@ -219,6 +224,10 @@ export class ParsingEmbeddedDocumentExtractor
     });
     try {
       await parser.parse(source, text, metadata, child);
+      container?.tally(part, true);
+    } catch (error) {
+      container?.tally(part, false);
+      throw error;
     } finally {
       if (source !== stream) await source.close();
     }
