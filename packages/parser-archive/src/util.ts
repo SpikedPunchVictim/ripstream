@@ -1,6 +1,6 @@
 import {
   CONTEXT_KEYS,
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   isFatalParseError,
   MediaType,
@@ -106,22 +106,16 @@ export function checkDecompression(
   what: string,
 ): void {
   if (decompressedBytes > ctx.limits.maxEmbeddedResourceBytes) {
-    throw new LimitExceededError(
-      `${what} exceeds the per-entry byte limit`,
-    );
+    throw limitError(`${what} exceeds the per-entry byte limit`, "entryBytes", decompressedBytes, ctx.limits.maxEmbeddedResourceBytes);
   }
   if (decompressedBytes > ctx.limits.maxTotalEmbeddedBytes) {
-    throw new LimitExceededError(
-      `${what} exceeds the embedded byte limit`,
-    );
+    throw limitError(`${what} exceeds the embedded byte limit`, "totalBytes", decompressedBytes, ctx.limits.maxTotalEmbeddedBytes);
   }
   if (
     compressedBytes > 0 &&
     decompressedBytes / compressedBytes > ctx.limits.maxDecompressionRatio
   ) {
-    throw new LimitExceededError(
-      `${what} exceeds the decompression ratio limit`,
-    );
+    throw limitError(`${what} exceeds the decompression ratio limit`, "ratio", decompressedBytes / compressedBytes, ctx.limits.maxDecompressionRatio);
   }
 }
 
@@ -156,7 +150,9 @@ export class EntryLimit {
   admit(): boolean {
     this.#seen++;
     if (this.#seen <= this.#max) return true;
-    if (!this.#truncate) throw new LimitExceededError(`${this.#label} entries exceed ${this.#max}`);
+    if (!this.#truncate) {
+      throw limitError(`${this.#label} entries exceed ${this.#max}`, "zipEntries", this.#seen, this.#max);
+    }
     return false;
   }
 
@@ -174,7 +170,7 @@ export async function readAll(
   let total = 0;
   for await (const chunk of stream) {
     total += chunk.byteLength;
-    if (total > limit) throw new LimitExceededError(`Input exceeds ${limit} bytes`);
+    if (total > limit) throw limitError(`Input exceeds ${limit} bytes`, "inputBytes", total, limit);
     chunks.push(chunk);
   }
   const result = new Uint8Array(total);

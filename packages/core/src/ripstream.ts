@@ -321,7 +321,7 @@ export class Ripstream {
           // The output ended the parse early, by design: what was written is the answer.
         } else if (truncateEmbedded && isEmbeddedCountLimit(error)) {
           // So did the count of embedded resources: what was read is the answer.
-          noteEmbeddedLimit(metadata, { limit: error.limit, max: error.max, seen: error.seen, read: error.max });
+          noteEmbeddedLimit(metadata, { limit: "maxEmbeddedResources", max: error.max, seen: error.seen, read: error.max });
         } else if (failure === "unsupported") {
           noteEmptyParser(metadata);
         } else {

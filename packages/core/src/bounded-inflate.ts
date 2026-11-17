@@ -4,7 +4,7 @@ import {
   inflateRawSync,
   inflateSync,
 } from "node:zlib";
-import { LimitExceededError } from "./errors.ts";
+import { LimitExceededError, type LimitReason } from "./errors.ts";
 
 export interface InflateLimits {
   /** Hard cap on total decompressed bytes. */
@@ -13,6 +13,16 @@ export interface InflateLimits {
   readonly maxRatio?: number;
   /** Output up to this size is always allowed regardless of ratio. Default 64 KiB. */
   readonly minRatioBytes?: number;
+  /**
+   * Which limit `maxOutputBytes` is, for the `LimitExceededError` that reports it: `"entryBytes"` (default) or
+   * `"totalBytes"`. A cap set by the ratio is reported as `"ratio"` whatever this says.
+   */
+  readonly outputLimit?: Extract<LimitReason, "entryBytes" | "totalBytes">;
+}
+
+/** Which limit set `effectiveOutputLimit`: the ratio when it came out below the byte cap, else the byte cap's own. */
+function reasonFor(limit: number, limits: InflateLimits): LimitReason {
+  return limit < limits.maxOutputBytes ? "ratio" : (limits.outputLimit ?? "entryBytes");
 }
 
 export type InflateFormat = "gzip" | "deflate" | "deflate-raw" | "brotli";
@@ -41,11 +51,13 @@ export class OutputBudget {
   private total = 0;
   private readonly inputBytes: number;
   private readonly label: string;
+  private readonly reason: LimitReason;
 
   constructor(inputBytes: number, limits: InflateLimits, label = "Decompressed data") {
     this.inputBytes = inputBytes;
     this.label = label;
     this.limit = effectiveOutputLimit(inputBytes, limits);
+    this.reason = reasonFor(this.limit, limits);
   }
 
   get produced(): number {
@@ -57,6 +69,7 @@ export class OutputBudget {
     if (this.total > this.limit) {
       throw new LimitExceededError(
         `${this.label} exceeds ${this.limit} bytes (input ${this.inputBytes} bytes)`,
+        { limit: this.reason, observed: this.total, max: this.limit },
       );
     }
   }
@@ -90,7 +103,7 @@ export function inflateBounded(
     if ((error as { code?: string }).code === "ERR_BUFFER_TOO_LARGE") {
       throw new LimitExceededError(
         `Decompressed ${format} data exceeds ${limit} bytes (input ${input.byteLength} bytes)`,
-        { cause: error },
+        { cause: error, limit: reasonFor(limit, limits), max: limit },
       );
     }
     throw error;

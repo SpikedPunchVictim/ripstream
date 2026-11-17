@@ -2,6 +2,7 @@ import {
   AbortError,
   EncryptedDocumentError,
   IsolationError,
+  isLimitReason,
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
@@ -16,7 +17,8 @@ import type { ChildErrorKind, ErrorFrame } from "./frames.ts";
 
 /**
  * How a typed error crosses the process boundary. The child puts the error's stable `code` (a RipstreamErrorCode),
- * its message and, for the one class that has structured arguments, those arguments on an `error` frame. The
+ * its message and, for the classes that have structured arguments (MissingDependencyError, LimitExceededError's
+ * `limit`, `observed` and `max`), those arguments on an `error` frame. The
  * PARENT then builds the class itself from the table below; the child never names a class, and anything outside
  * the table is an IsolationError "crash". So a hostile child can choose among the classes a parser may legitimately
  * throw (it could equally have thrown any of them while parsing a document), and cannot make the parent construct
@@ -59,7 +61,7 @@ interface Crossing {
    */
   readonly kind: ChildErrorKind;
   /** Extra fields the frame carries for this code (child side). */
-  readonly fields?: (error: RipstreamError) => Partial<Pick<ErrorFrame, "dependency" | "capability">>;
+  readonly fields?: (error: RipstreamError) => Partial<Pick<ErrorFrame, "dependency" | "capability" | "limit" | "observed" | "max">>;
   /**
    * Builds the error (parent side) from a frame whose message is already sanitised, or returns null when the
    * frame lacks what this class needs.
@@ -73,7 +75,25 @@ const CROSSINGS: Readonly<Record<RipstreamErrorCode, Crossing | null>> = {
   ENCRYPTED_DOCUMENT: { kind: "crash", build: (message, _frame, cause) => new EncryptedDocumentError(message, cause) },
   MALFORMED_DOCUMENT: { kind: "malformed", build: (message, _frame, cause) => new MalformedDocumentError(message, cause) },
   PARSE_TIMEOUT: { kind: "timeout", build: (message, _frame, cause) => new ParseTimeoutError(message, cause) },
-  LIMIT_EXCEEDED: { kind: "limit", build: (message, _frame, cause) => new LimitExceededError(message, cause) },
+  LIMIT_EXCEEDED: {
+    kind: "limit",
+    fields: (error) =>
+      error instanceof LimitExceededError
+        ? {
+            limit: error.limit,
+            ...(error.observed === undefined ? {} : { observed: error.observed }),
+            ...(error.max === undefined ? {} : { max: error.max }),
+          }
+        : {},
+    // A `limit` this version does not know is "other", not a refusal of the frame: the child may be a newer one.
+    build: (message, frame, cause) =>
+      new LimitExceededError(message, {
+        ...cause,
+        ...(isLimitReason(frame.limit) ? { limit: frame.limit } : {}),
+        ...(frame.observed === undefined ? {} : { observed: frame.observed }),
+        ...(frame.max === undefined ? {} : { max: frame.max }),
+      }),
+  },
   MISSING_DEPENDENCY: {
     kind: "crash",
     fields: (error) =>

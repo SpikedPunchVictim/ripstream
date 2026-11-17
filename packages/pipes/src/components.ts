@@ -160,7 +160,7 @@ export class HttpFetcher implements Fetcher {
       await response.body?.cancel().catch(() => undefined);
       throw new HttpStatusError(response.status, url);
     }
-    return readBounded(response, this.#maxBytes, () => new LimitExceededError(`Fetched body exceeds ${this.#maxBytes} bytes: ${url}`), signal);
+    return readBounded(response, this.#maxBytes, () => new LimitExceededError(`Fetched body exceeds ${this.#maxBytes} bytes: ${url}`, { limit: "inputBytes", max: this.#maxBytes }), signal);
   }
 }
 

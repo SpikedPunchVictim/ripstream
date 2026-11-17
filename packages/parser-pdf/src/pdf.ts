@@ -2,7 +2,7 @@ import { stat } from "node:fs/promises";
 import {
   AbortError,
   EncryptedDocumentError,
-  LimitExceededError,
+  LimitExceededError, limitError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -104,9 +104,7 @@ export class PdfParser implements Parser {
     const path = await stream.getFile(this.#maxInputBytes);
     const { size } = await stat(path);
     if (size > this.#maxInputBytes) {
-      throw new LimitExceededError(
-        `PDF is ${size} bytes, exceeding the ${this.#maxInputBytes} byte limit`,
-      );
+      throw limitError(`PDF is ${size} bytes, exceeding the ${this.#maxInputBytes} byte limit`, "inputBytes", size, this.#maxInputBytes);
     }
 
     const limits = ctx.limits;
@@ -138,7 +136,7 @@ export class PdfParser implements Parser {
       // The pages are read one by one up to a cap, and a document over it is refused, as every other limit is: reading
       // the first MAX_PAGES and saying nothing about the rest hid whatever was on them.
       if (ready.numPages > MAX_PAGES) {
-        throw new LimitExceededError(`PDF has ${ready.numPages} pages, exceeding the ${MAX_PAGES} page limit`);
+        throw limitError(`PDF has ${ready.numPages} pages, exceeding the ${MAX_PAGES} page limit`, "pages", ready.numPages, MAX_PAGES);
       }
 
       // Tika reads the XMP packet first, then the Info dictionary, which fills what the packet left empty.

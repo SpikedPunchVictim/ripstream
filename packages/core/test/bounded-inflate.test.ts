@@ -56,3 +56,32 @@ test("limitOutput aborts a stream early", async () => {
   }, LimitExceededError);
   assert.ok(budget.produced < 10 * 1024);
 });
+
+test("an over-cap inflate says which limit stopped it: the byte cap, or the ratio", () => {
+  assert.throws(
+    () => inflateBounded(gzipSync(bomb), "gzip", { maxOutputBytes: 1024 * 1024, maxRatio: 1e9 }),
+    (error: unknown) => error instanceof LimitExceededError && error.limit === "entryBytes" && error.max === 1024 * 1024,
+  );
+  assert.throws(
+    () => inflateBounded(gzipSync(bomb), "gzip", { maxOutputBytes: 1024 * 1024, maxRatio: 1e9, outputLimit: "totalBytes" }),
+    (error: unknown) => error instanceof LimitExceededError && error.limit === "totalBytes",
+  );
+  assert.throws(
+    () => inflateBounded(gzipSync(bomb), "gzip", { maxOutputBytes: 100 * 1024 * 1024, maxRatio: 2, minRatioBytes: 0 }),
+    (error: unknown) => error instanceof LimitExceededError && error.limit === "ratio",
+  );
+});
+
+test("an OutputBudget reports observed and max, and the limit that set its cap", () => {
+  const budget = new OutputBudget(10, { maxOutputBytes: 1000, maxRatio: 1e9 }, "thing");
+  assert.throws(
+    () => budget.add(2000),
+    (error: unknown) =>
+      error instanceof LimitExceededError && error.limit === "entryBytes" && error.observed === 2000 && error.max === 1000,
+  );
+  const ratio = new OutputBudget(10, { maxOutputBytes: 1_000_000, maxRatio: 5, minRatioBytes: 0 }, "thing");
+  assert.throws(
+    () => ratio.add(100),
+    (error: unknown) => error instanceof LimitExceededError && error.limit === "ratio" && error.max === 50,
+  );
+});

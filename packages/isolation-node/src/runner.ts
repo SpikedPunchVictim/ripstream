@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { AbortError, DEFAULT_LIMITS, IsolationError, LimitExceededError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
+import { AbortError, DEFAULT_LIMITS, IsolationError, limitError, type IsolatedComponents, type IsolatedParseRequest, type IsolatedParseResult } from "@spikedpunch/ripstream-core";
 import { requireTempDir } from "./disk.ts";
 import { DEFAULT_MAX_DISK_MB, segmentAllowanceBytes, WIRE_BYTES_PER_OUTPUT_CHAR } from "./limits.ts";
 import type { MemoryPool } from "./pool.ts";
@@ -469,7 +469,7 @@ export class ChildRunner {
     const { input } = request;
     const size = input instanceof Uint8Array ? input.length : (await stat(input.path)).size;
     if (size > this.#options.maxInputBytes) {
-      throw new LimitExceededError(`Input of ${size} bytes exceeds the maximum of ${this.#options.maxInputBytes} bytes`);
+      throw limitError(`Input of ${size} bytes exceeds the maximum of ${this.#options.maxInputBytes} bytes`, "inputBytes", size, this.#options.maxInputBytes);
     }
   }
 }

@@ -1,5 +1,5 @@
 import {
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   MediaType,
   type ContentHandler,
@@ -56,9 +56,7 @@ export class Iso9660Parser implements Parser {
         depth: number,
       ): Promise<void> => {
         if (depth > ctx.limits.maxNodeDepth) {
-          throw new LimitExceededError(
-            `ISO directory depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`,
-          );
+          throw limitError(`ISO directory depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`, "nodeDepth", depth, ctx.limits.maxNodeDepth);
         }
         if (visited.has(entry.extent)) return;
         visited.add(entry.extent);

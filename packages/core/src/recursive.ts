@@ -9,7 +9,7 @@ import {
   ParsingEmbeddedDocumentExtractor,
   type EmbeddedDocumentExtractor,
 } from "./embedded.ts";
-import { LimitExceededError, WriteLimitReachedError, type RipstreamError } from "./errors.ts";
+import { limitError, WriteLimitReachedError, type RipstreamError } from "./errors.ts";
 import { classifyFailure, isWriteLimitReached } from "./failure.ts";
 import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
@@ -194,7 +194,7 @@ export class RecursiveParserWrapper implements Parser {
         // The output ended the parse early, by design: what was read is the answer.
       } else if (this.truncateEmbedded && isEmbeddedCountLimit(error)) {
         // So did the count of embedded resources: the records so far are the answer, the container says where it stopped.
-        noteEmbeddedLimit(metadata, { limit: error.limit, max: error.max, seen: error.seen, read: error.max });
+        noteEmbeddedLimit(metadata, { limit: "maxEmbeddedResources", max: error.max, seen: error.seen, read: error.max });
       } else if (this.recordFailures && classifyFailure(error) === "unsupported") {
         noteEmptyParser(metadata);
       } else {
@@ -442,9 +442,7 @@ class OutputBudgetHandler extends ContentHandlerDecorator {
     if (this.documentLimit !== undefined && this.documentLimit >= 0) {
       this.documentChars += length;
       if (this.documentChars > this.documentLimit) {
-        throw new LimitExceededError(
-          `Document output exceeds ${this.documentLimit} characters`,
-        );
+        throw limitError(`Document output exceeds ${this.documentLimit} characters`, "documentOutputChars", this.documentChars, this.documentLimit);
       }
     }
     const budget = this.budget;
@@ -455,9 +453,7 @@ class OutputBudgetHandler extends ContentHandlerDecorator {
     }
     if (!budget.truncate) {
       budget.chars += length;
-      throw new LimitExceededError(
-        `Recursive output exceeds ${budget.limit} characters`,
-      );
+      throw limitError(`Recursive output exceeds ${budget.limit} characters`, "outputChars", budget.chars, budget.limit);
     }
     const allowed = Math.max(0, budget.limit - budget.chars);
     budget.chars = budget.limit;

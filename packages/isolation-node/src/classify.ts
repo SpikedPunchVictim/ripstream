@@ -2,6 +2,7 @@ import {
   AbortError,
   IsolationError,
   LimitExceededError,
+  type LimitReason,
   ParseTimeoutError,
   type RipstreamError,
 } from "@spikedpunch/ripstream-core";
@@ -93,6 +94,11 @@ function stderrCause(facts: ExitFacts): { cause?: Error } {
   return tail.length === 0 ? {} : { cause: new Error(`child stderr (tail): ${tail}`) };
 }
 
+/** What a `LimitExceededError` for a child's resource budget carries: the stderr tail as its cause, and which budget. */
+function limitOf(facts: ExitFacts, limit: LimitReason): { cause?: Error; limit: LimitReason } {
+  return { ...stderrCause(facts), limit };
+}
+
 /** "heapMb 512 MiB, child resident set 773 MiB at most of its 1536 MiB perChildMb": the numbers of a memory failure. */
 function memoryNumbers(memory: NonNullable<ExitFacts["memory"]>): string {
   const peak = memory.peakRssMb === null ? "not sampled" : `${Math.round(memory.peakRssMb)} MiB at most`;
@@ -140,20 +146,20 @@ function fromKillReason(reason: KillReason, facts: ExitFacts): RipstreamError {
           ? "Isolated parser exceeded its memory limit (resident set size)"
           : `Isolated parser exceeded its memory limit (resident set size, ${memoryNumbers(facts.memory)}). ` +
               "Raise perChildMb (and heapMb with it) or lower maxOutputChars",
-        stderrCause(facts),
+        limitOf(facts, "memory"),
       );
     case "result_cap":
-      return new LimitExceededError("Isolated parser result exceeded the maximum result size", stderrCause(facts));
+      return new LimitExceededError("Isolated parser result exceeded the maximum result size", limitOf(facts, "resultBytes"));
     case "segment_cap":
-      return new LimitExceededError("Isolated parser result's segments exceeded the maximum size allowed for segments", stderrCause(facts));
+      return new LimitExceededError("Isolated parser result's segments exceeded the maximum size allowed for segments", limitOf(facts, "resultBytes"));
     case "frame_cap":
-      return new LimitExceededError("Isolated parser result frame exceeded the maximum frame size", stderrCause(facts));
+      return new LimitExceededError("Isolated parser result frame exceeded the maximum frame size", limitOf(facts, "resultBytes"));
     case "metadata_cap":
-      return new LimitExceededError("Isolated parser result metadata exceeded the maximum size", stderrCause(facts));
+      return new LimitExceededError("Isolated parser result metadata exceeded the maximum size", limitOf(facts, "resultBytes"));
     case "disk":
-      return new LimitExceededError(diskMessage(facts.disk), stderrCause(facts));
+      return new LimitExceededError(diskMessage(facts.disk), limitOf(facts, "disk"));
     case "cpu":
-      return new LimitExceededError("Isolated parser exceeded its CPU time limit", stderrCause(facts));
+      return new LimitExceededError("Isolated parser exceeded its CPU time limit", limitOf(facts, "cpu"));
     case "protocol": {
       // A child that breaks the frame protocol is broken or hostile, never a malformed document.
       const detail = oneLine(facts.protocolDetail ?? "unspecified");
@@ -211,21 +217,21 @@ export function classifyExit(facts: ExitFacts): RipstreamError | null {
     (facts.signal === "SIGABRT" || facts.signal === "SIGTRAP" || facts.signal === "SIGSEGV") && sawMemory;
   if (memoryAbort) {
     const heapHit = tailMarkers.heap === true || facts.stderrMarkers?.heap === true;
-    return new LimitExceededError(memoryAbortMessage(facts, heapHit), stderrCause(facts));
+    return new LimitExceededError(memoryAbortMessage(facts, heapHit), limitOf(facts, "memory"));
   }
   if (sawStringLength) {
-    return new LimitExceededError("Isolated parser exceeded the maximum string length", stderrCause(facts));
+    return new LimitExceededError("Isolated parser exceeded the maximum string length", limitOf(facts, "memory"));
   }
   // Only the signal: 152 is what a shell reports (128 + SIGXCPU), the parent sees SIGXCPU through exec, and a
   // child that calls exit(152) itself must not be taken for a CPU limit.
   if (facts.signal === "SIGXCPU") {
-    return new LimitExceededError("Isolated parser exceeded its CPU time limit", stderrCause(facts));
+    return new LimitExceededError("Isolated parser exceeded its CPU time limit", limitOf(facts, "cpu"));
   }
   if (facts.signal === "SIGKILL") {
     // Nobody here asked for this kill: the cgroup OOM killer, or the CPU hard limit (RLIMIT_CPU's hard limit
     // delivers SIGKILL once the soft limit's SIGXCPU was ignored). Either way the document caused it.
     const numbers = facts.memory === undefined ? "" : ` (${memoryNumbers(facts.memory)})`;
-    return new LimitExceededError(`Isolated parser was killed (likely out of memory or CPU hard limit)${numbers}`, stderrCause(facts));
+    return new LimitExceededError(`Isolated parser was killed (likely out of memory or CPU hard limit)${numbers}`, limitOf(facts, "memory"));
   }
   return new IsolationError(
     "crash",

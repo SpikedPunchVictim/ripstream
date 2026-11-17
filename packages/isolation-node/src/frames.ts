@@ -96,6 +96,12 @@ export interface ErrorFrame {
   readonly dependency?: string;
   /** Only for code MISSING_DEPENDENCY. Untrusted text. */
   readonly capability?: string;
+  /** Only for code LIMIT_EXCEEDED: which limit (a LimitReason; the parent ignores a name it does not know). */
+  readonly limit?: string;
+  /** Only for code LIMIT_EXCEEDED: how far the document got, when the child knew. A finite, non-negative number. */
+  readonly observed?: number;
+  /** Only for code LIMIT_EXCEEDED: the limit's value, in the unit of `observed`. A finite, non-negative number. */
+  readonly max?: number;
 }
 
 export type Frame =
@@ -858,14 +864,20 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
       return extra !== null ? `done: ${extra}` : { t: "done" };
     }
     case "error": {
-      const extra = onlyKeys(value, ["t", "kind", "message", "code", "dependency", "capability"]);
+      const extra = onlyKeys(value, ["t", "kind", "message", "code", "dependency", "capability", "limit", "observed", "max"]);
       if (extra !== null) return `error: ${extra}`;
       if (typeof value.kind !== "string" || !ERROR_KINDS.has(value.kind)) {
         return "error.kind is not a known kind";
       }
       if (typeof value.message !== "string") return "error.message must be a string";
-      for (const name of ["code", "dependency", "capability"] as const) {
+      for (const name of ["code", "dependency", "capability", "limit"] as const) {
         if (value[name] !== undefined && typeof value[name] !== "string") return `error.${name} must be a string`;
+      }
+      for (const name of ["observed", "max"] as const) {
+        const number = value[name];
+        if (number !== undefined && (typeof number !== "number" || !Number.isFinite(number) || number < 0)) {
+          return `error.${name} must be a finite non-negative number`;
+        }
       }
       const kind = value.kind as ChildErrorKind;
       return {
@@ -875,6 +887,9 @@ function validateFrame(value: unknown, limits: MetadataLimits): Frame | string {
         ...(value.code === undefined ? {} : { code: value.code as string }),
         ...(value.dependency === undefined ? {} : { dependency: value.dependency as string }),
         ...(value.capability === undefined ? {} : { capability: value.capability as string }),
+        ...(value.limit === undefined ? {} : { limit: value.limit as string }),
+        ...(value.observed === undefined ? {} : { observed: value.observed as number }),
+        ...(value.max === undefined ? {} : { max: value.max as number }),
       };
     }
     default:

@@ -1,7 +1,7 @@
 import {
   CONTEXT_KEYS,
   EncryptedDocumentError,
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -64,7 +64,7 @@ export class OleContainerParser implements Parser {
       }
       const encrypted = compound.read("EncryptedPackage");
       if (encrypted.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
-        throw new LimitExceededError(`Encrypted package is ${encrypted.byteLength} bytes, exceeding the per-document limit`);
+        throw limitError(`Encrypted package is ${encrypted.byteLength} bytes, exceeding the per-document limit`, "entryBytes", encrypted.byteLength, ctx.limits.maxEmbeddedResourceBytes);
       }
       const provider = ctx.get(CONTEXT_KEYS.PASSWORD_PROVIDER) as PasswordProvider | undefined;
       const supplied = provider?.getPassword();
@@ -74,7 +74,7 @@ export class OleContainerParser implements Parser {
       const decrypted = decryptOoxmlPackage(compound.read("EncryptionInfo"), encrypted, passwords);
       if (decrypted === null) throw new EncryptedDocumentError("Unable to process: document is encrypted");
       if (decrypted.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
-        throw new LimitExceededError(`Decrypted package is ${decrypted.byteLength} bytes, exceeding the per-document limit`);
+        throw limitError(`Decrypted package is ${decrypted.byteLength} bytes, exceeding the per-document limit`, "entryBytes", decrypted.byteLength, ctx.limits.maxEmbeddedResourceBytes);
       }
       const packageStream = await RipstreamInputStream.from(decrypted, { context: ctx });
       try {

@@ -331,7 +331,7 @@ test("the isolation is disposed when the parse fails", async () => {
   assert.equal(log.disposed, 1);
 });
 
-test("a pool refusal exits as bad input data, like the limit it extends, and its message says it is a refusal", async () => {
+test("a pool refusal exits as bad input data, like a limit, and its message says it is a refusal", async () => {
   const { createIsolation } = fakeIsolation({
     parse: async () => {
       throw new AdmissionRefusedError("Admission refused: needs 10146 MiB");

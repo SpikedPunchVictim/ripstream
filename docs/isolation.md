@@ -348,9 +348,10 @@ tiny-paragraph DOCX above (65 MiB of frames, 11 bytes a character) is one at the
 more allowance, or read such a document without `segments`.
 
 A request that does not fit the pool is an `AdmissionRefusedError` (code `ADMISSION_REFUSED`, 422 from the server, exit
-3 from the CLI, `PAYLOAD_LIMIT_EXCEEDED` in pipes). It extends `LimitExceededError`, so code that catches that keeps
-working, and it has its own name and code so a consumer can tell it from a limit the parse itself hit (output,
-entries, nested documents) and from a crash. Its message gives each part and, on purpose, uses none of the words those
+3 from the CLI, `PAYLOAD_LIMIT_EXCEEDED` in pipes). It does **not** extend `LimitExceededError` (it did before `tikajs-mz56`: a
+capacity problem of the deployment is not a limit the document hit, and had no `limit` to name), so code that catches
+`LimitExceededError` must also catch it, or branch on `code`. It has its own name and code so a consumer can tell it
+from a limit the parse itself hit (output, entries, nested documents) and from a crash. Its message gives each part and, on purpose, uses none of the words those
 limits use (`output`, `entries`, `embedded`, `ratio`, `timeout`, `corrupt`...), so a classifier that matches messages
 does not mistake it for one:
 

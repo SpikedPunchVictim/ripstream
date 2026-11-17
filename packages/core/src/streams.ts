@@ -1,4 +1,4 @@
-import { LimitExceededError, UnsupportedRuntimeError } from "./errors.ts";
+import { limitError, UnsupportedRuntimeError } from "./errors.ts";
 import { safeFetch } from "./url-security.ts";
 import type { ByteStream, InputSource } from "./content-handler.ts";
 
@@ -201,9 +201,7 @@ export async function collect(
   for await (const chunk of toAsyncIterable(source, options)) {
     total += chunk.byteLength;
     if (options.limit !== undefined && total > options.limit) {
-      throw new LimitExceededError(
-        `Input exceeds ${options.limit} bytes`,
-      );
+      throw limitError(`Input exceeds ${options.limit} bytes`, "inputBytes", total, options.limit);
     }
     chunks.push(chunk);
   }

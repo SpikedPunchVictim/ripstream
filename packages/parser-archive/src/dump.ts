@@ -2,7 +2,7 @@ import { isFatalParseError } from "@spikedpunch/ripstream-core";
 import {
   AbortError,
   CONTEXT_KEYS,
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -185,7 +185,7 @@ class Volume {
     this.names.set(dirent.ino, dirent);
     // The root is in the map from the start and is not an entry of the volume.
     if (this.names.size - 1 > this.ctx.limits.maxZipEntries) {
-      throw new LimitExceededError(`Unix dump directory entries exceed ${this.ctx.limits.maxZipEntries}`);
+      throw limitError(`Unix dump directory entries exceed ${this.ctx.limits.maxZipEntries}`, "zipEntries", this.names.size - 1, this.ctx.limits.maxZipEntries);
     }
   }
 
@@ -199,7 +199,7 @@ class Volume {
       parts.push(dirent.name);
       if (dirent.ino === dirent.parentIno) break;
       if (depth >= this.ctx.limits.maxNodeDepth) {
-        throw new LimitExceededError(`Unix dump path deeper than ${this.ctx.limits.maxNodeDepth} directories`);
+        throw limitError(`Unix dump path deeper than ${this.ctx.limits.maxNodeDepth} directories`, "nodeDepth", depth + 1, this.ctx.limits.maxNodeDepth);
       }
       current = dirent.parentIno;
     }
@@ -230,9 +230,7 @@ class Volume {
   private entrySize(segment: Segment): number {
     if (segment.size < 0n) throw new MalformedDocumentError(`Unix dump inode of negative size ${segment.size}`);
     if (segment.size > BigInt(this.ctx.limits.maxEmbeddedResourceBytes)) {
-      throw new LimitExceededError(
-        `Unix dump entry of ${segment.size} bytes exceeds the per-entry limit ${this.ctx.limits.maxEmbeddedResourceBytes}`,
-      );
+      throw limitError(`Unix dump entry of ${segment.size} bytes exceeds the per-entry limit ${this.ctx.limits.maxEmbeddedResourceBytes}`, "entryBytes", Number(segment.size), this.ctx.limits.maxEmbeddedResourceBytes);
     }
     return Number(segment.size);
   }
@@ -240,11 +238,11 @@ class Volume {
   private charge(size: number): void {
     this.files++;
     if (this.files > this.ctx.limits.maxZipEntries) {
-      throw new LimitExceededError(`Unix dump entries exceed ${this.ctx.limits.maxZipEntries}`);
+      throw limitError(`Unix dump entries exceed ${this.ctx.limits.maxZipEntries}`, "zipEntries", this.files, this.ctx.limits.maxZipEntries);
     }
     this.total += size;
     if (this.total > this.ctx.limits.maxTotalEmbeddedBytes) {
-      throw new LimitExceededError("Unix dump exceeds the embedded byte limit");
+      throw limitError("Unix dump exceeds the embedded byte limit", "totalBytes", this.total, this.ctx.limits.maxTotalEmbeddedBytes);
     }
   }
 
@@ -278,7 +276,7 @@ class Volume {
 
   private checkRatio(consumed: number, produced: number): void {
     if (produced > RATIO_CHECK_THRESHOLD_BYTES && produced / consumed > this.ctx.limits.maxDecompressionRatio) {
-      throw new LimitExceededError("Unix dump entry exceeds the decompression ratio limit: it is mostly holes");
+      throw limitError("Unix dump entry exceeds the decompression ratio limit: it is mostly holes", "ratio", produced / consumed, this.ctx.limits.maxDecompressionRatio);
     }
   }
 

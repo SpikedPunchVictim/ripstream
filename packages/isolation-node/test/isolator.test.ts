@@ -372,7 +372,7 @@ test("pool: a given pool whose overshoot leaves no room for one child is a wirin
   await assert.rejects(setup({ pool, config: { mode: "strict" } }).create(), /cannot hold one child.*1024 MiB overshoot/);
 });
 
-test("pool: a pool that fits the default text request but not the default records request says so in status and refuses records as a limit", async () => {
+test("pool: a pool that fits the default text request but not the default records request says so in status and refuses records as an admission refusal", async () => {
   const pool = new MemoryPool({ poolMb: 1800, overshootMb: 0, maxQueue: 0 });
   const h = setup({ pool, config: { mode: "strict" } });
   const isolator = await h.create();
@@ -381,12 +381,12 @@ test("pool: a pool that fits the default text request but not the default record
   assert.equal((await isolator.isolate({ input: bytes("fits") })).kind, "text");
   await assert.rejects(
     isolator.isolate({ input: bytes("a"), output: "records" }),
-    (error: unknown) => error instanceof LimitExceededError && /Lower the caps or enlarge the pool/.test(error.message),
+    (error: unknown) => error instanceof AdmissionRefusedError && /Lower the caps or enlarge the pool/.test(error.message),
   );
   assert.equal(h.runs(), 1, "only the text request reached a child");
 });
 
-test("pool: with 1024 MiB of overshoot per reservation, a records request that only overshoot makes too big is still a LimitExceededError", async () => {
+test("pool: with 1024 MiB of overshoot per reservation, a records request that only overshoot makes too big is still an AdmissionRefusedError", async () => {
   // Defaults: text needs 2729 MiB and records 3042 MiB of this pool (both include the 1024 MiB overshoot). 2900 MiB
   // fits the first only. If the isolator's own check forgot the overshoot it would let a records request through
   // to the pool, which can never satisfy it and would call it "unavailable" (503) instead of the caller's limit.
@@ -396,7 +396,7 @@ test("pool: with 1024 MiB of overshoot per reservation, a records request that o
   assert.ok(reservation !== null && reservation.text <= 2900 && reservation.records > 2900, JSON.stringify(reservation));
   assert.equal((await isolator.isolate({ input: bytes("fits") })).kind, "text");
   await assert.rejects(isolator.isolate({ input: bytes("a"), output: "records" }), (error: unknown) => {
-    assert.ok(error instanceof LimitExceededError, String(error));
+    assert.ok(error instanceof AdmissionRefusedError, String(error));
     assert.match(error.message, /Lower the caps or enlarge the pool/);
     assert.doesNotMatch(error.message, /never be satisfied/);
     return true;
@@ -583,13 +583,13 @@ test("maxOutputChars -1 (unbounded) and absurd caps are refused as limits, for e
   assert.equal(h.runs(), 0);
 });
 
-test("a cap that would never fit the memory pool is a limit error, not an outage", async () => {
+test("a cap that would never fit the memory pool is an admission refusal, not an outage", async () => {
   // Text is reserved per character (tikajs-2cvh): 80 million characters need 1536 + 549 = 2085 MiB here, the default 1708.
   const pool = new MemoryPool({ poolMb: 2000, overshootMb: 0, maxQueue: 0 });
   const h = setup({ pool, config: { mode: "strict" } });
   const isolator = await h.create();
   assert.doesNotThrow(() => deriveLimits({ mode: "strict" }, { maxOutputChars: 80_000_000 }));
-  await assert.rejects(isolator.isolate({ input: bytes("a"), maxOutputChars: 80_000_000 }), LimitExceededError);
+  await assert.rejects(isolator.isolate({ input: bytes("a"), maxOutputChars: 80_000_000 }), AdmissionRefusedError);
   assert.equal(h.runs(), 0);
   assert.equal((await isolator.isolate({ input: bytes("fits") })).kind, "text", "the default cap fits");
 });
@@ -818,7 +818,7 @@ test("unpackBytes: above what a child may hold it is a RangeError that names the
   assert.equal(h.runs(), 0);
 });
 
-test("unpackBytes: a pool that fits the records request but not the bytes on top is a LimitExceededError, not an outage", async () => {
+test("unpackBytes: a pool that fits the records request but not the bytes on top is an AdmissionRefusedError, not an outage", async () => {
   const limits = deriveLimits({ mode: "strict" }, { output: "records" });
   const fits = limits.perChildMb + parentResultMb(limits.maxResultBytes, "records");
   const pool = new MemoryPool({ poolMb: fits + 40, overshootMb: 0, maxQueue: 0 });
@@ -827,7 +827,7 @@ test("unpackBytes: a pool that fits the records request but not the bytes on top
   assert.equal((await isolator.isolate({ input: bytes("a"), output: "records" })).kind, "records");
   await assert.rejects(
     isolator.isolate({ input: bytes("a"), output: "records", unpackBytes: 64 * MIB }),
-    (error: unknown) => error instanceof LimitExceededError && /Lower the caps or enlarge the pool/.test(error.message),
+    (error: unknown) => error instanceof AdmissionRefusedError && /Lower the caps or enlarge the pool/.test(error.message),
   );
   assert.equal(h.runs(), 1, "only the request without bytes reached a child");
 });
@@ -864,7 +864,7 @@ test("a pool refusal is its own class and its message names none of the words ot
       assert.ok(error instanceof AdmissionRefusedError, String(error));
       assert.equal(error.name, "AdmissionRefusedError");
       assert.equal(error.code, "ADMISSION_REFUSED");
-      assert.ok(error instanceof LimitExceededError, "still a limit for the exit code, the HTTP status and pipes");
+      assert.ok(!(error instanceof LimitExceededError), "not a limit (tikajs-mz56); the exit code, HTTP status and pipes name the class");
       assert.doesNotMatch(error.message, otherLimits);
       assert.match(error.message, /\d+ per child \+ \d+ overshoot \+ \d+ for the parent to hold the result/);
       return true;

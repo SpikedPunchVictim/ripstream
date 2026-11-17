@@ -4,6 +4,7 @@ import {
   DEFAULT_LIMITS,
   DEFAULT_SERVER_ENDPOINTS,
   IsolationError,
+  AdmissionRefusedError,
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
@@ -114,7 +115,8 @@ function exitCodeFor(error: unknown): number {
     error instanceof MalformedDocumentError ||
     error instanceof UnsupportedFormatError ||
     error instanceof EncryptedDocumentError ||
-    error instanceof LimitExceededError
+    error instanceof LimitExceededError ||
+    error instanceof AdmissionRefusedError
   ) {
     return EXIT_DATA;
   }

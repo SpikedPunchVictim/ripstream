@@ -5,7 +5,7 @@ import type { Readable } from "node:stream";
 import {
   AbortError,
   IsolationError,
-  LimitExceededError,
+  LimitExceededError, limitError,
   type IsolatedParseRequest,
   type IsolatedParseResult,
 } from "@spikedpunch/ripstream-core";
@@ -721,7 +721,7 @@ class WarmChild {
     else retire = await this.#afterCleanAnswer(req, result);
     if (retire === "cpu") {
       result = null;
-      error = new LimitExceededError("Isolated parser exceeded its CPU time limit");
+      error = new LimitExceededError("Isolated parser exceeded its CPU time limit", { limit: "cpu" });
     }
     if (retire !== null) {
       this.retire(this.state === "retired" ? (this.retireReason ?? retire) : retire);
@@ -1060,7 +1060,7 @@ export class WarmRunner {
     const { input } = request;
     const size = input instanceof Uint8Array ? input.length : (await stat(input.path)).size;
     if (size > this.#options.maxInputBytes) {
-      throw new LimitExceededError(`Input of ${size} bytes exceeds the maximum of ${this.#options.maxInputBytes} bytes`);
+      throw limitError(`Input of ${size} bytes exceeds the maximum of ${this.#options.maxInputBytes} bytes`, "inputBytes", size, this.#options.maxInputBytes);
     }
   }
 

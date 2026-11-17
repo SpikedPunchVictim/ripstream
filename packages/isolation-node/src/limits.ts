@@ -1,4 +1,4 @@
-import { DEFAULT_LIMITS, LimitExceededError, type HandlerType, type IsolationConfig } from "@spikedpunch/ripstream-core";
+import { DEFAULT_LIMITS, limitError, type HandlerType, type IsolationConfig } from "@spikedpunch/ripstream-core";
 import { MAX_BYTES_CHUNK, MAX_TEXT_CHUNK_CHARS } from "./frames.ts";
 
 /**
@@ -339,10 +339,8 @@ export function deriveLimits(config: IsolationConfig, request: LimitsRequest = {
     (maxSegmentBytes ?? 0) +
     RESULT_SLACK_BYTES;
   if (textResultBytes > MAX_RESULT_BYTES_CEILING) {
-    throw new LimitExceededError(
-      `maxOutputChars ${maxOutputChars} needs a result of up to ${textResultBytes} bytes, above the isolation ` +
-        `ceiling of ${MAX_RESULT_BYTES_CEILING} bytes`,
-    );
+    throw limitError(`maxOutputChars ${maxOutputChars} needs a result of up to ${textResultBytes} bytes, above the isolation ` +
+        `ceiling of ${MAX_RESULT_BYTES_CEILING} bytes`, "resultBytes", textResultBytes, MAX_RESULT_BYTES_CEILING);
   }
   // Markup never makes a request refusable that its text allowance fits: it gets what is left under the ceiling.
   const maxMarkupChars = Math.min(

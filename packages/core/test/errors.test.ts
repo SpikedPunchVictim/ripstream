@@ -5,6 +5,7 @@ import {
   AdmissionRefusedError,
   EncryptedDocumentError,
   IsolationError,
+  LIMIT_REASONS,
   LimitExceededError,
   MalformedDocumentError,
   MissingDependencyError,
@@ -14,6 +15,7 @@ import {
   UnsupportedFormatError,
   WriteLimitReachedError,
   httpStatusForError,
+  isLimitReason,
 } from "../src/errors.ts";
 
 test("errors carry stable codes and names", () => {
@@ -48,13 +50,37 @@ test("maps errors to server status codes", () => {
   assert.equal(httpStatusForError(new Error("plain")), 500);
 });
 
-test("a pool refusal is told apart from a limit by name and code, and still maps as a limit", () => {
+test("a pool refusal is not a limit: its own class, code and base, and still 422 and recoverable", () => {
   const error = new AdmissionRefusedError("pool too small");
   assert.equal(error.name, "AdmissionRefusedError");
-  assert.notEqual(error.code, new LimitExceededError("x").code);
-  assert.ok(error instanceof LimitExceededError);
+  assert.equal(error.code, "ADMISSION_REFUSED");
+  assert.ok(error instanceof RipstreamError);
+  assert.ok(!(error instanceof LimitExceededError));
+  assert.equal("limit" in error, false);
   assert.equal(error.recoverable, true);
   assert.equal(httpStatusForError(error), 422);
+});
+
+test("a limit error says which limit, and carries the numbers only when the site knew them", () => {
+  const bare = new LimitExceededError("too much");
+  assert.equal(bare.limit, "other");
+  assert.equal(bare.observed, undefined);
+  assert.equal(bare.max, undefined);
+  assert.equal("observed" in bare, false);
+  assert.equal(bare.recoverable, true);
+
+  const cause = new Error("inner");
+  const full = new LimitExceededError("Entries 11 exceed 10", { limit: "zipEntries", observed: 11, max: 10, cause });
+  assert.equal(full.limit, "zipEntries");
+  assert.equal(full.observed, 11);
+  assert.equal(full.max, 10);
+  assert.equal(full.cause, cause);
+  assert.equal(full.code, "LIMIT_EXCEEDED");
+});
+
+test("isLimitReason accepts exactly the listed reasons", () => {
+  for (const reason of LIMIT_REASONS) assert.ok(isLimitReason(reason), reason);
+  for (const value of ["maxZipEntries", "", undefined, 3, null, "__proto__"]) assert.ok(!isLimitReason(value), String(value));
 });
 
 test("missing dependency error names the package and capability", () => {

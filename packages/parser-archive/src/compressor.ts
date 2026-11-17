@@ -1,5 +1,5 @@
 import {
-  LimitExceededError,
+  LimitExceededError, limitError,
   MalformedDocumentError,
   MediaType,
   MissingDependencyError,
@@ -258,9 +258,7 @@ export class Lz4Parser extends CompressorParser {
     // decompressBound only walks block headers; reject before allocating.
     const bound = lz4.decompressBound(data);
     if (!(bound <= budget.limit + LZ4_MAX_BLOCK_BYTES)) {
-      throw new LimitExceededError(
-        `Lz4Parser output exceeds ${budget.limit} bytes (declared ${bound})`,
-      );
+      throw limitError(`Lz4Parser output exceeds ${budget.limit} bytes (declared ${bound})`, "entryBytes", bound, budget.limit);
     }
     const result = lz4.decompress(data, bound);
     budget.add(result.byteLength);

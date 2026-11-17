@@ -2,7 +2,7 @@ import { isFatalParseError, recordStreamException } from "@spikedpunch/ripstream
 import {
   AbortError,
   CONTEXT_KEYS,
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -81,9 +81,7 @@ export class WACZParser implements Parser {
         }
         gzipOutput += bytes.byteLength;
         if (gzipOutput > ctx.limits.maxTotalEmbeddedBytes) {
-          throw new LimitExceededError(
-            `The gzip entries of the archive inflate to more than ${ctx.limits.maxTotalEmbeddedBytes} bytes in all`,
-          );
+          throw limitError(`The gzip entries of the archive inflate to more than ${ctx.limits.maxTotalEmbeddedBytes} bytes in all`, "totalBytes", gzipOutput, ctx.limits.maxTotalEmbeddedBytes);
         }
       }
 

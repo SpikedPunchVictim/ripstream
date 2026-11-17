@@ -333,6 +333,20 @@ Tika's behaviour; the text so far is the result and the flag is on the metadata.
 `parseToStream` always throw. The limit is one total for the container and everything embedded in it, where Tika's
 applies to each document. Read from Tika source and its saved responses, not checked against a live Tika.
 
+## Which limit stopped a parse (`tikajs-mz56`, breaking)
+
+`LimitExceededError` has `limit`, which names the limit that stopped the parse (`outputChars`, `zipEntries`, `ratio`,
+`entryBytes`, `totalBytes`, `nodeDepth`, `embeddedResources`, `entityExpansion`, ...; `other` for a format's own guard),
+and `observed` and `max`, the numbers, when the parser knew them. The list and what each is: docs/limits-and-statuses.md.
+They are the same in a child process as in process. Read them instead of the message.
+
+Breaking: `AdmissionRefusedError` (an isolation memory-pool refusal) no longer extends `LimitExceededError`. It keeps code
+`ADMISSION_REFUSED`, `recoverable: true`, HTTP 422, CLI exit 3 and the pipes `PAYLOAD_LIMIT_EXCEEDED`. What changes is
+that `instanceof LimitExceededError` is false for it: a handler that caught `LimitExceededError` to also catch a pool
+refusal must add `AdmissionRefusedError` (or test `error.code`). The reverse was the bug it fixes: a consumer that mapped
+a limit by `error.limit` or by the class got a capacity problem of the deployment, with no limit to read, in the same
+branch as a hostile document.
+
 ## The entry-count limit
 
 A container with more entries than the limits allow fails the parse by default: a ZIP or tar with more than

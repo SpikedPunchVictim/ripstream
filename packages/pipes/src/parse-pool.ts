@@ -577,7 +577,7 @@ export function crashErrorFor(death: unknown, limits: ResourceLimits): Error {
   if (death instanceof IsolationError) return death;
   if ((death as { code?: unknown } | null)?.code === "ERR_WORKER_OUT_OF_MEMORY") {
     const heap = limits.maxOldGenerationSizeMb === undefined ? "" : ` (${limits.maxOldGenerationSizeMb} MB heap)`;
-    return new LimitExceededError(`the parse worker ran out of memory${heap}`, { cause: death });
+    return new LimitExceededError(`the parse worker ran out of memory${heap}`, { cause: death, limit: "memory" });
   }
   return new IsolationError("crash", `the parse worker stopped: ${describe(death)}`, { cause: death });
 }

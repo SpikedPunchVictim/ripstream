@@ -8,7 +8,7 @@ import {
   DEFAULT_LIMITS,
   HANDLER_TYPES,
   IsolationError,
-  LimitExceededError,
+  LimitExceededError, limitError,
   ParseTimeoutError,
   validateConfig,
   type IsolatedException,
@@ -448,7 +448,7 @@ class NodeIsolatorImpl implements NodeIsolator {
     const { input } = request;
     const size = input instanceof Uint8Array ? input.length : (await stat(input.path)).size;
     if (size > this.#maxInputBytes) {
-      throw new LimitExceededError(`Input of ${size} bytes exceeds the maximum of ${this.#maxInputBytes} bytes`);
+      throw limitError(`Input of ${size} bytes exceeds the maximum of ${this.#maxInputBytes} bytes`, "inputBytes", size, this.#maxInputBytes);
     }
     return size;
   }

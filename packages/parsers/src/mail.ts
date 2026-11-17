@@ -2,7 +2,7 @@ import {
   AbortError,
   BodyContentHandler,
   CONTEXT_KEYS,
-  LimitExceededError,
+  LimitExceededError, limitError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -212,7 +212,7 @@ function collectEntity(
   foldOnly = false,
 ): void {
   if (depth > output.ctx.limits.maxNodeDepth) {
-    throw new LimitExceededError(`Mail nesting depth ${depth} exceeds ${output.ctx.limits.maxNodeDepth}`);
+    throw limitError(`Mail nesting depth ${depth} exceeds ${output.ctx.limits.maxNodeDepth}`, "nodeDepth", depth, output.ctx.limits.maxNodeDepth);
   }
   const contentType = contentTypeOf(entity.headers);
   const type = contentType.type;

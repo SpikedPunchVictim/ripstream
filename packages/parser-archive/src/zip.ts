@@ -1,5 +1,5 @@
 import {
-  LimitExceededError,
+  LimitExceededError, limitError,
   MalformedDocumentError,
   MediaType,
   type ContentHandler,
@@ -66,29 +66,21 @@ export class ZipParser implements Parser {
           entries++;
           if (entries > ctx.limits.maxZipEntries) {
             if (truncate) return false; // not read; the walk goes on only to count them
-            throw new LimitExceededError(
-              `ZIP entries exceed ${ctx.limits.maxZipEntries}`,
-            );
+            throw limitError(`ZIP entries exceed ${ctx.limits.maxZipEntries}`, "zipEntries", entries, ctx.limits.maxZipEntries);
           }
           originalTotal += file.originalSize;
           if (originalTotal > ctx.limits.maxTotalEmbeddedBytes) {
-            throw new LimitExceededError(
-              "ZIP archive expanded size exceeds the embedded byte limit",
-            );
+            throw limitError("ZIP archive expanded size exceeds the embedded byte limit", "totalBytes", originalTotal, ctx.limits.maxTotalEmbeddedBytes);
           }
           if (file.originalSize > ctx.limits.maxEmbeddedResourceBytes) {
-            throw new LimitExceededError(
-              `ZIP entry ${file.name} expanded size exceeds the per-entry limit`,
-            );
+            throw limitError(`ZIP entry ${file.name} expanded size exceeds the per-entry limit`, "entryBytes", file.originalSize, ctx.limits.maxEmbeddedResourceBytes);
           }
           if (
             file.originalSize > RATIO_CHECK_THRESHOLD_BYTES &&
             file.size > 0 &&
             file.originalSize / file.size > ctx.limits.maxDecompressionRatio
           ) {
-            throw new LimitExceededError(
-              `ZIP entry ${file.name} exceeds the decompression ratio limit`,
-            );
+            throw limitError(`ZIP entry ${file.name} exceeds the decompression ratio limit`, "ratio", file.originalSize / file.size, ctx.limits.maxDecompressionRatio);
           }
           admitted.push(file.name);
           return true;
@@ -101,9 +93,7 @@ export class ZipParser implements Parser {
     }
 
     if (files.length > ctx.limits.maxZipEntries) {
-      throw new LimitExceededError(
-        `ZIP entries ${files.length} exceed ${ctx.limits.maxZipEntries}`,
-      );
+      throw limitError(`ZIP entries ${files.length} exceed ${ctx.limits.maxZipEntries}`, "zipEntries", files.length, ctx.limits.maxZipEntries);
     }
     if (truncate && entries > ctx.limits.maxZipEntries) {
       noteEmbeddedLimit(metadata, { limit: "maxZipEntries", max: ctx.limits.maxZipEntries, seen: entries, read: ctx.limits.maxZipEntries });
@@ -129,10 +119,10 @@ export class ZipParser implements Parser {
         }
         total += bytes.byteLength;
         if (bytes.byteLength > ctx.limits.maxEmbeddedResourceBytes) {
-          throw new LimitExceededError(`Entry ${name} expanded size exceeds the per-entry limit`);
+          throw limitError(`Entry ${name} expanded size exceeds the per-entry limit`, "entryBytes", bytes.byteLength, ctx.limits.maxEmbeddedResourceBytes);
         }
         if (total > ctx.limits.maxTotalEmbeddedBytes) {
-          throw new LimitExceededError("Archive expanded size exceeds the embedded byte limit");
+          throw limitError("Archive expanded size exceeds the embedded byte limit", "totalBytes", total, ctx.limits.maxTotalEmbeddedBytes);
         }
 
         await xhtml.startElement("div", "class", "package-entry");
@@ -244,7 +234,7 @@ function decodeEntries(
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const files: ZipFile[] = [];
   if (allEntries.length > limits.maxZipEntries && !truncate) {
-    throw new LimitExceededError(`ZIP entries ${allEntries.length} exceed ${limits.maxZipEntries}`);
+    throw limitError(`ZIP entries ${allEntries.length} exceed ${limits.maxZipEntries}`, "zipEntries", allEntries.length, limits.maxZipEntries);
   }
   const entries = allEntries.slice(0, limits.maxZipEntries);
   // Declared sizes only reject early; what an entry really inflates to is bounded by what is left of the total.
@@ -252,14 +242,16 @@ function decodeEntries(
   let produced = 0;
   for (const entry of entries) {
     if (entry.uncompressedSize > limits.maxEmbeddedResourceBytes) {
-      throw new LimitExceededError(`ZIP entry ${entry.name} expanded size exceeds the per-entry limit`);
+      throw limitError(`ZIP entry ${entry.name} expanded size exceeds the per-entry limit`, "entryBytes", entry.uncompressedSize, limits.maxEmbeddedResourceBytes);
     }
     if (entry.uncompressedSize > RATIO_CHECK_THRESHOLD_BYTES && entry.compressedSize > 0
       && entry.uncompressedSize / entry.compressedSize > limits.maxDecompressionRatio) {
-      throw new LimitExceededError(`ZIP entry ${entry.name} exceeds the decompression ratio limit`);
+      throw limitError(`ZIP entry ${entry.name} exceeds the decompression ratio limit`, "ratio", entry.uncompressedSize / entry.compressedSize, limits.maxDecompressionRatio);
     }
     total += entry.uncompressedSize;
-    if (total > limits.maxTotalEmbeddedBytes) throw new LimitExceededError("ZIP archive expanded size exceeds the embedded byte limit");
+    if (total > limits.maxTotalEmbeddedBytes) {
+      throw limitError("ZIP archive expanded size exceeds the embedded byte limit", "totalBytes", total, limits.maxTotalEmbeddedBytes);
+    }
     if (entry.localOffset + 30 > data.byteLength || view.getUint32(entry.localOffset, true) !== 0x04034b50) {
       throw new MalformedDocumentError("Invalid ZIP local header");
     }
@@ -281,7 +273,7 @@ function decodeEntries(
     let bytes: Uint8Array;
     if (entry.method === 0) {
       if (compressed.byteLength > entryLimits.maxOutputBytes) {
-        throw new LimitExceededError(`ZIP entry ${entry.name} exceeds ${entryLimits.maxOutputBytes} bytes`);
+        throw limitError(`ZIP entry ${entry.name} exceeds ${entryLimits.maxOutputBytes} bytes`, "entryBytes", compressed.byteLength, entryLimits.maxOutputBytes);
       }
       bytes = compressed;
     } else if (entry.method === 8) {

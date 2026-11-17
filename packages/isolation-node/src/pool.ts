@@ -1,7 +1,7 @@
 import {
   AbortError,
   IsolationError,
-  LimitExceededError,
+  limitError,
   ParseTimeoutError,
 } from "@spikedpunch/ripstream-core";
 import { clampTimerMs } from "./timers.ts";
@@ -299,9 +299,7 @@ export class MemoryPool {
     if (lease.released) throw new Error("charge: lease is already released");
     const freeMb = this.#poolMb - this.#reservedMb;
     if (extraMb > freeMb) {
-      throw new LimitExceededError(
-        `Result needs ${extraMb} MiB of parent memory but only ${freeMb} MiB of the ${this.#poolMb} MiB pool is free`,
-      );
+      throw limitError(`Result needs ${extraMb} MiB of parent memory but only ${freeMb} MiB of the ${this.#poolMb} MiB pool is free`, "memory", extraMb, freeMb);
     }
     lease.totalMb += extraMb;
     this.#reservedMb += extraMb;

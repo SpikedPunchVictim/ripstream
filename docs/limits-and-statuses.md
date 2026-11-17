@@ -127,13 +127,38 @@ was not run against Tika for this page.
 
 ## Refused before parsing: `AdmissionRefusedError`
 
-`AdmissionRefusedError` (code `ADMISSION_REFUSED`, a `LimitExceededError` subclass, `packages/core/src/errors.ts`) is
-raised in the parent by the isolation layer when a request could never fit the memory pool: the per-child budget plus
-overshoot plus the parent's result allowance is more than the whole pool (`isolator.ts`). It says nothing about the
-document, so a consumer should **test for the class before `LimitExceededError`** and treat it as a deployment or cap
-problem (lower the caps or enlarge `memoryPoolMb`), not as a hostile or oversized file. Its message deliberately avoids
-the names of the parse limits. It never crosses the child boundary and is mapped like any limit: HTTP 422, CLI exit 3,
-pipes `PAYLOAD_LIMIT_EXCEEDED`.
+`AdmissionRefusedError` (code `ADMISSION_REFUSED`, extends `RipstreamError`, not `LimitExceededError`;
+`packages/core/src/errors.ts`) is raised in the parent by the isolation layer when a request could never fit the memory
+pool: the per-child budget plus overshoot plus the parent's result allowance is more than the whole pool
+(`isolator.ts`). It says nothing about the document, so treat it as a deployment or cap problem (lower the caps or
+enlarge `memoryPoolMb`), not as a hostile or oversized file. It is not a `LimitExceededError` (it was until
+`tikajs-mz56`), so a `catch` of that class does not take it and it has no `limit`: branch on the class or on `code`.
+Its message deliberately avoids the names of the parse limits. It never crosses the child boundary and is mapped like
+a limit: HTTP 422, CLI exit 3, pipes `PAYLOAD_LIMIT_EXCEEDED`.
+
+## Which limit: `LimitExceededError.limit`
+
+| `limit` | The limit it is about |
+| --- | --- |
+| `outputChars` | `maxOutputChars`: the text, or the recursive total |
+| `documentOutputChars` | `maxDocumentOutputChars` |
+| `zipEntries` | `maxZipEntries`: entries of a zip, tar, cpio, ar, ISO or dump |
+| `ratio` | `maxDecompressionRatio` (`observed` and `max` are ratios) |
+| `entryBytes` | `maxEmbeddedResourceBytes`: one entry, part or decompressed stream |
+| `totalBytes` | `maxTotalEmbeddedBytes`: all of an archive or package |
+| `nodeDepth` | embedded depth (`maxNodeDepth`) and the nesting guards of mail, HTML, XML and directories |
+| `embeddedResources` | `maxEmbeddedResources` |
+| `entityExpansion` | an XML entity declaration (`maxXmlEntityExpansions`); no numbers |
+| `metadataChars` | `maxMetadataTotalChars` |
+| `inputBytes` | the input is too large: the isolator's `maxInputBytes`, a bounded read, a fetched body or a PDF over its cap |
+| `pages` | the PDF page cap |
+| `memory`, `cpu`, `disk` | an isolated child's memory, CPU-time or temporary-disk budget; `memory` also covers a parse worker that ran out of heap |
+| `resultBytes` | the result an isolated child may send back, or a `maxOutputChars` whose result would not fit the isolation ceiling |
+| `other` | a format's own guard that no `ParseLimits` member names (a row, cell, packet or box count, a header block); the message says which, and `observed` and `max` may be absent |
+
+A child's answer carries the same `limit`, `observed` and `max` as the in-process one (they travel in the error frame). A
+`limit` name a parent does not know (a newer child) arrives as `other`. Some sites that throw carry no numbers (a stream whose length is
+unknown, a child killed from outside), so `observed` and `max` are optional; `limit` is always set.
 
 ## Error to status
 
@@ -158,7 +183,8 @@ first match:
 1. Threw `AdmissionRefusedError`: **refused (deployment)**. Not the document's fault; retry with lower caps.
 2. Threw `ParseTimeoutError` or `AbortError`, or `IsolationError`: **timeout / aborted / infrastructure** (`reason`
    tells a crash from a full queue).
-3. Threw `LimitExceededError`: **refused, over a limit** (the message names which).
+3. Threw `LimitExceededError`: **refused, over a limit**. `error.limit` names which (see below); `observed` and `max` are the
+   numbers when the parser knew them. Do not match the message.
 4. Threw `EncryptedDocumentError`, or (record mode) the root `exception` is one, or an archive has an
    `embedded-stream-exception` starting `EncryptedDocumentException`: **encrypted** (whole file, or some entries).
 5. Threw `MalformedDocumentError` / `ZeroByteFileError`, or (record mode) the root has `tk:exception:container-exception`:

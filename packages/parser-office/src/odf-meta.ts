@@ -1,5 +1,5 @@
 import {
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   tikaDateMetadataString,
   type Metadata,
@@ -316,7 +316,7 @@ export function applyOdfMetadata(metadata: Metadata, xml: string): void {
     throw new MalformedDocumentError(`Malformed ODF meta.xml: ${error.message}`, { cause: error });
   });
   parser.on("opentag", (tag: SaxesTagNS) => {
-    if (depth >= MAX_ODF_META_DEPTH) throw new LimitExceededError(`ODF meta.xml nests deeper than ${MAX_ODF_META_DEPTH} elements`);
+    if (depth >= MAX_ODF_META_DEPTH) throw limitError(`ODF meta.xml nests deeper than ${MAX_ODF_META_DEPTH} elements`, "nodeDepth", depth + 1, MAX_ODF_META_DEPTH);
     const uri = mapOldNamespace(tag.uri);
     const attributes = Object.values(tag.attributes);
     for (const handler of handlers) handler.start(uri, tag.local, attributes, depth);

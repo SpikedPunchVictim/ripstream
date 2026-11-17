@@ -343,6 +343,7 @@ test("a worker that runs out of memory fails its parse as a limit, best effort",
   const error = crashErrorFor(death, { maxOldGenerationSizeMb: 512 });
   assert.ok(error instanceof LimitExceededError);
   assert.equal(statusForParseError(error), "PAYLOAD_LIMIT_EXCEEDED");
+  assert.equal(error.limit, "memory");
   assert.match(error.message, /512 MB/);
 });
 

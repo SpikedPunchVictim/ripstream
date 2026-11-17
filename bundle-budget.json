@@ -3,7 +3,7 @@
   "mime": 1100,
   "parsers": 1145,
   "parser-office": 740,
-  "parser-archive": 250,
+  "parser-archive": 252,
   "parser-pdf": 385,
   "parser-media": 450,
   "parity": 25,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { crc32, deflateRawSync } from "node:zlib";
 import { MemoryPool, type RunDiagnostics } from "@spikedpunch/ripstream-isolation-node";
-import { LimitExceededError, createRipstream, type ParseLimits, type ParseRecord } from "../src/index.ts";
+import { LimitExceededError, createRipstream, type LimitReason, type ParseLimits, type ParseRecord } from "../src/index.ts";
 import { createStandardIsolation } from "../src/isolation.ts";
 
 /**
@@ -82,14 +82,21 @@ function comparable(records: readonly ParseRecord[]): unknown {
   return records.map((record) => [record.embeddedResourcePath, record.content, record.exception?.message ?? null]);
 }
 
-/** Both arms refuse alike: the same typed error, the same message, and the child really ran. */
-async function bothRefuse(bytes: Uint8Array, limits: Partial<ParseLimits>, message: RegExp): Promise<void> {
+/**
+ * Both arms refuse alike: the same typed error, the same message, the same `limit`, `observed` and `max` (tikajs-mz56),
+ * and the child really ran.
+ */
+async function bothRefuse(bytes: Uint8Array, limits: Partial<ParseLimits>, message: RegExp, reason: LimitReason): Promise<void> {
   const before = settled.length;
   const [local, child] = [await run("in-process", bytes, limits), await run("child", bytes, limits)];
   assert.ok(local instanceof LimitExceededError, `in-process: ${String(local)}`);
   assert.ok(child instanceof LimitExceededError, `child: ${String(child)}`);
   assert.match(local.message, message);
   assert.equal(child.message, local.message);
+  assert.equal(local.limit, reason, "in-process limit");
+  assert.equal(child.limit, reason, "child limit");
+  assert.equal(child.observed, local.observed, "observed");
+  assert.equal(child.max, local.max, "max");
   assert.equal(settled.length - before, 1, "the child ran");
 }
 
@@ -119,26 +126,31 @@ async function bothAnswer(bytes: Uint8Array, limits: Partial<ParseLimits>): Prom
 
 test("maxZipEntries stops a many-entry zip in a child as it does in process", async () => {
   const bytes = zip(names(40, 4));
-  await bothRefuse(bytes, { maxZipEntries: 10 }, /ZIP entries exceed 10/);
+  await bothRefuse(bytes, { maxZipEntries: 10 }, /ZIP entries exceed 10/, "zipEntries");
   await bothAnswer(bytes, { maxZipEntries: 40 });
 });
 
 test("maxDecompressionRatio stops a deflate bomb in a child as it does in process", async () => {
   const bytes = zip({ "zeros.txt": text(600_000, "a") }, true);
-  await bothRefuse(bytes, { maxDecompressionRatio: 10, maxOutputChars: 2_000_000 }, /ratio/i);
+  await bothRefuse(bytes, { maxDecompressionRatio: 10, maxOutputChars: 2_000_000 }, /ratio/i, "ratio");
   await bothAnswer(bytes, { maxDecompressionRatio: 100_000, maxOutputChars: 2_000_000 });
 });
 
 test("maxEmbeddedResourceBytes stops an oversized entry in a child as it does in process", async () => {
   const bytes = zip({ "big.txt": text(2000) });
-  await bothRefuse(bytes, { maxEmbeddedResourceBytes: 1000 }, /per-entry limit/);
+  await bothRefuse(bytes, { maxEmbeddedResourceBytes: 1000 }, /per-entry limit/, "entryBytes");
   await bothAnswer(bytes, { maxEmbeddedResourceBytes: 100_000 });
 });
 
 test("maxTotalEmbeddedBytes stops a zip whose entries add up too far in a child as it does in process", async () => {
   const bytes = zip(names(5, 100));
-  await bothRefuse(bytes, { maxTotalEmbeddedBytes: 1000 }, /embedded byte limit/);
+  await bothRefuse(bytes, { maxTotalEmbeddedBytes: 1000 }, /embedded byte limit/, "totalBytes");
   await bothAnswer(bytes, { maxTotalEmbeddedBytes: 1_000_000 });
+});
+
+test("maxOutputChars stops a long document in a child as it does in process, and says which limit", async () => {
+  const bytes = zip({ "long.txt": text(5000) });
+  await bothRefuse(bytes, { maxOutputChars: 100 }, /output exceeds 100 characters/i, "outputChars");
 });
 
 test("maxDocumentOutputChars stops one long document in a child as it does in process", async () => {

@@ -1,5 +1,5 @@
 import type { ContentHandler } from "./content-handler.ts";
-import { LimitExceededError } from "./errors.ts";
+import { LimitExceededError, limitError, type LimitExceededOptions } from "./errors.ts";
 import { Metadata } from "./metadata.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
 import { CONTEXT_KEYS, type ParseContext } from "./parse-context.ts";
@@ -24,8 +24,8 @@ export interface EmbeddedDocumentExtractor {
 const WHOLE_PARSE_LIMITS = new WeakSet<Error>();
 
 /** A LimitExceededError for a limit of the whole parse, which no document's failure record may absorb. */
-export function wholeParseLimit(message: string): LimitExceededError {
-  const error = new LimitExceededError(message);
+export function wholeParseLimit(message: string, options: LimitExceededOptions = {}): LimitExceededError {
+  const error = new LimitExceededError(message, options);
   WHOLE_PARSE_LIMITS.add(error);
   return error;
 }
@@ -40,16 +40,14 @@ export function isWholeParseLimit(error: unknown): boolean {
  * `isEmbeddedCountLimit`), and the numbers are what it notes on the container.
  */
 export class EmbeddedCountLimitError extends LimitExceededError {
-  readonly limit = "maxEmbeddedResources" as const;
-  readonly max: number;
+  declare readonly max: number;
   readonly seen: number;
 
   constructor(seen: number, max: number) {
-    super(`Embedded count ${seen} exceeds ${max}`);
+    super(`Embedded count ${seen} exceeds ${max}`, { limit: "embeddedResources", observed: seen, max });
     // The same name an isolated parse gives it (the error codec rebuilds it by code as a LimitExceededError).
     this.name = "LimitExceededError";
     this.seen = seen;
-    this.max = max;
     WHOLE_PARSE_LIMITS.add(this);
   }
 }
@@ -100,9 +98,7 @@ export function chargeEmbeddedResource(ctx: ParseContext): number {
   }
   const depth = (ctx.get(CONTEXT_KEYS.EMBEDDED_DEPTH) ?? 0) + 1;
   if (depth > ctx.limits.maxNodeDepth) {
-    throw new LimitExceededError(
-      `Embedded depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`,
-    );
+    throw limitError(`Embedded depth ${depth} exceeds ${ctx.limits.maxNodeDepth}`, "nodeDepth", depth, ctx.limits.maxNodeDepth);
   }
   return depth;
 }
@@ -110,16 +106,16 @@ export function chargeEmbeddedResource(ctx: ParseContext): number {
 /** Adds embedded bytes to the shared total and enforces both byte limits. */
 export function chargeEmbeddedBytes(ctx: ParseContext, bytes: number): void {
   if (bytes > ctx.limits.maxEmbeddedResourceBytes) {
-    throw new LimitExceededError(
-      `Embedded resource of ${bytes} bytes exceeds ${ctx.limits.maxEmbeddedResourceBytes}`,
-    );
+    throw limitError(`Embedded resource of ${bytes} bytes exceeds ${ctx.limits.maxEmbeddedResourceBytes}`, "entryBytes", bytes, ctx.limits.maxEmbeddedResourceBytes);
   }
   const budget = budgetFor(ctx);
   budget.bytes += bytes;
   if (budget.bytes > ctx.limits.maxTotalEmbeddedBytes) {
-    throw wholeParseLimit(
-      `Embedded bytes ${budget.bytes} exceed ${ctx.limits.maxTotalEmbeddedBytes}`,
-    );
+    throw wholeParseLimit(`Embedded bytes ${budget.bytes} exceed ${ctx.limits.maxTotalEmbeddedBytes}`, {
+      limit: "totalBytes",
+      observed: budget.bytes,
+      max: ctx.limits.maxTotalEmbeddedBytes,
+    });
   }
 }
 
@@ -140,14 +136,14 @@ export async function meterEmbeddedStream(
       own += chunk.byteLength;
       budget.bytes += chunk.byteLength;
       if (own > maxEmbeddedResourceBytes) {
-        throw new LimitExceededError(
-          `Embedded resource of at least ${own} bytes exceeds ${maxEmbeddedResourceBytes}`,
-        );
+        throw limitError(`Embedded resource of at least ${own} bytes exceeds ${maxEmbeddedResourceBytes}`, "entryBytes", own, maxEmbeddedResourceBytes);
       }
       if (budget.bytes > maxTotalEmbeddedBytes) {
-        throw wholeParseLimit(
-          `Embedded bytes ${budget.bytes} exceed ${maxTotalEmbeddedBytes}`,
-        );
+        throw wholeParseLimit(`Embedded bytes ${budget.bytes} exceed ${maxTotalEmbeddedBytes}`, {
+          limit: "totalBytes",
+          observed: budget.bytes,
+          max: maxTotalEmbeddedBytes,
+        });
       }
       yield chunk;
     }

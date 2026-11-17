@@ -1,4 +1,4 @@
-import { LimitExceededError, MalformedDocumentError, type OutputBudget } from "@spikedpunch/ripstream-core";
+import { LimitExceededError, limitError, MalformedDocumentError, type OutputBudget } from "@spikedpunch/ripstream-core";
 import { OutputWindow } from "./output-window.ts";
 
 /**
@@ -74,7 +74,7 @@ function readHeader(data: Uint8Array, budget: OutputBudget): Properties {
   if (sizeHigh >= 0x80000000) throw new MalformedDocumentError("LZMA uncompressed size is too big");
   const declaredSize = sizeHigh * 2 ** 32 + sizeLow;
   if (declaredSize > budget.limit) {
-    throw new LimitExceededError(`LZMA output exceeds ${budget.limit} bytes (declared ${declaredSize})`);
+    throw limitError(`LZMA output exceeds ${budget.limit} bytes (declared ${declaredSize})`, "entryBytes", declaredSize, budget.limit);
   }
   return { lc, lp, pb, dictionaryBytes, declaredSize };
 }

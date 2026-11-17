@@ -2,7 +2,7 @@ import {
   ContentHandlerDecorator,
   type MaybePromise,
 } from "../content-handler.ts";
-import { LimitExceededError } from "../errors.ts";
+import { limitError } from "../errors.ts";
 
 /**
  * The problem with an output-character limit, or null when it is valid. `-1` is the documented "unlimited" sentinel;
@@ -50,7 +50,7 @@ export class OutputLimitContentHandler extends ContentHandlerDecorator {
     if (this.#limit < 0) return;
     this.#written += length;
     if (this.#written > this.#limit) {
-      throw new LimitExceededError(`Output exceeds ${this.#limit} characters`);
+      throw limitError(`Output exceeds ${this.#limit} characters`, "outputChars", this.#written, this.#limit);
     }
   }
 }

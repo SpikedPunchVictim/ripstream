@@ -1,7 +1,7 @@
 import { createDecoder } from "./charset.ts";
 import {
   AttributesImpl,
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   MediaType,
   RipstreamError,
@@ -88,7 +88,7 @@ export class DifParser implements Parser {
     const parser = new SaxesParser({ xmlns: true });
     parser.on("opentag", (tag) => {
       if (failed !== null) return;
-      if (++depth > maxDepth) throw new LimitExceededError(`DIF nesting exceeds ${maxDepth} open elements`);
+      if (++depth > maxDepth) throw limitError(`DIF nesting exceeds ${maxDepth} open elements`, "nodeDepth", depth, maxDepth);
       events.push({ type: "open", name: (tag as unknown as { local: string }).local });
     });
     // saxes reports the whitespace around the root element as text; a SAX parser does not.

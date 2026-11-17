@@ -1,5 +1,6 @@
 import {
   IsolationError,
+  AdmissionRefusedError,
   LimitExceededError,
   PIPES_RESULT_STATUSES,
   ParseTimeoutError,
@@ -119,6 +120,7 @@ export function statusForParseError(error: unknown): PipesResultStatus {
   }
   if (
     error instanceof LimitExceededError ||
+    error instanceof AdmissionRefusedError ||
     error instanceof WriteLimitReachedError ||
     error instanceof RequestTooLargeError
   ) {

@@ -1,6 +1,7 @@
 import {
   AbortError,
   EncryptedDocumentError,
+  AdmissionRefusedError,
   LimitExceededError,
   MalformedDocumentError,
   ParseTimeoutError,
@@ -47,6 +48,7 @@ export function isWriteLimitReached(error: unknown): boolean {
 export function isFatalParseError(error: unknown, ctx: { readonly signal: AbortSignal }): boolean {
   return (
     error instanceof LimitExceededError ||
+    error instanceof AdmissionRefusedError ||
     error instanceof ParseTimeoutError ||
     error instanceof AbortError ||
     error instanceof WriteLimitReachedError ||

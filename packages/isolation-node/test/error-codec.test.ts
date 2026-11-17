@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   AbortError,
+  AdmissionRefusedError,
   EmptyDocumentError,
   EncryptedDocumentError,
   IsolationError,
@@ -36,7 +37,8 @@ function cliExitCodeFor(error: unknown): number {
     error instanceof MalformedDocumentError ||
     error instanceof UnsupportedFormatError ||
     error instanceof EncryptedDocumentError ||
-    error instanceof LimitExceededError
+    error instanceof LimitExceededError ||
+    error instanceof AdmissionRefusedError
   ) {
     return 3;
   }
@@ -398,6 +400,56 @@ test("dependency and capability are display text: bounded and sanitised", () => 
   assert.ok(parent instanceof MissingDependencyError);
   assert.ok(parent.message.length < 600, `message is ${parent.message.length} chars`);
   assert.equal(/[\u0000-\u001f]/.test(parent.message), false);
+});
+
+test("a limit error keeps which limit, and the numbers, across the boundary", () => {
+  const parent = crossBoundary(new LimitExceededError("ZIP entries 11 exceed 10", { limit: "zipEntries", observed: 11, max: 10 }));
+  assert.ok(parent instanceof LimitExceededError);
+  assert.equal(parent.limit, "zipEntries");
+  assert.equal(parent.observed, 11);
+  assert.equal(parent.max, 10);
+});
+
+test("a limit error without numbers crosses without them, and a bare one is `other`", () => {
+  const entity = crossBoundary(new LimitExceededError("entity", { limit: "entityExpansion" }));
+  assert.ok(entity instanceof LimitExceededError);
+  assert.equal(entity.limit, "entityExpansion");
+  assert.equal("observed" in entity, false);
+  assert.equal("max" in entity, false);
+  assert.equal((crossBoundary(new LimitExceededError("bare")) as LimitExceededError).limit, "other");
+});
+
+test("a fractional observed value (a ratio) survives", () => {
+  const parent = crossBoundary(new LimitExceededError("ratio", { limit: "ratio", observed: 1234.5, max: 1000 })) as LimitExceededError;
+  assert.equal(parent.observed, 1234.5);
+});
+
+test("a limit name this version does not know is `other`, not a refusal of the frame", () => {
+  const parent = parentErrorFor({ t: "error", kind: "limit", message: "m", code: "LIMIT_EXCEEDED", limit: "somethingNewer", max: 3 });
+  assert.ok(parent instanceof LimitExceededError);
+  assert.equal(parent.limit, "other");
+  assert.equal(parent.max, 3);
+});
+
+test("limit, observed and max on another code are ignored", () => {
+  const parent = parentErrorFor({ t: "error", kind: "malformed", message: "m", code: "MALFORMED_DOCUMENT", limit: "ratio", observed: 1, max: 2 });
+  assert.ok(parent instanceof MalformedDocumentError);
+  assert.equal("limit" in parent, false);
+});
+
+test("observed and max must be finite non-negative numbers, and limit a string", () => {
+  for (const extra of [{ observed: "5" }, { max: -1 }, { observed: null }, { limit: 7 }]) {
+    const reader = new FrameReader({ output: "text", maxTotalBytes: 1 << 20 });
+    reader.push(bytesOf({ t: "ready", pid: 1 }));
+    const events = reader.push(bytesOf({ t: "error", kind: "limit", message: "m", code: "LIMIT_EXCEEDED", ...extra }));
+    assert.equal(events[0]?.type, "violation", JSON.stringify(extra));
+  }
+});
+
+test("a pool refusal does not cross: a child cannot mint one, and it is not a limit", () => {
+  const parent = crossBoundary(new AdmissionRefusedError("needs 10146 MiB"));
+  assert.ok(parent instanceof IsolationError);
+  assert.ok(!(parent instanceof LimitExceededError));
 });
 
 test("dependency and capability fields on another code are ignored", () => {

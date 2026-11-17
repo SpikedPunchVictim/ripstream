@@ -4,6 +4,24 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### BREAKING: `LimitExceededError` says which limit; `AdmissionRefusedError` is no longer a `LimitExceededError` (`tikajs-mz56`)
+
+Added: `LimitExceededError` has `limit` (a `LimitReason`: `outputChars`, `documentOutputChars`, `zipEntries`, `ratio`, `entryBytes`,
+`totalBytes`, `nodeDepth`, `embeddedResources`, `entityExpansion`, `metadataChars`, `inputBytes`, `pages`, `memory`, `cpu`, `disk`,
+`resultBytes`, or `other` for a format's own guard that no `ParseLimits` member names), and `observed` and `max` (numbers, present when
+the site that threw knew them; `ratio` is a decompression ratio, the byte limits are bytes, the count limits are counts). A consumer maps a
+refusal to a verdict without matching the message. They survive the isolation boundary (in the error frame, both ways) and a parse-worker
+thread unchanged, so a child's answer equals the in-process one. `LIMIT_REASONS`, `LimitReason`, `isLimitReason` and
+`LimitExceededOptions` are exported from core. `new LimitExceededError(message, options)` takes `{ cause?, limit?, observed?, max? }`;
+a bare `new LimitExceededError(message)` is `limit: "other"`.
+
+Changed (breaking): `AdmissionRefusedError` now extends `RipstreamError` directly. It keeps its code (`ADMISSION_REFUSED`), its name and
+`recoverable: true`, and refusals behave as before (HTTP 422, CLI exit 3, pipes `PAYLOAD_LIMIT_EXCEEDED`: the places that relied on the old
+hierarchy now name the class), but `error instanceof LimitExceededError` is **false** for it, and it has no `limit`. A caller that caught
+`LimitExceededError` to catch a pool refusal must also catch `AdmissionRefusedError`, or branch on `code`. `EmbeddedCountLimitError.limit`
+(an internal class) was `"maxEmbeddedResources"` and is now `"embeddedResources"`. Public API change (`api-report.json`);
+docs/migration.md and docs/isolation.md have the note.
+
 ### Isolation: every limit but `maxTaskMillis` is a per-request limit in child mode (`tikajs-segq`)
 
 Changed: in child mode `maxZipEntries`, `maxDecompressionRatio`, `maxEmbeddedResourceBytes`, `maxTotalEmbeddedBytes`,

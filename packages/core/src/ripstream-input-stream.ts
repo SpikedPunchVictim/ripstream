@@ -2,7 +2,7 @@ import { mkdtemp, open, rm, type FileHandle } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InputSource } from "./content-handler.ts";
-import { LimitExceededError } from "./errors.ts";
+import { limitError } from "./errors.ts";
 import type { ParseContext } from "./parse-context.ts";
 import { toAsyncIterable, type StreamOptions } from "./streams.ts";
 
@@ -90,7 +90,7 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
     await this.ensureBuffered(maxBytes + 1);
     const available = this.bytesStored - this.cursor;
     if (available > maxBytes) {
-      throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
+      throw limitError(`Input exceeds ${maxBytes} bytes`, "inputBytes", available, maxBytes);
     }
     const result = await this.readAt(this.cursor, available);
     this.cursor += result.length;
@@ -137,12 +137,12 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       if (!(maxBytes >= 0)) throw new RangeError(`maxBytes must be >= 0, got ${maxBytes}`);
       while (!this.eof) {
         if (this.bytesStored > maxBytes) {
-          throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
+          throw limitError(`Input exceeds ${maxBytes} bytes`, "inputBytes", this.bytesStored, maxBytes);
         }
         await this.pull();
       }
       if (this.bytesStored > maxBytes) {
-        throw new LimitExceededError(`Input exceeds ${maxBytes} bytes`);
+        throw limitError(`Input exceeds ${maxBytes} bytes`, "inputBytes", this.bytesStored, maxBytes);
       }
     }
     await this.spill();

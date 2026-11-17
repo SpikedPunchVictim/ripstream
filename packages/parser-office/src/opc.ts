@@ -1,7 +1,7 @@
 import { open, type FileHandle } from "node:fs/promises";
 import { Inflate } from "fflate";
 import {
-  LimitExceededError,
+  LimitExceededError, limitError,
   OutputBudget,
   MalformedDocumentError,
   type ParseLimits,
@@ -69,14 +69,14 @@ export class OpcPackage {
       throw new MalformedDocumentError(`Missing OPC part: ${name}`);
     }
     if (entry.uncompressedSize > this.#limits.maxEmbeddedResourceBytes) {
-      throw new LimitExceededError(`OPC part ${name} exceeds the per-entry limit`);
+      throw limitError(`OPC part ${name} exceeds the per-entry limit`, "entryBytes", entry.uncompressedSize, this.#limits.maxEmbeddedResourceBytes);
     }
     if (
       entry.compressedSize > 0 &&
       entry.uncompressedSize / entry.compressedSize >
         this.#limits.maxDecompressionRatio
     ) {
-      throw new LimitExceededError(`OPC part ${name} exceeds the ratio limit`);
+      throw limitError(`OPC part ${name} exceeds the ratio limit`, "ratio", entry.uncompressedSize / entry.compressedSize, this.#limits.maxDecompressionRatio);
     }
 
     const header = new Uint8Array(30);
@@ -120,7 +120,7 @@ export class OpcPackage {
         entryBudget.add(chunk.byteLength);
         this.#totalInflated += chunk.byteLength;
         if (this.#totalInflated > this.#limits.maxTotalEmbeddedBytes) {
-          throw new LimitExceededError("OPC parts exceed the embedded byte limit");
+          throw limitError("OPC parts exceed the embedded byte limit", "totalBytes", this.#totalInflated, this.#limits.maxTotalEmbeddedBytes);
         }
         chunks.push(chunk);
         produced += chunk.byteLength;
@@ -212,12 +212,10 @@ async function readCentralDirectory(
   }
 
   if (entryCount > limits.maxZipEntries) {
-    throw new LimitExceededError(
-      `OPC entries ${entryCount} exceed ${limits.maxZipEntries}`,
-    );
+    throw limitError(`OPC entries ${entryCount} exceed ${limits.maxZipEntries}`, "zipEntries", entryCount, limits.maxZipEntries);
   }
   if (directorySize > limits.maxTotalEmbeddedBytes) {
-    throw new LimitExceededError("OPC central directory exceeds the byte limit");
+    throw limitError("OPC central directory exceeds the byte limit", "totalBytes", directorySize, limits.maxTotalEmbeddedBytes);
   }
 
   const directory = new Uint8Array(directorySize);
@@ -256,7 +254,7 @@ async function readCentralDirectory(
     if (name.length > 0) {
       total += uncompressedSize;
       if (total > limits.maxTotalEmbeddedBytes) {
-        throw new LimitExceededError("OPC parts exceed the embedded byte limit");
+        throw limitError("OPC parts exceed the embedded byte limit", "totalBytes", total, limits.maxTotalEmbeddedBytes);
       }
       entries.set(name, { name, method, compressedSize, uncompressedSize, localOffset });
     }

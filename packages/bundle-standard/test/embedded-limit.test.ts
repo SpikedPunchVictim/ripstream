@@ -164,6 +164,10 @@ for (const [arm, ripstream] of arms) {
       (e: unknown) => {
         assert.ok(e instanceof LimitExceededError, String(e));
         assert.match((e as Error).message, /Embedded count 1001 exceeds 1000/);
+        // In process and across the boundary alike (tikajs-mz56).
+        assert.equal((e as LimitExceededError).limit, "embeddedResources");
+        assert.equal((e as LimitExceededError).observed, 1001);
+        assert.equal((e as LimitExceededError).max, 1000);
         return true;
       },
     );

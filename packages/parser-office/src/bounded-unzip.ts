@@ -3,7 +3,7 @@ import {
   inflateBounded,
   OutputBudget,
   MalformedDocumentError,
-  LimitExceededError,
+  LimitExceededError, limitError,
   type ParseLimits,
 } from "@spikedpunch/ripstream-core";
 import { Unzip, UnzipInflate, UnzipPassThrough, type UnzipFile } from "fflate";
@@ -99,7 +99,7 @@ function centralDirectoryZip(data: Uint8Array, limits: ParseLimits): BoundedZip 
     if (name.endsWith("/")) continue;
     count += 1;
     if (count > limits.maxZipEntries) {
-      throw new LimitExceededError(`ZIP entries exceed ${limits.maxZipEntries}`);
+      throw limitError(`ZIP entries exceed ${limits.maxZipEntries}`, "zipEntries", count, limits.maxZipEntries);
     }
     entries.set(name, { method, compressedSize, localOffset });
   }
@@ -107,7 +107,7 @@ function centralDirectoryZip(data: Uint8Array, limits: ParseLimits): BoundedZip 
 
   const total = new OutputBudget(
     data.byteLength,
-    { maxOutputBytes: limits.maxTotalEmbeddedBytes, maxRatio: limits.maxDecompressionRatio },
+    { maxOutputBytes: limits.maxTotalEmbeddedBytes, maxRatio: limits.maxDecompressionRatio, outputLimit: "totalBytes" },
     "ZIP package",
   );
 
@@ -134,7 +134,7 @@ function centralDirectoryZip(data: Uint8Array, limits: ParseLimits): BoundedZip 
       let bytes: Uint8Array;
       if (entry.method === 0) {
         if (compressed.byteLength > effectiveOutputLimit(compressed.byteLength, entryLimits)) {
-          throw new LimitExceededError(`ZIP entry ${name} exceeds ${entryLimits.maxOutputBytes} bytes`);
+          throw limitError(`ZIP entry ${name} exceeds ${entryLimits.maxOutputBytes} bytes`, "entryBytes", compressed.byteLength, entryLimits.maxOutputBytes);
         }
         bytes = compressed;
       } else if (entry.method === 8) {
@@ -173,7 +173,7 @@ function streamingZip(data: Uint8Array, limits: ParseLimits): BoundedZip {
   scan(data, (file) => {
     entries += 1;
     if (entries > limits.maxZipEntries) {
-      throw new LimitExceededError(`ZIP entries exceed ${limits.maxZipEntries}`);
+      throw limitError(`ZIP entries exceed ${limits.maxZipEntries}`, "zipEntries", entries, limits.maxZipEntries);
     }
     ordinals.set(file.name, entries);
     compressedSizes.set(file.name, file.size ?? data.byteLength);
@@ -182,7 +182,7 @@ function streamingZip(data: Uint8Array, limits: ParseLimits): BoundedZip {
 
   const total = new OutputBudget(
     data.byteLength,
-    { maxOutputBytes: limits.maxTotalEmbeddedBytes, maxRatio: limits.maxDecompressionRatio },
+    { maxOutputBytes: limits.maxTotalEmbeddedBytes, maxRatio: limits.maxDecompressionRatio, outputLimit: "totalBytes" },
     "ZIP package",
   );
 

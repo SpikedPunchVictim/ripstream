@@ -134,7 +134,7 @@ async function collectParts(
     // A DTD entity declaration is refused before any XML parser sees it: expansion is the billion-laughs vector, and
     // ripstream never expands DTD entities. Tika's limit trips on the expansion; this names the same limit up front.
     if ((name.endsWith(".xml") || name.endsWith(".rels")) && containsAscii(bytes, "<!ENTITY")) {
-      throw new LimitExceededError("XML entity expansion exceeds the expanded-size limit");
+      throw new LimitExceededError("XML entity expansion exceeds the expanded-size limit", { limit: "entityExpansion" });
     }
     files[name] = bytes;
   }

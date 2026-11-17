@@ -1,6 +1,6 @@
 import { createDecoder } from "./charset.ts";
 import {
-  LimitExceededError,
+  LimitExceededError, limitError,
   MalformedDocumentError,
   MediaType,
   RipstreamError,
@@ -153,7 +153,7 @@ function readTree(text: string, maxDepth: number, maxNodes: number, tick: () => 
 
   parser.on("opentag", (tag) => {
     tick();
-    if (open.length >= maxDepth) throw new LimitExceededError(`ISO 19139 nesting exceeds ${maxDepth} open elements`);
+    if (open.length >= maxDepth) throw limitError(`ISO 19139 nesting exceeds ${maxDepth} open elements`, "nodeDepth", open.length + 1, maxDepth);
     if (++nodes > maxNodes) throw new LimitExceededError(`an ISO 19139 document has more than ${maxNodes} elements`);
     const { uri, local, attributes } = tag as unknown as SaxTag;
     const element: XmlElement = { uri, local, attributes: {}, children: [], text: "" };

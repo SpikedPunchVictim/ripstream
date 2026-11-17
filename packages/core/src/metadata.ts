@@ -1,4 +1,4 @@
-import { LimitExceededError } from "./errors.ts";
+import { limitError } from "./errors.ts";
 
 export type MetadataValue = string | number | boolean | Date;
 
@@ -43,9 +43,7 @@ export class Metadata implements Iterable<[string, string]> {
       this.values.set(name, [encoded]);
     } else {
       if (existing.length >= MAX_VALUES_PER_KEY) {
-        throw new LimitExceededError(
-          `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
-        );
+        throw limitError(`Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`, "other", existing.length + 1, MAX_VALUES_PER_KEY);
       }
       this.charge(valueCost(encoded));
       existing.push(encoded);
@@ -96,7 +94,7 @@ export class Metadata implements Iterable<[string, string]> {
   /** Adds `cost` to the total, or throws and changes nothing when that passes the cap. */
   private charge(cost: number): void {
     if (this.totalChars + cost > this.maxTotalChars) {
-      throw new LimitExceededError(`Metadata exceeds ${this.maxTotalChars} characters in total (names and values)`);
+      throw limitError(`Metadata exceeds ${this.maxTotalChars} characters in total (names and values)`, "metadataChars", this.totalChars + cost, this.maxTotalChars);
     }
     this.totalChars += cost;
   }
@@ -172,9 +170,7 @@ export class Metadata implements Iterable<[string, string]> {
     // Keep the per-key cap a true invariant: the replace path must bound count
     // too, not only `add` (M17 — otherwise an oversized array slips past).
     if (values.length > MAX_VALUES_PER_KEY) {
-      throw new LimitExceededError(
-        `Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`,
-      );
+      throw limitError(`Metadata key "${name}" exceeds ${MAX_VALUES_PER_KEY} values`, "other", values.length, MAX_VALUES_PER_KEY);
     }
     this.replace(name, values.map((v) => this.encodeValue(v)));
   }

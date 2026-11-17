@@ -5,6 +5,7 @@ import {
   AbortError,
   AdmissionRefusedError,
   IsolationError,
+  LimitExceededError,
   MalformedDocumentError,
   MediaType,
   Metadata,
@@ -43,9 +44,21 @@ test("every Error class core exports is one the codec builds again", () => {
   assert.deepEqual(classes.filter(([, value]) => !known.has(value)).map(([name]) => name), []);
 });
 
-test("a pool refusal crosses as itself, not as the limit it extends", () => {
+test("a limit error crosses with which limit, and the numbers it carries", () => {
+  const decoded = roundTrip(new LimitExceededError("Embedded count 3 exceeds 2", { limit: "embeddedResources", observed: 3, max: 2 })) as LimitExceededError;
+  assert.ok(decoded instanceof LimitExceededError);
+  assert.equal(decoded.limit, "embeddedResources");
+  assert.equal(decoded.observed, 3);
+  assert.equal(decoded.max, 2);
+  const bare = roundTrip(new LimitExceededError("bare")) as LimitExceededError;
+  assert.equal(bare.limit, "other");
+  assert.equal("observed" in bare, false);
+});
+
+test("a pool refusal crosses as itself, and is not a limit", () => {
   const decoded = roundTrip(new AdmissionRefusedError("Admission refused: needs 10146 MiB")) as AdmissionRefusedError;
   assert.ok(decoded instanceof AdmissionRefusedError);
+  assert.ok(!(decoded instanceof LimitExceededError));
   assert.equal(decoded.code, "ADMISSION_REFUSED");
   assert.equal(decoded.name, "AdmissionRefusedError");
 });

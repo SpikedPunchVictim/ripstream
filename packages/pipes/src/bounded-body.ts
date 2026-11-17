@@ -6,7 +6,11 @@ export const DEFAULT_MAX_BODY_BYTES = 256 * 1024 * 1024;
 /** The error a body over its cap fails with: the object it was, and the cap. */
 export const overCap = (what: string, maxBytes: number): ((declared: number | null) => Error) => {
   return (declared) =>
-    new LimitExceededError(`${what} ${declared === null ? "exceeds" : `is ${declared} bytes, over`} the cap of ${maxBytes} bytes`);
+    new LimitExceededError(`${what} ${declared === null ? "exceeds" : `is ${declared} bytes, over`} the cap of ${maxBytes} bytes`, {
+      limit: "inputBytes",
+      max: maxBytes,
+      ...(declared === null ? {} : { observed: declared }),
+    });
 };
 
 /**

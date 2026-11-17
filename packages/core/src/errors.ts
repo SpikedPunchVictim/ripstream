@@ -83,20 +83,97 @@ export class RequestTooLargeError extends RipstreamError {
   }
 }
 
+/**
+ * Which limit a `LimitExceededError` is about, so a consumer maps a refusal without reading the message:
+ *
+ * - `outputChars`: `maxOutputChars` (the text, or the recursive total). `documentOutputChars`: `maxDocumentOutputChars`.
+ * - `zipEntries`: `maxZipEntries` (zip, tar, cpio, ar, ISO and dump entries).
+ * - `ratio`: `maxDecompressionRatio`. `entryBytes`: `maxEmbeddedResourceBytes` (one entry or part).
+ *   `totalBytes`: `maxTotalEmbeddedBytes` (all of an archive).
+ * - `nodeDepth`: embedded depth (`maxNodeDepth`) and the nesting guards of mail, HTML, XML and directories.
+ * - `embeddedResources`: `maxEmbeddedResources`. `entityExpansion`: XML entity expansion (`maxXmlEntityExpansions`).
+ * - `metadataChars`: `maxMetadataTotalChars` and the per-key value cap of `Metadata`.
+ * - `inputBytes`: the input itself is too large (an isolator's `maxInputBytes`, a stream or PDF cap).
+ * - `pages`: the PDF page cap.
+ * - `memory`, `cpu`, `disk`, `resultBytes`: an isolated child's resource budget (its memory, CPU time, temporary disk,
+ *   or the result it may send back) or the memory pool that holds the result.
+ * - `other`: a format's own guard that no `ParseLimits` member names (a row, cell, packet or box count, say); the
+ *   message says which.
+ */
+export const LIMIT_REASONS = [
+  "outputChars",
+  "documentOutputChars",
+  "zipEntries",
+  "ratio",
+  "entryBytes",
+  "totalBytes",
+  "nodeDepth",
+  "embeddedResources",
+  "entityExpansion",
+  "metadataChars",
+  "inputBytes",
+  "pages",
+  "memory",
+  "cpu",
+  "disk",
+  "resultBytes",
+  "other",
+] as const;
+
+export type LimitReason = (typeof LIMIT_REASONS)[number];
+
+export function isLimitReason(value: unknown): value is LimitReason {
+  return typeof value === "string" && (LIMIT_REASONS as readonly string[]).includes(value);
+}
+
+export interface LimitExceededOptions {
+  readonly cause?: unknown;
+  /** Which limit. Omitted: `"other"`. */
+  readonly limit?: LimitReason;
+  /** How far the document got when the limit stopped it (a count, bytes or characters), when the parser knows. */
+  readonly observed?: number;
+  /** The limit's value, in the same unit as `observed`. */
+  readonly max?: number;
+}
+
+/**
+ * A document went past a limit. `code` is `LIMIT_EXCEEDED`; `limit` says which limit (see {@link LimitReason}), and
+ * `observed` and `max` carry the numbers when the site that threw knew them. All three survive the isolation boundary
+ * and a parse-worker thread unchanged; the message stays text for people.
+ */
 export class LimitExceededError extends RipstreamError {
-  constructor(message: string, options: { cause?: unknown } = {}) {
-    super("LIMIT_EXCEEDED", message, { ...options, recoverable: true });
+  readonly limit: LimitReason;
+  // `declare`: no own property unless the site knew the number, so an error without one carries none across a boundary.
+  declare readonly observed?: number;
+  declare readonly max?: number;
+
+  constructor(message: string, options: LimitExceededOptions = {}) {
+    super("LIMIT_EXCEEDED", message, {
+      ...(options.cause === undefined ? {} : { cause: options.cause }),
+      recoverable: true,
+    });
+    this.limit = options.limit ?? "other";
+    if (options.observed !== undefined) this.observed = options.observed;
+    if (options.max !== undefined) this.max = options.max;
   }
+}
+
+/** A `LimitExceededError` for `limit`, with the numbers when the site knows them: the short form of the options object. */
+export function limitError(message: string, limit: LimitReason, observed?: number, max?: number): LimitExceededError {
+  return new LimitExceededError(message, { limit, ...(observed === undefined ? {} : { observed }), ...(max === undefined ? {} : { max }) });
 }
 
 /**
  * The isolation memory pool refused a request that could never fit it: the caps the request carries (or defaults to)
  * reserve more than the whole pool. It is about the deployment and the caps, not the document, and not any one limit
- * the parse hit, so it has its own code and name; it is still a LimitExceededError (exit 3, 422, PAYLOAD_LIMIT_EXCEEDED
- * keep applying). Raised in the parent: it never crosses the child boundary.
+ * the parse hit, so it has its own code and name and is not a `LimitExceededError` (before tikajs-mz56 it was, which
+ * folded a capacity problem into a document's limit). Still recoverable, and still 422 from the server. Raised in the
+ * parent: it never crosses the child boundary.
  */
-export class AdmissionRefusedError extends LimitExceededError {
-  override readonly code: RipstreamErrorCode = "ADMISSION_REFUSED";
+export class AdmissionRefusedError extends RipstreamError {
+  constructor(message: string, options: { cause?: unknown } = {}) {
+    super("ADMISSION_REFUSED", message, { ...options, recoverable: true });
+  }
 }
 
 export class MissingDependencyError extends RipstreamError {

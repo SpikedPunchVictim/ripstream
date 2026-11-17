@@ -2,7 +2,7 @@ import { createDecoder, recordDetectedEncoding, withCharset } from "./charset.ts
 import {
   AttributesImpl,
   CONTEXT_KEYS,
-  LimitExceededError,
+  limitError,
   MediaType,
   XHTMLContentHandler,
   signalCheckpoint,
@@ -178,9 +178,7 @@ export class HtmlDocumentParser implements Parser {
           const dropped = tables.length === 0 && TABLE_PARTS.has(name);
           if (!dropped) {
             if (++depth > maxDepth) {
-              throw new LimitExceededError(
-                `HTML nesting exceeds ${maxDepth} open elements`,
-              );
+              throw limitError(`HTML nesting exceeds ${maxDepth} open elements`, "nodeDepth", depth, maxDepth);
             }
             if (name === "svg") svgDepth++;
             // The document title is the first <title>; an inline SVG's <title> is its accessible name, not the page's.

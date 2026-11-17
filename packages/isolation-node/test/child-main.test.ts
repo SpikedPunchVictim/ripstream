@@ -647,7 +647,16 @@ const throwing = (error: unknown): ChildRipstream => ({
 test("a typed error from the parser is one error frame carrying its code", async () => {
   const r = run(throwing(new LimitExceededError("Output exceeds 10 characters")), input(header()));
   await r.outcome;
-  assert.deepEqual(r.frames.slice(1), [{ t: "error", kind: "limit", code: "LIMIT_EXCEEDED", message: "Output exceeds 10 characters" }]);
+  assert.deepEqual(r.frames.slice(1), [{ t: "error", kind: "limit", code: "LIMIT_EXCEEDED", message: "Output exceeds 10 characters", limit: "other" }]);
+});
+
+test("a limit error's which-limit and numbers ride on its error frame", async () => {
+  const thrown = new LimitExceededError("Output exceeds 10 characters", { limit: "outputChars", observed: 11, max: 10 });
+  const r = run(throwing(thrown), input(header()));
+  await r.outcome;
+  assert.deepEqual(r.frames.slice(1), [
+    { t: "error", kind: "limit", code: "LIMIT_EXCEEDED", message: "Output exceeds 10 characters", limit: "outputChars", observed: 11, max: 10 },
+  ]);
 });
 
 test("a plain Error is one crash frame with no code", async () => {

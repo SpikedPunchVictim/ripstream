@@ -1,5 +1,5 @@
 import {
-  LimitExceededError,
+  limitError,
   MalformedDocumentError,
   RipstreamError,
   MediaType,
@@ -71,9 +71,7 @@ export class TarParser implements Parser {
             entry.resume();
             return;
           }
-          throw new LimitExceededError(
-            `Tar entries exceed ${ctx.limits.maxZipEntries}`,
-          );
+          throw limitError(`Tar entries exceed ${ctx.limits.maxZipEntries}`, "zipEntries", entries, ctx.limits.maxZipEntries);
         }
         if (header.type === "symlink" || header.type === "link") {
           entry.resume();
@@ -89,17 +87,13 @@ export class TarParser implements Parser {
         for await (const chunk of entry as AsyncIterable<Uint8Array>) {
           size += chunk.byteLength;
           if (size > ctx.limits.maxEmbeddedResourceBytes) {
-            throw new LimitExceededError(
-              `Tar entry ${header.name} exceeds the per-entry limit`,
-            );
+            throw limitError(`Tar entry ${header.name} exceeds the per-entry limit`, "entryBytes", size, ctx.limits.maxEmbeddedResourceBytes);
           }
           chunks.push(chunk);
         }
         total += size;
         if (total > ctx.limits.maxTotalEmbeddedBytes) {
-          throw new LimitExceededError(
-            "Tar archive exceeds the embedded byte limit",
-          );
+          throw limitError("Tar archive exceeds the embedded byte limit", "totalBytes", total, ctx.limits.maxTotalEmbeddedBytes);
         }
         if (header.type === "file") {
           await xhtml.startElement("div", "class", "package-entry");

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  AdmissionRefusedError,
   IsolationError,
   LimitExceededError,
   Metadata,
@@ -227,9 +228,10 @@ test("what a parse throws becomes the status of its input: timeout, crash, queue
     "queue.txt": new IsolationError("queue_full", "queue full"),
     "gone.txt": new IsolationError("unavailable", "no isolation"),
     "limit.txt": new LimitExceededError("too many entries"),
+    "refused.txt": new AdmissionRefusedError("needs more memory than the pool"),
     "bug.txt": new TypeError("x is not a function"),
   });
-  const ids = ["ok.txt", "timeout.txt", "crash.txt", "queue.txt", "gone.txt", "limit.txt", "bug.txt"];
+  const ids = ["ok.txt", "timeout.txt", "crash.txt", "queue.txt", "gone.txt", "limit.txt", "refused.txt", "bug.txt"];
   for (const mode of ["CONTENT_ONLY", "RMETA"] as const) {
     const { results, engine } = await runWith({ source: documents(...ids), emitter: new MemoryEmitter(), ripstream, mode, concurrency: 3 });
     assert.deepEqual(statuses(results), {
@@ -239,12 +241,13 @@ test("what a parse throws becomes the status of its input: timeout, crash, queue
       "queue.txt": "CLIENT_UNAVAILABLE_WITHIN_MS",
       "gone.txt": "CLIENT_UNAVAILABLE_WITHIN_MS",
       "limit.txt": "PAYLOAD_LIMIT_EXCEEDED",
+      "refused.txt": "PAYLOAD_LIMIT_EXCEEDED",
       "bug.txt": "UNSPECIFIED_CRASH",
     }, mode);
     assert.equal(results.find((r) => r.id === "timeout.txt")?.category, "PROCESS_CRASH");
     assert.equal(results.find((r) => r.id === "queue.txt")?.category, "INITIALIZATION_FAILURE");
     assert.equal(results.find((r) => r.id === "limit.txt")?.message, "LimitExceededError: too many entries");
-    assert.equal(engine.stats.failed, 6, mode);
+    assert.equal(engine.stats.failed, 7, mode);
     assert.equal(engine.stats.emitted, 1, mode);
   }
 });

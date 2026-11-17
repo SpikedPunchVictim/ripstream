@@ -237,7 +237,8 @@ const ERROR_CLASSES = {
   // Most specific first: the chain is walked from the error up, and the first class found wins.
   ZeroByteFileError: { type: ZeroByteFileError, make: () => new ZeroByteFileError() },
   AbortError: { type: AbortError, make: (message: string) => new AbortError(message) },
-  // Before LimitExceededError, which it extends: the chain walk takes the first class found.
+  // Not a LimitExceededError (tikajs-mz56). LimitExceededError below needs no `limit`, `observed` or `max` here: they are
+  // own primitive properties, so they are in `props` and the revive loop puts them back.
   AdmissionRefusedError: { type: AdmissionRefusedError, make: (message: string) => new AdmissionRefusedError(message) },
   EmptyDocumentError: { type: EmptyDocumentError, make: (message: string) => new EmptyDocumentError(message) },
   EncryptedDocumentError: { type: EncryptedDocumentError, make: (message: string) => new EncryptedDocumentError(message) },
