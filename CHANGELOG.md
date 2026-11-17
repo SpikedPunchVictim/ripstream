@@ -4,6 +4,22 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### docx heading styles are written as h1-h6, as Tika writes them (`tikajs-9zu2`)
+
+Changed: a docx paragraph in a heading style is written as the heading Tika writes, so `handlerType: "html"` has `<h1>`-`<h6>` and
+`"markdown"` has `#` marks where both had plain paragraphs. The rule is Tika 4.2.0's, read from its answer: the style's **name** in
+`word/styles.xml` decides (never the id, so no styles.xml means no headings); `Title` is `<h1 class="title">`, `Subtitle` is
+`<h2 class="subtitle">`, and a name that starts with `heading` or `Heading` is `<hN>` for the digit it ends in (1 when it ends in
+none), N at most 6. A paragraph in a table cell stays plain, as Tika writes no tags in a cell. The text (`handlerType: "text"`, the
+default) is byte-identical.
+Segments: the `h1`-`h6` tags now give the segments' heading chain too. `Title` was and stays level 1, as Tika writes it `<h1>`, so a
+`Heading1` after it replaces it in the chain; a `Subtitle` is a level-2 heading, so what follows a Subtitle is labelled
+`Title > Subtitle`, and a style named `heading 7`-`heading 9` is a level-6 heading (it was none). A style that Word gave the English id but
+another name keeps its heading level in the chain, and is not written as a heading tag.
+Not changed: ripstream still writes `<p>` for a styled paragraph where Tika writes `<p class="quote">`, and an empty heading paragraph
+writes nothing where Tika writes `<h1></h1>`. word/styles.xml is now read for every docx, not only when segments are asked for; one
+that does not parse is read as having no styles.
+
 ### Typed warnings on results, and `onLowYield: "throw"` (`tikajs-icjf`)
 
 Added: `ParseResult.warnings` and `ParseRecord.warnings`, a typed list of what a result did not read, so a consumer that must see every

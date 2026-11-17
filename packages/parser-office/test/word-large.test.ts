@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   BodyContentHandler,
   CONTEXT_KEYS,
+  ToHTMLContentHandler,
   Metadata,
   ParseContext,
   RipstreamInputStream,
@@ -20,12 +21,15 @@ const OVER_THE_THRESHOLD = 8 * 1024 * 1024 + 1024;
 const run = (text: string): string => `<w:r><w:t>${text}</w:t></w:r>`;
 const para = (text: string, style?: string): string =>
   `<w:p>${style === undefined ? "" : `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>`}${run(text)}</w:p>`;
+const named = (id: string, name: string): string => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/></w:style>`;
 const styles =
-  `<w:styles ${W}><w:style w:type="paragraph" w:styleId="berschrift2"><w:name w:val="heading 2"/></w:style></w:styles>`;
+  `<w:styles ${W}>${named("berschrift2", "heading 2")}${named("Heading1", "heading 1")}${named("Title", "Title")}${named("Subtitle", "Subtitle")}</w:styles>`;
 
 /** Every construct the two paths must read alike: structure, wrappers, skipped content, text boxes and special characters. */
 const BODY = [
   para("Title", "Title"),
+  para("the title", "Title"),
+  para("the subtitle", "Subtitle"),
   "<w:p/>",
   para("Intro"),
   para("Localized", "berschrift2"),
@@ -47,7 +51,7 @@ interface Parsed {
   readonly text: string;
 }
 
-async function parse(body: string, padding: number, withHints: boolean): Promise<Parsed> {
+async function parse(body: string, padding: number, withHints: boolean, html = false): Promise<Parsed> {
   // An XML comment adds bytes the parsers ignore, so the same document is read by either path.
   const pad = padding === 0 ? "" : `<!--${"x".repeat(padding)}-->`;
   const raw = strToU8(`<w:document ${W}><w:body>${pad}${body}</w:body></w:document>`);
@@ -72,7 +76,7 @@ async function parse(body: string, padding: number, withHints: boolean): Promise
   const ctx = new ParseContext();
   if (withHints) ctx.set(CONTEXT_KEYS.SEGMENT_HINTS, log);
   const stream = await RipstreamInputStream.from(zipSync(files));
-  const handler = new BodyContentHandler();
+  const handler = html ? new ToHTMLContentHandler() : new BodyContentHandler();
   try {
     await new OoxmlParser().parse(stream, handler, new Metadata(), ctx);
   } finally {
@@ -95,4 +99,14 @@ test("a very large document.xml has the text of the normal path, with the hints 
   assert.equal(largeOn.text, normal.text);
   assert.equal(largeOff.text, normal.text);
   assert.deepEqual(largeOff.hints, []);
+});
+
+test("a very large document.xml writes the heading tags of the normal path, and none in a table cell (tikajs-9zu2)", async () => {
+  const normal = await parse(BODY, 0, false, true);
+  const large = await parse(BODY, OVER_THE_THRESHOLD, false, true);
+  assert.equal(large.text, normal.text);
+  assert.match(normal.text, /<h1 class="title">the title<\/h1>/);
+  assert.match(normal.text, /<h2 class="subtitle">the subtitle<\/h2>/);
+  assert.match(normal.text, /<h2>Localized<\/h2>/);
+  assert.match(normal.text, /<td><p>r1c2<\/p>/);
 });

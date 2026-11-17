@@ -88,7 +88,7 @@ export class OoxmlParser implements Parser {
       if (packageFile.has("EncryptedPackage") || packageFile.has("EncryptionInfo")) {
         throw new EncryptedDocumentError("OOXML document is encrypted");
       }
-      files = await collectParts(packageFile, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS) !== undefined);
+      files = await collectParts(packageFile);
       if (
         packageFile.has("word/vbaProject.bin") ||
         packageFile.has("xl/vbaProject.bin") ||
@@ -124,13 +124,12 @@ export class OoxmlParser implements Parser {
 
 async function collectParts(
   packageFile: OpcPackage,
-  withStyles: boolean,
 ): Promise<Record<string, Uint8Array>> {
   const files: Record<string, Uint8Array> = {};
   for (const entry of packageFile.names) {
     const name = canonicalPartName(entry);
-    // word/styles.xml names the heading styles whose ids are localized; only the segments' labels use it.
-    if (!neededPart(name) && !(withStyles && name === WORD_STYLES)) continue;
+    // word/styles.xml names the paragraph styles: the heading tags and the segments' heading labels read it.
+    if (!neededPart(name) && name !== WORD_STYLES) continue;
     const bytes = await packageFile.read(entry);
     // A DTD entity declaration is refused before any XML parser sees it: expansion is the billion-laughs vector, and
     // ripstream never expands DTD entities. Tika's limit trips on the expansion; this names the same limit up front.
@@ -221,9 +220,8 @@ async function renderWord(
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
 ): Promise<void> {
-  if (hints !== undefined) headingStyles.set(hints, wordHeadingStyles(parsePart(files, WORD_STYLES)));
   // Word's own paragraph number, empty paragraphs included, for a block's para= location.
-  const paragraphs: WordParagraphCounter = { value: 0 };
+  const paragraphs: WordRenderState = { value: 0, styleNames: wordStyleNames(files), cells: 0 };
   const raw = files["word/document.xml"];
   if (raw !== undefined && raw.byteLength > LARGE_WORD_DOCUMENT_BYTES) {
     await renderLargeWordDocument(decode(raw), xhtml, hints, paragraphs);
@@ -254,9 +252,14 @@ const LARGE_WORD_CHUNK_CHARS = 256 * 1024;
 const WORD_BLOCK_WRAPPERS = new Set(["sdt", "sdtContent", "customXml", "ins", "del", "moveTo", "hdr", "ftr"]);
 const WORD_ROW_WRAPPERS = new Set(["sdt", "sdtContent", "customXml"]);
 
-/** Word's paragraph number in the part, empty paragraphs included (a docx para= location). */
-interface WordParagraphCounter {
+/** What the walk of word parts carries: Word's paragraph number, the paragraph style names, and whether a cell is open. */
+interface WordRenderState {
+  /** Word's paragraph number in the part, empty paragraphs included (a docx para= location). */
   value: number;
+  /** word/styles.xml: the name of each style, by id. */
+  readonly styleNames: ReadonlyMap<string, string>;
+  /** Table cells open around the paragraph being written: Tika writes no heading tags inside a cell. */
+  cells: number;
 }
 
 /** Where the streaming read is, by the kinds of block renderWordBlocks, renderWordTable and rowCells walk. */
@@ -272,7 +275,7 @@ async function renderLargeWordDocument(
   xml: string,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   // renderWord reads the first w:body, or the root when there is none.
   const hasBody = /<(?:[^\s<>/:]+:)?body[\s/>]/.test(xml);
@@ -334,7 +337,10 @@ async function renderLargeWordDocument(
     frames.push(frame);
     if (frame === "table") queue.push(() => xhtml.startElement("table"));
     else if (frame === "row") queue.push(() => xhtml.startElement("tr"));
-    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => xhtml.startElement("td"));
+    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => {
+        paragraphs.cells++;
+        return xhtml.startElement("td");
+      });
   });
   const onText = (text: string): void => {
     const node = open[open.length - 1];
@@ -356,7 +362,10 @@ async function renderLargeWordDocument(
     const parent = frames[frames.length - 1];
     if (frame === "table") queue.push(() => xhtml.endElement("table"));
     else if (frame === "row") queue.push(() => xhtml.endElement("tr"));
-    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => xhtml.endElement("td"));
+    else if (frame === "block" && (parent === "row" || parent === "wrapper")) queue.push(() => {
+      paragraphs.cells--;
+      return xhtml.endElement("td");
+    });
   });
 
   const flush = async (): Promise<void> => {
@@ -383,7 +392,7 @@ async function renderWordPartGroup(
   className: string,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   for (const name of Object.keys(files).filter((key) => pattern.test(key)).sort()) {
     const root = parsePart(files, name);
@@ -401,7 +410,7 @@ async function renderNotes(
   className: string,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   const root = parsePart(files, part);
   if (root === undefined) return;
@@ -426,7 +435,7 @@ async function renderWordBlocks(
   node: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   for (const child of node.children) {
     const name = localName(child.name);
@@ -447,42 +456,48 @@ async function renderWordParagraph(
   paragraph: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   const text = wordParagraphText(paragraph);
   // Word's own paragraph number: empty paragraphs and those in table cells count, so a location holds when a consumer maps it back.
   const number = ++paragraphs.value;
   if (text.length > 0) {
+    const styleId = paragraphStyleId(paragraph);
+    const tag = paragraphs.cells === 0 ? headingTag(styleId === undefined ? undefined : paragraphs.styleNames.get(styleId)) : undefined;
     if (hints !== undefined) {
       hints.para(number);
-      const level = headingLevel(paragraph, headingStyles.get(hints));
+      // The tag's level when there is one, so the segments' heading chain and the h1-h6 written agree.
+      const level = tag?.level ?? headingLevel(styleId, paragraphs.styleNames);
       if (level > 0) hints.heading(level);
     }
-    await xhtml.startElement("p");
+    const name = tag === undefined ? "p" : `h${tag.level}`;
+    if (tag?.className === undefined) await xhtml.startElement(name);
+    else await xhtml.startElement(name, "class", tag.className);
     await xhtml.characters(text);
-    await xhtml.endElement("p");
+    await xhtml.endElement(name);
   }
   for (const box of textBoxes(paragraph)) {
     await renderWordBlocks(box, xhtml, hints, paragraphs);
   }
 }
 
-/**
- * The heading level of each paragraph style whose id Word localized (`berschrift1`, `Titre1`), by the name word/styles.xml gives it
- * (`heading 1`: the names of the built-in styles are English in every language). Kept by the hints of the parse that read it.
- */
-const headingStyles = new WeakMap<SegmentHints, ReadonlyMap<string, number>>();
-
-function wordHeadingStyles(styles: XmlNode | undefined): ReadonlyMap<string, number> {
-  const levels = new Map<string, number>();
-  if (styles === undefined) return levels;
+/** word/styles.xml: the name of every style, by id. An unreadable part names none, so no paragraph is a heading by name. */
+function wordStyleNames(files: Record<string, Uint8Array>): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  let styles: XmlNode | undefined;
+  try {
+    styles = parsePart(files, WORD_STYLES);
+  } catch {
+    return names;
+  }
+  if (styles === undefined) return names;
   for (const style of descendantsNamed(styles, "style")) {
     const id = attribute(style, "styleId");
     const name = childrenNamed(style, "name")[0];
-    const level = name === undefined ? 0 : styleNameLevel(attribute(name, "val") ?? "");
-    if (id !== undefined && level > 0) levels.set(id, level);
+    const value = name === undefined ? undefined : attribute(name, "val");
+    if (id !== undefined && value !== undefined) names.set(id, value);
   }
-  return levels;
+  return names;
 }
 
 function styleNameLevel(name: string): number {
@@ -492,16 +507,37 @@ function styleNameLevel(name: string): number {
 }
 
 /**
- * The level of a paragraph in a heading style (`Heading1`-`Heading6`; `Title` is 1), for segment labels; 0 otherwise. The id says
- * so for the English ids; `styles` (see headingStyles) for the others.
+ * The heading Tika writes for a paragraph style, by the style's name in word/styles.xml (measured against Tika 4.2.0,
+ * tikajs-9zu2): `Title` is `<h1 class="title">` and `Subtitle` `<h2 class="subtitle">`; a name that starts with `heading` or
+ * `Heading` is `<hN>` for the digit it ends in (1 when it ends in none), N capped at 6. Tika reads only the name, never the
+ * id: no styles.xml, or a name it does not know, is a plain paragraph, and so is a name in another case (`HEADING 1`).
+ * Tika writes `<h0>` for `heading 0`; that is not an element, so it is `<h1>` here.
  */
-function headingLevel(paragraph: XmlNode, styles: ReadonlyMap<string, number> | undefined): number {
+function headingTag(name: string | undefined): { level: number; className?: string } | undefined {
+  if (name === undefined) return undefined;
+  if (name === "Title") return { level: 1, className: "title" };
+  if (name === "Subtitle") return { level: 2, className: "subtitle" };
+  if (!name.startsWith("heading") && !name.startsWith("Heading")) return undefined;
+  const digit = /[0-9]$/.exec(name);
+  return { level: Math.min(6, Math.max(1, digit === null ? 1 : Number(digit[0]))) };
+}
+
+function paragraphStyleId(paragraph: XmlNode): string | undefined {
   const properties = childrenNamed(paragraph, "pPr")[0];
   const style = properties === undefined ? undefined : childrenNamed(properties, "pStyle")[0];
-  const id = style === undefined ? undefined : attribute(style, "val");
+  return style === undefined ? undefined : attribute(style, "val");
+}
+
+/**
+ * The level of a paragraph in a heading style (`Heading1`-`Heading6`; `Title` is 1), for segment labels when there is no tag
+ * (headingTag): 0 otherwise. The id says so for the English ids; the name `styleNames` gives the id for the others.
+ */
+function headingLevel(id: string | undefined, styleNames: ReadonlyMap<string, string>): number {
   if (id === undefined) return 0;
   const level = styleNameLevel(id);
-  return level > 0 ? level : styles?.get(id) ?? 0;
+  if (level > 0) return level;
+  const name = styleNames.get(id);
+  return name === undefined ? 0 : styleNameLevel(name);
 }
 
 /**
@@ -572,14 +608,19 @@ async function renderWordTable(
   table: XmlNode,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
-  paragraphs: WordParagraphCounter,
+  paragraphs: WordRenderState,
 ): Promise<void> {
   await xhtml.startElement("table");
   for (const row of childrenNamed(table, "tr")) {
     await xhtml.startElement("tr");
     for (const cell of rowCells(row)) {
       await xhtml.startElement("td");
-      await renderWordBlocks(cell, xhtml, hints, paragraphs);
+      paragraphs.cells++;
+      try {
+        await renderWordBlocks(cell, xhtml, hints, paragraphs);
+      } finally {
+        paragraphs.cells--;
+      }
       await xhtml.endElement("td");
     }
     await xhtml.endElement("tr");

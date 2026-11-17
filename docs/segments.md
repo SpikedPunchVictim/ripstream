@@ -169,7 +169,7 @@ only when segments are on, and a hint never touches the SAX stream:
 | `layout("table")` | CsvParser's table: the document is one table, so no `table=` |
 | `row(n)` | the sheet's own row number: OOXML spreadsheet `<row r>`; xls the row's index; xlsb the row header's number; ods the count of rows before it, with `number-rows-repeated` |
 | `col(n)` | the sheet's own column number of the next cell, when it is not the one after the last: xlsb (empty cells are not written), ods (`number-columns-repeated` and covered cells) |
-| `heading(level, title?)` | OOXML word heading styles (`Title`, `Heading1`-`Heading6`, or a style whose `word/styles.xml` name is `heading N` or `Title`, whatever its localized id), markdown `#` and setext (`title` is the text without the underline) |
+| `heading(level, title?)` | OOXML word heading styles (`Title` is level 1 and `Subtitle` level 2, as Tika writes them `<h1>` and `<h2>`; `Heading1`-`Heading6`, or a style whose `word/styles.xml` name is `heading N`, whatever its localized id; the same styles `handlerType: "html"` writes as `<h1>`-`<h6>`), markdown `#` and setext (`title` is the text without the underline) |
 | `line(n)` | markdown: a block's source line |
 | `shape(name, title)` | OOXML presentation: `cNvPr@name`, title placeholders |
 | `pageLabel(label)` | PDF: the next page's `/PageLabels` label, an additive first label of its segments (the location still counts pages from 1) |
