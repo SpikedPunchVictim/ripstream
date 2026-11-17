@@ -60,3 +60,9 @@ export {
 export type { ChildReuseOptions } from "./reuse.ts";
 export type { ChildReuseStats, ChildRetireReason } from "./warm.ts";
 export { runChildMain, type ChildMainOptions, type ChildRipstream } from "./child-main.ts";
+export {
+  classifyWorkerFailure,
+  type WorkerFailureFacts,
+  type WorkerFailureKind,
+  type WorkerFailureVerdict,
+} from "./worker-failure.ts";

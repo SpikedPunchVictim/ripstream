@@ -642,6 +642,13 @@ stays at version 1: `limits` is an optional field, and the parent and the child 
 install, so there is no version skew to bridge. An allowlisted type parsed in this process takes the same limits. A limit
 raised above what the pool can hold is still answered per request (`ADMISSION_REFUSED`), not at construction.
 
+## Hosting in your own Worker
+
+An application that cannot start a child process can host a Ripstream in a `worker_threads` Worker it supervises itself.
+[worker-hosting.md](worker-hosting.md) says what to set there, that the heap limit does not bound total memory, and how
+`ERR_WORKER_OUT_OF_MEMORY`, `terminate()` and the Worker's `'error'` and `'exit'` events map to the errors (and the
+`IsolationFailureReason`) of this page, through `classifyWorkerFailure`.
+
 ## Limits of the design
 
 - **Parser code is trusted.** The disk budget assumes it too: code in the child can hide its files from the poll

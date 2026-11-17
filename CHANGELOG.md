@@ -22,6 +22,19 @@ hierarchy now name the class), but `error instanceof LimitExceededError` is **fa
 (an internal class) was `"maxEmbeddedResources"` and is now `"embeddedResources"`. Public API change (`api-report.json`);
 docs/migration.md and docs/isolation.md have the note.
 
+### Hosting Ripstream in your own Worker: `classifyWorkerFailure` and docs/worker-hosting.md (`tikajs-yg2g`)
+
+Added: `classifyWorkerFailure(facts)` in `@spikedpunch/ripstream-isolation-node` (with `WorkerFailureFacts`, `WorkerFailureKind`,
+`WorkerFailureVerdict`): a pure function from what a caller saw of a dead `worker_threads` Worker (its `'error'` value, its `'exit'` code,
+whether the caller ended it with `terminate()` for a deadline or a cancellation) to the error the child isolator would have thrown and the
+`IsolationFailureReason` where it has one: `ERR_WORKER_OUT_OF_MEMORY` is `LimitExceededError` (`limit: "memory"`, no reason, as for a
+child's heap death), a caller's own `terminate()` is `ParseTimeoutError` or `AbortError`, a Worker that cannot start is `unavailable`, and an
+uncaught exception, an exit without an answer or a `terminate()` nobody asked for is `crash`. New page docs/worker-hosting.md (linked from
+docs/isolation.md): the options and limits to set in a Worker, the expected errors, the mapping table, how to test the mapping (including
+how to get `IsolationError("crash")` from the child isolator with a three-line `childModule`), and, measured, that `maxOldGenerationSizeMb`
+bounds the V8 heap only (a Worker with a 32 MB heap held 1000 MiB of Buffers). Tests: a real Worker parses, runs out of heap and is
+terminated, each mapped through the helper. Public API addition (`api-report.json`).
+
 ### Per-request `maxInputBytes`, refused in the parent before a child is spawned (`tikajs-is31`)
 
 Added: `ParseLimits.maxInputBytes` (optional; unset means no cap in process). A parse whose input is larger fails with a `LimitExceededError`
