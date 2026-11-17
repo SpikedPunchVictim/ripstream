@@ -14,7 +14,8 @@ import { StaticPasswordProvider, type PasswordProvider } from "./passwords.ts";
 import { BodyContentHandler, WriteOutContentHandler } from "./handlers/text.ts";
 import { assertHandlerType, createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { OutputLimitContentHandler } from "./handlers/limits.ts";
-import { ParseTimeoutError } from "./errors.ts";
+import { limitError, ParseTimeoutError } from "./errors.ts";
+import { declaredSize } from "./streams.ts";
 import { isEmbeddedCountLimit, noteEmbeddedLimit } from "./embedded.ts";
 import { classifyFailure, isWriteLimitReached } from "./failure.ts";
 import { noteEmptyParser, recordFailure, RecursiveParserWrapper, type ParseRecord } from "./recursive.ts";
@@ -406,6 +407,14 @@ export class Ripstream {
       throw new TypeError(`emailHeaders must be a boolean, got ${typeof options.emailHeaders}`);
     }
     const limits = this.limitsFor(options.limits);
+    const maxInputBytes = limits?.maxInputBytes;
+    if (maxInputBytes !== undefined) {
+      // Refused before the parse timer, the context or the stream exist, when the size is known without reading.
+      const size = await declaredSize(source);
+      if (size !== null && size > maxInputBytes) {
+        throw limitError(`Input of ${size} bytes exceeds the maximum of ${maxInputBytes} bytes`, "inputBytes", size, maxInputBytes);
+      }
+    }
     const timeout = limits?.maxParseMillis ?? DEFAULT_LIMITS.maxParseMillis;
     const timeoutController = new AbortController();
     const timer =
@@ -440,6 +449,7 @@ export class Ripstream {
     const stream = await RipstreamInputStream.from(source, {
       context: ctx,
       signal,
+      ...(maxInputBytes === undefined ? {} : { maxBytes: maxInputBytes }),
     });
     try {
       const result = await action(stream, metadata, ctx);

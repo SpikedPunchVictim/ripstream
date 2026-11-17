@@ -65,6 +65,7 @@ Defaults and what each enforces are in [security.md](security.md#resource-limits
 
 | Limit | Default | At the limit | Opt-in to keep what was read |
 | --- | --- | --- | --- |
+| `maxInputBytes` | none (isolator: 100 MiB) | `LimitExceededError` with `limit: "inputBytes"`, `observed` (the input's size) and `max`, before any parsing; where the size is known (bytes, Blob, `{ path }`) nothing is read, and an isolator refuses it before a child is spawned or pool memory is reserved; a stream of unknown length is refused as soon as it passes the cap | none |
 | `maxOutputChars` | 100,000 | `LimitExceededError` ("Output exceeds 100000 characters"; "Recursive output exceeds ..." in `parseRecursive`) | `onOutputLimit: "truncate"`: text so far, `tk:exception:write-limit-reached` = `true` |
 | `maxZipEntries` | 10,000 | `LimitExceededError` ("ZIP entries exceed 10000") | `onEmbeddedLimit: "truncate"`: first N entries in archive order, five keys: `tk:exception:embedded-resource-limit-reached` = `true`, `-limit` (which), `-max`, `-seen`, `-read` |
 | `maxEmbeddedResources` | 10,000 | `LimitExceededError` ("Embedded count 10001 exceeds 10000"), a whole-parse limit | the same `onEmbeddedLimit: "truncate"`, noted on the container |
@@ -150,7 +151,7 @@ a limit: HTTP 422, CLI exit 3, pipes `PAYLOAD_LIMIT_EXCEEDED`.
 | `embeddedResources` | `maxEmbeddedResources` |
 | `entityExpansion` | an XML entity declaration (`maxXmlEntityExpansions`); no numbers |
 | `metadataChars` | `maxMetadataTotalChars` |
-| `inputBytes` | the input is too large: the isolator's `maxInputBytes`, a bounded read, a fetched body or a PDF over its cap |
+| `inputBytes` | the input is too large: `maxInputBytes` (a call's own limit, or the isolator's), a bounded read, a fetched body or a PDF over its cap |
 | `pages` | the PDF page cap |
 | `memory`, `cpu`, `disk` | an isolated child's memory, CPU-time or temporary-disk budget; `memory` also covers a parse worker that ran out of heap |
 | `resultBytes` | the result an isolated child may send back, or a `maxOutputChars` whose result would not fit the isolation ceiling |

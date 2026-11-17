@@ -158,6 +158,25 @@ export async function* toAsyncIterable(
   throw new TypeError("Unsupported input source");
 }
 
+/**
+ * The size of `source` when it is known without reading it: bytes, an ArrayBuffer, a Blob, or a `{ path }` (stat'ed; an
+ * unreadable path is `null`, so reading it reports the real error). `null` for streams and URLs.
+ */
+export async function declaredSize(source: InputSource): Promise<number | null> {
+  if (source instanceof Uint8Array || source instanceof ArrayBuffer) return source.byteLength;
+  if (typeof Blob !== "undefined" && source instanceof Blob) return source.size;
+  if (isReadableStream(source) || isAsyncIterable(source)) return null;
+  if (typeof source === "object" && source !== null && "path" in source) {
+    const { stat } = await import("node:fs/promises");
+    try {
+      return (await stat(source.path)).size;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function toReadableStream(
   source: InputSource,
   options: StreamOptions = {},

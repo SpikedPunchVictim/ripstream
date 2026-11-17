@@ -560,6 +560,55 @@ test("maxInputBytes is enforced before anything is detected, read for routing or
   assert.equal(h.runs(), 1);
 });
 
+test("a request's limits.maxInputBytes lowers the isolator's cap and is refused before routing, admission or a spawn (tikajs-is31)", async () => {
+  const h = setup({ config: { ...STRICT, maxInputBytes: 1000 } });
+  const isolator = await h.create();
+  const refused = (observed: number, max: number) => (error: unknown) =>
+    error instanceof LimitExceededError && error.limit === "inputBytes" && error.observed === observed && error.max === max;
+  await assert.rejects(isolator.isolate({ input: bytes("12345678901"), limits: { maxInputBytes: 10 } }), refused(11, 10));
+  const path = join(scratch, "per-request.bin");
+  await writeFile(path, "12345678901");
+  await assert.rejects(isolator.isolate({ input: { path }, limits: { maxInputBytes: 10 } }), refused(11, 10));
+  assert.equal(h.runs(), 0, "no child was spawned");
+  assert.equal(h.ripstream.detectCalls.length, 0, "nothing was detected");
+  assert.equal(isolator.status().pool?.reservedMb, 0, "nothing was reserved from the pool");
+
+  assert.equal((await isolator.isolate({ input: bytes("1234567890"), limits: { maxInputBytes: 10 } })).kind, "text", "exactly the cap is accepted");
+  assert.equal(h.runs(), 1);
+  // Without one, the isolator's own cap applies.
+  await assert.rejects(isolator.isolate({ input: new Uint8Array(1001) }), refused(1001, 1000));
+  assert.equal(h.runs(), 1);
+});
+
+test("a request cannot raise maxInputBytes above the isolator's own", async () => {
+  const h = setup({ config: { ...STRICT, maxInputBytes: 10 } });
+  const isolator = await h.create();
+  await assert.rejects(
+    isolator.isolate({ input: bytes("123"), limits: { maxInputBytes: 11 } }),
+    (error) => error instanceof RangeError && /maxInputBytes/.test(error.message),
+  );
+  assert.equal(h.runs(), 0);
+});
+
+test("limits.maxInputBytes answers alike for an isolated, an in-process and a mode-off request", async () => {
+  const errors: Array<LimitExceededError> = [];
+  const variants = [
+    setup({ config: STRICT }), // application/zip: isolated
+    setup({ config: STRICT, ripstream: fakeRipstream({ type: "text/plain" }) }), // allowlisted: parsed in this process
+    setup({ config: { mode: "off" } }),
+  ];
+  for (const h of variants) {
+    const error = await (await h.create()).isolate({ input: new Uint8Array(11), limits: { maxInputBytes: 10 } }).catch((e: unknown) => e);
+    assert.ok(error instanceof LimitExceededError);
+    errors.push(error);
+    assert.equal(h.runs(), 0);
+    assert.equal(h.ripstream.parseCount(), 0);
+  }
+  const shapes = errors.map((error) => [error.limit, error.observed, error.max, error.message]);
+  assert.deepEqual(shapes[1], shapes[0]);
+  assert.deepEqual(shapes[2], shapes[0]);
+});
+
 test("the default maxInputBytes is 100 MiB", async () => {
   assert.equal((await setup().create()).status().maxInputBytes, 100 * MIB);
 });

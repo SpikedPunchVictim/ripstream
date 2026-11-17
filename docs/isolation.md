@@ -625,6 +625,7 @@ they take the same path as a call's own, merged under it, and are checked when t
 | `maxEmbeddedResources` | `maxEmbeddedResources` | the child's embedded-resource counter | non-negative integer |
 | `maxNodeDepth` | `maxNodeDepth` | the child's recursion walk | non-negative integer |
 | `maxParseMillis` | `maxParseMillis` | the child's parse timer | at most `maxTaskMillis` less the margin; the parent's kill timer is the real bound |
+| `maxInputBytes` | `limits.maxInputBytes` | the parent, before routing, pool admission or a spawn (bytes: their length; `{ path }`: stat); the child and an in-process parse apply it again | non-negative integer, at most the isolator's own `maxInputBytes` (a request can lower the operator's cap, never raise it); omitted: the isolator's (100 MiB by default) |
 | `maxDocumentOutputChars` | `limits.maxDocumentOutputChars` | the child's per-document output handler (`parseRecursive`) | `-1` or a non-negative number; the shared `maxOutputChars` still caps the total |
 | `maxZipEntries` | `limits.maxZipEntries` | the child's zip, tar, cpio, ar, ISO and dump readers | non-negative integer |
 | `maxDecompressionRatio` | `limits.maxDecompressionRatio` | the child's inflate budgets (zip, OPC, gzip and the other codecs) | positive finite number |

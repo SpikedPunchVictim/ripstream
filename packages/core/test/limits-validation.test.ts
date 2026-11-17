@@ -13,6 +13,7 @@ import { MediaType } from "../src/media-type.ts";
  */
 
 const COUNT_LIMITS = [
+  "maxInputBytes",
   "maxEmbeddedResources",
   "maxEmbeddedResourceBytes",
   "maxTotalEmbeddedBytes",

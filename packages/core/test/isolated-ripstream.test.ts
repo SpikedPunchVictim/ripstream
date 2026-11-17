@@ -406,6 +406,7 @@ test("detect stays in this process: it is the detector's answer and never reache
 });
 
 const EVERY_EXTRA_LIMIT = {
+  maxInputBytes: 1234,
   maxDocumentOutputChars: 40,
   maxEmbeddedResourceBytes: 1000,
   maxTotalEmbeddedBytes: 5000,

@@ -9,6 +9,8 @@ import { toAsyncIterable, type StreamOptions } from "./streams.ts";
 export interface RipstreamInputStreamOptions extends StreamOptions {
   readonly spoolThreshold?: number;
   readonly context?: ParseContext;
+  /** Reading more than this many bytes fails with a LimitExceededError (`inputBytes`); `ParseLimits.maxInputBytes`. */
+  readonly maxBytes?: number;
 }
 
 /**
@@ -30,6 +32,7 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
   private readonly iterator: AsyncIterator<Uint8Array>;
   private readonly spoolThreshold: number;
   private readonly signal: AbortSignal | undefined;
+  private readonly maxBytes: number | undefined;
   private readonly chunks: Uint8Array[] = [];
   // Where the last in-memory read started: chunks[scanIndex] begins at byte
   // scanStart. Sequential reads resume here instead of scanning from chunk 0.
@@ -51,6 +54,7 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
     this.iterator = iterator;
     this.spoolThreshold = options.spoolThreshold ?? 1024 * 1024;
     this.signal = options.signal;
+    this.maxBytes = options.maxBytes;
   }
 
   get hasFile(): boolean {
@@ -207,6 +211,14 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       return;
     }
     if (value.byteLength === 0) return;
+    if (this.maxBytes !== undefined && this.bytesStored + value.byteLength > this.maxBytes) {
+      throw limitError(
+        `Input exceeds ${this.maxBytes} bytes`,
+        "inputBytes",
+        this.bytesStored + value.byteLength,
+        this.maxBytes,
+      );
+    }
 
     if (this.handle !== null) {
       await this.handle.write(value, 0, value.byteLength, this.bytesStored);

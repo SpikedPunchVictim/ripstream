@@ -443,12 +443,23 @@ class NodeIsolatorImpl implements NodeIsolator {
     if (isolating.ownsPool) isolating.pool.dispose();
   }
 
-  /** The input's size, refused above `maxInputBytes` before anything is read, detected or spawned. */
+  /**
+   * The input's size, refused above the request's `limits.maxInputBytes` (the isolator's own when it names none) before
+   * anything is read, detected, reserved from the pool or spawned. A request may lower the isolator's cap, never raise it:
+   * the isolator's `maxInputBytes` is the operator's ceiling.
+   */
   async #measure(request: IsolatedParseRequest): Promise<number> {
     const { input } = request;
+    const max = request.limits?.maxInputBytes ?? this.#maxInputBytes;
+    if (max > this.#maxInputBytes) {
+      throw new RangeError(
+        `isolate: request.limits.maxInputBytes ${max} is more than the isolator's maxInputBytes of ${this.#maxInputBytes}; ` +
+          "a request can lower the cap, and raising it is the isolation config's",
+      );
+    }
     const size = input instanceof Uint8Array ? input.length : (await stat(input.path)).size;
-    if (size > this.#maxInputBytes) {
-      throw limitError(`Input of ${size} bytes exceeds the maximum of ${this.#maxInputBytes} bytes`, "inputBytes", size, this.#maxInputBytes);
+    if (size > max) {
+      throw limitError(`Input of ${size} bytes exceeds the maximum of ${max} bytes`, "inputBytes", size, max);
     }
     return size;
   }

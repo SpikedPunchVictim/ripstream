@@ -22,6 +22,18 @@ hierarchy now name the class), but `error instanceof LimitExceededError` is **fa
 (an internal class) was `"maxEmbeddedResources"` and is now `"embeddedResources"`. Public API change (`api-report.json`);
 docs/migration.md and docs/isolation.md have the note.
 
+### Per-request `maxInputBytes`, refused in the parent before a child is spawned (`tikajs-is31`)
+
+Added: `ParseLimits.maxInputBytes` (optional; unset means no cap in process). A parse whose input is larger fails with a `LimitExceededError`
+(`limit: "inputBytes"`, `observed`, `max`) before anything is parsed: the size is checked up front where it is known (bytes, an
+`ArrayBuffer`, a `Blob`, a `{ path }`, which is stat'ed) and while reading where it is not (a stream stops as soon as it passes the cap).
+In child mode it is a per-request limit like the others (`IsolatedParseRequest.limits.maxInputBytes`, so also a limit of an isolated
+ripstream, a server preset and `ISOLATED_LIMIT_NAMES`): the isolator checks it first, before routing, pool admission or a spawn, so an
+oversized input costs a `stat` instead of a child (measured: a 10 MiB docx against a 1 MiB cap took 479-555 ms and about 150 MB before,
+81 ms by the caller's own check). A request without one gets the isolator's `config.maxInputBytes` (100 MiB by default), which is also the
+most a request may name: it can lower the operator's cap, and naming a higher one is a `RangeError`. The in-process route and
+`mode: "off"` answer exactly as a child would. Public API addition (`api-report.json`).
+
 ### Isolation: every limit but `maxTaskMillis` is a per-request limit in child mode (`tikajs-segq`)
 
 Changed: in child mode `maxZipEntries`, `maxDecompressionRatio`, `maxEmbeddedResourceBytes`, `maxTotalEmbeddedBytes`,

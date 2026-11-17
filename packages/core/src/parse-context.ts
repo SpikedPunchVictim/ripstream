@@ -28,6 +28,14 @@ export interface ParseLimits {
    * Same validation as maxOutputChars; unset means no per-document cap.
    */
   readonly maxDocumentOutputChars?: number;
+  /**
+   * Largest input of one parse, in bytes; a larger one fails with a `LimitExceededError` (`limit: "inputBytes"`) before any
+   * of it is parsed. The size is checked up front where it is known (bytes, a Blob, a `{ path }`, which is stat'ed) and
+   * while reading where it is not (a stream). Applies to the top-level input only, not to embedded documents (those have
+   * `maxEmbeddedResourceBytes`). Unset (the default) means no cap. Through an isolator, an unset value falls back to the
+   * isolator's own `maxInputBytes` (100 MiB by default), which is also the most a request may name.
+   */
+  readonly maxInputBytes?: number;
   readonly maxEmbeddedResources: number;
   readonly maxEmbeddedResourceBytes: number;
   readonly maxTotalEmbeddedBytes: number;
@@ -91,6 +99,7 @@ const timerMillis =
 const LIMIT_CHECKS: Readonly<Record<keyof ParseLimits, LimitCheck>> = {
   maxOutputChars: outputLimitIssue,
   maxDocumentOutputChars: outputLimitIssue,
+  maxInputBytes: nonNegativeInteger,
   maxEmbeddedResources: nonNegativeInteger,
   maxEmbeddedResourceBytes: nonNegativeInteger,
   maxTotalEmbeddedBytes: nonNegativeInteger,

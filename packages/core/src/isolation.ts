@@ -126,6 +126,7 @@ export const ISOLATED_FLAT_LIMIT_NAMES = ["maxOutputChars", "maxEmbeddedResource
 
 /** The limits an `IsolatedParseRequest` carries in its `limits` object. */
 export const ISOLATED_LIMIT_NAMES = [
+  "maxInputBytes",
   "maxDocumentOutputChars",
   "maxEmbeddedResourceBytes",
   "maxTotalEmbeddedBytes",
@@ -200,8 +201,9 @@ export interface IsolatedParseRequest {
    */
   readonly maxParseMillis?: number;
   /**
-   * The remaining per-request limits (`ParseLimits` members of the same name and meaning): zip and archive entries,
-   * decompression ratio, per-entry and total embedded bytes, per-document output, metadata and XML entity caps. Together
+   * The remaining per-request limits (`ParseLimits` members of the same name and meaning): the input size
+   * (`maxInputBytes`, refused by the parent before anything is spawned or reserved, and never above the isolator's own),
+   * zip and archive entries, decompression ratio, per-entry and total embedded bytes, per-document output, metadata and XML entity caps. Together
    * with the four fields above they are every limit except `maxTaskMillis`. Omitted members: core's default. Validated
    * by `assertValidIsolatedLimits`.
    */

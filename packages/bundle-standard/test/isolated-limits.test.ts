@@ -165,6 +165,24 @@ test("the metadata and XML limits cross: a value cap shortens, a total cap above
   await assert.rejects(standard.ripstream.parseRecursive(bytes, { limits: { maxMetadataTotalChars: 2_000_001 } }), RangeError);
 });
 
+test("maxInputBytes refuses an oversized input in the parent, with no child spawned, and with the in-process answer (tikajs-is31)", async () => {
+  const bytes = zip(names(5, 100));
+  const limits = { maxInputBytes: 1000 };
+  assert.ok(bytes.length > 1000);
+  const before = settled.length;
+  const local = await run("in-process", bytes, limits);
+  const child = await run("child", bytes, limits);
+  assert.ok(local instanceof LimitExceededError, String(local));
+  assert.ok(child instanceof LimitExceededError, String(child));
+  assert.equal(local.limit, "inputBytes");
+  assert.equal(child.limit, "inputBytes");
+  assert.equal(child.message, local.message);
+  assert.deepEqual([child.observed, child.max], [bytes.length, 1000]);
+  assert.deepEqual([local.observed, local.max], [bytes.length, 1000]);
+  assert.equal(settled.length, before, "no child ran");
+  await bothAnswer(bytes, { maxInputBytes: bytes.length });
+});
+
 test("maxTaskMillis is the isolation's own budget and is refused with a pointer to it", async () => {
   await assert.rejects(standard.ripstream.parse(new Uint8Array(1), { limits: { maxTaskMillis: 1000 } }), /IsolationConfig\.maxTaskMillis/);
 });
@@ -184,6 +202,7 @@ test("every limit that crosses reaches a child at once: no RangeError for any Pa
     maxMetadataTotalChars: 100_000,
     maxZipEntries: 100,
     maxXmlEntityExpansions: 0,
+    maxInputBytes: 1_000_000,
   };
   await bothAnswer(bytes, every);
 });
