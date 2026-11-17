@@ -367,8 +367,9 @@ test("when isolating, a preset may only carry the limits that cross the boundary
       log: () => undefined,
     });
   assert.doesNotThrow(make({ maxOutputChars: 10, maxEmbeddedResources: 2 }));
-  assert.throws(make({ maxParseMillis: 5 }), /preset "quick".*maxParseMillis/);
-  assert.throws(make({ maxOutputChars: 10, maxZipEntries: 5 }), /preset "quick".*maxZipEntries/);
+  assert.doesNotThrow(make({ maxParseMillis: 5, maxZipEntries: 5, maxDecompressionRatio: 2.5, maxTotalEmbeddedBytes: 100 }));
+  assert.throws(make({ maxOutputChars: 10, maxTaskMillis: 5 }), /preset "quick".*maxTaskMillis/);
+  assert.throws(make({ maxOutputChars: -1 }), /preset "quick".*maxOutputChars/);
 });
 
 test("without isolation a preset may carry any limit", () => {
@@ -404,10 +405,10 @@ test("the preset rules apply whenever an isolation handle is given, even one tha
       createRipstreamServer({
         ripstream: fakeEngine(),
         isolation: off,
-        presets: { quick: { limits: { maxParseMillis: 5 } } },
+        presets: { quick: { limits: { maxTaskMillis: 5 } } },
         log: () => undefined,
       }),
-    /preset "quick".*maxParseMillis/,
+    /preset "quick".*maxTaskMillis/,
   );
   // ...but the output ceiling is only required when something is actually isolated.
   assert.doesNotThrow(() => createRipstreamServer({ ripstream: fakeEngine(), isolation: off, log: () => undefined }));

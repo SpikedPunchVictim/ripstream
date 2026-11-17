@@ -1,7 +1,16 @@
 import type { InputSource } from "./content-handler.ts";
 import { MediaType } from "./media-type.ts";
 import { Metadata } from "./metadata.ts";
-import type { IsolatedException, IsolatedParseRecord, IsolatedParseRequest, ParseIsolator } from "./isolation.ts";
+import {
+  ISOLATED_FLAT_LIMIT_NAMES,
+  ISOLATED_LIMIT_NAMES,
+  assertValidIsolatedLimits,
+  type IsolatedException,
+  type IsolatedLimits,
+  type IsolatedParseRecord,
+  type IsolatedParseRequest,
+  type ParseIsolator,
+} from "./isolation.ts";
 import { assertHandlerType, type HandlerType } from "./handler-type.ts";
 import type { ParseRecord } from "./recursive.ts";
 import type { Segment } from "./segments.ts";
@@ -29,8 +38,8 @@ export interface IsolatedRipstreamOptions {
   readonly limits?: Partial<ParseLimits>;
 }
 
-/** The limits an isolated request can carry. Everything else is the child's (core's default) or the isolator's. */
-const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbeddedResources", "maxNodeDepth", "maxParseMillis"]);
+/** The limits an isolated request carries: every `ParseLimits` member but `maxTaskMillis` (the isolation's own budget). */
+const CROSSING_LIMITS: ReadonlySet<string> = new Set([...ISOLATED_FLAT_LIMIT_NAMES, ...ISOLATED_LIMIT_NAMES]);
 
 /** The limits `options` names (an `undefined` names none), all of which must be able to cross. */
 function crossingLimits(options: Partial<ParseLimits> | undefined): Partial<ParseLimits> {
@@ -40,19 +49,21 @@ function crossingLimits(options: Partial<ParseLimits> | undefined): Partial<Pars
     if (value === undefined) continue;
     if (!CROSSING_LIMITS.has(name)) {
       throw new RangeError(
-        `Limit "${name}" cannot cross the isolation boundary (only ${[...CROSSING_LIMITS].join(", ")} can)`,
+        `Limit "${name}" cannot cross the isolation boundary: it is the isolation's own budget (IsolationConfig.${name}); ` +
+          "name maxParseMillis to shorten one parse",
       );
     }
     limits[name] = value as number;
   }
+  assertValidIsolatedLimits(extraLimits(limits as Partial<ParseLimits>)); // the ceilings the child's frames impose
   return limits as Partial<ParseLimits>;
 }
 
 /**
  * A Ripstream-shaped front over a ParseIsolator, so code written against `parse` / `parseRecursive` (the server,
  * the pipes engine, the CLI) runs every parse across the isolation boundary without knowing it. Only what an
- * `IsolatedParseRequest` can express crosses: bytes or a `{ path }`, a filename, `maxOutputChars`,
- * `maxEmbeddedResources`, `maxNodeDepth`, `maxParseMillis` and the abort signal. Anything else (`contentType`, `password`, other limits, streams) is refused
+ * `IsolatedParseRequest` can express crosses: bytes or a `{ path }`, a filename, every limit but `maxTaskMillis` (the
+ * isolation's own budget, refused) and the abort signal. Anything else (`contentType`, `password`, streams) is refused
  * before anything is isolated, because ignoring it would silently change the parse.
  */
 export function createIsolatedRipstream(options: IsolatedRipstreamOptions): IsolatedRipstream {
@@ -103,6 +114,7 @@ function toRequest(
     throw new TypeError(`emailHeaders must be a boolean, got ${typeof options.emailHeaders}`);
   }
   const limits = { ...defaults, ...crossingLimits(options.limits) };
+  const rest = extraLimits(limits);
   return {
     input: toInput(source),
     ...(options.filename === undefined ? {} : { filename: options.filename }),
@@ -110,6 +122,7 @@ function toRequest(
     ...(limits.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: limits.maxEmbeddedResources }),
     ...(limits.maxNodeDepth === undefined ? {} : { maxNodeDepth: limits.maxNodeDepth }),
     ...(limits.maxParseMillis === undefined ? {} : { maxParseMillis: limits.maxParseMillis }),
+    ...(rest === undefined ? {} : { limits: rest }),
     ...(options.onDocumentFailure === "record" ? { recordFailures: true } : {}),
     ...(options.onOutputLimit === "truncate" ? { truncateOutput: true } : {}),
     ...(options.onEmbeddedLimit === "truncate" ? { truncateEmbedded: true } : {}),
@@ -120,6 +133,16 @@ function toRequest(
     ...(options.segments === true && output === "records" ? { segments: true } : {}),
     output,
   };
+}
+
+/** The limits that ride in the request's `limits` object (those without a field of their own), or undefined for none. */
+function extraLimits(limits: Partial<ParseLimits>): IsolatedLimits | undefined {
+  const picked: Record<string, number> = {};
+  for (const name of ISOLATED_LIMIT_NAMES) {
+    const value = limits[name];
+    if (value !== undefined) picked[name] = value;
+  }
+  return Object.keys(picked).length === 0 ? undefined : (picked as IsolatedLimits);
 }
 
 function toInput(source: InputSource): Uint8Array | { readonly path: string } {

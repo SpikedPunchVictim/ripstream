@@ -4,6 +4,7 @@ import { isAbsolute } from "node:path";
 import {
   AbortError,
   AdmissionRefusedError,
+  assertValidIsolatedLimits,
   DEFAULT_LIMITS,
   HANDLER_TYPES,
   IsolationError,
@@ -263,6 +264,7 @@ function checkRequest(request: IsolatedParseRequest): void {
   if (maxNodeDepth !== undefined && (!Number.isSafeInteger(maxNodeDepth) || maxNodeDepth < 0)) {
     throw new RangeError(`isolate: request.maxNodeDepth must be a non-negative safe integer, got ${String(maxNodeDepth)}`);
   }
+  assertValidIsolatedLimits(request.limits);
   const { recordFailures } = request;
   if (recordFailures !== undefined && typeof recordFailures !== "boolean") {
     throw new TypeError(`isolate: request.recordFailures must be a boolean, got ${String(recordFailures)}`);
@@ -483,6 +485,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       maxOutputChars: limits.maxOutputChars,
       maxEmbeddedResources: limits.maxEmbeddedResources,
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+      ...(request.limits === undefined ? {} : { limits: request.limits }),
       ...(request.recordFailures === true ? { recordFailures: true } : {}),
       ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
       ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),
@@ -515,6 +518,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
       ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
       ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+      ...request.limits,
     };
     const parseOptions: ParseOptions = {
       limits,

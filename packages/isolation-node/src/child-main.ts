@@ -206,6 +206,7 @@ function toWireRecord(record: ParseRecord, withoutContent = false): IsolatedPars
  */
 function parseOptionsFor(header: InputHeader): ParseOptions {
   const limits: Partial<ParseLimits> = {
+    ...header.limits,
     ...(header.maxOutputChars === undefined ? {} : { maxOutputChars: header.maxOutputChars }),
     ...(header.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: header.maxEmbeddedResources }),
     ...(header.maxNodeDepth === undefined ? {} : { maxNodeDepth: header.maxNodeDepth }),

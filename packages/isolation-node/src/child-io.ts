@@ -1,6 +1,14 @@
 import { writeSync } from "node:fs";
 import type { Writable } from "node:stream";
-import { DIGEST_ALGORITHMS, DIGEST_ENCODINGS, HANDLER_TYPES, type HandlerType, type IsolatedComponents } from "@spikedpunch/ripstream-core";
+import {
+  assertValidIsolatedLimits,
+  DIGEST_ALGORITHMS,
+  DIGEST_ENCODINGS,
+  HANDLER_TYPES,
+  type HandlerType,
+  type IsolatedComponents,
+  type IsolatedLimits,
+} from "@spikedpunch/ripstream-core";
 
 /**
  * Child-side I/O shared by the real child entry (P3), the probe child and the
@@ -38,6 +46,12 @@ export interface InputHeader {
   readonly maxEmbeddedResources?: number;
   /** Deepest embedded document the child parses (ParseLimits.maxNodeDepth). Omitted: core's default. */
   readonly maxNodeDepth?: number;
+  /**
+   * The other per-request limits (IsolatedParseRequest.limits): zip entries, decompression ratio, embedded bytes,
+   * per-document output, metadata and XML entity caps. Omitted members: core's default. Optional, so the header stays
+   * version 1: an absent field is what every earlier parent sent.
+   */
+  readonly limits?: IsolatedLimits;
   /**
    * The `parsers` and `detectors` sections the child builds its ripstream from. Parent-authored and the same for
    * every request of an isolator. Omitted: the default parsers and detectors.
@@ -200,6 +214,11 @@ function parseHeader(json: string): InputHeader {
   optionalNonNegativeInteger(header, "maxParseMillis");
   optionalNonNegativeInteger(header, "maxNodeDepth");
   optionalNonNegativeInteger(header, "unpackBytes");
+  try {
+    assertValidIsolatedLimits(header.limits);
+  } catch (error) {
+    throw new TypeError(`input header: limits: ${error instanceof Error ? error.message : String(error)}`);
+  }
   if (header.unpackBytes !== undefined && header.output !== "records") {
     throw new TypeError('input header: unpackBytes needs output "records"');
   }

@@ -76,8 +76,8 @@ Defaults and what each enforces are in [security.md](security.md#resource-limits
 | PDF pages | 10,000 (fixed) | `LimitExceededError` naming the count | none |
 | `maxXmlEntityExpansions` | 0, reserved | never reached: DTD entities are not expanded | none |
 
-`onOutputLimit` and `onEmbeddedLimit` cross the isolation boundary; the other limits do not (only `maxOutputChars`,
-`maxEmbeddedResources`, `maxNodeDepth`, `maxParseMillis` are per request, [isolation.md](isolation.md)). The server and
+`onOutputLimit` and `onEmbeddedLimit` cross the isolation boundary, and so does every limit but `maxTaskMillis` (the
+isolation's own budget; which limit is enforced where is the table in [isolation.md](isolation.md#per-request-limits)). The server and
 the CLI keep throwing at the entry limits except where `docs/migration.md` says otherwise.
 
 Two flags belong to a *segmented* result, not a limit of the parse: `tk:segments-degraded` (value `ptr` or `selector`)

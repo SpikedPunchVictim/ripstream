@@ -609,6 +609,37 @@ The child's RSS over those 500 requests, without recycling: 157 MiB after reques
 first run ended at 163). With `maxRequests` 100 it stays between 129 and 175 MiB. The default ceiling, 768 MiB, is far
 above both.
 
+## Per-request limits
+
+Every member of `ParseLimits` but one is a per-request limit in child mode, and the child applies the value the request
+names (or core's default when it names none), exactly as an in-process parse does. The values are validated in the parent
+(`assertValidLimits`, plus the ceilings below) before anything is spawned, so a bad limit is a `RangeError` at the call,
+never a surprise from the child; a limit that crosses is never refused for crossing. The same table holds for the limits an
+isolated ripstream or `createStandardIsolation` is built with (`limits`, and `parse-context` limits of a configuration):
+they take the same path as a call's own, merged under it, and are checked when the facade is built.
+
+| Limit | Wire field of the request and the child's input header | Enforced by | Parent-side bound |
+| --- | --- | --- | --- |
+| `maxOutputChars` | `maxOutputChars` | the child's output handler | finite (`-1` is refused: the heap and result cap are sized from it) |
+| `maxEmbeddedResources` | `maxEmbeddedResources` | the child's embedded-resource counter | non-negative integer |
+| `maxNodeDepth` | `maxNodeDepth` | the child's recursion walk | non-negative integer |
+| `maxParseMillis` | `maxParseMillis` | the child's parse timer | at most `maxTaskMillis` less the margin; the parent's kill timer is the real bound |
+| `maxDocumentOutputChars` | `limits.maxDocumentOutputChars` | the child's per-document output handler (`parseRecursive`) | `-1` or a non-negative number; the shared `maxOutputChars` still caps the total |
+| `maxZipEntries` | `limits.maxZipEntries` | the child's zip, tar, cpio, ar, ISO and dump readers | non-negative integer |
+| `maxDecompressionRatio` | `limits.maxDecompressionRatio` | the child's inflate budgets (zip, OPC, gzip and the other codecs) | positive finite number |
+| `maxEmbeddedResourceBytes` | `limits.maxEmbeddedResourceBytes` | the child's per-entry size check | non-negative integer |
+| `maxTotalEmbeddedBytes` | `limits.maxTotalEmbeddedBytes` | the child's per-archive size budget | non-negative integer |
+| `maxMetadataValueChars` | `limits.maxMetadataValueChars` | the child's metadata (a value is cut, with no flag) | non-negative integer |
+| `maxMetadataTotalChars` | `limits.maxMetadataTotalChars` | the child's metadata (`LimitExceededError`) | at most the default, 2,000,000: a result frame is sized for that many metadata characters |
+| `maxXmlEntityExpansions` | `limits.maxXmlEntityExpansions` | reserved: no parser expands DTD entities, so nothing reads it | non-negative integer |
+| `maxTaskMillis` | none (does not cross) | the isolator, once, from `IsolationConfig.maxTaskMillis`: it sets the parent's deadline and the child's CPU backstop | refused by name with a pointer to the isolation config; name `maxParseMillis` to shorten one parse |
+
+The four flat fields are the older request shape; the rest ride in one `limits` object (`IsolatedParseRequest.limits`,
+`IsolatedLimits` in core). Both are the same limits, so `request.limits` may not repeat a flat one. The input header
+stays at version 1: `limits` is an optional field, and the parent and the child it spawns always come from the same
+install, so there is no version skew to bridge. An allowlisted type parsed in this process takes the same limits. A limit
+raised above what the pool can hold is still answered per request (`ADMISSION_REFUSED`), not at construction.
+
 ## Limits of the design
 
 - **Parser code is trusted.** The disk budget assumes it too: code in the child can hide its files from the poll
@@ -623,9 +654,9 @@ above both.
 - **A document password does not cross the boundary.** `--password` with `--isolation` is a usage error.
 - **Exception text from a child is data.** Per-document exceptions in recursive results become plain `Error`s with
   the child's text, sanitised and length-capped. They are never a ripstream error class.
-- **Only `maxOutputChars`, `maxEmbeddedResources`, `maxNodeDepth` and `maxParseMillis` cross.** Other limits stay at the
-  child's defaults, and an isolated request that sets another is refused up front. `maxParseMillis` cannot exceed what
-  `maxTaskMillis` allows. `contentType` overrides, streams and blobs are refused too.
+- **Every limit but `maxTaskMillis` crosses** ([Per-request limits](#per-request-limits)). `maxTaskMillis` is the isolation's
+  own budget and is refused by name; `maxParseMillis` cannot exceed what it allows. `contentType` overrides, passwords,
+  streams and blobs are refused too.
 - **The child's parse timer does not know about queue time.** It is derived from `maxTaskMillis`. After a long wait
   for memory the parent's deadline can fire first and kill the child; the answer is still a timeout.
 - **Reservation is a policy, not a measurement.** The pool counts reservations. Real memory is held by L1, L3 and L4.

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   LimitExceededError,
   MediaType,
+  assertValidIsolatedLimits,
   createIsolatedRipstream,
   rmetaObject,
   type IsolatedParseRequest,
@@ -241,7 +242,7 @@ test("parse: sources and options that cannot cross the boundary are refused, and
   await assert.rejects(ripstream.parse(new Blob(["x"])), /bytes or a \{ path \}/);
   await assert.rejects(ripstream.parse(new ReadableStream<Uint8Array>()), /bytes or a \{ path \}/);
   await assert.rejects(ripstream.parse(new Uint8Array(1), { contentType: "text/plain" }), /contentType/);
-  await assert.rejects(ripstream.parse(new Uint8Array(1), { limits: { maxZipEntries: 5 } }), /maxZipEntries/);
+  await assert.rejects(ripstream.parse(new Uint8Array(1), { limits: { maxTaskMillis: 5 } }), /maxTaskMillis/);
   assert.equal(calls.length, 0);
 });
 
@@ -294,7 +295,9 @@ test("limits: the defaults of every parse, under what a call names itself", asyn
 
 test("limits: a default that cannot cross, or is invalid, is refused when the facade is built", () => {
   const { isolator } = fakeIsolator(TEXT);
-  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxZipEntries: 5 } }), /maxZipEntries/);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxTaskMillis: 5 } }), /maxTaskMillis/);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxMetadataTotalChars: 2_000_001 } }), /maxMetadataTotalChars/);
+  assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxDecompressionRatio: 0 } }), RangeError);
   assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxEmbeddedResources: -5 } }), RangeError);
   assert.throws(() => createIsolatedRipstream({ isolator, detector, limits: { maxBogus: 1 } as never }), RangeError);
 });
@@ -400,4 +403,49 @@ test("detect stays in this process: it is the detector's answer and never reache
   assert.equal(type.toString(), "application/pdf");
   assert.deepEqual(seen, [[bytes, { filename: "x.pdf" }]]);
   assert.equal(calls.length, 0);
+});
+
+const EVERY_EXTRA_LIMIT = {
+  maxDocumentOutputChars: 40,
+  maxEmbeddedResourceBytes: 1000,
+  maxTotalEmbeddedBytes: 5000,
+  maxDecompressionRatio: 2.5,
+  maxZipEntries: 7,
+  maxMetadataValueChars: 100,
+  maxMetadataTotalChars: 200,
+  maxXmlEntityExpansions: 3,
+} as const;
+
+test("parse: every other ParseLimits member crosses in the request's limits object (tikajs-segq)", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  await createIsolatedRipstream({ isolator, detector }).parse(new Uint8Array(1), {
+    limits: { ...EVERY_EXTRA_LIMIT, maxOutputChars: 9 },
+  });
+  assert.deepEqual(calls[0]?.request, { input: new Uint8Array(1), maxOutputChars: 9, limits: EVERY_EXTRA_LIMIT, output: "text" });
+});
+
+test("limits: the defaults of the facade carry the other limits too, and a call's own wins", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  const ripstream = createIsolatedRipstream({ isolator, detector, limits: { maxZipEntries: 50, maxDecompressionRatio: 10 } });
+  await ripstream.parse(new Uint8Array(1));
+  await ripstream.parseRecursive(new Uint8Array(1), { limits: { maxZipEntries: 5 } }).catch(() => undefined);
+  assert.deepEqual(calls[0]?.request.limits, { maxZipEntries: 50, maxDecompressionRatio: 10 });
+  assert.deepEqual(calls[1]?.request.limits, { maxZipEntries: 5, maxDecompressionRatio: 10 });
+});
+
+test("limits: an invalid value of one of the other limits is refused in the parent, nothing is isolated", async () => {
+  const { isolator, calls } = fakeIsolator(TEXT);
+  const ripstream = createIsolatedRipstream({ isolator, detector });
+  await assert.rejects(ripstream.parse(new Uint8Array(1), { limits: { maxZipEntries: -1 } }), /maxZipEntries/);
+  await assert.rejects(ripstream.parse(new Uint8Array(1), { limits: { maxDecompressionRatio: Number.NaN } }), /maxDecompressionRatio/);
+  assert.equal(calls.length, 0);
+});
+
+test("assertValidIsolatedLimits: names the limits of the object, refuses the four flat ones and maxTaskMillis", () => {
+  assertValidIsolatedLimits(EVERY_EXTRA_LIMIT);
+  assertValidIsolatedLimits(undefined);
+  assert.throws(() => assertValidIsolatedLimits({ maxOutputChars: 5 }), /maxOutputChars/);
+  assert.throws(() => assertValidIsolatedLimits({ maxTaskMillis: 5 }), /maxTaskMillis/);
+  assert.throws(() => assertValidIsolatedLimits([]), RangeError);
+  assert.throws(() => assertValidIsolatedLimits({ maxZipEntries: "5" }), /maxZipEntries/);
 });

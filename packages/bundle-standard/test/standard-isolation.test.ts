@@ -593,7 +593,7 @@ test("limits that cannot be isolated are refused when the isolation is built, no
     createStandardIsolation({ config: { mode: "strict" }, pool, limits: { maxOutputChars: -1 } }),
     (error: unknown) => error instanceof RangeError && /maxOutputChars -1 \(unlimited\) cannot be isolated/.test(error.message),
   );
-  await assert.rejects(createStandardIsolation({ config: { mode: "strict" }, pool, limits: { maxZipEntries: 5 } }), /maxZipEntries/);
+  await assert.rejects(createStandardIsolation({ config: { mode: "strict" }, pool, limits: { maxTaskMillis: 5 } }), /maxTaskMillis/);
   // With isolation off there is no child to size, so the same limits are fine.
   const off = await createStandardIsolation({ config: { mode: "off" }, pool, limits: { maxOutputChars: -1 } });
   await off.isolator.dispose();

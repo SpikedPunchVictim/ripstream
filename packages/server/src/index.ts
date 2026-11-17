@@ -3,6 +3,8 @@ import { timingSafeEqual } from "node:crypto";
 import { gzip } from "node:zlib";
 import {
   Metadata,
+  ISOLATED_FLAT_LIMIT_NAMES,
+  ISOLATED_LIMIT_NAMES,
   SERVER_ENDPOINTS,
   TIKA_KEYS,
   assertValidLimits,
@@ -193,7 +195,7 @@ export interface RipstreamServerOptions {
    * given one (`ripstream serve` passes the standard bundle's).
    */
   readonly mimeTypes?: readonly ServerMimeType[];
-  /** With an active `isolation`, a preset's `limits` may only name `maxOutputChars` and `maxEmbeddedResources`. */
+  /** With an active `isolation`, a preset's `limits` may name every limit but `maxTaskMillis`, and not `maxOutputChars: -1`. */
   readonly presets?: Readonly<Record<string, { readonly handler?: string; readonly limits?: Record<string, number> }>>;
 }
 
@@ -1335,8 +1337,8 @@ function defaultLog(level: "debug" | "info" | "warn", message: string): void {
   if (level === "warn") console.warn(`[ripstream-server] ${message}`);
 }
 
-/** The only limits an isolated request can carry; see createIsolatedRipstream in core. */
-const CROSSING_LIMITS: ReadonlySet<string> = new Set(["maxOutputChars", "maxEmbeddedResources"]);
+/** The limits an isolated request can carry (all but `maxTaskMillis`); see createIsolatedRipstream in core. */
+const CROSSING_LIMITS: ReadonlySet<string> = new Set([...ISOLATED_FLAT_LIMIT_NAMES, ...ISOLATED_LIMIT_NAMES]);
 
 /** A server-side count: an integer, and at least `min`. Throws naming the option. */
 function requireCount(name: string, value: number | undefined, min: number): void {
@@ -1404,10 +1406,11 @@ function requireIsolatedOptions(options: RipstreamServerOptions, isolating: bool
       if (!CROSSING_LIMITS.has(key)) {
         throw new Error(
           `createRipstreamServer: preset "${presetName}" sets limit "${key}", which cannot cross the isolation ` +
-            "boundary; with an `isolation` a preset may only set maxOutputChars and maxEmbeddedResources",
+            "boundary; with an `isolation` a preset may set every limit but maxTaskMillis (the isolation's own budget)",
         );
       }
-      if (!Number.isSafeInteger(value) || value < 0) {
+      // Every crossing limit is a count (a ratio excepted); maxOutputChars -1 cannot be isolated, a child is sized from it.
+      if (key !== "maxDecompressionRatio" && (!Number.isSafeInteger(value) || value < 0)) {
         throw new Error(
           `createRipstreamServer: preset "${presetName}" sets ${key} to ${String(value)}; ` +
             "with an `isolation` it must be a non-negative integer",

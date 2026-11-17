@@ -421,6 +421,13 @@ test("maxNodeDepth comes from the header", async () => {
   assert.deepEqual(seen.options, { limits: { maxNodeDepth: 3 } });
 });
 
+test("the other limits come from the header, beside the flat ones (tikajs-segq)", async () => {
+  const { ripstream, seen } = recording();
+  const limits = { maxZipEntries: 5, maxDecompressionRatio: 2.5, maxEmbeddedResourceBytes: 10, maxTotalEmbeddedBytes: 20, maxDocumentOutputChars: 30 };
+  await run(ripstream, input(header({ maxOutputChars: 11, limits }))).outcome;
+  assert.deepEqual(seen.options, { limits: { ...limits, maxOutputChars: 11 } });
+});
+
 test("a ripstream factory is called with the header's components, and its ripstream parses", async () => {
   const { ripstream, seen } = recording();
   const given: unknown[] = [];

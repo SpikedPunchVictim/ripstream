@@ -199,38 +199,39 @@ for (const [arm, ripstream] of arms) {
   });
 }
 
-// maxZipEntries and the expansion limits are not per-request limits: a child always applies the defaults. Only the
-// in-process arm can lower them.
-test("in-process: a lowered maxZipEntries cuts a zip and a tar at that many entries", async () => {
-  for (const [filename, bytes] of [
-    ["big.zip", bigZip(300)],
-    ["big.tar", bigTar(300)],
-  ] as const) {
-    const records = await inProcess.parseRecursive(bytes, { filename, onEmbeddedLimit: "truncate", limits: { maxZipEntries: 100 } });
-    assert.equal(records.length, 101, filename);
-    assert.equal(records[0]!.metadata.get(LIMIT), "maxZipEntries", filename);
-    assert.equal(records[0]!.metadata.get(SEEN), "300", filename);
-    assert.equal(records[0]!.metadata.get(READ), "100", filename);
-    assert.equal(records[100]!.content.trim(), body(100), filename);
-  }
-});
-
-test("in-process: a raised maxZipEntries reads every zip entry and sets no flag", async () => {
-  const records = await inProcess.parseRecursive(bigZip(12_000), {
-    filename: "big.zip",
-    onEmbeddedLimit: "truncate",
-    limits: { maxZipEntries: 20_000, maxEmbeddedResources: 20_000, maxOutputChars: OUT },
+// maxZipEntries and the expansion limits cross the boundary per request (tikajs-segq): both arms answer alike.
+for (const [arm, ripstream] of arms) {
+  test(`${arm}: a lowered maxZipEntries cuts a zip and a tar at that many entries`, async () => {
+    for (const [filename, bytes] of [
+      ["big.zip", bigZip(300)],
+      ["big.tar", bigTar(300)],
+    ] as const) {
+      const records = await ripstream.parseRecursive(bytes, { filename, onEmbeddedLimit: "truncate", limits: { maxZipEntries: 100 } });
+      assert.equal(records.length, 101, filename);
+      assert.equal(records[0]!.metadata.get(LIMIT), "maxZipEntries", filename);
+      assert.equal(records[0]!.metadata.get(SEEN), "300", filename);
+      assert.equal(records[0]!.metadata.get(READ), "100", filename);
+      assert.equal(records[100]!.content.trim(), body(100), filename);
+    }
   });
-  assert.equal(records.length, 12_001);
-  assert.equal(records[0]!.metadata.get(FLAG), null);
-});
 
-test("in-process: the expansion limit still throws under truncate", async () => {
-  await assert.rejects(
-    inProcess.parseRecursive(bigZip(50), { filename: "big.zip", onEmbeddedLimit: "truncate", limits: { maxTotalEmbeddedBytes: 100 } }),
-    LimitExceededError,
-  );
-});
+  test(`${arm}: a raised maxZipEntries reads every zip entry and sets no flag`, async () => {
+    const records = await ripstream.parseRecursive(bigZip(12_000), {
+      filename: "big.zip",
+      onEmbeddedLimit: "truncate",
+      limits: { maxZipEntries: 20_000, maxEmbeddedResources: 20_000, maxOutputChars: OUT },
+    });
+    assert.equal(records.length, 12_001);
+    assert.equal(records[0]!.metadata.get(FLAG), null);
+  });
+
+  test(`${arm}: the expansion limit still throws under truncate`, async () => {
+    await assert.rejects(
+      ripstream.parseRecursive(bigZip(50), { filename: "big.zip", onEmbeddedLimit: "truncate", limits: { maxTotalEmbeddedBytes: 100 } }),
+      LimitExceededError,
+    );
+  });
+}
 
 /** A one-entry stored zip around `data`. */
 function wrapEntry(entryName: string, data: Uint8Array): Uint8Array {

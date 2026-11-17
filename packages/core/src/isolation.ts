@@ -8,6 +8,7 @@
 import type { ComponentEntry } from "./component-config.ts";
 import type { DigestSettings } from "./digest.ts";
 import type { HandlerType } from "./handler-type.ts";
+import { assertValidLimits, DEFAULT_LIMITS, type ParseLimits } from "./parse-context.ts";
 import type { PathPart } from "./recursive.ts";
 
 /**
@@ -117,6 +118,68 @@ export interface IsolatedSegment {
   readonly location: string;
 }
 
+/**
+ * The limits that have a field of their own on an `IsolatedParseRequest` (and on the child's input header). Together with
+ * `ISOLATED_LIMIT_NAMES` they are every `ParseLimits` member that crosses the isolation boundary.
+ */
+export const ISOLATED_FLAT_LIMIT_NAMES = ["maxOutputChars", "maxEmbeddedResources", "maxNodeDepth", "maxParseMillis"] as const;
+
+/** The limits an `IsolatedParseRequest` carries in its `limits` object. */
+export const ISOLATED_LIMIT_NAMES = [
+  "maxDocumentOutputChars",
+  "maxEmbeddedResourceBytes",
+  "maxTotalEmbeddedBytes",
+  "maxDecompressionRatio",
+  "maxZipEntries",
+  "maxMetadataValueChars",
+  "maxMetadataTotalChars",
+  "maxXmlEntityExpansions",
+] as const;
+
+/**
+ * The only `ParseLimits` member that cannot cross: it is the isolation's own wall-clock budget (`IsolationConfig.maxTaskMillis`,
+ * set once for the isolator), and it sizes the pool's deadlines and the child's CPU backstop. A request lowers the child's
+ * parse timer with `maxParseMillis` instead.
+ */
+export const NON_CROSSING_LIMIT_NAMES = ["maxTaskMillis"] as const;
+
+export type IsolatedLimitName = (typeof ISOLATED_LIMIT_NAMES)[number];
+
+/** Every limit of a request that is not one of the four flat fields; each is `ParseLimits`' own member, with its meaning. */
+export type IsolatedLimits = Partial<Pick<ParseLimits, IsolatedLimitName>>;
+
+/** Compile-time proof that no `ParseLimits` member is missing from the three lists above. */
+type UnlistedLimit = Exclude<
+  keyof ParseLimits,
+  (typeof ISOLATED_FLAT_LIMIT_NAMES)[number] | IsolatedLimitName | (typeof NON_CROSSING_LIMIT_NAMES)[number]
+>;
+const everyLimitIsListed: [UnlistedLimit] extends [never] ? true : never = true;
+void everyLimitIsListed;
+
+/**
+ * Refuses `IsolatedParseRequest.limits` the child would misread: not an object, a name that is not one of
+ * `ISOLATED_LIMIT_NAMES`, or a value `assertValidLimits` rejects. `maxMetadataTotalChars` may not exceed core's default:
+ * a result frame is sized for that number of metadata characters. Throws RangeError naming every problem.
+ */
+export function assertValidIsolatedLimits(limits: unknown): void {
+  if (limits === undefined) return;
+  if (typeof limits !== "object" || limits === null || Array.isArray(limits)) {
+    throw new RangeError(`invalid limits: expected an object, got ${limits === null ? "null" : Array.isArray(limits) ? "array" : typeof limits}`);
+  }
+  const names: readonly string[] = ISOLATED_LIMIT_NAMES;
+  const strangers = Object.keys(limits).filter((name) => !names.includes(name) && (limits as Record<string, unknown>)[name] !== undefined);
+  if (strangers.length > 0) {
+    throw new RangeError(`request.limits cannot carry ${strangers.map((name) => `"${name}"`).join(", ")} (only ${names.join(", ")}; the rest have fields of their own)`);
+  }
+  assertValidLimits(limits as Partial<ParseLimits>);
+  const total = (limits as IsolatedLimits).maxMetadataTotalChars;
+  if (total !== undefined && total > DEFAULT_LIMITS.maxMetadataTotalChars) {
+    throw new RangeError(
+      `maxMetadataTotalChars ${total} is more than an isolated result can carry (${DEFAULT_LIMITS.maxMetadataTotalChars}); lower it`,
+    );
+  }
+}
+
 export interface IsolatedParseRequest {
   /**
    * Bytes, or a file path readable by the child. The caller must not mutate
@@ -136,6 +199,13 @@ export interface IsolatedParseRequest {
    * the isolation allows.
    */
   readonly maxParseMillis?: number;
+  /**
+   * The remaining per-request limits (`ParseLimits` members of the same name and meaning): zip and archive entries,
+   * decompression ratio, per-entry and total embedded bytes, per-document output, metadata and XML entity caps. Together
+   * with the four fields above they are every limit except `maxTaskMillis`. Omitted members: core's default. Validated
+   * by `assertValidIsolatedLimits`.
+   */
+  readonly limits?: IsolatedLimits;
   /**
    * "text" (default): parse the top-level document and answer with
    * `kind: "text"`. "records": also parse embedded documents and answer with

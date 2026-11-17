@@ -176,6 +176,12 @@ export {
   type SafeFetchOptions,
 } from "./url-security.ts";
 export {
+  assertValidIsolatedLimits,
+  ISOLATED_FLAT_LIMIT_NAMES,
+  ISOLATED_LIMIT_NAMES,
+  NON_CROSSING_LIMIT_NAMES,
+  type IsolatedLimitName,
+  type IsolatedLimits,
   type IsolatedException,
   type IsolatedParseRecord,
   type IsolatedComponents,

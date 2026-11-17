@@ -751,6 +751,10 @@ test("the child is told the request's depth and parse timer, and the components 
   assert.equal(named.maxNodeDepth, 3);
   assert.equal(named.maxParseMillis, 5000);
   assert.deepEqual(named.components, components);
+
+  const limits = { maxZipEntries: 7, maxDecompressionRatio: 2.5, maxTotalEmbeddedBytes: 4096 };
+  assert.deepEqual((await header({ input: bytes("x"), limits })).limits, limits);
+  assert.equal(plain.limits, undefined);
 });
 
 // ---------------------------------------------------------------- unpackBytes
@@ -924,6 +928,20 @@ test("a request with an invalid maxNodeDepth is refused", async () => {
   for (const bad of [-1, 1.5, Number.NaN]) {
     await assert.rejects(isolator.isolate({ input: bytes("x"), maxNodeDepth: bad }), /maxNodeDepth/, String(bad));
   }
+});
+
+test("an allowlisted type is parsed in-process with the request's other limits too (tikajs-segq)", async () => {
+  const h = setup({ config: { ...STRICT, maxTaskMillis: 5000 }, ripstream: fakeRipstream({ type: "text/plain" }) });
+  await (await h.create()).isolate({ input: bytes("plain"), maxNodeDepth: 2, limits: { maxZipEntries: 3, maxDecompressionRatio: 5 } });
+  assert.deepEqual(h.ripstream.parseCalls[0]?.options.limits, { maxParseMillis: 5000, maxNodeDepth: 2, maxZipEntries: 3, maxDecompressionRatio: 5 });
+});
+
+test("a request with invalid other limits is refused before anything is spawned (tikajs-segq)", async () => {
+  const isolator = await setup({ ripstream: fakeRipstream({ type: "application/zip" }) }).create();
+  await assert.rejects(isolator.isolate({ input: bytes("x"), limits: { maxZipEntries: -1 } }), /maxZipEntries/);
+  await assert.rejects(isolator.isolate({ input: bytes("x"), limits: { maxDecompressionRatio: 0 } }), /maxDecompressionRatio/);
+  await assert.rejects(isolator.isolate({ input: bytes("x"), limits: { maxOutputChars: 5 } as never }), /maxOutputChars/);
+  await assert.rejects(isolator.isolate({ input: bytes("x"), limits: { maxMetadataTotalChars: 2_000_001 } }), /maxMetadataTotalChars/);
 });
 
 test("a request with a recordFailures that is not a boolean is refused", async () => {

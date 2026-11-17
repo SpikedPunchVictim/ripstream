@@ -4,6 +4,19 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### Isolation: every limit but `maxTaskMillis` is a per-request limit in child mode (`tikajs-segq`)
+
+Changed: in child mode `maxZipEntries`, `maxDecompressionRatio`, `maxEmbeddedResourceBytes`, `maxTotalEmbeddedBytes`,
+`maxDocumentOutputChars`, `maxMetadataValueChars`, `maxMetadataTotalChars` and `maxXmlEntityExpansions` threw a `RangeError` when a
+request or an isolated facade named them; now they cross and the child applies them, so a bomb is stopped by the limit the caller
+set and the answer equals the in-process one. Added: `IsolatedParseRequest.limits` (`IsolatedLimits`), `ISOLATED_LIMIT_NAMES`,
+`ISOLATED_FLAT_LIMIT_NAMES`, `NON_CROSSING_LIMIT_NAMES` and `assertValidIsolatedLimits` in core; an optional `limits` object in
+the child's input header (still version 1: the parent and its child come from one install). Values are validated in the parent
+before anything is spawned; `maxMetadataTotalChars` may not exceed its default (a result frame is sized for it). Only
+`maxTaskMillis`, the isolation's own budget, still cannot cross and is refused by name. The server's isolated presets accept every
+limit that crosses, not only `maxOutputChars` and `maxEmbeddedResources`. `docs/isolation.md` has one table of where each limit is
+enforced. Public API addition (`api-report.json`).
+
 ### Server: `idleTimeoutMillis` no longer closes an upload the server has only just begun to read (`tikajs-dizt`)
 
 Fixed: a request that waited for a concurrency slot with its body unread is exempt from the idle timeout, but the idle clock kept

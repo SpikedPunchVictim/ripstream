@@ -275,6 +275,7 @@ export function inputHeaderFor(
     ...(request.maxOutputChars === undefined ? {} : { maxOutputChars: request.maxOutputChars }),
     ...(request.maxEmbeddedResources === undefined ? {} : { maxEmbeddedResources: request.maxEmbeddedResources }),
     ...(request.maxNodeDepth === undefined ? {} : { maxNodeDepth: request.maxNodeDepth }),
+    ...(request.limits === undefined ? {} : { limits: request.limits }),
     ...(request.recordFailures === true ? { recordFailures: true } : {}),
     ...(request.truncateOutput === true ? { truncateOutput: true } : {}),
     ...(request.truncateEmbedded === true ? { truncateEmbedded: true } : {}),

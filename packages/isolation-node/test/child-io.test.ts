@@ -39,6 +39,12 @@ test("maxNodeDepth round trips, including 0", async () => {
   assert.equal((await readInput(stream(wire(header())))).header.maxNodeDepth, undefined);
 });
 
+test("the other limits round trip as one object, and a bad one is refused (tikajs-segq)", async () => {
+  const limits = { maxZipEntries: 5, maxDecompressionRatio: 2.5, maxTotalEmbeddedBytes: 99, maxDocumentOutputChars: -1 };
+  assert.deepEqual((await readInput(stream(wire(header({ limits }))))).header.limits, limits);
+  assert.equal((await readInput(stream(wire(header())))).header.limits, undefined);
+});
+
 test("recordFailures round trips, and anything but a boolean is refused", async () => {
   assert.equal((await readInput(stream(wire(header({ recordFailures: true }))))).header.recordFailures, true);
   assert.equal((await readInput(stream(wire(header())))).header.recordFailures, undefined);
@@ -158,6 +164,11 @@ for (const [label, json] of [
   ["null maxParseMillis", '{"v":1,"output":"text","byteLength":0,"maxParseMillis":null}'],
   ["negative maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":-1}'],
   ["string maxNodeDepth", '{"v":1,"output":"text","byteLength":0,"maxNodeDepth":"3"}'],
+  ["limits that is not an object", '{"v":1,"output":"text","byteLength":0,"limits":[]}'],
+  ["limits with a flat limit", '{"v":1,"output":"text","byteLength":0,"limits":{"maxOutputChars":5}}'],
+  ["limits with an unknown limit", '{"v":1,"output":"text","byteLength":0,"limits":{"maxBogus":5}}'],
+  ["limits with a bad value", '{"v":1,"output":"text","byteLength":0,"limits":{"maxZipEntries":-1}}'],
+  ["limits with a string value", '{"v":1,"output":"text","byteLength":0,"limits":{"maxDecompressionRatio":"9"}}'],
   ["string recordFailures", '{"v":1,"output":"text","byteLength":0,"recordFailures":"yes"}'],
   ["string truncateOutput", '{"v":1,"output":"text","byteLength":0,"truncateOutput":"yes"}'],
   ["string truncateEmbedded", '{"v":1,"output":"text","byteLength":0,"truncateEmbedded":"yes"}'],
