@@ -41,6 +41,7 @@ fixed when the process starts, and a client cannot name a mode, a limit or a poo
 | Refuse platforms without hard memory containment (strict only) | | `RIPSTREAM_ISOLATION_REQUIRE_STRICT_CONTAINMENT` | `requireStrictContainment` |
 | Memory shared by all children, MiB | | `RIPSTREAM_ISOLATION_MEMORY_POOL_MB` | `memoryPoolMb` |
 | Memory budget of one child, MiB (default 1536) | | `RIPSTREAM_ISOLATION_PER_CHILD_MB` | `perChildMb` |
+| Overshoot added to every reservation, MiB (default 1024) | library option `overshootMb` only: the CLI and the server expose no setting | | |
 | Largest input, bytes (default 100 MiB) | | `RIPSTREAM_ISOLATION_MAX_INPUT_BYTES` | `maxInputBytes` |
 | Wall-clock budget of one request, ms (default 60,000) | | `RIPSTREAM_ISOLATION_MAX_TASK_MILLIS` | `maxTaskMillis` |
 | V8 heap of one child, MiB (default derived, 384 to 512) | | `RIPSTREAM_ISOLATION_HEAP_MB` | `heapMb` |
@@ -76,7 +77,7 @@ make them fail. `--max-output-chars` and `RIPSTREAM_MAX_OUTPUT_CHARS` belong to 
 `--max-output-chars` is the server's ceiling and also its default: a request that sends no `maxOutputChars`, or asks
 for more, gets the ceiling. With isolation on the ceiling is required, because the child's result cap and memory are
 derived from it, so `serve` builds the isolation for that cap (`defaultMaxOutputChars`). The pool check, `/status` and
-the reservations all describe a request at the ceiling. A ceiling no child could hold is a usage error. A library
+the reservations all describe a request at the ceiling. A ceiling above what a result may carry is a usage error; one the pool cannot hold starts with a WARN and is refused per request (`tikajs-2clp`). A library
 caller that builds its own isolation passes `defaultMaxOutputChars` the same way; the server warns when its ceiling is
 above what the isolation was built for.
 
@@ -240,24 +241,82 @@ parser bug, not an isolation defect.
 
 ## Sizing and the deployment cliff
 
-Each request reserves `perChildMb` (1536) + 1024 MiB of overshoot + room for its result in the pool: **2729 MiB** for
+Each request reserves `perChildMb` (1536) + `overshootMb` (1024) + room for its result in the pool: **2729 MiB** for
 a default text request, 3042 MiB for a recursive one. The pool is sized from the smaller of the cgroup limit and host
-memory, minus 512 MiB for the parent, unless `memoryPoolMb` is set.
+memory, minus 512 MiB for the parent, unless `memoryPoolMb` is set. (The constants are measured on glibc arm64; Node and the
+container image change the real peak, which is far below the reservation, see "Measured peaks" below.)
 
-The consequence is a cliff: **a pool below 2729 MiB cannot run one child.** In practice a container needs about
-3.2 GiB of memory to isolate (2729 MiB plus the 512 MiB of parent headroom). Below that, `strict` refuses to start (exit 4, with the sum in the message) and
-`lenient` parses everything in-process with a WARN, which is the behaviour isolation exists to prevent. Either
-raise the limit, or lower `perChildMb` and `heapMb` and accept a smaller budget per document.
+**What construction requires, and what a request requires (`tikajs-2clp`).** Two checks, at two times:
 
-Between 2729 and 3042 MiB the pool runs text requests (`/tika`, `/meta`) but cannot hold a recursive one (`/rmeta`,
-`/unpack`, `--recursive`): those that reach a child are refused with 422 (`AdmissionRefusedError`, "more than the whole memory pool"), which
-describes the deployment and not the document. The isolator logs a WARN at startup when that is the case. Size the
-pool to at least 3042 MiB to serve recursive requests; `/unpack` reserves a little more for the bytes it carries
+1. At construction the pool must hold the **smallest request there is**: a text request with no output, which reserves
+   `perChildMb + overshootMb + 169` (the parent term's floor: 96 fixed plus 73 for the 12 MiB metadata allowance at 6x) = **2729
+   MiB** with the defaults. A pool below that cannot run any request, so a `strict` isolator refuses to start (`IsolationError`
+   `unavailable`, exit 4, with the sum in the message) and a `lenient` one parses everything in-process with a WARN, which is the
+   behaviour isolation exists to prevent. A pool given by the caller is a `RangeError`. The pool floor is 1 GiB: an automatic
+   pool below it (a container under about 1.5 GiB) is `unavailable` whatever the settings.
+2. At each request the pool must hold **that request's** reservation, derived from the request's own caps (`maxOutputChars`,
+   `output`, segments, `unpackBytes`; the formula below). A request that does not fit is refused, before anything is spawned,
+   with `AdmissionRefusedError` (`ADMISSION_REFUSED`, HTTP 422), whatever the pool's size relative to the defaults: a
+   pool that holds a 100,000-character text request and not a 50-million-character one admits the first and refuses the second in
+   the same isolator, and queues nothing for the second.
+
+Before `tikajs-2clp` construction also required the pool to hold a request at the *default* caps (the isolator's
+`defaultMaxOutputChars`, 100,000 unless raised, text), so a server whose ceiling was raised for a few large requests could not start in
+a container that served the small ones. Now it starts, logs a WARN naming what a default text and a default records request need,
+and refuses per request those that name no lower cap. With the defaults the window is narrow (the smallest request is 2729 and a default
+text request is the same), so this helps when the default cap is raised, or when `perChildMb` and `overshootMb` are lowered (below).
+
+The reservation does not depend on the size of the input: the parent holds the input it was given whatever the child does, and the
+child's memory is `perChildMb` however small the file, so a 1 KiB file reserves what a 25 MiB one does. It depends on the
+caps. `status()` shows the inputs and the results (below).
+
+**Configurable.** `perChildMb` (config, default 1536, and `heapMb` with it) and `overshootMb` (an option of `createNodeIsolator` and
+`createStandardIsolation`, default 1024; a non-negative integer, ignored with a warning for a given pool, whose own value applies) are
+the two terms an operator can lower to fit a smaller pool. They are not lowered for you: the measured peaks below are for text-heavy
+25 MB documents at about a fifth of the budget, which is not enough evidence to change a default that exists to keep an unbounded child
+from taking the container down (`overshootMb` is what a child can use between two RSS polls). A lower `perChildMb` makes a memory-hungry
+document a `LimitExceededError` (`memory`) instead of a success, and a lower `overshootMb` makes an out-of-memory kill of the
+container possible; both are your trade.
+
+**Sizing table**, `mode: "strict"`, default `perChildMb` and `overshootMb`, parent term from the formula below (the container is the
+pool plus 512 MiB of parent headroom):
+
+| request | reservation (MiB) | smallest container |
+|---|---|---|
+| smallest (text, no output); also a default text request (100,000 characters) | 2729 | 3241 MiB |
+| default recursive request (records, 100,000 characters) | 3042 | 3554 MiB |
+| text, `maxOutputChars` 50,000,000 | 2967 | 3479 MiB |
+| records, `maxOutputChars` 50,000,000 | 3280 | 3792 MiB |
+| records, `maxOutputChars` 52,428,800 (the worked example below, 10,000 embedded resources) | 3292 | 3804 MiB |
+
+The cliff measured in `node:24-alpine` with `-m N`: construction failed below 3241 m (a default-cap text request), a request at the
+50-million cap was admitted only from 3479 m. That is the 3300 - 3500 step: not a container property but the arithmetic above, a pool of
+`N - 512`. With `perChildMb` 768 and `overshootMb` 512 the smallest request reserves 768 + 512 + 169 = 1449 MiB, a container of about 2 GiB
+(arithmetic only; not run).
+
+**Measured peaks** (`grizzly-measure`, `node:24-alpine`, one 25 MB document per child): the PDF's child had a resident set of 425 - 528 MB
+(cgroup `memory.peak` 529 - 549 MiB), the DOCX's 475 - 732 MB (613 - 617 MiB); with the pool bypassed both parsed in containers of 512 MiB
+to 1 GiB (peaks 366 - 446 MiB). The reservation is about five times what these two used. That is not a general result: the text-heavy
+documents `tikajs-m5ng` measured needed far more, which is why the default stays.
+
+The number of requests that run at once is `floor(pool / reservation)`. The server's own gate is derived from it (below), and
+`/status` shows both: `isolation.pool.poolMb` against `isolation.defaultReservationMb`. Both reservations are computed for a request
+at the server's output ceiling.
+
+A library caller reads the same from `status()` of the isolator: `pool` (`poolMb`, `freeMb`, `reservedMb`, `queued`, `running`),
+`defaultReservationMb` (`text`, `records`), and `reservation`:
+
+| field | meaning |
+|---|---|
+| `perChildMb`, `overshootMb` | the two per-child terms of every reservation |
+| `parentSlackMb` | the fixed 96 MiB of the parent term |
+| `smallestMb` | the smallest request: the least a pool may hold |
+| `idleHeldMb` | what the idle reused children hold: `perChildMb + overshootMb` each (their result memory is refunded); 0 without reuse |
+
+Between a pool that holds the smallest request and one that holds a recursive default request, text requests (`/tika`, `/meta`) run
+and recursive ones (`/rmeta`, `/unpack`, `--recursive`) that reach a child are refused with 422 (`AdmissionRefusedError`, "more than
+the whole memory pool"), which describes the deployment and not the document. `/unpack` reserves a little more for the bytes it carries
 (see its budget, below).
-
-The number of requests that run at once is `floor(pool / reservation)`. The server's own gate is derived from it
-(below), and `/status` shows both: `isolation.pool.poolMb` against `isolation.defaultReservationMb`. Both reservations
-are computed for a request at the server's output ceiling.
 
 ### What a request reserves (`tikajs-2cvh`)
 

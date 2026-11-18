@@ -668,25 +668,74 @@ test("defaultMaxOutputChars: a request without a cap that parses in-process gets
   assert.equal(h.ripstream.parseCalls[0]?.options.limits?.maxOutputChars, 4_000_000);
 });
 
-test("defaultMaxOutputChars: an output cap the pool cannot hold fails at construction, not on every request", async () => {
-  // 2800 MiB holds the default request (2729) but not one sized for 50 million characters (2967).
-  const small: IsolationConfig = { mode: "strict", memoryPoolMb: 2800 };
-  const strict = setup({ config: small, defaultMaxOutputChars: 50_000_000 });
+test("defaultMaxOutputChars: an output cap the pool cannot hold is refused per request, not at construction (tikajs-2clp)", async () => {
+  // 2800 MiB holds the smallest request (2729) but not one sized for 50 million characters (2967).
+  const strict = setup({ config: { mode: "strict", memoryPoolMb: 2800 }, defaultMaxOutputChars: 50_000_000 });
   delete (strict.options as { pool?: MemoryPool }).pool;
-  await assert.rejects(createNodeIsolator(strict.options), (error: unknown) => {
+  const isolator = await createNodeIsolator(strict.options);
+  created.push(isolator);
+  assert.ok(strict.logs.some((entry) => entry.level === "warn" && /default text request \(2967 MiB\)/.test(entry.message)), JSON.stringify(strict.logs));
+  await assert.rejects(isolator.isolate({ input: bytes("a") }), (error: unknown) => error instanceof AdmissionRefusedError && error.code === "ADMISSION_REFUSED");
+  assert.equal((await isolator.isolate({ input: bytes("a"), maxOutputChars: 1000 })).kind, "text", "a request that names a cap that fits runs");
+
+  // Below the smallest request there is, construction still fails: a strict one rejects, a lenient one degrades.
+  const small: IsolationConfig = { mode: "strict", memoryPoolMb: 2700 };
+  const none = setup({ config: small, defaultMaxOutputChars: 50_000_000 });
+  delete (none.options as { pool?: MemoryPool }).pool;
+  await assert.rejects(createNodeIsolator(none.options), (error: unknown) => {
     assert.ok(error instanceof IsolationError && error.reason === "unavailable", String(error));
     assert.match(error.message, /cannot hold one child/);
     return true;
   });
-
   const lenient = setup({ config: { ...small, mode: "lenient" }, defaultMaxOutputChars: 50_000_000 });
   delete (lenient.options as { pool?: MemoryPool }).pool;
-  const isolator = await createNodeIsolator(lenient.options);
-  created.push(isolator);
-  assert.equal(isolator.status().degraded, true);
+  const degraded = await createNodeIsolator(lenient.options);
+  created.push(degraded);
+  assert.equal(degraded.status().degraded, true);
 
-  const wired = setup({ pool: new MemoryPool({ poolMb: 1900, overshootMb: 1024, maxQueue: 0 }), defaultMaxOutputChars: 50_000_000 }); // STRICT has perChildMb 512: 512 + 1024 + 407 = 1943
-  await assert.rejects(createNodeIsolator(wired.options), /cannot hold one child/);
+  // A given pool: the same rule, as a RangeError. STRICT has perChildMb 512: the smallest request is 512 + 1024 + 169 = 1705.
+  const given = (poolMb: number) => setup({ pool: new MemoryPool({ poolMb, overshootMb: 1024, maxQueue: 0 }), defaultMaxOutputChars: 50_000_000 });
+  await assert.rejects(createNodeIsolator(given(1700).options), /cannot hold one child/);
+  created.push(await createNodeIsolator(given(1705).options)); // 1943 for the default cap: constructs, refuses per request
+});
+
+test("status().reservation says what a request reserves, the smallest request, and what idle children hold (tikajs-2clp)", async () => {
+  const isolator = await setup({ config: { mode: "strict" }, pool: new MemoryPool({ poolMb: 4000, maxQueue: 0 }) }).create();
+  const status = isolator.status();
+  assert.deepEqual(status.reservation, { perChildMb: 1536, overshootMb: 1024, parentSlackMb: 96, smallestMb: 2729, idleHeldMb: 0 });
+  assert.deepEqual(status.defaultReservationMb, { text: 2729, records: 3042 });
+  assert.equal(status.pool?.poolMb, 4000);
+  assert.equal(status.pool?.freeMb, 4000);
+  assert.equal((await setup({ config: { mode: "off" } }).create()).status().reservation, null);
+});
+
+test("a small request is admitted and a big one refused in the same isolator, and the refusal says what it needed (tikajs-2clp)", async () => {
+  const pool = new MemoryPool({ poolMb: 3000, overshootMb: 1024, maxQueue: 0 });
+  const h = setup({ config: { mode: "strict", perChildMb: 1536 }, pool });
+  const isolator = await h.create();
+  assert.equal((await isolator.isolate({ input: bytes("small"), maxOutputChars: 1000 })).kind, "text");
+  await assert.rejects(isolator.isolate({ input: bytes("big"), maxOutputChars: 80_000_000 }), (error: unknown) => {
+    assert.ok(error instanceof AdmissionRefusedError, String(error));
+    assert.match(error.message, /needs \d+ MiB.*more than the whole memory pool of 3000 MiB/);
+    return true;
+  });
+  assert.equal(h.runs(), 1, "the big one never reached a child");
+  assert.equal(pool.stats().reservedMb, 0, "and holds nothing");
+});
+
+test("overshootMb is an option of the owned pool: validated, applied, and ignored with a warning for a given pool (tikajs-2clp)", async () => {
+  const owned = setup({ config: { mode: "strict", perChildMb: 512, memoryPoolMb: 1500 }, overshootMb: 256 });
+  delete (owned.options as { pool?: MemoryPool }).pool;
+  const isolator = await createNodeIsolator(owned.options);
+  created.push(isolator);
+  assert.equal(isolator.status().reservation?.overshootMb, 256);
+  assert.equal(isolator.status().defaultReservationMb?.text, 512 + 256 + 169);
+  for (const bad of [-1, 0.5, Number.NaN, Infinity, "1"]) {
+    await assert.rejects(createNodeIsolator({ ...owned.options, overshootMb: bad as number }), (e: unknown) => e instanceof RangeError && /overshootMb/.test(e.message), String(bad));
+  }
+  const given = setup({ overshootMb: 256 });
+  await given.create();
+  assert.ok(given.logs.some((entry) => entry.level === "warn" && /overshootMb is ignored/.test(entry.message)));
 });
 
 test("defaultMaxOutputChars must be a finite non-negative integer", async () => {

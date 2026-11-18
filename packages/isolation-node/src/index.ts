@@ -38,6 +38,7 @@ export {
   type NodeIsolateOptions,
   type NodeIsolator,
   type NodeIsolatorOptions,
+  type IsolatorReservation,
   type NodeIsolatorStatus,
 } from "./isolator.ts";
 export {

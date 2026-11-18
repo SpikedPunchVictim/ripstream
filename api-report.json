@@ -959,6 +959,7 @@
       "DiskStats",
       "InputHeader",
       "IsolatorLogLevel",
+      "IsolatorReservation",
       "IsolatorRipstream",
       "IsolatorRunnerOptions",
       "Lease",

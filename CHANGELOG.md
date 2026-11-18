@@ -44,6 +44,20 @@ Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`
 
 ## Unreleased
 
+### Per-request admission instead of a construction failure; `overshootMb`; `status().reservation` (`tikajs-2clp`)
+
+Changed: `createNodeIsolator` (and `createStandardIsolation`, `serve`, the CLI) no longer fails when the pool cannot hold a request at the
+default caps. It requires the pool to hold the smallest request (text, no output: `perChildMb + overshootMb + 169`, 2729 MiB with the
+defaults), logs a WARN naming what a default text and a default recursive request need, and refuses the requests that do not fit one by one
+with `AdmissionRefusedError` (`ADMISSION_REFUSED`). A pool below the smallest request, or below the 1 GiB floor, still fails (strict) or
+degrades (lenient). Before, a raised `defaultMaxOutputChars` could stop a server from starting in a container that served small requests.
+Added: `overshootMb` option on `createNodeIsolator` and `createStandardIsolation` (non-negative integer, default 1024, ignored with a warning
+for a given pool); `perChildMb` was already a config key. Added: `status().reservation` (`perChildMb`, `overshootMb`, `parentSlackMb`,
+`smallestMb`, `idleHeldMb`; `IsolatorReservation` is exported) beside `pool` and `defaultReservationMb`. The defaults, 1536 and 1024, are
+unchanged: the measured peaks of a 25 MB PDF and DOCX are a fifth of the reservation, which is not evidence for all documents.
+docs/isolation.md has the formula, both checks, the thresholds and a sizing table (the 3300 - 3500 MiB step is the arithmetic of a
+`pool = container - 512` against 2729 / 2967 MiB). Not an output change.
+
 ### `maxPages`, a status on every record, the caps and error codes documented (`tikajs-efpm`)
 
 Added: `ParseLimits.maxPages` refuses a document with more pages (PDF), sheets (xlsx, ods) or slides (pptx, odp) than it names, with

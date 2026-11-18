@@ -36,7 +36,7 @@ import { DEFAULT_OVERSHOOT_MB, MemoryPool, type PoolStats } from "./pool.ts";
 import { probeIsolation } from "./probe.ts";
 import { requireTrustDomain, resolveReuse, type ChildReuseOptions } from "./reuse.ts";
 import { DEFAULT_IN_PROCESS_MAX_BYTES, DEFAULT_IN_PROCESS_TYPES, routeRequest } from "./routing.ts";
-import { ChildRunner, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "./runner.ts";
+import { ChildRunner, PARENT_RESULT_SLACK_MB, parentResultMb, parentResultMbFor, type ChildRunnerOptions } from "./runner.ts";
 import { WarmRunner, type ChildReuseStats } from "./warm.ts";
 
 /**
@@ -110,6 +110,13 @@ export interface NodeIsolatorOptions {
    * `config.memoryPoolMb`.
    */
   readonly pool?: MemoryPool;
+  /**
+   * MiB every reservation adds to a child's cap for what it can use between two RSS polls. Default 1024
+   * (`DEFAULT_OVERSHOOT_MB`); a non-negative integer. A lower value fits a smaller pool and gives up some of the margin the
+   * default was chosen for. Applies to the pool this isolator creates: with a given `pool`, that pool's own value decides
+   * and this one is ignored (with a warning).
+   */
+  readonly overshootMb?: number;
   /** Exact base media types parsed in-process. Default DEFAULT_IN_PROCESS_TYPES. Copied at construction. */
   readonly inProcessTypes?: ReadonlySet<string>;
   /** Inputs above this are isolated whatever their type. Default DEFAULT_IN_PROCESS_MAX_BYTES. */
@@ -156,6 +163,18 @@ export interface NodeIsolateOptions {
 }
 
 /** Plain, JSON-serialisable: the shape the server shows on /status. */
+/** The inputs of a request's reservation (`perChildMb + overshootMb + parent`), see "What a request reserves" in docs/isolation.md. */
+export interface IsolatorReservation {
+  readonly perChildMb: number;
+  readonly overshootMb: number;
+  /** The fixed MiB of the parent term. The rest of it is per character (5 bytes) and per byte of the rest of the result (6 text, 24 records). */
+  readonly parentSlackMb: number;
+  /** The smallest request there is (text, no output): the pool must hold it or construction fails. */
+  readonly smallestMb: number;
+  /** MiB the idle reused children hold (`perChildMb + overshootMb` each; their result memory is refunded); 0 without reuse. */
+  readonly idleHeldMb: number;
+}
+
 export interface NodeIsolatorStatus {
   /** The mode in force. A lenient isolator that found isolation unavailable reports "off". */
   readonly mode: IsolationMode;
@@ -179,6 +198,8 @@ export interface NodeIsolatorStatus {
    * unless isolating. A kind above `pool.poolMb` can never run: every such request is refused as a limit error.
    */
   readonly defaultReservationMb: { readonly text: number; readonly records: number } | null;
+  /** What a request reserves and what the pool holds for children that are waiting; null unless isolating. */
+  readonly reservation: IsolatorReservation | null;
   readonly maxInputBytes: number;
   readonly inProcessTypes: readonly string[];
   readonly inProcessMaxBytes: number;
@@ -430,6 +451,7 @@ class NodeIsolatorImpl implements NodeIsolator {
       limits: isolating === null ? null : { ...isolating.defaultLimits },
       defaultReservationMb:
         isolating === null ? null : defaultReservations(plan.config, isolating.pool.overshootMb, plan.defaultMaxOutputChars),
+      reservation: isolating === null ? null : reservationOf(plan.config, isolating.pool.overshootMb, runner),
       maxInputBytes: this.#maxInputBytes,
       inProcessTypes: [...plan.inProcessTypes].sort(),
       inProcessMaxBytes: plan.inProcessMaxBytes,
@@ -613,6 +635,24 @@ function defaultReservations(
   return { text: reserve("text"), records: reserve("records") };
 }
 
+/** The smallest request: text, no output. What a pool must hold for the isolator to be worth constructing. */
+function smallestReservationMb(config: IsolationConfig, overshootMb: number): number {
+  const limits = deriveLimits(config, { output: "text", maxOutputChars: 0 });
+  return limits.perChildMb + overshootMb + parentResultMbFor(limits);
+}
+
+function reservationOf(config: IsolationConfig, overshootMb: number, runner: ChildRunner | WarmRunner | undefined): IsolatorReservation {
+  const { perChildMb } = deriveLimits(config);
+  const idle = runner instanceof WarmRunner ? runner.stats().idle : 0;
+  return {
+    perChildMb,
+    overshootMb,
+    parentSlackMb: PARENT_RESULT_SLACK_MB,
+    smallestMb: smallestReservationMb(config, overshootMb),
+    idleHeldMb: idle * (perChildMb + overshootMb),
+  };
+}
+
 function defaultLog(level: IsolatorLogLevel, message: string): void {
   if (level === "warn") console.warn(`[ripstream-isolation] ${message}`);
 }
@@ -629,23 +669,23 @@ type PoolChoice = { readonly pool: MemoryPool; readonly ownsPool: boolean } | { 
  * The pool this isolator draws on. A pool that is too small to run one child is an environment problem when we
  * sized it (a small cgroup: unavailable) and a wiring bug when the caller gave it to us (RangeError).
  */
-function choosePool(options: NodeIsolatorOptions, config: IsolationConfig, defaults: DerivedLimits, log: NonNullable<NodeIsolatorOptions["log"]>): PoolChoice {
-  const resultMb = parentResultMbFor(defaults);
+function choosePool(options: NodeIsolatorOptions, config: IsolationConfig, log: NonNullable<NodeIsolatorOptions["log"]>): PoolChoice {
+  const { perChildMb } = deriveLimits(config);
+  const tooSmall = (poolMb: number, overshootMb: number, needMb: number): string =>
+    `${poolMb} MiB cannot hold one child: ${perChildMb} MiB per child + ${overshootMb} MiB overshoot + ` +
+    `${needMb - perChildMb - overshootMb} MiB for the result of the smallest request = ${needMb} MiB`;
   if (options.pool !== undefined) {
     if (config.memoryPoolMb !== undefined || config.maxQueue !== undefined) {
       log("warn", "config.memoryPoolMb and config.maxQueue are ignored: the isolator was given a shared memory pool");
     }
+    if (options.overshootMb !== undefined) log("warn", "overshootMb is ignored: the isolator was given a shared memory pool, whose own overshootMb applies");
     const { overshootMb } = options.pool;
     const { poolMb } = options.pool.stats();
-    const needMb = defaults.perChildMb + overshootMb + resultMb;
-    if (poolMb < needMb) {
-      throw new RangeError(
-        `The given memory pool of ${poolMb} MiB cannot hold one child: ${defaults.perChildMb} MiB per child + ` +
-          `${overshootMb} MiB overshoot + ${resultMb} MiB for its result = ${needMb} MiB`,
-      );
-    }
+    const needMb = smallestReservationMb(config, overshootMb);
+    if (poolMb < needMb) throw new RangeError(`The given memory pool of ${tooSmall(poolMb, overshootMb, needMb)}`);
     return { pool: options.pool, ownsPool: false };
   }
+  const overshootMb = options.overshootMb ?? DEFAULT_OVERSHOOT_MB;
 
   const limits = readCgroupLimits();
   const hostTotalBytes = totalmem();
@@ -662,15 +702,9 @@ function choosePool(options: NodeIsolatorOptions, config: IsolationConfig, defau
     if (error instanceof RangeError) return { unavailable: error.message };
     throw error;
   }
-  const needMb = defaults.perChildMb + DEFAULT_OVERSHOOT_MB + resultMb;
-  if (poolMb < needMb) {
-    return {
-      unavailable:
-        `The memory pool of ${poolMb} MiB cannot hold one child: ${defaults.perChildMb} MiB per child + ` +
-        `${DEFAULT_OVERSHOOT_MB} MiB overshoot + ${resultMb} MiB for its result = ${needMb} MiB`,
-    };
-  }
-  return { pool: new MemoryPool({ poolMb, maxQueue: config.maxQueue ?? DEFAULT_MAX_QUEUE }), ownsPool: true };
+  const needMb = smallestReservationMb(config, overshootMb);
+  if (poolMb < needMb) return { unavailable: `The memory pool of ${tooSmall(poolMb, overshootMb, needMb)}` };
+  return { pool: new MemoryPool({ poolMb, overshootMb, maxQueue: config.maxQueue ?? DEFAULT_MAX_QUEUE }), ownsPool: true };
 }
 
 export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<NodeIsolator> {
@@ -678,6 +712,9 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   const config = snapshotConfig(options.config);
   const platform = options.platform ?? process.platform;
   requireValidOutputCap(options.defaultMaxOutputChars);
+  if (options.overshootMb !== undefined && !(Number.isSafeInteger(options.overshootMb) && options.overshootMb >= 0)) {
+    throw new RangeError(`overshootMb must be a non-negative integer, got ${String(options.overshootMb)}`);
+  }
   const inProcessMaxBytes = options.inProcessMaxBytes ?? DEFAULT_IN_PROCESS_MAX_BYTES;
   const base = {
     config,
@@ -703,7 +740,7 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     return new NodeIsolatorImpl({ ...base, isolating: null, degradedReason: reason });
   };
 
-  const chosen = choosePool(options, config, defaults, log);
+  const chosen = choosePool(options, config, log);
   if ("unavailable" in chosen) return unavailable(chosen.unavailable);
 
   const probed = await (options.probe ?? probeIsolation)({
@@ -716,17 +753,19 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   });
   if (!probed.available) return unavailable(probed.reason);
 
-  // choosePool sized the pool for a text request. A pool between the two reservations runs those and refuses every
-  // recursive request that reaches a child, so say so now rather than on the first /rmeta.
+  // The pool holds at least the smallest request. A pool between that and the default reservations runs the requests that
+  // fit and refuses the rest per request (ADMISSION_REFUSED), so say so now rather than on the first refusal.
   const reservations = defaultReservations(config, chosen.pool.overshootMb, options.defaultMaxOutputChars);
   const { poolMb } = chosen.pool.stats();
-  if (reservations.records > poolMb) {
-    log(
-      "warn",
-      `The memory pool of ${poolMb} MiB holds a text request (${reservations.text} MiB) but not a recursive one ` +
-        `(${reservations.records} MiB): recursive parses that reach a child will be refused. Raise the pool to at ` +
-        `least ${reservations.records} MiB to run them.`,
-    );
+  for (const kind of ["text", "records"] as const) {
+    if (reservations[kind] > poolMb) {
+      const label = kind === "text" ? "text" : "recursive (records)";
+      log(
+        "warn",
+        `The memory pool of ${poolMb} MiB cannot hold a default ${label} request (${reservations[kind]} MiB): a ${label} request ` +
+          `that reaches a child is refused unless it names caps that fit. Raise the pool to at least ${reservations[kind]} MiB to run them as they are.`,
+      );
+    }
   }
 
   if (config.requireStrictContainment === true) {
