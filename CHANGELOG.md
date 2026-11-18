@@ -44,6 +44,22 @@ Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`
 
 ## Unreleased
 
+### `maxPages`, a status on every record, the caps and error codes documented (`tikajs-efpm`)
+
+Added: `ParseLimits.maxPages` refuses a document with more pages (PDF), sheets (xlsx, ods) or slides (pptx, odp) than it names, with
+`LimitExceededError` (`limit: "pages"`, `observed`, `max`) before any text is extracted. A PDF keeps its fixed 10,000 cap. It crosses the
+isolation boundary like the other per-request limits, and a child refuses with the in-process message. Added: `ParseRecord.status`
+(`"ok"`, `"skipped"`, `"failed"`) and `reason` on every record of `parseRecursive`, in process and through a child, derived from the
+`exception` and `tk:parsed-by` the record already has, so nothing new crosses the boundary (`RecordStatus` is exported). Not an output
+change: no text or metadata key moves.
+
+Checked, not changed: Grizzly's "a 50,000-entry zip with `onEmbeddedLimit: "truncate"` gives no text" does not reproduce for `parse` and
+`parseRecursive`: they keep the first 10,000 entries and flag `truncated:zipEntries`, in process and in a child. What does end such a call in
+`LIMIT_EXCEEDED` is `maxOutputChars` (default 100,000, passed by 10,000 entries) and, as documented, `parseToString`, `parseToHandler` and
+`parseToStream`, which ignore both `truncate` options. docs/limits-and-statuses.md now says so, with the status table and "error codes are API,
+messages are not"; docs/isolation.md has the frame, segment and result caps with what each breach looks like, and a platforms and runtimes note
+(CI runs Node 22 and 24; the chaos fixtures run on glibc and musl; the memory numbers are glibc arm64).
+
 ### `tk:extractor-version` on every result, a results page, an output-change log (`tikajs-25ot`)
 
 Added: every result's metadata (`parse`, `parseToString`'s source parse, the container's record of `parseRecursive`, in a child and in this

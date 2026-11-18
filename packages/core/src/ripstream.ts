@@ -85,14 +85,13 @@ export interface ParseOptions {
   readonly onOutputLimit?: "throw" | "truncate";
   /**
    * What `parse` and `parseRecursive` do when a document holds more embedded resources or archive entries than
-   * `limits.maxEmbeddedResources` or `limits.maxZipEntries` allow. "throw" (default): the call rejects with a
-   * LimitExceededError ("Embedded count N exceeds M", "ZIP entries exceed M"). "truncate": what was read is the answer,
-   * in archive order, and the document carries `tk:exception:embedded-resource-limit-reached` = "true" with
-   * `tk:exception:embedded-resource-limit` (which limit), `-max`, `-seen` and `-read`. `maxEmbeddedResources` is one
-   * budget for the whole tree, so reaching it stops the parse and the flag is on the container's metadata; an archive
-   * with too many entries (ZIP, tar, cpio, ar, ISO 9660) is read up to `maxZipEntries` entries and flagged on its own metadata (its
-   * record's, in `parseRecursive`). The bomb limits (`maxTotalEmbeddedBytes`, `maxEmbeddedResourceBytes`, the
-   * decompression ratio) and every other limit still reject. The other parse methods always throw. See "The entry-count limit" in docs/migration.md.
+   * `limits.maxEmbeddedResources` or `limits.maxZipEntries` allow. "throw" (default): a LimitExceededError. "truncate": what
+   * was read, in archive order, is the answer, and the metadata carries `tk:exception:embedded-resource-limit-reached` = "true"
+   * with `tk:exception:embedded-resource-limit` (which limit), `-max`, `-seen` and `-read`. `maxEmbeddedResources` is one
+   * budget for the tree: reaching it stops the parse, flagged on the container. An archive with too many entries (ZIP, tar,
+   * cpio, ar, ISO 9660) is read up to `maxZipEntries` and flagged on its own record. The bomb limits and every other limit
+   * still reject, and so does `maxOutputChars` unless `onOutputLimit` is "truncate" too. The other parse methods always
+   * throw. See "The entry-count limit" in docs/migration.md.
    */
   readonly onEmbeddedLimit?: "throw" | "truncate";
   /**

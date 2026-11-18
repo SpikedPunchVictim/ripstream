@@ -97,8 +97,8 @@ above which everything is isolated), both on `createNodeIsolator` and, through `
 `createStandardIsolation`. Pass `inProcessTypes: new Set()` to isolate every document, text included: each request then
 costs a child and the pool has to be sized for it (see the memory table below). `ripstream serve` and the CLI do not
 expose a switch for either option; an operator who needs all-isolated parsing builds the engine in code. The other
-containment limits in this file (no network or filesystem denial, no temp sweep after a parent SIGKILL, memory defaults
-measured on glibc arm64 only) stand as documented.
+containment limits in this file (no network or filesystem denial, no temp sweep after a parent SIGKILL) stand as documented;
+see "Platforms and runtimes", below, for where the memory defaults were measured and what CI runs.
 
 `/detect` is answered in the parent. Detection looks at a bounded prefix, except that a ZIP's central directory is
 read from the end of the file; that walk is capped at 10,000 entries and 8 MiB (before the cap, a crafted directory
@@ -365,6 +365,28 @@ To fit a small container, lower `maxOutputChars` (each million characters costs 
 `perChildMb`, or enlarge the container: a records request at the cap needs
 about 3.7 GiB of container (3196 + 512 MiB of headroom).
 
+### Result caps at the boundary
+
+A child sends its result as frames, and the parent checks each against a cap before it holds the bytes. A breach is not a
+document's failure by itself: the parent stops reading, kills the child, and the call is rejected with a
+`LimitExceededError` whose `limit` is `resultBytes` (and, when known, `observed` and `max` in bytes), never a partial
+result. Which message says which cap (the codes are stable, the wording is not, see
+[limits-and-statuses.md](limits-and-statuses.md#error-codes-are-api-messages-are-not)):
+
+| Cap | Value | A breach |
+|---|---|---|
+| a frame | 1 MiB (`DEFAULT_MAX_FRAME_BYTES`); a text frame holds at most 64 Ki characters, a segments frame at most 1,024 segments (and about 64 Ki characters of strings), a bytes frame 192 KiB | "Isolated parser result frame exceeded the maximum frame size" |
+| frames in all | 1,000,000 per child (`DEFAULT_MAX_FRAMES`): the cap on parent CPU | a protocol violation: `IsolationError` (`crash`), since a legitimate child never gets near it |
+| the result | `maxResultBytes`: `6 * maxOutputChars` + the metadata allowance + the markup allowance + 64 KiB, at most 512 MiB | "Isolated parser result exceeded the maximum result size" |
+| metadata | one metadata object may hold `maxMetadataTotalChars` characters and half that many keys | "Isolated parser result metadata exceeded the maximum size" |
+| segments | 24 MiB + 0.75 bytes per output character of `segments` frames, on top of the text | "Isolated parser result's segments exceeded the maximum size allowed for segments" |
+
+The frame caps came in with `tikajs-2cvh` (`074280c`, content in text frames), `tikajs-62gk` (`5d3f057`, segments cross) and
+`tikajs-9ztw` (`e2b4794`, segments in frames of their own with their own allowance). A frame that is malformed rather than
+too large is a protocol violation (`IsolationError`, kind `crash`, "Isolated parser protocol violation"), also never a
+partial result. An in-process parse has none of these caps; its answer is bounded by `maxOutputChars` alone, so a document
+whose segments fit in process can be refused through a child (the allowance above).
+
 ## The server
 
 `ripstream serve` prints the mode, where it came from and the pool at startup, and sends warnings to stderr as
@@ -627,6 +649,7 @@ they take the same path as a call's own, merged under it, and are checked when t
 | `maxParseMillis` | `maxParseMillis` | the child's parse timer | at most `maxTaskMillis` less the margin; the parent's kill timer is the real bound |
 | `maxInputBytes` | `limits.maxInputBytes` | the parent, before routing, pool admission or a spawn (bytes: their length; `{ path }`: stat); the child and an in-process parse apply it again | non-negative integer, at most the isolator's own `maxInputBytes` (a request can lower the operator's cap, never raise it); omitted: the isolator's (100 MiB by default) |
 | `maxDocumentOutputChars` | `limits.maxDocumentOutputChars` | the child's per-document output handler (`parseRecursive`) | `-1` or a non-negative number; the shared `maxOutputChars` still caps the total |
+| `maxPages` | `limits.maxPages` | the child's PDF reader (before any text) and its xlsx, ods, pptx and odp readers (before any text) | non-negative integer |
 | `maxZipEntries` | `limits.maxZipEntries` | the child's zip, tar, cpio, ar, ISO and dump readers | non-negative integer |
 | `maxDecompressionRatio` | `limits.maxDecompressionRatio` | the child's inflate budgets (zip, OPC, gzip and the other codecs) | positive finite number |
 | `maxEmbeddedResourceBytes` | `limits.maxEmbeddedResourceBytes` | the child's per-entry size check | non-negative integer |
@@ -641,6 +664,16 @@ The four flat fields are the older request shape; the rest ride in one `limits` 
 stays at version 1: `limits` is an optional field, and the parent and the child it spawns always come from the same
 install, so there is no version skew to bridge. An allowlisted type parsed in this process takes the same limits. A limit
 raised above what the pool can hold is still answered per request (`ADMISSION_REFUSED`), not at construction.
+
+## Platforms and runtimes
+
+- **Node.** `engines` is `>=22.18` and CI runs the whole suite on Node 22 and on Node 24 (`.github/workflows/ci.yml`). The
+  measurements in this file were taken on Node 24.
+- **glibc and musl.** The chaos fixtures for the isolation (`.github/workflows/isolation-chaos.yml`) run on native x86_64 and
+  arm64 runners, in `node:24-slim` (glibc) and `node:24-alpine` (musl). The memory defaults ("Measured defaults") and the
+  corpus runs were measured on glibc arm64, so the numbers in this file are glibc numbers unless a section says otherwise.
+  `@napi-rs/canvas` (a pdf.js import) is not loaded by the standard child (`blockPdfjsCanvas`), so its musl build is never
+  reached by a parse; ripstream has not tested that package on musl.
 
 ## Hosting in your own Worker
 

@@ -18,6 +18,7 @@ import { decodeChapter } from "./epub-chapter.ts";
 import { describeFailure } from "./failures.ts";
 import { emitEmbeddedItems, isChapter, readPackageDocument, type ManifestItem } from "./epub-package.ts";
 import { applyOdfMetadata } from "./odf-meta.ts";
+import { capPages } from "./page-cap.ts";
 import { SaxesParser } from "saxes";
 import {
   attribute,
@@ -98,6 +99,11 @@ export class OpenDocumentParser implements Parser {
 
     const root = parseXmlTree(decode(files.get("content.xml")!));
     const body = findBody(root);
+    const kind = body === undefined ? "" : localName(body.name);
+    if (kind === "spreadsheet" || kind === "presentation") {
+      const unit = kind === "spreadsheet" ? "table" : "page";
+      capPages(ctx, body!.children.filter((child) => localName(child.name) === unit).length, unit === "table" ? "sheets" : "slides");
+    }
     if (body !== undefined) await renderOdfBody(body, xhtml, ctx.get(CONTEXT_KEYS.SEGMENT_HINTS));
 
     const styles = files.get("styles.xml");

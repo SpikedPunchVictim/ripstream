@@ -122,20 +122,11 @@ export class RequestTooLargeError extends RipstreamError {
 
 /**
  * Which limit a `LimitExceededError` is about, so a consumer maps a refusal without reading the message:
- *
- * - `outputChars`: `maxOutputChars` (the text, or the recursive total). `documentOutputChars`: `maxDocumentOutputChars`.
- * - `zipEntries`: `maxZipEntries` (zip, tar, cpio, ar, ISO and dump entries).
- * - `ratio`: `maxDecompressionRatio`. `entryBytes`: `maxEmbeddedResourceBytes` (one entry or part).
- *   `totalBytes`: `maxTotalEmbeddedBytes` (all of an archive).
- * - `nodeDepth`: embedded depth (`maxNodeDepth`) and the nesting guards of mail, HTML, XML and directories.
- * - `embeddedResources`: `maxEmbeddedResources`. `entityExpansion`: XML entity expansion (`maxXmlEntityExpansions`).
- * - `metadataChars`: `maxMetadataTotalChars` and the per-key value cap of `Metadata`.
- * - `inputBytes`: the input itself is too large (an isolator's `maxInputBytes`, a stream or PDF cap).
- * - `pages`: the PDF page cap.
- * - `memory`, `cpu`, `disk`, `resultBytes`: an isolated child's resource budget (its memory, CPU time, temporary disk,
- *   or the result it may send back) or the memory pool that holds the result.
- * - `other`: a format's own guard that no `ParseLimits` member names (a row, cell, packet or box count, say); the
- *   message says which.
+ * `outputChars`, `documentOutputChars`, `zipEntries` (zip, tar, cpio, ar, ISO, dump), `ratio`, `entryBytes` (one entry),
+ * `totalBytes` (all of an archive), `nodeDepth` (embedding and nesting guards), `embeddedResources`, `entityExpansion`,
+ * `metadataChars` (`maxMetadataTotalChars`, the per-key cap), `inputBytes`, `pages` (`maxPages`; a PDF's has a 10,000 cap),
+ * `memory`, `cpu`, `disk`, `resultBytes` (an isolated child's budgets, or the memory pool holding its result), and
+ * `other`: a format's own guard no `ParseLimits` member names (the message says which).
  */
 export const LIMIT_REASONS = [
   "outputChars",

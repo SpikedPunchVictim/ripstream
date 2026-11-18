@@ -147,6 +147,16 @@ for (const [arm, ripstream] of arms) {
     assert.doesNotMatch(result.text, new RegExp(body(10_001)));
   });
 
+  test(`${arm}: a zip over maxZipEntries at the default output cap: entries alone end at the output cap, both truncations give the text and both warnings (tikajs-efpm)`, { timeout: 120_000 }, async () => {
+    const zip = bigZip(10_300);
+    await assert.rejects(ripstream.parse(zip, { filename: "big.zip", onEmbeddedLimit: "truncate" }), (e: unknown) => e instanceof LimitExceededError && e.limit === "outputChars");
+    const result = await ripstream.parse(zip, { filename: "big.zip", onEmbeddedLimit: "truncate", onOutputLimit: "truncate" });
+    assert.equal(result.text.length, 100_000);
+    assert.match(result.text, /e00001\.txt\s+n1\b/);
+    const cut = result.warnings.filter((w) => w.kind === "truncated").map((w) => (w.kind === "truncated" ? w.limit : ""));
+    assert.deepEqual(cut.sort(), ["outputChars", "zipEntries"]);
+  });
+
   test(`${arm}: tar with the limit raised above its entries reads all of them and sets no flag`, { timeout: 60_000 }, async () => {
     const records = await ripstream.parseRecursive(bigTar(3_000), {
       filename: "big.tar",

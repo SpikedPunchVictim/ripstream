@@ -41,23 +41,33 @@ export interface PathPart {
   readonly name: string;
 }
 
+export type RecordStatus = "ok" | "skipped" | "failed";
+
+/** A record's `status` and `reason`; an isolated parse's parent derives them from what crossed. */
+export function recordStatus(exception: { name: string; code?: unknown } | null, metadata: Metadata): Pick<ParseRecord, "status" | "reason"> {
+  if (exception === null) {
+    return metadata.getAll(TIKA_KEYS.PARSED_BY).includes("EmptyParser") ? { status: "skipped", reason: "no-parser" } : { status: "ok" };
+  }
+  const reason = typeof exception.code === "string" ? exception.code : exception.name;
+  return { status: reason === "UNSUPPORTED_FORMAT" ? "skipped" : "failed", reason };
+}
+
 export interface ParseRecord {
   readonly metadata: Metadata;
   content: string;
-  /**
-   * The document's path by names, "/" between them (and runs of "/" collapsed), from the root down. An archive entry
-   * named "data/x.csv" makes this string ambiguous: `pathParts` is the same path, unambiguous.
-   */
+  /** The path by names from the root down, "/" between them (runs collapsed); an entry named "data/x.csv" makes it ambiguous, `pathParts` is not. */
   readonly embeddedResourcePath: string;
-  /**
-   * `embeddedResourcePath` as a list, one part per document from the root down to this one, each name whole. Every
-   * record of `parseRecursive` has it; a record built elsewhere may not. Joining the names with "/" and collapsing runs
-   * of "/" gives `embeddedResourcePath`; the parts after the first are `tk:embedded-resource-path`.
-   */
+  /** `embeddedResourcePath` as a list, one whole name per document from the root; every record of `parseRecursive` has it. */
   readonly pathParts?: readonly PathPart[];
   readonly depth: number;
   mediaType: MediaType;
   exception: RipstreamError | Error | null;
+  /**
+   * `"failed"`: `exception` is set. `"skipped"`: no parser read it (EmptyParser, or `UNSUPPORTED_FORMAT`). Else `"ok"`; a cut or
+   * partial read is in `warnings`. `reason`: the exception's `code`, else its name; `"no-parser"` for EmptyParser.
+   */
+  status?: RecordStatus;
+  reason?: string;
   /** The shape `content` is written in (default "text"); the `tk:content-handler-type` of the record. */
   readonly handlerType?: HandlerType;
   /**
@@ -95,24 +105,14 @@ export class RecursiveParserWrapper implements Parser {
   private readonly segments: boolean;
 
   /**
-   * `recordFailures`: a container with no parser to take it is an empty document, as with Tika's EmptyParser, not
-   * a failure. Every other failure of the container is noted the same way and still thrown; the caller decides
-   * whether the records it keeps are an answer (see `Ripstream.parseRecursive`).
-   *
-   * `truncateOutput`: reaching `maxOutputChars` ends the parse instead of failing it. The text up to the limit is
-   * kept, the records parsed so far are the answer, and `tk:exception:write-limit-reached` is set on the container
-   * and on the document whose text was cut. Every other limit still fails the parse.
-   *
-   * `truncateEmbedded`: reaching `maxEmbeddedResources`, or an archive with more than `maxZipEntries` entries, keeps what
-   * was read instead of failing the parse, and notes it on the metadata (see `noteEmbeddedLimit`). The count ends the
-   * parse and is noted on the container's record; an archive's entries are cut in the archive, on its own record.
-   *
-   * `handlerType`: the shape each record's content is written in (default "text"). An embedded document's "text" is
-   * the text of its body; the container's is every character it writes. "ignore" keeps no content and counts no
-   * output: its budget is unlimited, as Tika's ignore handler has no write limit.
-   *
-   * `segments`: give each record its `segments`. Only with a `handlerType` of "text" or "body", whose content they
-   * index; a RangeError otherwise. Off, nothing is added to the parse.
+   * `recordFailures`: a container with no parser is an empty document, as with Tika's EmptyParser; any other failure of
+   * the container is noted the same way and still thrown (see `Ripstream.parseRecursive`).
+   * `truncateOutput`: reaching `maxOutputChars` ends the parse and keeps the records so far, with
+   * `tk:exception:write-limit-reached` on the container and the cut document. Other limits still fail it.
+   * `truncateEmbedded`: reaching `maxEmbeddedResources`, or an archive with more than `maxZipEntries` entries, keeps what was
+   * read and notes it (see `noteEmbeddedLimit`): the count on the container's record, an archive's cut on its own.
+   * `handlerType`: the shape of each record's content (default "text"); "ignore" keeps none and has no output limit.
+   * `segments`: give each record its `segments`; only for a `handlerType` of "text" or "body" (a RangeError otherwise).
    */
   constructor(
     delegate: Parser,
@@ -226,6 +226,7 @@ export class RecursiveParserWrapper implements Parser {
       const type = metadata.get("Content-Type");
       if (type !== null) record.mediaType = MediaType.parse(type)?.getBaseType() ?? record.mediaType;
       record.warnings = sink.finish(metadata);
+      Object.assign(record, recordStatus(record.exception, metadata));
     }
   }
 }
@@ -311,7 +312,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
     this.records.push(record);
 
     const parser = ctx.get(CONTEXT_KEYS.PARSER) as Parser | undefined;
-    if (parser === undefined) return;
+    if (parser === undefined) return void Object.assign(record, { status: "skipped", reason: "no-parser" });
 
     if (this.unpackRemaining !== undefined) {
       // Before the parse: whatever the parse does to the document, the bytes are the ones it was given.
@@ -382,6 +383,7 @@ class RecordExtractor implements EmbeddedDocumentExtractor {
         metadata.set(CONTENT_LENGTH, String(stream.length));
       }
       record.warnings = sink.finish(metadata);
+      Object.assign(record, recordStatus(record.exception, metadata));
     }
 
     // The text belongs to the embedded record only. Forwarding it to the

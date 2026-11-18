@@ -37,6 +37,8 @@ export interface ParseLimits {
    * isolator's own `maxInputBytes` (100 MiB by default), which is also the most a request may name.
    */
   readonly maxInputBytes?: number;
+  /** Most pages (PDF), slides (pptx) or sheets (xlsx) a document may have, else `LimitExceededError` ("pages") before any text. Unset: PDF 10,000, others none. */
+  readonly maxPages?: number;
   readonly maxEmbeddedResources: number;
   readonly maxEmbeddedResourceBytes: number;
   readonly maxTotalEmbeddedBytes: number;
@@ -47,12 +49,10 @@ export interface ParseLimits {
   /** Metadata values longer than this are truncated (see Metadata.setMaxValueChars). */
   readonly maxMetadataValueChars: number;
   /**
-   * One document's metadata may hold at most this many characters in total: every name (once) and every value counts
-   * its length plus one (see Metadata.setMaxTotalChars). Past it the parse fails with a LimitExceededError. The value
-   * cap bounds one value, this bounds their sum. The default, 2,000,000, is ten times the most any document in the
-   * test corpora produced (about 2,000 characters) and small enough that a text-mode isolated result still fits its
-   * metadata frame in the worst case (6 wire bytes per character), so an isolated and an in-process parse refuse the
-   * same documents. An isolated child always applies the default.
+   * One document's metadata may hold at most this many characters in total (each name once, each value, plus one apiece; see
+   * Metadata.setMaxTotalChars); past it the parse fails with a LimitExceededError. The default, 2,000,000, is far above any
+   * corpus document and keeps a text-mode isolated result inside its metadata frame (6 wire bytes a character), so an isolated
+   * and an in-process parse refuse the same documents. An isolated child always applies the default.
    */
   readonly maxMetadataTotalChars: number;
   readonly maxZipEntries: number;
@@ -101,6 +101,7 @@ const LIMIT_CHECKS: Readonly<Record<keyof ParseLimits, LimitCheck>> = {
   maxOutputChars: outputLimitIssue,
   maxDocumentOutputChars: outputLimitIssue,
   maxInputBytes: nonNegativeInteger,
+  maxPages: nonNegativeInteger,
   maxEmbeddedResources: nonNegativeInteger,
   maxEmbeddedResourceBytes: nonNegativeInteger,
   maxTotalEmbeddedBytes: nonNegativeInteger,

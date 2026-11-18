@@ -14,6 +14,7 @@ import { MediaType } from "../src/media-type.ts";
 
 const COUNT_LIMITS = [
   "maxInputBytes",
+  "maxPages",
   "maxEmbeddedResources",
   "maxEmbeddedResourceBytes",
   "maxTotalEmbeddedBytes",
@@ -73,8 +74,8 @@ test("timers are whole milliseconds a timer can hold; maxParseMillis 0 means no 
 
 test("an unknown limit is refused by name", () => {
   assert.throws(
-    () => assertValidLimits({ maxPages: 3 } as never),
-    (error: unknown) => error instanceof RangeError && /unknown limit "maxPages"/.test(error.message),
+    () => assertValidLimits({ maxWidgets: 3 } as never),
+    (error: unknown) => error instanceof RangeError && /unknown limit "maxWidgets"/.test(error.message),
   );
 });
 
@@ -101,7 +102,7 @@ test("a limit set to undefined is absent, never an override", () => {
 
 test("ParseContext and createChild refuse bad limits", () => {
   assert.throws(() => new ParseContext({ limits: { maxNodeDepth: Number.NaN } }), /maxNodeDepth/);
-  assert.throws(() => new ParseContext({ limits: { maxPages: 1 } as never }), /unknown limit "maxPages"/);
+  assert.throws(() => new ParseContext({ limits: { maxWidgets: 1 } as never }), /unknown limit "maxWidgets"/);
   assert.throws(() => new ParseContext().createChild({ limits: { maxZipEntries: -1 } }), /maxZipEntries/);
 });
 
@@ -115,7 +116,7 @@ test("Ripstream refuses bad limits before it reads the source or arms a timer", 
     parser: { getSupportedTypes: () => new Set(), parse: () => Promise.reject(new Error("must not run")) } as never,
   });
   const bytes = new Uint8Array(1);
-  for (const limits of [{ maxParseMillis: 2 ** 31 }, { maxNodeDepth: Number.NaN }, { maxPages: 1 }] as Partial<ParseLimits>[]) {
+  for (const limits of [{ maxParseMillis: 2 ** 31 }, { maxNodeDepth: Number.NaN }, { maxWidgets: 1 }] as Partial<ParseLimits>[]) {
     await assert.rejects(ripstream.parse(bytes, { limits }), RangeError);
     assert.throws(() => ripstream.parseToStream(bytes, { limits }), RangeError);
   }

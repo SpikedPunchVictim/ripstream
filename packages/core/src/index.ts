@@ -350,6 +350,7 @@ export {
 export {
   RecursiveParserWrapper,
   type ParseRecord,
+  type RecordStatus,
   type PathPart,
   type PathPartKind,
 } from "./recursive.ts";

@@ -76,8 +76,16 @@ Defaults and what each enforces are in [security.md](security.md#resource-limits
 | `maxParseMillis` | 60,000 | `ParseTimeoutError` (HTTP 408) | none |
 | `maxMetadataValueChars` | 1,000,000 | **the value is cut silently, with no flag** (`Metadata.setMaxValueChars`) | none |
 | `maxMetadataTotalChars` | 2,000,000 | `LimitExceededError` | none |
-| PDF pages | 10,000 (fixed) | `LimitExceededError` naming the count | none |
+| `maxPages` | none; a PDF has a fixed 10,000 | `LimitExceededError` (`limit: "pages"`, `observed` pages, `max`) before any text is extracted: a PDF's `numPages`, an xlsx/ods's sheets, a pptx/odp's slides. A PDF over its cap is refused even when `maxPages` is higher. In a child the same, through the request's `limits` | none |
 | `maxXmlEntityExpansions` | 0, reserved | never reached: DTD entities are not expanded | none |
+
+**Text from an archive over the entry limit.** `parse` and `parseRecursive` with `onEmbeddedLimit: "truncate"` return the text of the
+first `maxZipEntries` entries (zip, tar, cpio, ar, ISO) with a `truncated` warning, `limit: "zipEntries"`
+([warnings.md](warnings.md)), in process and through a child (measured at HEAD, a 50,000-entry zip: 10,000 entries read, one
+`truncated:zipEntries` warning). Two things still end such a call in `LimitExceededError`, and are not the entry limit: `maxOutputChars`
+(default 100,000, which 10,000 entries can pass: the error is `limit: "outputChars"`; add `onOutputLimit: "truncate"`, or raise
+the cap, to keep the text) and the other three archive methods: `parseToString`, `parseToHandler` and `parseToStream` ignore both
+`truncate` options and always throw, so a caller that uses one sees `LIMIT_EXCEEDED` with `limit: "zipEntries"` and no text.
 
 `onOutputLimit` and `onEmbeddedLimit` cross the isolation boundary, and so does every limit but `maxTaskMillis` (the
 isolation's own budget; which limit is enforced where is the table in [isolation.md](isolation.md#per-request-limits)). The server and
@@ -86,6 +94,31 @@ the CLI keep throwing at the entry limits except where `docs/migration.md` says 
 Two flags belong to a *segmented* result, not a limit of the parse: `tk:segments-degraded` (value `ptr` or `selector`)
 says the record's segment locations did not fit the allowance for locations and its segments are line (JSON) or
 paragraph (HTML) segments instead, with the text kept ([segments.md](segments.md)).
+
+## Per record: `status` and `reason`
+
+Every record `parseRecursive` returns (the container's and each embedded document's), in process and through a child, has a
+`status` and, when it is not `"ok"`, a `reason`. They are derived from fields the record already has, so nothing new crosses the
+boundary and the existing fields (`exception`, `warnings`, `tk:exception:*`) are unchanged.
+
+| `status` | When | `reason` |
+| --- | --- | --- |
+| `"ok"` | the document was read, whole or in part: a cut or partial read is a `warnings` entry, not a status | absent |
+| `"skipped"` | no parser read it: the type has none (`tk:parsed-by` is `EmptyParser`) or the exception is `UNSUPPORTED_FORMAT` | `"no-parser"`, or `UNSUPPORTED_FORMAT` |
+| `"failed"` | `exception` is set | the exception's `code` (`MALFORMED_DOCUMENT`, `ENCRYPTED_DOCUMENT`, `LIMIT_EXCEEDED`, ...); a plain `Error` with no code gives its `name` |
+
+A record that is an archive entry cut by `onEmbeddedLimit: "truncate"` does not exist (the entries past the limit are not read), so
+a cut is in the archive's own `warnings` and `tk:exception:embedded-resource-limit-reached`, not in a status. Through a child the
+exception is a plain `Error` (see "Error to status", below), but its `code` crosses, so `reason` is the same as in process.
+
+## Error codes are API, messages are not
+
+The `code` of a `RipstreamError` (`MALFORMED_DOCUMENT`, `LIMIT_EXCEEDED`, `ADMISSION_REFUSED`, ...), the `limit` of a
+`LimitExceededError` (the table below) and the `status` and `reason` above are stable: a code or `limit` that exists is not
+renamed or reused for another meaning in a release, and a new one is added in the CHANGELOG. A **message is not API**: it
+is for people, it is reworded when it helps (it has been, e.g. `tikajs-mz56`, `tikajs-6ghz`), and it can carry a
+document's own text. Branch on `code`, `limit`, `observed` and `max`, never on a message; a `limit` a parent does not know
+(a newer child) arrives as `other`.
 
 ## Nested archive depth
 
@@ -154,7 +187,7 @@ a limit: HTTP 422, CLI exit 3, pipes `PAYLOAD_LIMIT_EXCEEDED`.
 | `entityExpansion` | an XML entity declaration (`maxXmlEntityExpansions`); no numbers |
 | `metadataChars` | `maxMetadataTotalChars` |
 | `inputBytes` | the input is too large: `maxInputBytes` (a call's own limit, or the isolator's), a bounded read, a fetched body or a PDF over its cap |
-| `pages` | the PDF page cap |
+| `pages` | `maxPages` (pages of a PDF, sheets of a workbook, slides of a presentation) and a PDF's fixed 10,000 |
 | `memory`, `cpu`, `disk` | an isolated child's memory, CPU-time or temporary-disk budget; `memory` also covers a parse worker that ran out of heap |
 | `resultBytes` | the result an isolated child may send back, or a `maxOutputChars` whose result would not fit the isolation ceiling |
 | `other` | a format's own guard that no `ParseLimits` member names (a row, cell, packet or box count, a header block); the message says which, and `observed` and `max` may be absent |

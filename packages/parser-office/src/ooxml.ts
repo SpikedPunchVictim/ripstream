@@ -19,6 +19,7 @@ import {
   TIKA_KEYS,
 } from "@spikedpunch/ripstream-core";
 import { SaxesParser } from "saxes";
+import { capPages } from "./page-cap.ts";
 import { OpcPackage } from "./opc.ts";
 import {
   appendText,
@@ -110,7 +111,7 @@ export class OoxmlParser implements Parser {
     } else if (files["xl/workbook.xml"] !== undefined) {
       await renderWorkbook(files, xhtml, hints, ctx);
     } else if (files["ppt/presentation.xml"] !== undefined) {
-      await renderPresentation(files, xhtml, hints);
+      await renderPresentation(files, xhtml, hints, ctx);
     } else if (files["visio/document.xml"] !== undefined) {
       await renderVisio(files, xhtml);
     } else {
@@ -883,6 +884,7 @@ async function renderWorkbook(
 
   const workbook = parsePart(files, "xl/workbook.xml");
   const sheets = orderedSheets(files, workbook);
+  capPages(ctx, sheets.length, "sheets");
   // A sheet the workbook lists and the package has no part for is not read, and says nothing in the text: a workbook whose
   // sheets are all gone would read as an empty one.
   const declared = workbook === undefined ? 0 : descendantsNamed(workbook, "sheet").length;
@@ -1016,8 +1018,10 @@ async function renderPresentation(
   files: Record<string, Uint8Array>,
   xhtml: XHTMLContentHandler,
   hints: SegmentHints | undefined,
+  ctx: ParseContext,
 ): Promise<void> {
   const slides = orderedSlides(files);
+  capPages(ctx, slides.length, "slides");
 
   for (const slide of slides) {
     const root = parsePart(files, slide);

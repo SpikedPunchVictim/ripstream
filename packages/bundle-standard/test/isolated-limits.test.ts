@@ -203,6 +203,7 @@ test("every limit that crosses reaches a child at once: no RangeError for any Pa
     maxZipEntries: 100,
     maxXmlEntityExpansions: 0,
     maxInputBytes: 1_000_000,
+    maxPages: 1000,
   };
   await bothAnswer(bytes, every);
 });

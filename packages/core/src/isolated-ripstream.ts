@@ -12,7 +12,7 @@ import {
   type ParseIsolator,
 } from "./isolation.ts";
 import { assertHandlerType, type HandlerType } from "./handler-type.ts";
-import type { ParseRecord } from "./recursive.ts";
+import { recordStatus, type ParseRecord } from "./recursive.ts";
 import type { Segment } from "./segments.ts";
 import { assertValidLimits, type ParseLimits } from "./parse-context.ts";
 import { assertLowYieldPolicy, enforceLowYield, recordWarnings } from "./warnings.ts";
@@ -179,9 +179,10 @@ function toMetadata(values: Readonly<Record<string, readonly string[]>>): Metada
 }
 
 function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | undefined): ParseRecord {
+  const metadata = toMetadata(record.metadata);
   return {
     ...(handlerType === undefined ? {} : { handlerType }),
-    metadata: toMetadata(record.metadata),
+    metadata,
     content: record.content,
     embeddedResourcePath: record.embeddedResourcePath,
     ...(record.pathParts === undefined ? {} : { pathParts: record.pathParts }),
@@ -189,6 +190,7 @@ function toParseRecord(record: IsolatedParseRecord, handlerType: HandlerType | u
     mediaType: MediaType.parse(record.mediaType) ?? MediaType.OCTET_STREAM,
     exception: record.exception === null ? null : toException(record.exception),
     warnings: record.warnings ?? [],
+    ...recordStatus(record.exception, metadata),
     ...(record.bytes === undefined ? {} : { bytes: record.bytes }),
     ...(record.segments === undefined ? {} : { segments: toSegments(record) }),
   };

@@ -130,6 +130,7 @@ export const ISOLATED_FLAT_LIMIT_NAMES = ["maxOutputChars", "maxEmbeddedResource
 /** The limits an `IsolatedParseRequest` carries in its `limits` object. */
 export const ISOLATED_LIMIT_NAMES = [
   "maxInputBytes",
+  "maxPages",
   "maxDocumentOutputChars",
   "maxEmbeddedResourceBytes",
   "maxTotalEmbeddedBytes",
@@ -273,18 +274,13 @@ export type IsolatedParseResult =
   | { readonly kind: "records"; readonly records: readonly IsolatedParseRecord[] };
 
 /**
- * Runs a whole parse inside a resource-budgeted boundary. The server, the pipes
- * engine and the CLI reach it through `createIsolatedRipstream`.
+ * Runs a whole parse inside a resource-budgeted boundary; the server, the pipes engine and the CLI reach it through
+ * `createIsolatedRipstream`. A facade: the implementation owns routing (detection, the in-process allowlist), the init-time
+ * probe and any lenient-mode fallback; the caller passes bytes (or a trusted path).
  *
- * This is a facade. The implementation owns routing (media-type detection and
- * the in-process safe allowlist), the init-time availability probe and any
- * lenient-mode fallback; the caller only passes bytes (or a trusted path).
- *
- * Failures are thrown as RipstreamError subclasses: IsolationError for
- * infrastructure problems, ParseTimeoutError / LimitExceededError /
- * MalformedDocumentError for document-caused ones. When `signal` aborts,
- * implementations classify `signal.reason`: a TimeoutError DOMException
- * becomes ParseTimeoutError, anything else becomes AbortError.
+ * Failures are thrown as RipstreamError subclasses: IsolationError for infrastructure problems, ParseTimeoutError /
+ * LimitExceededError / MalformedDocumentError for document-caused ones. When `signal` aborts, a TimeoutError DOMException
+ * becomes ParseTimeoutError, anything else AbortError.
  */
 export interface ParseIsolator {
   isolate(

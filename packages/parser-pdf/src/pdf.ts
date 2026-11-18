@@ -138,8 +138,9 @@ export class PdfParser implements Parser {
 
       // The pages are read one by one up to a cap, and a document over it is refused, as every other limit is: reading
       // the first MAX_PAGES and saying nothing about the rest hid whatever was on them.
-      if (ready.numPages > MAX_PAGES) {
-        throw limitError(`PDF has ${ready.numPages} pages, exceeding the ${MAX_PAGES} page limit`, "pages", ready.numPages, MAX_PAGES);
+      const maxPages = Math.min(MAX_PAGES, limits.maxPages ?? MAX_PAGES);
+      if (ready.numPages > maxPages) {
+        throw limitError(`PDF has ${ready.numPages} pages, exceeding the ${maxPages} page limit`, "pages", ready.numPages, maxPages);
       }
 
       // Tika reads the XMP packet first, then the Info dictionary, which fills what the packet left empty.
