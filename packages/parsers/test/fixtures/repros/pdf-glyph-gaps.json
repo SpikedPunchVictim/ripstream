@@ -1,0 +1,53 @@
+{
+  "description": "tikajs-4c5k: glyphs a gap apart, as a code set letter by letter has them (Helvetica 11, one Tj each, a TJ with kerning numbers, and two fonts). PDFBox puts a space where the gap exceeds min(0.5 x the space width, 0.3 x the average glyph width): 0.139 em for digits and capitals, 0.07 em between narrow letters; pdf.js puts its own at 0.102 em, which split NHS2012D1298E into 'N H S 2 0 1 2 D 1 2 9 8 E'. Apache Tika 4.2.0 (/rmeta/text) for the same bytes, in order: 'NHS2012D1298E' and 'N H S 2 0 1 2 D 1 2 9 8 E' (gaps 0.12 and 0.20 em), 'KME2014D4023G' and 'K M E 2 0 1 4 D 4 0 2 3 G' (TJ), 'ill i i l l i t l' and 'illiillitl' (0.08 and 0.04 em), '12345678' and '1234 5678' (a font change). Written by scripts/make-pdf-repros.ts.",
+  "tags": [
+    "repro",
+    "pdf"
+  ],
+  "input": {
+    "file": "pdf-glyph-gaps.pdf",
+    "filename": "pdf-glyph-gaps.pdf"
+  },
+  "assertions": [
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "NHS2012D1298E"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "N H S 2 0 1 2 D 1 2 9 8 E"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "KME2014D4023G"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "K M E 2 0 1 4 D 4 0 2 3 G"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "ill i i l l i t l"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "illiillitl"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "12345678"
+    },
+    {
+      "type": "contains",
+      "field": "text",
+      "value": "1234 5678"
+    }
+  ]
+}

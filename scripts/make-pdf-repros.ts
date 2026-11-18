@@ -60,6 +60,44 @@ function rotatedPageTable(): Buffer {
   ]);
 }
 
+/**
+ * A page of Helvetica 11 lines whose glyphs are shown a few at a time with a gap of `gap` em between them, as codes set letter by
+ * letter are: one Tj for each glyph (`runs`), a TJ array with the gap as a kerning number (`kerned`), or two fonts with the gap
+ * between them (`bold`).
+ */
+function glyphGaps(): Buffer {
+  const width = (ch: string): number => (/[0-9]/.test(ch) ? 556 : ({ N: 722, H: 722, S: 667, D: 722, E: 667, K: 667, M: 833, G: 778, i: 222, l: 222, t: 278 } as Record<string, number>)[ch]!);
+  const size = 11;
+  let y = 180;
+  let content = "";
+  const runs = (text: string, gap: number): void => {
+    let x = 10;
+    for (const ch of text) {
+      content += `BT /F1 ${size} Tf ${x.toFixed(4)} ${y} Td (${ch}) Tj ET\n`;
+      x += (width(ch) * size) / 1000 + gap * size;
+    }
+    y -= 18;
+  };
+  const kerned = (text: string, gap: number): void => {
+    content += `BT /F1 ${size} Tf 10 ${y} Td [${[...text].map((ch) => `(${ch})`).join(` ${-Math.round(gap * 1000)} `)}] TJ ET\n`;
+    y -= 18;
+  };
+  const bold = (first: string, second: string, gap: number): void => {
+    const x = 10 + ([...first].reduce((sum, ch) => sum + width(ch), 0) * size) / 1000 + gap * size;
+    content += `BT /F1 ${size} Tf 10 ${y} Td (${first}) Tj ET\nBT /F2 ${size} Tf ${x.toFixed(4)} ${y} Td (${second}) Tj ET\n`;
+    y -= 18;
+  };
+  runs("NHS2012D1298E", 0.12);
+  runs("NHS2012D1298E", 0.2);
+  kerned("KME2014D4023G", 0.12);
+  kerned("KME2014D4023G", 0.2);
+  runs("illiillitl", 0.08);
+  runs("illiillitl", 0.04);
+  bold("1234", "5678", 0.12);
+  bold("1234", "5678", 0.2);
+  return pageWith(content, "/F1 5 0 R /F2 6 0 R", HELVETICA, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+}
+
 const HELVETICA = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
 /** A Type3 font (its glyphs are drawn by the file itself, so it counts as embedded) whose one glyph H is object `glyph`. */
 const type3 = (glyph: number): string =>
@@ -91,6 +129,9 @@ const FILES: Record<string, Buffer> = {
   // tikajs-jmd0: a table on a page rotated by /Rotate 90 whose text runs up the page. Tika 4.2.0 reads the rows upright:
   // "Name Alice", "City Paris", "Total 42".
   "pdf-rotated-page-table.pdf": rotatedPageTable(),
+  // tikajs-4c5k: glyphs a gap apart, in a code set letter by letter. PDFBox puts a space where the gap is over min(0.5 x the space
+  // width, 0.3 x the average glyph width): 0.139 em in Helvetica, 0.07 em between narrow letters. pdf.js puts one at 0.102 em.
+  "pdf-glyph-gaps.pdf": glyphGaps(),
   // tikajs-xxud: a TrueType font whose /FontFile2 is ten junk bytes. Tika 4.2.0 (PDFBox) cannot read the program, so it
   // is a damaged font and also counts as not embedded: both keys true.
   "pdf-damaged-font-program.pdf": onePage(

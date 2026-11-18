@@ -4,6 +4,23 @@ All notable changes. The project has no tagged release yet, so everything is und
 
 ## Unreleased
 
+### PDF word spacing follows PDFBox, not pdf.js (`tikajs-4c5k`)
+
+Changed: a space between two glyphs of PDF text is now written where PDFBox writes one: the gap is wider than the smaller of half the
+font's space width and 0.3 of the running average glyph width. pdf.js writes a space for any gap of 0.10 to 0.6 em, so a code set a glyph at a
+time with small gaps (`NHS2012D1298E`) was `N H S 2 0 1 2 D 1 2 9 8 E` and is now one token, as in Tika, and narrow glyphs set wide apart
+(`ill i i l l i t l`) are separated as Tika separates them. The page's operator list is walked beside its text (`pdf-glyph-gaps.ts`) with
+PDFBox's arithmetic, in 32-bit floats. A sweep of 1,218 gaps in Helvetica, Times and Courier against a running Tika 4.2.0 differed in 165
+before and in none after. On the 92-PDF reference benchmark the mean TF1 went from 0.8221 to 0.8231 (50 fixtures moved, 48 up and 2 down, by 0.0006 and
+0.0004: PDFBox takes a font's space from the font program where pdf.js shows only the declared widths); the summed token distance to Tika
+went from 35,268 to 31,913.
+Cost: each page is read a second time (pdf.js `getOperatorList`, with image decoding off), about 5 ms a page on top of 6 ms for the text, and
+about 20 MB more resident on a typical document. A page with more than 20,000 text items or 200,000 operators (the longest of the 794 reference
+pages has 87,000), or whose glyphs do not line up with pdf.js's items, or whose walk fails, keeps pdf.js's spacing, and the read of an
+operator list is cancelled at the limit (a 42 MB page of path operators went from 1.5 GB resident to 0.5 GB).
+Not changed: a font whose space is neither shown nor declared has its space taken as the mean glyph width, where PDFBox reads it from the
+font program, so a gap near the threshold can fall the other way (`docs/migration.md`).
+
 ### docx heading styles are written as h1-h6, as Tika writes them (`tikajs-9zu2`)
 
 Changed: a docx paragraph in a heading style is written as the heading Tika writes, so `handlerType: "html"` has `<h1>`-`<h6>` and

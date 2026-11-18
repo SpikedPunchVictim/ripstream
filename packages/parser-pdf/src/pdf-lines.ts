@@ -4,6 +4,9 @@ export interface PdfTextItem {
   readonly transform?: number[];
   readonly width?: number;
   readonly height?: number;
+  readonly dir?: string;
+  /** PDFBox's decision on the space between this item and the one after it, where it is not the one needsSpace gives (pdf-glyph-gaps.ts). */
+  readonly gapAfter?: boolean;
 }
 
 /** Baselines closer than this (in points) are one line. */
@@ -60,7 +63,7 @@ function sortedByPosition(items: PdfTextItem[]): PdfTextItem[] {
 }
 
 /** Whether a space belongs between `previous` and `next`, two items of one line. Without geometry, it does. */
-function needsSpace(previous: PdfTextItem | undefined, next: PdfTextItem): boolean {
+export function needsSpace(previous: PdfTextItem | undefined, next: PdfTextItem): boolean {
   const end = previous?.transform?.[4];
   const start = next.transform?.[4];
   const width = previous?.width;
@@ -180,7 +183,9 @@ export function lines(items: PdfTextItem[], sortByPosition = false): string[] {
       lineY = y;
       lineHeight = item.height ?? 0;
     }
-    if (current.length > 0 && !current.endsWith(" ") && !item.str.startsWith(" ") && needsSpace(previous, item)) current += " ";
+    // PDFBox's own decision on this gap, when pdf-glyph-gaps.ts made one; a sorted page's previous item need not be the next in the stream.
+    const decided = sortByPosition ? undefined : previous?.gapAfter;
+    if (current.length > 0 && !current.endsWith(" ") && !item.str.startsWith(" ") && (decided ?? needsSpace(previous, item))) current += " ";
     current += item.str;
     previous = item;
     if (item.hasEOL === true) {

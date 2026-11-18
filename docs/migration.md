@@ -110,6 +110,18 @@ statistics `pdf:total-unmapped-unicode-chars`, `pdf:unmapped-unicode-chars-per-p
 same three codes it counted 3 of 7 characters where pdf.js reads all 7), and `pdf:contains-non-embedded-font`
 (`tikajs-j60e`). The paragraph grouping of Tika's PDF text is not reproduced either: ripstream writes one `<p>` per line.
 
+Word spacing in PDF text follows PDFBox's rule, not pdf.js's (`tikajs-4c5k`). pdf.js writes a space wherever two runs are 0.10 to 0.6 em
+apart; PDFBox writes one where the gap exceeds the smaller of half the font's space width and 0.3 of the running average glyph width.
+So a code such as `NHS2012D1298E`, set one glyph at a time with small gaps, is one token in Tika's text and was `N H S 2 0 1 2 D 1 2 9 8 E`
+in ripstream's, and the reverse holds for narrow glyphs set wide apart. ripstream now reads each page's operator list beside its text and
+decides every gap between glyphs the way PDFBox does (the space width is the font's own space glyph, else its declared width for
+character 32, else Helvetica, Times and Courier's, else the mean glyph width). The decision is made in 32-bit floats, as PDFBox's is, so a
+gap that sits on the threshold falls the same way (checked against a running Tika 4.2.0 on 1,218 gaps in Helvetica, Times and Courier: 0
+differ; 165 did before). It costs a second read of each page. A page whose text items and glyphs do not line up, that has more than
+20,000 text items or 200,000 operators, or whose operator list cannot be read keeps the spacing pdf.js gave it. Still different from Tika:
+a font whose space is neither shown nor declared (an embedded Type 1 font with no width for character 32) has its space taken as the
+mean glyph width, where PDFBox reads the width from the font program, so a gap near the threshold can fall the other way.
+
 A page that pdf.js cannot load is not silently gone (`tikajs-6ik0`): `tk:exception:warn` gets `MalformedDocumentError: page N
 could not be read: <reason>` and `pdf:chars-per-page` a `0` for it, so it still has one value per page. The same key names
 a page whose content stream is cut off, missing or cannot be decoded, or that shows text pdf.js did not extract, in every

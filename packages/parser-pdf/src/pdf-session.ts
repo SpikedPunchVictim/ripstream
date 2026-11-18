@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { PageContentScanner, type PageContent } from "./pdf-content.ts";
 import { ownerPasswordMatches, streamDecryptor } from "./pdf-decrypt.ts";
 import { eofOffsets } from "./pdf-eof.ts";
+import { respaced, type GlyphFont } from "./pdf-glyph-gaps.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
 import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
 import { preflightPdf, preflightPdfChunks } from "./pdf-preflight.ts";
@@ -142,8 +143,18 @@ interface PdfPage {
   /** The structure tree for the page, or null when the catalog has no /StructTreeRoot. */
   getStructTree?(): Promise<unknown>;
   streamTextContent(): ReadableStream<{ items: unknown[] }>;
+  readonly view?: readonly number[];
+  readonly commonObjs?: { get(name: string): unknown };
+  getOperatorList?(options?: { annotationMode?: number }): Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>;
+  /** pdf.js's own hand-over of each chunk of the operator list (private; see #operators). */
+  _renderPageChunk?: (chunk: { readonly length: number }, state: PdfOperatorState) => void;
   getAnnotations?(options?: { intent?: string }): Promise<PdfjsAnnotation[]>;
   cleanup(): void;
+}
+
+interface PdfOperatorState {
+  operatorList: { fnArray: unknown[]; argsArray: unknown[] };
+  streamReader?: { cancel(reason: unknown): Promise<unknown> } | null;
 }
 
 interface PdfMetadata {
@@ -180,6 +191,7 @@ interface LoadingTask {
 }
 
 interface PdfModule {
+  OPS?: Record<string, number>;
   PDFDataRangeTransport: RangeTransportConstructor;
   getDocument(options: Record<string, unknown>): LoadingTask;
 }
@@ -205,6 +217,11 @@ interface PdfOutlineItem {
   readonly title?: unknown;
   readonly items?: readonly PdfOutlineItem[];
 }
+
+/** Pages with more text items, or whose operator list is longer, keep the spacing pdf.js gave them (the walk reads a second copy of the page). */
+const MAX_RESPACED_ITEMS = 20_000;
+// The longest page of the 92 reference PDFs has 87,000 operators (the median 560). pdf.js holds about 250 bytes per operator.
+const MAX_RESPACED_OPERATORS = 200_000;
 
 /** A page label is a few characters ("iv", "A-3"); a longer one is cut, as it ends up in a segment's labels. */
 const MAX_PAGE_LABEL = 64;
@@ -255,6 +272,7 @@ export class PdfSession {
    * whose page shows text pdf.js did not extract. Set by #load when the file is in memory; used at most once.
    */
   #reopenRepaired: (() => Promise<PdfDocument | null>) | undefined;
+  #ops: Record<string, number> | undefined;
 
   constructor(input: PdfSessionInput) {
     this.#input = input;
@@ -378,11 +396,16 @@ export class PdfSession {
   async #load(): Promise<PdfDocument> {
     const input = this.#input;
     const pdfjs = (await importWithoutPdfjsWarnings(() => import("pdfjs-dist/legacy/build/pdf.mjs"))) as unknown as PdfModule;
+    this.#ops = pdfjs.OPS;
     const options: Record<string, unknown> = {
       isEvalSupported: false,
       useWorkerFetch: false,
       disableFontFace: true,
       useSystemFonts: false,
+      // Nothing is drawn: the operator list read for word spacing (#spaced) leaves images out instead of decoding them (a 16 MB paper took 13 s and 1.2 GB).
+      maxImageSize: 1,
+      // Fonts carry their widths, for the width PDFBox takes for a space the page never shows (pdf-glyph-gaps.ts).
+      fontExtraProperties: true,
       // Errors only: pdf.js's warnings go to stdout through console.log, into the output of a command line tool.
       verbosity: 0,
       standardFontDataUrl: pdfjsDataUrl("standard_fonts"),
@@ -546,7 +569,7 @@ export class PdfSession {
     let page: PdfPage | undefined;
     try {
       page = await document.getPage(index);
-      let items = await this.#readTextItems(page);
+      let items = await this.#spaced(page, await this.#readTextItems(page));
       let pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
       let scanned = await this.#pageContent(page);
       let content = pageLines.some((line) => line.trim().length > 0) ? undefined : scanned;
@@ -561,7 +584,7 @@ export class PdfSession {
           this.#document = reopened;
           repair = this.#repair;
           page = await document.getPage(index);
-          items = await this.#readTextItems(page);
+          items = await this.#spaced(page, await this.#readTextItems(page));
           pageLines = lines(items as PdfTextItem[], this.#input.sortByPosition ?? false);
           scanned = await this.#pageContent(page);
           content = pageLines.some((line) => line.trim().length > 0) ? undefined : scanned;
@@ -601,6 +624,59 @@ export class PdfSession {
     } finally {
       page?.cleanup();
       await this.#releaseDocumentCaches(document, index);
+    }
+  }
+
+  /** The items with word spacing as PDFBox decides it (pdf-glyph-gaps.ts); the items as they are when that cannot be done. */
+  /**
+   * The page's operator list, or null when it has more than MAX_RESPACED_OPERATORS. pdf.js builds the whole list before it
+   * returns it (a 42 MB page of path operators took 1.4 GB), so the count is kept as its chunks arrive and the read is
+   * cancelled at the limit. That wraps `_renderPageChunk`, which is private; a pdf.js without it is read whole and counted after.
+   */
+  async #operators(page: PdfPage): Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> } | null> {
+    const chunk = page._renderPageChunk;
+    let over: (() => void) | undefined;
+    const exceeded = new Promise<null>((resolve) => (over = () => resolve(null)));
+    if (typeof chunk === "function") {
+      page._renderPageChunk = function (this: PdfPage, piece, state) {
+        if (state.operatorList.fnArray.length + piece.length <= MAX_RESPACED_OPERATORS) return chunk.call(this, piece, state);
+        state.operatorList.fnArray.length = 0;
+        state.operatorList.argsArray.length = 0;
+        state.streamReader?.cancel(new Error("operator limit")).catch(() => undefined);
+        state.streamReader = null;
+        over?.();
+      };
+    }
+    const list = await Promise.race([page.getOperatorList!({ annotationMode: 0 }), exceeded]);
+    // pdf.js keeps the page until document.cleanup(), and a hook that outlived the read would keep the list through `exceeded`.
+    if (list !== null && typeof chunk === "function") delete page._renderPageChunk;
+    return list !== null && list.fnArray.length <= MAX_RESPACED_OPERATORS ? list : null;
+  }
+
+  async #spaced(page: PdfPage, items: unknown[]): Promise<unknown[]> {
+    const ops = this.#ops;
+    if (ops === undefined || page.getOperatorList === undefined || items.length === 0 || items.length > MAX_RESPACED_ITEMS) return items;
+    try {
+      const list = await this.#operators(page);
+      if (list === null) return items;
+      const objs = page.commonObjs;
+      const view = page.view;
+      return (
+        respaced(items as PdfTextItem[], {
+          list,
+          ops,
+          view,
+          font: (name) => {
+            try {
+              return objs?.get(name) as GlyphFont | undefined;
+            } catch {
+              return undefined;
+            }
+          },
+        }) ?? items
+      );
+    } catch {
+      return items;
     }
   }
 

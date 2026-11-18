@@ -24,6 +24,7 @@ measured size plus about five percent (KiB).
 
 | package | measured | cap | what grew it |
 |---|---|---|---|
+| parser-pdf | 427,828 | 435 (was 385) | the glyph-gap interpreter that applies PDFBox's word-space rule per glyph (tikajs-4c5k), about 31 KB of dist including its source map and `.d.ts` |
 | parser-archive | 257,380 | 252 (was 250) | typed `limit`, `observed` and `max` at every archive throw site, through core's `limitError` (tikajs-mz56) |
 | parsers | 1,112,011 | 1100 (was 1000) | a hand-written CommonMark/GFM block and inline parser for Markdown (tikajs-8uhs, no new dependency); RTF `\pict` embedded documents (tikajs-3b5g); Tika-exact email body text (tikajs-w12u); the HTML body start (tikajs-x1cd); XML UTF-16 detection (tikajs-dmp7); unversioned WordPerfect as empty (tikajs-mic4). Per-feature bytes not measured |
 | parser-office | 749,322 | 740 (was 725) | the streaming path for a very large docx `document.xml` now reads tables, wrappers, text boxes, CDATA and `moveFrom` as the normal path does and gives the same segment hints (tikajs-ne73), about 7.3 KB of dist |
