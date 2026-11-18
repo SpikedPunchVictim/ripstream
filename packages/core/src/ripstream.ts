@@ -20,6 +20,7 @@ import { isEmbeddedCountLimit, noteEmbeddedLimit } from "./embedded.ts";
 import { classifyFailure, isWriteLimitReached } from "./failure.ts";
 import { noteEmptyParser, recordFailure, RecursiveParserWrapper, type ParseRecord } from "./recursive.ts";
 import { TIKA_KEYS } from "./tika-keys.ts";
+import { RIPSTREAM_VERSION } from "./version.ts";
 import type { EventSink } from "./events.ts";
 import { RipstreamInputStream } from "./ripstream-input-stream.ts";
 import type { InputSource } from "./content-handler.ts";
@@ -311,7 +312,7 @@ export class Ripstream {
     counting: "all" | "body" | "none" = "all",
   ): Promise<{ readonly metadata: Metadata; readonly exception: Error | null; readonly warnings: readonly ParseWarning[] }> {
     const recording = options.onDocumentFailure === "record";
-    return this.withStream(source, options, async (stream, metadata, ctx) => {
+    const run = async (stream: RipstreamInputStream, metadata: Metadata, ctx: ParseContext) => {
       ctx.set(CONTEXT_KEYS.PARSER, this.parser);
       ctx.set(CONTEXT_KEYS.DETECTOR, this.detector);
       const sink = new WarningSink();
@@ -373,6 +374,14 @@ export class Ripstream {
         durationMs: performance.now() - started,
       });
       return { metadata, exception: null, warnings: sink.finish(metadata) };
+    };
+    return this.withStream(source, options, async (stream, metadata, ctx) => {
+      try {
+        return await run(stream, metadata, ctx);
+      } finally {
+        // After the parse: while a parser writes its head, a key adds a line break to the content.
+        metadata.set(TIKA_KEYS.EXTRACTOR_VERSION, RIPSTREAM_VERSION);
+      }
     });
   }
 

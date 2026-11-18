@@ -20,6 +20,7 @@ import { ContentHandlerDecorator } from "./content-handler.ts";
 import { TeeContentHandler } from "./handlers/tee.ts";
 import { assertHandlerType, createOutputHandler, type HandlerType } from "./handler-type.ts";
 import { markParseTiming } from "./rmeta.ts";
+import { RIPSTREAM_VERSION } from "./version.ts";
 import { SegmentTap, segmentLocationAllowance, type Segment } from "./segments.ts";
 import { CONTENT_LENGTH, TIKA_KEYS } from "./tika-keys.ts";
 import { WarningSink, type ParseWarning } from "./warnings.ts";
@@ -216,6 +217,7 @@ export class RecursiveParserWrapper implements Parser {
       if (output.truncate && output.reached) metadata.set(TIKA_KEYS.WRITE_LIMIT_REACHED, "true");
       markParseTiming(metadata, startedAt);
       metadata.set(TIKA_KEYS.EMBEDDED_DEPTH, "0");
+      metadata.set(TIKA_KEYS.EXTRACTOR_VERSION, RIPSTREAM_VERSION);
       if (stream.length !== null && metadata.get(CONTENT_LENGTH) === null) {
         metadata.set(CONTENT_LENGTH, String(stream.length));
       }

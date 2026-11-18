@@ -129,7 +129,7 @@ test("Ripstream.parse refuses root metadata past maxMetadataTotalChars", async (
     LimitExceededError,
   );
   const ok = await ripstream.parse(new Uint8Array([1]), { limits: { maxMetadataTotalChars: 2000 } });
-  assert.equal(ok.metadata.size(), 10);
+  assert.equal(ok.metadata.size(), 11); // the ten keys and tk:extractor-version
 });
 
 test("Ripstream.parse with the default limits accepts a 1,000,000-character value plus 500,000 more", async () => {

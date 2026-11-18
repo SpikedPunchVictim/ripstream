@@ -46,6 +46,8 @@ export const TIKA_KEYS = {
    */
   SEGMENTS_DEGRADED: "tk:segments-degraded",
   IS_ENCRYPTED: "tk:encrypted",
+  /** Ripstream's own: the release that wrote the result. */
+  EXTRACTOR_VERSION: "tk:extractor-version",
 } as const;
 
 /** The values of `tk:embedded-resource-type` (`TikaCoreProperties.EmbeddedResourceType`), in Tika's order. */

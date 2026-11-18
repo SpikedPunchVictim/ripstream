@@ -2,7 +2,60 @@
 
 All notable changes. The project has no tagged release yet, so everything is under Unreleased.
 
+## Output changes
+
+An **output change** is anything that can change the `text` or the metadata of an input that parsed before: a line-break rule, a field
+that moves between text and metadata, a key added or dropped, a document that was skipped and is now read. A change that is only a
+fix of a crash or a refusal is not one. Every entry that is one starts its first line with `Output change (<formats>):`, names the
+bead or commit, and says in one sentence what a stored extraction of the old kind loses or gains, so a consumer that stores text and
+the detector hits on it knows to scan again. `tk:extractor-version` on every result says which release wrote it
+([docs/results.md](docs/results.md)); it is the package version, so when the first release is tagged any entry marked as an output
+change bumps the minor version, and this table is replaced by the release headings. Until then compare by commit.
+
+### Known output changes from 4bbe289 to 3f115c0 (147 commits)
+
+Grizzly saw 27 of 65 real files change length in this range. How this was checked: 4bbe289, 3f115c0 and 15 checkpoints between them were
+built from `git archive` and run over the 159 fixture files of the repository that are PDF, xlsx/xls, eml, zip, html, docx, pptx, odt,
+msg, csv and md (`docs/results.md` lists the formats). A cell says **verified** when the fixtures changed in exactly the checkpoint
+interval that holds the commit and the commit's own message describes the change; **message only** when the commit message says it and
+no fixture here exercises it. Grizzly's 65 files are not in the repository, so a per-file match is not claimed.
+
+| What Grizzly saw | Format | Change and effect | Commit | Evidence |
+| --- | --- | --- | --- | --- |
+| HTML `<title>` gone from the text (222 to 26 and 162 to 15 chars) | html | The head's `<title>` is metadata (`dc:title`, `title`) only; a title after the body began is body text. Text is shorter by the title and its line. 28 of 28 HTML fixtures changed in 4bbe289..97565e3, 20 shorter | a89c8f4 | verified |
+| HTML both longer and shorter | html | Block ends get Tika's line break and a tab before a cell or list item (a89c8f4, longer where blocks were run together); the head writes no line breaks (5e936b6, the eight leading line breaks of a page go); text after `</body>` is body text (32175d2, longer); bare table parts are dropped and a cell implies its row (7ce64e5) | a89c8f4, 5e936b6, 32175d2, 7ce64e5 | a89c8f4 and 5e936b6 verified (1 more fixture changed in 027d7ad..2d79312); 32175d2 and 7ce64e5 message only |
+| `.eml` longer (846 to 1231) | eml | The text now starts with the header block (Subject, From, To, CC, ..., then a blank line), then every body part, then `Attachments:` and each attachment's text; `emailHeaders: false` removes the block. 23 of 26 eml fixtures got longer by it in c96bbed..f7f5074 | 90e3a76 | verified |
+| `.eml` text ends differently | eml | A body ends with Tika's paragraph breaks, a quoted-printable hard line break is CRLF with the spaces before it dropped, each non-alternative part is wrapped as Tika wraps it. 25 of 26 changed in e835e18..027d7ad | 0cb8cb9 | verified |
+| `.eml` both ways, before the header block | eml | 12 of 26 eml fixtures changed in 4bbe289..97565e3 (five to 41 characters longer, some up to 24 shorter), the interval in which block line breaks and tabs of the XHTML writer changed; the only other mail change there only de-duplicates `tk:exception:embedded-exception` | a89c8f4 | the interval is verified; which of its changes moved a given message is unverified |
+| `.msg` text appears | msg | An Outlook body kept in the HTML or compressed RTF property was empty before; it is read now, and attachments are read. 7 of 7 `.msg` fixtures changed (longer 5, shorter 2) | 9fa2db4 | verified |
+| PDFs about 2.5% shorter (24,177,174 to 23,570,229 chars on the 25 MiB file) | pdf | A line break per line instead of two (an empty end-of-line item was written as a blank line), a blank line only at a paragraph gap; raised text stays on its line; text drawn twice at one spot is written once; rotated pages are read a row at a time | f7f5074, 836796a, 21592d5 | f7f5074 verified on the PDF fixtures in c96bbed..f7f5074 (2 changed), 836796a/21592d5 in f7f5074..b1ba5ba (1 changed); the 2.5% on the large file is attributed by these messages, not measured |
+| PDFs longer where a CJK or CMap font was unreadable | pdf | pdf.js is given its predefined CMaps, so text with Unicode only by CMap is read | b4d8078 | verified (1 fixture) |
+| zips shorter | zip | An entry with an encrypted body used to put its ciphertext in the text (`synthetic-encrypted-entry.zip`: 94 to 47 chars, the ciphertext gone); the entry is now an unreadable entry, not text | a89c8f4 ("zip unsupported entries") | verified on that fixture; whether Grizzly's shorter zips are encrypted entries is unverified |
+| zips longer where a name was unsafe | zip, tar | An entry named with `..` or a drive letter was skipped, and is read under a sanitised name | 07da7d9 | message only |
+| xlsx and xls changed | xlsx, xls | Number formats follow Excel: `time 12h` `13:45:00` is `1:45 PM`, durations read `36:00` and `90:00` where they read `:01` and `:00` (a fixture got 3 characters longer; a `.xls` 2 shorter); a BIFF5 workbook in an OLE2 stream is read as POI reads it | a89c8f4, 6fe9bce | a89c8f4 verified (1 xlsx, 2 xls); 6fe9bce verified (2 xls changed in 2fc8c0c..e835e18); why Grizzly's xlsx got shorter is unverified |
+| md shorter | md | Markdown is read as CommonMark and written as Tika writes it: markup characters are not text, a table is tab-separated rows, front matter has no fences, references are resolved. 16 of 48 fixtures changed in 4bbe289..97565e3 (a89c8f4) and 38 more in 027d7ad..2d79312 (-27,907 characters over the set, 34 shorter) | a89c8f4, 331f8ff, e6de4ee, 3e80933, 15dcdc7 | verified |
+| csv / txt longer | csv, text | A text file keeps its carriage returns (a CRLF file gains one character a line) and ends with one added `\n` | db5c0e8 | verified (9 of 10 csv fixtures) |
+| odt and ods | odt | Notes, nested lists, header and footer regions and headings written as Tika writes them | bb4f313, 8ff9f99 | verified (4 odt fixtures changed in 027d7ad..2d79312, 2 in 2d79312..c96bbed) |
+
+Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`access-permission:*`, `pdf:has-marked-content`,
+`pdf:contains-non-embedded-font`, `pdf:contains-damaged-font`, `tk:pdf:image-only-*`), `.xls` (`SummaryInformation` keys, e6ad69e) and
+`msg`; a scan detector that reads metadata sees them. After 3f115c0, `tikajs-4c5k` (below) changes where a PDF writes a space, and
+`tk:extractor-version` is new on every result (`tikajs-25ot`).
+
 ## Unreleased
+
+### `tk:extractor-version` on every result, a results page, an output-change log (`tikajs-25ot`)
+
+Added: every result's metadata (`parse`, `parseToString`'s source parse, the container's record of `parseRecursive`, in a child and in this
+process alike) carries `tk:extractor-version`, the ripstream release (`RIPSTREAM_VERSION`, exported from core, one constant that
+`packages/core/test/version.test.ts` holds equal to the `version` of every workspace package). The key is set after the parse, so it
+adds no line to a record's content (a key present while a parser writes its head would add one: the head writes a `<meta>` line a key).
+An embedded record does not have it, and there is no per-parser version: that would need a number per parser kept in step with its output
+by hand, and the changelog's output-change entries name the format instead. The parity harness ignores the key like the other
+run-dependent `tk:` keys. docs/results.md says per format what is text and what is metadata only (an HTML `<title>` is metadata only; the
+email header block; the PDF image-only keys). The CHANGELOG has an "Output changes" convention and a table of the changes between
+4bbe289 and 3f115c0 that Grizzly saw, each with its cause and whether it was verified by running the two commits over the repository's fixtures.
+Public API addition (`api-report.json`).
 
 ### PDF word spacing follows PDFBox, not pdf.js (`tikajs-4c5k`)
 

@@ -38,7 +38,7 @@ export interface ParityDiff {
   readonly detail: string;
 }
 
-const DEFAULT_IGNORED = ["tk:parse-time-millis", "tk:digest", "tk:exception:embedded-parser"];
+const DEFAULT_IGNORED = ["tk:extractor-version", "tk:parse-time-millis", "tk:digest", "tk:exception:embedded-parser"];
 
 export function fixtureSha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");

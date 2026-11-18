@@ -15,6 +15,7 @@ import {
   CompositeParser,
   LimitExceededError,
   ParseContext,
+  RIPSTREAM_VERSION,
   RipstreamConfigError,
   UnsupportedFormatError,
   createRipstream,
@@ -219,6 +220,15 @@ test("an xml handler's markup beyond maxOutputChars does not fail the isolated p
     assert.equal(settled.length - before, 1, "it went to a child");
     assert.equal(viaChild.text.length, expected.text.length);
     assert.ok(viaChild.text === expected.text, "the same text");
+  });
+});
+
+test("a result parsed in a child carries the same tk:extractor-version as one parsed here", async () => {
+  await withStandard({}, async ({ ripstream }) => {
+    const child = await ripstream.parse(docx(["version"]), { filename: "v.docx" });
+    const here = await reference.parse(encoder.encode("x"), { filename: "v.txt" });
+    assert.equal(child.metadata.get("tk:extractor-version"), RIPSTREAM_VERSION);
+    assert.equal(here.metadata.get("tk:extractor-version"), RIPSTREAM_VERSION);
   });
 });
 

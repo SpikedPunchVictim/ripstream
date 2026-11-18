@@ -2,6 +2,7 @@ export {
   MediaType,
   type Comparable,
 } from "./media-type.ts";
+export { RIPSTREAM_VERSION } from "./version.ts";
 export { MediaTypeRegistry } from "./media-type-registry.ts";
 export { Metadata, type MetadataValue } from "./metadata.ts";
 export { javaDoubleString, javaFloatString } from "./java-double.ts";
