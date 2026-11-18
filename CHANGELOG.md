@@ -44,6 +44,16 @@ Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`
 
 ## Unreleased
 
+### Reuse: what a run did, platforms, pool sizing and the threat model documented (`tikajs-ddug`)
+
+Added: `RunDiagnostics.reuse` (`{ reused, retired }`), set by a reusing runner and reached through the existing
+`runner.onRunSettled` option of `createNodeIsolator` / `createStandardIsolation`: `reused` says the child had answered before, `retired`
+is the `ChildRetireReason` it was retired for at the end of that run (`error_frame`, `max_requests`, `rss_ceiling`, ...) or null when kept. A
+retirement with no run to carry it (`idle_timeout`, `evicted`, `dispose`) stays in `status().reuse.retired`. No new option; no behaviour
+change. docs/isolation.md: the platforms (Linux through `/proc`, macOS through `ps`, anything else rejected with the exact message), the pool
+a reusing isolator needs (2560 MiB an idle child, 2 x 2729 for two busy ones at default caps), what `trustDomain` must mean (one tenant or
+one trust level, never mixed) and the threat model, and the container measurement.
+
 ### Per-request admission instead of a construction failure; `overshootMb`; `status().reservation` (`tikajs-2clp`)
 
 Changed: `createNodeIsolator` (and `createStandardIsolation`, `serve`, the CLI) no longer fails when the pool cannot hold a request at the

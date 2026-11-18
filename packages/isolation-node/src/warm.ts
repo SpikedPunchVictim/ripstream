@@ -819,14 +819,14 @@ class WarmChild {
       if (!this.#exited) this.#proc.unref();
     }
     try {
-      this.#config.options.onRunSettled?.(this.#diagnostics(req));
+      this.#config.options.onRunSettled?.(this.#diagnostics(req, verdict));
     } catch {
       // diagnostics are best effort
     }
     req.resolve(verdict);
   }
 
-  #diagnostics(req: ActiveRequest): RunDiagnostics {
+  #diagnostics(req: ActiveRequest, verdict: Verdict): RunDiagnostics {
     const outcome =
       this.#spawnError !== null
         ? `spawn:${this.#spawnError.code ?? "?"}`
@@ -863,6 +863,7 @@ class WarmChild {
       callDir: this.#config.callDir,
       tempCleanupError: this.#tempCleanupError,
       outcome,
+      reuse: { reused: this.served > 1, retired: verdict.retire },
     };
   }
 }

@@ -23,6 +23,7 @@ import { DEFAULT_POLL_MS, RssPoller, type RssPollerOptions, type RssStats } from
 import { rssPollKind } from "./containment.ts";
 import { StderrRing } from "./ring.ts";
 import { clampTimerMs } from "./timers.ts";
+import type { ChildRetireReason } from "./warm.ts";
 import { buildWrapperCommand } from "./wrapper.ts";
 
 /** How a frame-reader objection is recorded as the reason the child was killed. */
@@ -224,6 +225,11 @@ export interface RunDiagnostics {
   readonly tempCleanupError: string | null;
   /** "signal:SIGKILL" | "code:0" | "spawn:ENOENT" | "unreaped" */
   readonly outcome: string;
+  /**
+   * Only from a reusing runner. `reused`: the child had answered a request before this one. `retired`: why the child was retired
+   * after this run (`error_frame`, `max_requests`, `rss_ceiling`, `idle_timeout`... see `ChildRetireReason`), null when it was kept for the next.
+   */
+  readonly reuse?: { readonly reused: boolean; readonly retired: ChildRetireReason | null };
 }
 
 function errorText(error: unknown): string {

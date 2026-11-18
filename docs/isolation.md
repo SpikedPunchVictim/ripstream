@@ -546,6 +546,41 @@ Reuse is refused at construction on a platform where the parent cannot read a ch
 and macOS), and checked at construction unless the mode is `off`; it is ignored when the mode is `off` or a lenient
 isolator found isolation unavailable.
 
+### Platforms
+
+Reuse works on **Linux** (the parent reads a child's CPU time and RSS from `/proc`) and **macOS** (from `ps`, about 2 ms per request for
+the CPU read and about 50 ms for an RSS sample). On any other platform it is rejected at construction with a `RangeError`, whatever the
+mode: `reuse cannot be enabled on <platform>: the parent cannot measure a child's CPU time per request there`. Two other settings fail
+it too, with their own messages: no `trustDomain` ("reuse.trustDomain is required when reuse is enabled: a child is only reused for
+requests of the same trust domain") and an `rssCeilingMb` at or above the child's RSS kill limit.
+
+### Sizing the pool for reuse
+
+An idle child keeps its lease: `perChildMb + overshootMb` = **2560 MiB** with the defaults, held until the child is retired, with the
+result memory of its last request refunded. A busy child holds that plus the parent's result memory for its request (169 MiB for a
+default text request, the table in "Sizing"). So a pool that serves `N` children at once needs `N * 2560` MiB plus the result memory of
+those that are busy; two children at default caps need **5458 MiB** (2 x 2729), a container of about 5.9 GiB. A pool of 4 GiB
+(3584 MiB) holds one child: with two callers they take turns (measured: 1 child spawned, 29 requests reused of 30). Idle children are
+retired to make room when a request waits for memory (`evicted`, in the stats), so a small pool is slower, not wrong. `status()` shows the
+pool, `reservation.idleHeldMb` what the idle children hold, and `reuse` what happened.
+
+### What one run did
+
+`runner.onRunSettled` (an option of `createNodeIsolator` and so of `createStandardIsolation`, `IsolatorRunnerOptions`) is called once
+per child run with a `RunDiagnostics`. With reuse enabled it has `reuse`: `{ reused, retired }`. `reused` is true when the child had
+answered a request before this one (false: a fresh child). `retired` is why the child was retired at the end of this run, a
+`ChildRetireReason` (`error_frame`, `exception`, `max_requests`, `rss_ceiling`, `timeout`, `abort`, `temp_leftover`, `exit`, ...), or null
+when it was kept for the next. A retirement that comes later, with no run to report it on (`idle_timeout`, `evicted`, `dispose`), is in
+`status().reuse.retired` only. A request whose reused child died before it began was run again on a new child (`retried`): that is two
+calls, the failed run first. Without reuse, `reuse` is absent.
+
+```ts
+const iso = await createStandardIsolation({
+  config: { mode: "strict" }, reuse: { enabled: true, trustDomain: "tenant-a" },
+  runner: { onRunSettled: (d) => log(d.pid, d.reuse) }, // { reused: true, retired: "max_requests" }
+});
+```
+
 ### In the CLI and the server
 
 `ripstream serve` and `ripstream pipes` take the same settings, off unless switched on. A trust domain is required:
@@ -578,7 +613,7 @@ RIPSTREAM_ISOLATION_REUSE=true RIPSTREAM_ISOLATION_REUSE_TRUST_DOMAIN=tenant-a r
 ### What reuse gives up
 
 **When documents of different owners can reach the same isolator, one child per document is the strong option.**
-Reuse weakens the boundary *between documents of one child*; the boundary between a child and the server is the same.
+Reuse trades isolation between documents for speed: the boundary between documents of one child is weaker, and the boundary between a child and the server is the same. The threat is a document that compromises its parser: it then runs in a process that served earlier documents and will serve later ones *of the same trust domain*, and nothing outside that domain.
 
 - A parser that a document compromises runs in a process that parsed earlier documents and will parse later ones. It
   can read what earlier documents left in the heap and in module state, and watch the documents that come after it.
@@ -586,6 +621,10 @@ Reuse weakens the boundary *between documents of one child*; the boundary betwee
   of that child answer.
 - The temp-directory check covers files. It does not cover the heap or module state: nothing short of a new process
   does.
+- **What `trustDomain` must mean.** One tenant, or one level of trust: every document that may share a child must be one whose
+  owner would be allowed to read, and to alter the answers for, every other. Never put two tenants (or an untrusted document and
+  a trusted one) in one domain, and never derive it from the document: it is the *owner's* identity. A single-tenant deployment (one
+  agent scanning its own files) may use one constant. When in doubt, leave reuse off: one child per document is the default.
 - The controls are: `trustDomain` (a child only ever serves the domain it was started for), a small `maxRequests`,
   retiring a child on anything unusual (below), and the OS limits, which apply to the reused child as to a fresh one
   (ulimit, the RSS kill, the process-group kill, the disk budget).
@@ -690,6 +729,29 @@ requests one after another in 2.2 s (4.4 ms each); with `maxRequests` 100, five 
 The child's RSS over those 500 requests, without recycling: 157 MiB after request 49, 175 after 149, 187 after 499 (a
 first run ended at 163). With `maxRequests` 100 it stays between 129 and 175 MiB. The default ceiling, 768 MiB, is far
 above both.
+
+### Measured in a container (`tikajs-ddug`)
+
+`node:24-alpine`, `docker run --network none -m 4g --cpus 2`, the standard isolation with `inProcessTypes` empty, two concurrent callers,
+30 requests of one file each, one DOCX and one PDF (the consumer's measurement; the file sizes were not recorded):
+
+| | median per request |
+|---|---|
+| one-shot (fresh child each) | DOCX 2676 ms, PDF 2675 ms |
+| reused | DOCX 490 ms, PDF 694 ms |
+
+No errors and no out-of-memory kill, with the pool forced to 16 GiB so that two children could run. With the default pool of that 4 GiB
+container (3584 MiB) one child fits, so the two callers took turns: 1 child spawned, 29 requests reused. Two children at default caps need
+about 5.4 GiB of pool ("Sizing the pool for reuse", above). The times are slower than the macOS table above because the container has two
+CPUs shared by the callers and the parent.
+
+The 45 s outlier of the consumer's run was tried again (`tikajs-ddug`): a 25 MiB text-heavy PDF (about 24 million characters,
+`buildTextHeavyPdf`), `-m 6g --cpus 2`, reuse on, two callers, 30 requests, `maxOutputChars` 30,000,000. **It reproduces as a queue,
+not as a fault.** One such parse takes 20 to 38 s inside a child (about 25 s on average, RSS 450 to 530 MiB). A request of that cap
+reserves about 3 GiB, so the 5.5 GiB pool held one child and the callers took turns: per-request times were 41 to 60 s (median 48 s),
+which is one parse plus the wait for the other caller. The one failure (`PARSE_TIMEOUT` at 60 s, `timeout` in the retire reasons)
+is the 60 s wall deadline, which starts before the wait for memory ("Limits of the design", below), not a slow child. No out-of-memory
+kill (cgroup peak 927 MiB), and the reused child's time did not grow over the 30 requests. A larger pool, or one caller, removes the wait.
 
 ## Per-request limits
 

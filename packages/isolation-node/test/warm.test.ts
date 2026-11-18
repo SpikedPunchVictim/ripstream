@@ -134,6 +134,22 @@ test("recycle at maxRequests: the Nth request is the child's last, the next one 
   await expectGroupGone(answers[0]!.pid);
 });
 
+test("each run's diagnostics say whether the child was reused and why it was retired (tikajs-ddug)", async () => {
+  const { runner, seen } = warm({ reuse: { maxRequests: 3 } });
+  for (let i = 0; i < 4; i++) await ask(runner, "ok");
+  await assert.rejects(ask(runner, "throw"), MalformedDocumentError);
+  assert.deepEqual(
+    [...seen].reverse().map((d) => d.reuse),
+    [
+      { reused: false, retired: null },
+      { reused: true, retired: null },
+      { reused: true, retired: "max_requests" },
+      { reused: false, retired: null },
+      { reused: true, retired: "error_frame" },
+    ],
+  );
+});
+
 test("a child is kept only for its heap size: a request with another heapMb gets another child", async () => {
   const { runner } = warm();
   const a = await ask(runner, "ok");
