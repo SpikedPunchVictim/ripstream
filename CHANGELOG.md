@@ -44,6 +44,15 @@ Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`
 
 ## Unreleased
 
+### Isolation: opt-in permission model for the child (`tikajs-bcnh`)
+
+Added: `permission?: boolean` on `createNodeIsolator` / `createStandardIsolation` and the exported `permissionArgs({ childModule, tempDir? })`. With it the child, and the availability probe, run under `--permission=true`: reads limited to the child's packages (their
+`dist`, `package.json` and `node_modules`, from real paths) and the call directory, writes to the call directory only, and no child process,
+worker or addon. Off by default; no change without it. The network is not denied (Node 24.18 has no `--allow-net`). Under `permission` an
+`execArgv` entry `--allow-*`, `--permission*` or `--experimental-permission*` is refused, and a `{ path }` input is refused (the child cannot
+open it; pass bytes). `checkExecArgv` is unchanged. docs/isolation.md: the "no network or filesystem denial" sentence now says what is available and
+what needs a container, and a "Permission model" section.
+
 ### Reuse: what a run did, platforms, pool sizing and the threat model documented (`tikajs-ddug`)
 
 Added: `RunDiagnostics.reuse` (`{ reused, retired }`), set by a reusing runner and reached through the existing

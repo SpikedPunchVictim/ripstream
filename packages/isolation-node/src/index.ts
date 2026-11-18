@@ -9,6 +9,7 @@ export {
   type PoolReclaimer,
   type PoolStats,
 } from "./pool.ts";
+export { permissionArgs, type PermissionArgsOptions } from "./permission.ts";
 export { probeIsolation, type ProbeOptions, type ProbeResult } from "./probe.ts";
 export { containmentFor, type Containment } from "./containment.ts";
 export {

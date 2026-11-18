@@ -33,6 +33,7 @@ import type { Containment } from "./containment.ts";
 import { requireTempDir } from "./disk.ts";
 import { deriveLimits, type DerivedLimits } from "./limits.ts";
 import { DEFAULT_OVERSHOOT_MB, MemoryPool, type PoolStats } from "./pool.ts";
+import { permissionExecArgv } from "./permission.ts";
 import { probeIsolation } from "./probe.ts";
 import { requireTrustDomain, resolveReuse, type ChildReuseOptions } from "./reuse.ts";
 import { DEFAULT_IN_PROCESS_MAX_BYTES, DEFAULT_IN_PROCESS_TYPES, routeRequest } from "./routing.ts";
@@ -110,13 +111,10 @@ export interface NodeIsolatorOptions {
    * `config.memoryPoolMb`.
    */
   readonly pool?: MemoryPool;
-  /**
-   * MiB every reservation adds to a child's cap for what it can use between two RSS polls. Default 1024
-   * (`DEFAULT_OVERSHOOT_MB`); a non-negative integer. A lower value fits a smaller pool and gives up some of the margin the
-   * default was chosen for. Applies to the pool this isolator creates: with a given `pool`, that pool's own value decides
-   * and this one is ignored (with a warning).
-   */
+  /** MiB a reservation adds to a child's cap for what it uses between RSS polls (default `DEFAULT_OVERSHOOT_MB`). Ignored, with a warning, for a given `pool`. */
   readonly overshootMb?: number;
+  /** Runs each child under Node's permission model (`permissionArgs`); `{ path }` inputs are then refused. Default false. */
+  readonly permission?: boolean;
   /** Exact base media types parsed in-process. Default DEFAULT_IN_PROCESS_TYPES. Copied at construction. */
   readonly inProcessTypes?: ReadonlySet<string>;
   /** Inputs above this are isolated whatever their type. Default DEFAULT_IN_PROCESS_MAX_BYTES. */
@@ -162,19 +160,19 @@ export interface NodeIsolateOptions {
   readonly trustDomain?: string;
 }
 
-/** Plain, JSON-serialisable: the shape the server shows on /status. */
-/** The inputs of a request's reservation (`perChildMb + overshootMb + parent`), see "What a request reserves" in docs/isolation.md. */
+/** The inputs of a request's reservation (`perChildMb + overshootMb + parent`), see docs/isolation.md. */
 export interface IsolatorReservation {
   readonly perChildMb: number;
   readonly overshootMb: number;
-  /** The fixed MiB of the parent term. The rest of it is per character (5 bytes) and per byte of the rest of the result (6 text, 24 records). */
+  /** The fixed MiB of the parent term. */
   readonly parentSlackMb: number;
-  /** The smallest request there is (text, no output): the pool must hold it or construction fails. */
+  /** The smallest request (text, no output): the pool must hold it. */
   readonly smallestMb: number;
-  /** MiB the idle reused children hold (`perChildMb + overshootMb` each; their result memory is refunded); 0 without reuse. */
+  /** MiB the idle reused children hold; 0 without reuse. */
   readonly idleHeldMb: number;
 }
 
+/** Plain, JSON-serialisable: the shape the server shows on /status. */
 export interface NodeIsolatorStatus {
   /** The mode in force. A lenient isolator that found isolation unavailable reports "off". */
   readonly mode: IsolationMode;
@@ -193,12 +191,9 @@ export interface NodeIsolatorStatus {
   readonly unreapedChildren: number;
   /** Derived limits of a default request (text output, default output cap); null unless isolating. */
   readonly limits: DerivedLimits | null;
-  /**
-   * Pool MiB one default request reserves (child + overshoot + parent copy of the result), per output kind; null
-   * unless isolating. A kind above `pool.poolMb` can never run: every such request is refused as a limit error.
-   */
+  /** Pool MiB a default request reserves, per output kind; null unless isolating. A kind above `pool.poolMb` is refused. */
   readonly defaultReservationMb: { readonly text: number; readonly records: number } | null;
-  /** What a request reserves and what the pool holds for children that are waiting; null unless isolating. */
+  /** The reservation's inputs; null unless isolating. */
   readonly reservation: IsolatorReservation | null;
   readonly maxInputBytes: number;
   readonly inProcessTypes: readonly string[];
@@ -371,6 +366,7 @@ interface Isolating {
   readonly runner: ChildRunner | WarmRunner;
   readonly pool: MemoryPool;
   readonly ownsPool: boolean;
+  readonly permission: boolean;
   readonly containment: Containment;
   readonly defaultLimits: DerivedLimits;
 }
@@ -494,6 +490,9 @@ class NodeIsolatorImpl implements NodeIsolator {
     signal: AbortSignal | undefined,
     trustDomain: string | undefined,
   ): Promise<IsolatedParseResult> {
+    if (isolating.permission && !(request.input instanceof Uint8Array)) {
+      throw new TypeError("isolate: under `permission` the child cannot open { path } inputs");
+    }
     // A request that could never fit the pool is the caller's (too large a cap, or a pool too small for the default
     // caps), not an outage: refuse it as a limit rather than let the pool call it "unavailable" (503).
     const { overshootMb } = isolating.pool;
@@ -635,7 +634,7 @@ function defaultReservations(
   return { text: reserve("text"), records: reserve("records") };
 }
 
-/** The smallest request: text, no output. What a pool must hold for the isolator to be worth constructing. */
+/** The smallest request: text, no output. */
 function smallestReservationMb(config: IsolationConfig, overshootMb: number): number {
   const limits = deriveLimits(config, { output: "text", maxOutputChars: 0 });
   return limits.perChildMb + overshootMb + parentResultMbFor(limits);
@@ -730,6 +729,10 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
   requireChildModule(options.childModule);
   if (options.tempDir !== undefined) requireTempDir(options.tempDir);
   const defaults = deriveDefaultLimits(config, options.defaultMaxOutputChars);
+  const permission = options.permission === true;
+  const execArgv = permission
+    ? permissionExecArgv({ childModule: options.childModule, ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }) }, options.runner?.execArgv)
+    : options.runner?.execArgv;
   // Before the probe: a mistyped or impossible reuse setting fails construction whatever the platform shows.
   const reuse = resolveReuse(options.reuse, { rssLimitMb: defaults.rssLimitMb, platform });
 
@@ -749,12 +752,12 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     heapMb: defaults.heapMb,
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
     ...(options.tempDir === undefined ? {} : { tempDir: options.tempDir }),
+    ...(permission && execArgv !== undefined ? { execArgv } : {}),
     onTempCleanupError: (message: string) => log("warn", message),
   });
   if (!probed.available) return unavailable(probed.reason);
 
-  // The pool holds at least the smallest request. A pool between that and the default reservations runs the requests that
-  // fit and refuses the rest per request (ADMISSION_REFUSED), so say so now rather than on the first refusal.
+  // A pool below a default reservation refuses the requests that do not fit (ADMISSION_REFUSED): say so now.
   const reservations = defaultReservations(config, chosen.pool.overshootMb, options.defaultMaxOutputChars);
   const { poolMb } = chosen.pool.stats();
   for (const kind of ["text", "records"] as const) {
@@ -806,11 +809,12 @@ export async function createNodeIsolator(options: NodeIsolatorOptions): Promise<
     ...(options.nodePath === undefined ? {} : { nodePath: options.nodePath }),
     ...(options.components === undefined ? {} : { components: options.components }),
     ...options.runner,
+    ...(execArgv === undefined ? {} : { execArgv }),
   };
   const runner = reuse === null ? new ChildRunner(runnerOptions) : new WarmRunner({ ...runnerOptions, reuse });
   return new NodeIsolatorImpl({
     ...base,
-    isolating: { runner, pool: chosen.pool, ownsPool: chosen.ownsPool, containment: { ...probed.containment }, defaultLimits: defaults },
+    isolating: { runner, pool: chosen.pool, ownsPool: chosen.ownsPool, permission, containment: { ...probed.containment }, defaultLimits: defaults },
     degradedReason: null,
   });
 }

@@ -225,10 +225,7 @@ export interface RunDiagnostics {
   readonly tempCleanupError: string | null;
   /** "signal:SIGKILL" | "code:0" | "spawn:ENOENT" | "unreaped" */
   readonly outcome: string;
-  /**
-   * Only from a reusing runner. `reused`: the child had answered a request before this one. `retired`: why the child was retired
-   * after this run (`error_frame`, `max_requests`, `rss_ceiling`, `idle_timeout`... see `ChildRetireReason`), null when it was kept for the next.
-   */
+  /** Reusing runner only: whether the child had answered before, and why it was retired after this run (null: kept). */
   readonly reuse?: { readonly reused: boolean; readonly retired: ChildRetireReason | null };
 }
 

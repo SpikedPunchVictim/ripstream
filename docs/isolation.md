@@ -98,7 +98,8 @@ above which everything is isolated), both on `createNodeIsolator` and, through `
 `createStandardIsolation`. Pass `inProcessTypes: new Set()` to isolate every document, text included: each request then
 costs a child and the pool has to be sized for it (see the memory table below). `ripstream serve` and the CLI do not
 expose a switch for either option; an operator who needs all-isolated parsing builds the engine in code. The other
-containment limits in this file (no network or filesystem denial, no temp sweep after a parent SIGKILL) stand as documented;
+containment limits in this file (no network denial, which needs a container or seccomp; filesystem, child-process, worker and addon denial is
+opt-in, see "Permission model"; no temp sweep after a parent SIGKILL) stand as documented;
 see "Platforms and runtimes", below, for where the memory defaults were measured and what CI runs.
 
 `/detect` is answered in the parent. Detection looks at a bounded prefix, except that a ZIP's central directory is
@@ -117,6 +118,7 @@ run leaves the parent at 387 MiB RSS; detection stays in the parent (tikajs-mq38
 | L4 `ulimit -v` | Address space | yes | **no** (RLIMIT_AS is unsupported) |
 | L5 `ulimit -t` | CPU seconds, also after the parent is gone | yes | yes |
 | L6 disk budget poll | Bytes the child writes to its private temp directory | yes | yes |
+| L7 `permission: true` (opt-in) | Files outside the child's packages and call directory, processes, workers, addons | yes | yes |
 
 `requireStrictContainment` makes the mode refuse a platform that lacks L3 or, on Linux, L4 and L5. macOS passes
 `strict` with the weaker memory containment shown above; set the option to refuse it. `/status` shows what the
@@ -154,6 +156,41 @@ the server have no flag or variable for it. Limits of this layer:
 - Only `TMPDIR` is measured. Parser code is trusted, and a path it names elsewhere is not covered.
 - If the **parent** is killed with `SIGKILL`, the directories of the calls in flight at that moment stay behind:
   nothing sweeps them. This is documented, not fixed.
+
+### Permission model (`tikajs-bcnh`)
+
+**Off by default.** `permission: true` on `createNodeIsolator` (and so `createStandardIsolation`) starts each child, and the
+availability probe, with Node's permission model (`--permission=true`). The child may then read only its own packages and the
+call directory, and write only in the call directory; it cannot spawn a process (`child_process`), start a worker or load a
+native addon. Each is refused with `ERR_ACCESS_DENIED`.
+
+```ts
+const isolator = await createNodeIsolator({ config: { mode: "strict" }, ripstream, childModule, permission: true });
+```
+
+The flags come from `permissionArgs({ childModule, tempDir? })` (exported from `isolation-node`), so a caller who builds
+`runner.execArgv` by hand gets the same list. It does not add a path of yours: the allow-list is the child's packages only.
+
+- `--allow-fs-read` for the `dist`, `package.json` and `node_modules` of the child's package and of every workspace package it
+  depends on, transitively (resolved with `realpath`); a dependency that is installed is covered by its `node_modules` root (the
+  repository's, with pnpm). The child's own directory and `isolation-node`'s (the probe child) are read too, so a child run from
+  `.ts` source works. A package's `src` is not readable.
+- `--allow-fs-read` and `--allow-fs-write` for `<tempDir>/ripstream-call-*` (`CALL_DIR_PREFIX`, the child's `TMPDIR`), for both the
+  given and the real path of `tempDir` (macOS `/var` is `/private/var`).
+- Never `--allow-child-process`, `--allow-worker` or `--allow-addons`. With `permission` on, an `execArgv` entry that starts with
+  `--allow-`, `--permission` or `--experimental-permission` is refused at construction. The `execArgv` check stays as strict as it was
+  for everything else (a bare `--permission` is still refused; `--permission=true` is accepted).
+
+What it does not do: **the network is not denied** (Node 24.18 has no `--allow-net`): a child can still open sockets and resolve names, so
+keep a container or seccomp profile for that. Reading is limited to the allow-list, so the process environment, `/etc` and the
+user's files are out of reach, but memory and CPU are L1 to L5's job. A `{ path }` input is refused under `permission` (the child
+cannot open the caller's file): read the file and pass the bytes. A path with a comma cannot be allowed (Node splits the flag on it).
+`blockPdfjsCanvas` stays: it keeps pdf.js from loading `@napi-rs/canvas` at all, which the model would only deny after the load was attempted.
+
+Measured: the standard child under `permission` answered a docx, xlsx, pptx, pdf, zip, html, eml and csv document with the same records as
+without (`permission-isolation.test.ts`), and docx, xlsx, pptx, pdf, zip, html and eml with the same text in `node:24-alpine`
+(`--network none`). An earlier 150-file corpus was identical with and without on macOS. `permission.test.ts` shows a write outside
+the call directory, a read outside it, a spawn and a worker all denied, and a write in it allowed.
 
 ## Measured defaults
 
