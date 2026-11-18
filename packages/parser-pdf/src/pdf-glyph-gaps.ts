@@ -38,22 +38,27 @@ const CHAR_TOLERANCE = Math.fround(0.3);
 
 type Matrix = [number, number, number, number, number, number];
 
+/** What every glyph of one show operator shares: a page of 10,000 glyphs is a few hundred runs, so a glyph holds a run and not a copy of it. */
+interface Run {
+  font: string;
+  /** The font's glyph space in ems (0.001), and its size on the page. */
+  unit: number;
+  size: number;
+  ux: number;
+  uy: number;
+  em: number;
+}
+
 interface Glyph {
   text: string;
   /** A whitespace glyph: pdf.js writes no item for it. */
   blank: boolean;
   /** Inside the page's box, so in an item. */
   shown: boolean;
-  font: string;
   width: number;
-  /** The font's glyph space in ems (0.001), and its size on the page. */
-  unit: number;
-  size: number;
   x: number;
   y: number;
-  ux: number;
-  uy: number;
-  em: number;
+  run: Run;
   /** PDFBox puts a word separator before it: 1 yes, 0 no, -1 not on the line of the glyph before. */
   sep: number;
 }
@@ -108,6 +113,9 @@ function glyphsOf(input: GapInput): Glyph[] | null {
     const length = Math.abs(size * th) * run;
     const direction = Math.sign(size * th) || 1;
     const view = input.view;
+    const ux = run > 0 ? (direction * m[0]) / run : 1;
+    const uy = run > 0 ? (direction * m[1]) / run : 0;
+    const shared: Run = { font: state.font, unit, size: length, ux, uy, em: Math.abs(size) * run };
     let offset = 0;
     for (let index = 0; index < shown.length; index++) {
       const glyph = shown[index];
@@ -128,15 +136,10 @@ function glyphsOf(input: GapInput): Glyph[] | null {
         text,
         blank: category?.[1] !== undefined,
         shown: view === undefined || !(x + width * size * unit < view[0]! || x > view[2]! || y < view[1]! || y > view[3]!),
-        font: state.font,
         width,
-        unit,
-        size: length,
         x,
         y,
-        ux: run > 0 ? (direction * m[0]) / run : 1,
-        uy: run > 0 ? (direction * m[1]) / run : 0,
-        em: Math.abs(size) * run,
+        run: shared,
         sep: -1,
       });
       offset += (width * size * unit + tc + (glyph.isSpace === true ? tw : 0)) * th;
@@ -214,13 +217,21 @@ function glyphsOf(input: GapInput): Glyph[] | null {
 function spaceWidths(glyphs: Glyph[], standard: (font: string) => number | undefined): Map<string, number> {
   const space = new Map<string, number>();
   const total = new Map<string, [number, number]>();
+  // The font of the run the glyph is in, and its totals once a glyph of it has counted: a run is many glyphs, a map lookup is not free.
+  let counted: Run | undefined;
+  let sum: [number, number] | undefined;
   for (const glyph of glyphs) {
-    if (glyph.blank && glyph.text === " " && glyph.width > 0 && !space.has(glyph.font)) space.set(glyph.font, glyph.width);
-    if (!glyph.blank && glyph.width > 0) {
-      const sum = total.get(glyph.font) ?? [0, 0];
+    const run = glyph.run;
+    if (run !== counted) {
+      counted = run;
+      sum = total.get(run.font);
+    }
+    if (glyph.blank) {
+      if (glyph.text === " " && glyph.width > 0 && !space.has(run.font)) space.set(run.font, glyph.width);
+    } else if (glyph.width > 0) {
+      if (sum === undefined) total.set(run.font, (sum = [0, 0]));
       sum[0] += glyph.width;
       sum[1]++;
-      total.set(glyph.font, sum);
     }
   }
   for (const [font, [sum, count]] of total) if (!space.has(font)) space.set(font, standard(font) ?? sum / count);
@@ -235,17 +246,24 @@ function decideSeparators(glyphs: Glyph[], standard: (font: string) => number | 
   let lastSpace = -1;
   // PDFBox computes in 32-bit floats, and a gap that equals its threshold (a Courier gap of 0.18 em) goes by the rounding.
   const f = Math.fround;
-  const advance = (glyph: Glyph, width: number): number => f(f(width * glyph.unit) * glyph.size);
-  const along = (glyph: Glyph): number => f(glyph.x * glyph.ux + glyph.y * glyph.uy);
+  const advance = (glyph: Glyph, width: number): number => f(f(width * glyph.run.unit) * glyph.run.size);
+  const along = (glyph: Glyph): number => f(glyph.x * glyph.run.ux + glyph.y * glyph.run.uy);
+  // A run's space advance is the same for each of its glyphs.
+  let counted: Run | undefined;
+  let spaceWidth = 0;
   for (const glyph of glyphs) {
-    const spaceWidth = advance(glyph, space.get(glyph.font) ?? 0);
+    const run = glyph.run;
+    if (run !== counted) {
+      counted = run;
+      spaceWidth = advance(glyph, space.get(run.font) ?? 0);
+    }
     const deltaSpace = spaceWidth > 0 ? f(f(lastSpace < 0 ? spaceWidth : f(f(spaceWidth + lastSpace) / 2)) * SPACE_TOLERANCE) : Infinity;
     const mean = f(advance(glyph, glyph.width) / Math.max(1, glyph.text.length));
     average = average < 0 ? mean : f(f(average + mean) / 2);
     if (previous !== undefined) {
-      const across = (glyph.y - previous.y) * glyph.ux - (glyph.x - previous.x) * glyph.uy;
-      const parallel = previous.ux * glyph.ux + previous.uy * glyph.uy > 0.99;
-      if (parallel && Math.abs(across) <= 0.5 * Math.max(previous.em, glyph.em)) {
+      const across = (glyph.y - previous.y) * run.ux - (glyph.x - previous.x) * run.uy;
+      const parallel = previous.run.ux * run.ux + previous.run.uy * run.uy > 0.99;
+      if (parallel && Math.abs(across) <= 0.5 * Math.max(previous.run.em, run.em)) {
         const expected = f(f(along(previous) + advance(previous, previous.width)) + Math.min(f(average * CHAR_TOLERANCE), deltaSpace));
         glyph.sep = expected < along(glyph) && !previous.text.endsWith(" ") ? 1 : 0;
       }
