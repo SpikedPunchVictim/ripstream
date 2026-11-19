@@ -628,9 +628,13 @@ test("ODF meta with tens of thousands of keywords is read in bounded time", () =
   const keywords = "<meta:keyword>kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk</meta:keyword>".repeat(80_000);
   const metadata = new Metadata();
   metadata.setMaxValueChars(1_000_000);
-  const started = performance.now();
+  // CPU time, not wall time: the work takes about 0.3 s of CPU however busy the machine is, but over 3 s of wall time when
+  // the full suite runs in parallel (tikajs-51hh). Re-flattening the value per keyword costs far more CPU than the bound.
+  const cpuBefore = process.cpuUsage();
   applyOdfMetadata(metadata, `<office:document-meta ${NS}><office:meta>${keywords}</office:meta></office:document-meta>`);
-  assert.ok(performance.now() - started < 3000, "keyword joining is not bounded");
+  const cpu = process.cpuUsage(cpuBefore);
+  const cpuMs = (cpu.user + cpu.system) / 1000;
+  assert.ok(cpuMs < 3000, `keyword joining is not bounded: ${cpuMs.toFixed(0)} ms of CPU`);
   assert.ok(metadata.get("meta:keyword")!.length <= 1_000_000);
 });
 
