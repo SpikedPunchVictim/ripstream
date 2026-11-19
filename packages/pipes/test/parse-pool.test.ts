@@ -265,7 +265,10 @@ test("a stuck parse's spooled input is removed with its worker, and close remove
 });
 
 test("an abort answers the caller at once with the error an in-process parse gives, and the worker goes back to the pool", async () => {
-  await withPool(FAST, async (pool) => {
+  // The worker acts on the abort itself, so it must not be terminated for being slow: the 150 ms FAST grace is shorter than
+  // a loaded machine needs to deliver the message, and the worker was replaced (a different thread) under full-suite load
+  // (tikajs-ffom). A worker that never acts on an abort is the next test's case, with its own grace.
+  await withPool({ ...FAST, graceMs: 30_000 }, async (pool) => {
     const before = thread(await pool.parse(bytes("x"), { filename: "echo:x" }));
     const controller = new AbortController();
     const running = pool.parse(bytes("x"), { filename: "hang", signal: controller.signal });
@@ -330,8 +333,23 @@ test("a worker that crashes fails its parse as a crash, and the next parse runs 
 test("a stray rejection after a parse answered takes its worker down, and the pool replaces it", async () => {
   await withPool(FAST, async (pool) => {
     const stray = await pool.parse(bytes("x"), { filename: "stray:20" });
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    const next = await pool.parse(bytes("x"), { filename: "echo:x" });
+    // The rejection fires 20 ms after the answer inside the worker; how long the worker then takes to die and be replaced
+    // depends on the machine (a parse that lands on it while it dies fails as a crash, which is right). Ask until the pool
+    // serves from another thread, tolerating only that crash, with a deadline a hang cannot outlive.
+    const giveUpAt = Date.now() + 30_000;
+    let next: Awaited<ReturnType<typeof pool.parse>> | undefined;
+    while (next === undefined) {
+      try {
+        const answer = await pool.parse(bytes("x"), { filename: "echo:x" });
+        if (thread(answer) !== thread(stray)) next = answer;
+      } catch (error) {
+        if (!(error instanceof IsolationError && error.reason === "crash")) throw error;
+      }
+      if (next === undefined) {
+        assert.ok(Date.now() < giveUpAt, "the worker with the stray rejection was never replaced");
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
     assert.notEqual(thread(next), thread(stray));
   });
 });
