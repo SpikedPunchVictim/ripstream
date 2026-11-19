@@ -28,7 +28,7 @@ async function supervised(
     (error: unknown) => ({ ok: false as const, error }),
   );
   await expectGroupGone(diag().pid);
-  await settleHandles();
+  await settleHandles(before);
   expectNoNewHandles(before);
   return { outcome, diag: diag() };
 }
@@ -257,7 +257,7 @@ test("done then linger with a grandchild: resolves after the grace, the whole gr
   assert.ok(elapsed < 5000, `took ${elapsed} ms`);
   await expectGroupGone(diag().pid);
   await expectPidGone(grandchild);
-  await settleHandles();
+  await settleHandles(before);
   expectNoNewHandles(before);
 });
 

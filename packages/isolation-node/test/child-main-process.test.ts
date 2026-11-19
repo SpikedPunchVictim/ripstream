@@ -95,7 +95,7 @@ test("text: a run answers with the text and metadata, and the child exits by its
   assert.equal(d.code, 0, "exit code 0 without process.exit()");
   assert.equal(d.graceKilled, false, "nothing kept the child alive after its terminal frame");
   assert.equal(d.killReason, null);
-  await settleHandles();
+  await settleHandles(before);
   expectNoNewHandles(before);
 });
 

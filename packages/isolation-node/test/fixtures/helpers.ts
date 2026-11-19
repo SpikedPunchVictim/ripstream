@@ -105,8 +105,20 @@ export function expectNoNewHandles(before: Record<string, number>): void {
   }
 }
 
-/** Lets close events and destroyed handles finish. */
-export async function settleHandles(): Promise<void> {
+/**
+ * Lets close events and destroyed handles finish. With `before`, it also waits (up to `timeoutMs`) until no handle kind
+ * has more live instances than in `before`: closing a child's pipes takes a few ms alone and far longer on a machine busy
+ * with the rest of the suite, and a fixed 20 ms made `expectNoNewHandles` report handles that were about to close
+ * (tikajs-ffom). A handle that really leaks stays live and `expectNoNewHandles` still fails after the wait.
+ */
+export async function settleHandles(before?: Record<string, number>, timeoutMs = 5000): Promise<void> {
   await sleep(20);
   await new Promise<void>((resolve) => setImmediate(resolve));
+  if (before === undefined) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const after = handleCounts();
+    if (Object.entries(after).every(([kind, count]) => count <= (before[kind] ?? 0))) return;
+    await sleep(25);
+  }
 }
