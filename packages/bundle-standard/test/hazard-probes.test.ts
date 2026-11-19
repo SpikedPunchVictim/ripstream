@@ -70,8 +70,12 @@ interface Config {
   readonly maxTaskMillis: number;
 }
 const TIGHT: Config = { mode: "strict", perChildMb: 256, heapMb: 64, maxTaskMillis: 10_000 };
-/** Memory is not the binding limit here: only the clock (or the CPU limit) can end a CPU-bound parse. */
-const CLOCK_ONLY: Config = { mode: "strict", perChildMb: 2048, heapMb: 1024, maxTaskMillis: 3000 };
+/**
+ * Memory is not the binding limit here: only the clock (or the CPU limit) can end a CPU-bound parse. The budget also covers
+ * the control parse that follows (a child start and a valid file), which took over 3 s on a machine busy with the rest of the
+ * suite (tikajs-ffom); the hostile files below still cannot finish in 8 s (4 MiB of 0xFF is 12 s bare, 20,000 columns 37 s).
+ */
+const CLOCK_ONLY: Config = { mode: "strict", perChildMb: 2048, heapMb: 1024, maxTaskMillis: 8000 };
 
 // ---- byte helpers ----------------------------------------------------------------------------------------------------
 
@@ -400,8 +404,8 @@ test("music-metadata: a CPU-bound MP3 (4 MiB of 0xFF, 12 s bare) with loose memo
     bytes: syncSpam(4),
     filename: "spam4.mp3",
     config: CLOCK_ONLY,
-    // A machine four times faster would finish it inside 3 s and answer ok. The CPU limit (SIGXCPU, LIMIT_EXCEEDED) is
-    // derived from the same 3 s and races the wall clock; either way the answer is bounded.
+    // A machine twice as fast would finish it inside 8 s and answer ok. The CPU limit (SIGXCPU, LIMIT_EXCEEDED) is
+    // derived from the same 8 s and races the wall clock; either way the answer is bounded.
     allowed: ["ok", TIMEOUT, LIMIT],
     control: AUDIO_CONTROL,
   });
@@ -470,7 +474,7 @@ test("hyparquet: 20,000 columns with loose memory limits is ended by the CPU lim
     bytes: wideSchema(20_000),
     filename: "wide-clock.parquet",
     config: CLOCK_ONLY,
-    // 9.4 s for 10,000 columns bare, so 20,000 cannot finish in 3 s: the CPU limit (SIGXCPU, LIMIT_EXCEEDED) or the clock.
+    // 9.4 s for 10,000 columns bare, so 20,000 cannot finish in 8 s: the CPU limit (SIGXCPU, LIMIT_EXCEEDED) or the clock.
     allowed: [LIMIT, TIMEOUT],
     control: PARQUET_CONTROL,
   });
