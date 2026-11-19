@@ -52,6 +52,10 @@ function runnerFor(mode: string, arg?: string, overrides: Partial<ChildRunnerOpt
     maxInputBytes: MIB,
     maxResultBytes: MIB,
     rssLimitMb: 512,
+    // The default grace (250 ms) is what a healthy child needs to exit after its terminal frame; under full-suite load it
+    // can need longer and would count as grace-killed. Whatever a test leaks (a ref'd timer, a handle) outlives 5 s
+    // (tikajs-ffom).
+    graceMs: 5000,
     ...overrides,
   });
   runners.push(runner);

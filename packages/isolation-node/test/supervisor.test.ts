@@ -262,7 +262,8 @@ test("done then linger with a grandchild: resolves after the grace, the whole gr
 });
 
 test("done then immediate exit with a grandchild holding the stdio fds: resolves on exit, grandchild swept", async () => {
-  const { options, diag } = withDiagnostics(runOptions("done-exit-grandchild", { graceMs: 100 }));
+  // A grace well above what a loaded machine needs for the child to exit (tikajs-ffom); the child exits at once, so the grace never runs.
+  const { options, diag } = withDiagnostics(runOptions("done-exit-grandchild", { graceMs: 2000 }));
   const result = await runChild(options);
   const grandchild = Number(result.kind === "text" ? result.text : "NaN");
   assert.equal(diag().code, 0);
