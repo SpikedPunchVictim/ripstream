@@ -491,11 +491,32 @@ function activeResources(): Record<string, number> {
 /** The count settles a moment after a worker exits (its loop closes its handles), so it is read until it is not above the limit. */
 async function settledDescriptors(limit: number): Promise<number> {
   let count = openDescriptors();
-  for (let attempt = 0; attempt < 50 && count > limit; attempt += 1) {
+  for (const deadline = Date.now() + 10_000; count > limit && Date.now() < deadline; ) {
     await new Promise((resolve) => setTimeout(resolve, 20));
     count = openDescriptors();
   }
   return count;
+}
+
+/** The kinds that have more live instances in `counts` than in `baseline`, with their counts. */
+function resourcesAbove(counts: Record<string, number>, baseline: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(counts).filter(([kind, count]) => count > (baseline[kind] ?? 0)));
+}
+
+/**
+ * Reads the resources until no kind exceeds `baseline`, and returns the last read: a worker's last file request
+ * (an FSReqCallback) or pipe can still be closing a moment after the pool reports it gone, and the baseline itself can have
+ * caught one that is gone by now; on a machine busy with the rest of the suite either lands in a snapshot (tikajs-51hh).
+ * Something a worker really leaks stays live, so the last read still exceeds the baseline.
+ */
+async function settledResources(baseline: Record<string, number>, timeoutMs = 10_000): Promise<Record<string, number>> {
+  const deadline = Date.now() + timeoutMs;
+  let counts = activeResources();
+  while (Object.keys(resourcesAbove(counts, baseline)).length > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    counts = activeResources();
+  }
+  return counts;
 }
 
 const CYCLES = 6;
@@ -552,7 +573,7 @@ test("workers terminated by the watchdog or by an abort leave no descriptor, lis
   for (let index = 0; index < CYCLES; index += 1) await cycle();
   const after = await settledDescriptors(baseline + DESCRIPTOR_SLACK);
   assert.ok(after <= baseline + DESCRIPTOR_SLACK, `${CYCLES * ways.length} terminated workers left ${after - baseline} descriptors open (${baseline} before, ${after} after)`);
-  assert.deepEqual(activeResources(), resources);
+  assert.deepEqual(resourcesAbove(await settledResources(resources), resources), {}, "terminated workers left handles or requests live");
   assert.deepEqual(await walk(root), []);
 });
 
