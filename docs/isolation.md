@@ -770,7 +770,7 @@ above both.
 ### Measured in a container (`tikajs-ddug`)
 
 `node:24-alpine`, `docker run --network none -m 4g --cpus 2`, the standard isolation with `inProcessTypes` empty, two concurrent callers,
-30 requests of one file each, one DOCX and one PDF (the consumer's measurement; the file sizes were not recorded):
+30 requests of one file each, one DOCX and one PDF (consumer measurement on a loaded shared host; the file sizes were not recorded):
 
 | | median per request |
 |---|---|
@@ -781,6 +781,11 @@ No errors and no out-of-memory kill, with the pool forced to 16 GiB so that two 
 container (3584 MiB) one child fits, so the two callers took turns: 1 child spawned, 29 requests reused. Two children at default caps need
 about 5.4 GiB of pool ("Sizing the pool for reuse", above). The times are slower than the macOS table above because the container has two
 CPUs shared by the callers and the parent.
+
+A later consumer measurement with known sizes (same container shape, loaded shared host, pool of one child, so the callers took turns, one run
+set; `-m 4g`, `-m 7g` for the 25 MiB DOCX) gives a smaller gain: 3.7x for a 1 MiB DOCX (1575 ms fresh, 424 ms reused, 1 child against 30),
+1.8x for a 1 MiB PDF (3073 against 1670 ms) and 1.1x for a 25 MiB DOCX (7127 against 6537 ms). Reuse saves the child's start, not parse time, so
+the ratio falls as the parse gets longer.
 
 The 45 s outlier of the consumer's run was tried again (`tikajs-ddug`): a 25 MiB text-heavy PDF (about 24 million characters,
 `buildTextHeavyPdf`), `-m 6g --cpus 2`, reuse on, two callers, 30 requests, `maxOutputChars` 30,000,000. **It reproduces as a queue,

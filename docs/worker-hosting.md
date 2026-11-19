@@ -66,7 +66,12 @@ process). The ones that matter for memory and time:
 | `maxOutputChars` | 100,000 | The text is held in memory; `-1` is unlimited, which only a Worker with a heap limit you trust should ask for |
 | `maxEmbeddedResourceBytes`, `maxTotalEmbeddedBytes`, `maxDecompressionRatio` | 512 MiB, 1 GiB, 1000 | The bomb limits; the heap limit does not see inflated bytes |
 | `maxZipEntries`, `maxEmbeddedResources`, `maxNodeDepth` | 10,000, 10,000, 100 | Counts of work |
-| `maxParseMillis` | 60,000 | A timer that aborts the parse and rejects with `ParseTimeoutError`. It is cooperative: a parser stuck in a synchronous loop never sees it, so your own `terminate()` deadline is the backstop (the `pipes` pool uses `maxParseMillis` plus 5 s) |
+| `maxParseMillis` | 60,000 | A timer that aborts the parse and rejects with `ParseTimeoutError`. It is cooperative: a parser stuck in a synchronous loop never sees it, so your own `terminate()` deadline is the backstop (the `pipes` pool uses `maxParseMillis` plus 5 s). It is a timer on the thread that runs the parse, and pdf.js runs on that thread, so a late return by the synchronous time of one page is expected. It is not a hard deadline. Run your `terminate()` timer on the parent thread |
+
+**Sizing Workers** (consumer measurement, `node:24-alpine`, `--cpus 2`, no swap, two Workers in one Node process, two 25 MiB documents, 3 runs per cell): at 512m a pair of
+PDFs or a pair of DOCX files was OOM-killed in 12 of 12 runs (exit 137, no result and no typed error, so `classifyWorkerFailure` is never
+called), whatever `maxOldGenerationSizeMb` was (256 MiB changed nothing). At 768m and 1g two PDFs held, with `memory.peak` 679 to 730 MiB and
+little margin. With swap allowed the 512m cells survived but took 69 to 104 s. Set `--memory-swap` equal to `-m` when you test, or the table says less than it appears to.
 
 Pass a `signal` for cancellation. `password` works in a Worker (it cannot cross to an isolation child).
 

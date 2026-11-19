@@ -117,7 +117,10 @@ in ripstream's, and the reverse holds for narrow glyphs set wide apart. ripstrea
 decides every gap between glyphs the way PDFBox does (the space width is the font's own space glyph, else its declared width for
 character 32, else Helvetica, Times and Courier's, else the mean glyph width). The decision is made in 32-bit floats, as PDFBox's is, so a
 gap that sits on the threshold falls the same way (checked against a running Tika 4.2.0 on 1,218 gaps in Helvetica, Times and Courier: 0
-differ; 165 did before). It costs a second read of each page. A page whose text items and glyphs do not line up, that has more than
+differ; 165 did before). It costs a second read of each page: a dense, text-only PDF (the repository's `buildTextHeavyPdf`, 10 MB, 850 pages) parses in about 6.5 s where it took
+about 3.4 s before, in process on a loaded host, and the text is identical. A consumer measured the same change on a 1,127-file regression corpus (pdf.js
+fixtures plus Cabinet of Horrors, one pass, loaded host, largest file 8.1 MB) at 1.04x overall and 1.25x for files of 10 to 100 thousand characters; no file
+stayed over 2.5x on a rerun. It is the accepted cost of the spacing. A page whose text items and glyphs do not line up, that has more than
 20,000 text items or 200,000 operators, or whose operator list cannot be read keeps the spacing pdf.js gave it. Still different from Tika:
 a font whose space is neither shown nor declared (an embedded Type 1 font with no width for character 32) has its space taken as the
 mean glyph width, where PDFBox reads the width from the font program, so a gap near the threshold can fall the other way.
