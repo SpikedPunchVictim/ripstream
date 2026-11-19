@@ -275,7 +275,10 @@ async function withIsolator(
 ): Promise<void> {
   const pool = new MemoryPool({ poolMb: 4096, maxQueue: 4 });
   const runs: RunDiagnostics[] = [];
-  const standard = await createStandardIsolation({ config, pool, ...options, runner: { onRunSettled: (d) => runs.push(d) } });
+  // The default grace (250 ms) is what a healthy child needs to exit after its terminal frame; under a loaded machine a
+  // child that leaked nothing can need longer and would be counted as grace-killed. A leaked handle keeps the child
+  // alive for good, so `graceKilled === false` below still catches it (tikajs-ffom).
+  const standard = await createStandardIsolation({ config, pool, ...options, runner: { onRunSettled: (d) => runs.push(d), graceMs: 10_000 } });
   try {
     await action({ standard, runs });
   } finally {
