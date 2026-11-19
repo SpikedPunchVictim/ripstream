@@ -992,7 +992,7 @@ function relationshipTargets(
   relsPart: string,
   sourceFolder: string,
 ): Map<string, { readonly target: string; readonly type: string }> | undefined {
-  const root = parsePart(files, relsPart);
+  const root = parseRelationships(files, relsPart);
   if (root === undefined) return undefined;
   const targets = new Map<string, { readonly target: string; readonly type: string }>();
   for (const relationship of descendantsNamed(root, "Relationship")) {
@@ -1212,7 +1212,7 @@ function embeddedTypesByPart(files: Record<string, Uint8Array>): Map<string, str
     const sourceFolder = name.slice(0, name.lastIndexOf("/_rels/"));
     let relationships: XmlNode[];
     try {
-      relationships = descendantsNamed(parseXmlTree(decode(files[name]!)), "Relationship");
+      relationships = descendantsNamed(parseRelationships(files, name)!, "Relationship");
     } catch {
       continue;
     }
@@ -1389,6 +1389,38 @@ function parsePart(
 ): XmlNode | undefined {
   const data = files[name];
   return data === undefined ? undefined : parseXmlTree(decode(data));
+}
+
+/** One relationships part's parse: the tree, or what threw (read again by the next caller, which decides what a failure means). */
+type RelationshipsParse = { readonly tree: XmlNode } | { readonly failure: unknown };
+
+/**
+ * `parsePart` for a relationships part, parsed once per package. The same `.rels` is read by the embedded-part typing
+ * and by the slide and sheet lookups, and only these callers read it, and none changes the tree. The cache is keyed by
+ * the parts record, which is one parse's (a document embedded in another is parsed with its own), so no tree outlives
+ * its package or is seen by another; only relationships are kept, as a body part's tree is large and read once.
+ */
+const relationshipParses = new WeakMap<Record<string, Uint8Array>, Map<string, RelationshipsParse>>();
+
+function parseRelationships(files: Record<string, Uint8Array>, name: string): XmlNode | undefined {
+  const data = files[name];
+  if (data === undefined) return undefined;
+  let parses = relationshipParses.get(files);
+  if (parses === undefined) {
+    parses = new Map();
+    relationshipParses.set(files, parses);
+  }
+  let parse = parses.get(name);
+  if (parse === undefined) {
+    try {
+      parse = { tree: parseXmlTree(decode(data)) };
+    } catch (failure) {
+      parse = { failure };
+    }
+    parses.set(name, parse);
+  }
+  if ("failure" in parse) throw parse.failure;
+  return parse.tree;
 }
 
 function findFirst(node: XmlNode, name: string): XmlNode | undefined {
