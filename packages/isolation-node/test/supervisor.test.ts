@@ -662,7 +662,9 @@ test("stderr: a one-byte-per-write trickle is cut off at the budget, not read fo
   const { outcome, diag } = await supervised("stderr-spam", {
     scriptArgs: ["stderr-spam", "1", String(300_000)],
     stderrBudgetBytes: 1024,
-    deadlineMs: 20_000,
+    // 300,000 one-byte writes take about 1 s alone and over 20 s on a machine busy with the rest of the suite. The deadline
+    // is only a backstop for a hang here: the byte-count assertion below is what proves the trickle was cut off (tikajs-ffom).
+    deadlineMs: 120_000,
   });
   assert.ok(outcome.ok, String(outcome.ok ? "" : outcome.error));
   assert.equal(diag.stderrClosed, true);
