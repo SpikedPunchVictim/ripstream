@@ -435,8 +435,11 @@ test("CPU, real: a request that burns past its budget is killed during the reque
   const { runner } = warm({ cpuSecs: 1, cpuPollMs: 100 });
   const before = await ask(runner, "ok");
   const started = Date.now();
-  await assert.rejects(ask(runner, "burn:10000"), (e: unknown) => e instanceof LimitExceededError && /CPU time/.test(e.message));
-  assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
+  // Budget is 1 s of CPU, so the kill comes after about 1 s of wall time alone and several times that on a machine busy
+  // with the rest of the suite. A 60 s burn that is not killed during the request takes more than 60 s of wall time, so
+  // the bound separates "killed during the request" from "ran to the end" at any plausible load (tikajs-ffom).
+  await assert.rejects(ask(runner, "burn:60000"), (e: unknown) => e instanceof LimitExceededError && /CPU time/.test(e.message));
+  assert.ok(Date.now() - started < 30_000, `took ${Date.now() - started} ms`);
   assert.equal(retired(runner, "cpu"), 1);
   await expectGroupGone(before.pid);
 });
