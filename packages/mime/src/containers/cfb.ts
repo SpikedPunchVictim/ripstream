@@ -1,4 +1,4 @@
-import { open, type FileHandle } from "node:fs/promises";
+import type { RandomReader } from "@spikedpunch/ripstream-core";
 
 /** A storage (directory) or stream of a compound file; `children` is null for a stream. */
 export interface CfbNode {
@@ -66,14 +66,14 @@ interface MutableNode {
  */
 export class CompoundFile {
   readonly root: CfbNode;
-  private readonly handle: FileHandle;
+  private readonly handle: RandomReader;
   private readonly sectorSize: number;
   private readonly sectorCount: number;
   private readonly fat: Uint32Array;
   private readonly miniFat: Uint32Array;
   private miniStreamSectors: readonly number[] | null | undefined;
 
-  private constructor(handle: FileHandle, structure: Structure) {
+  private constructor(handle: RandomReader, structure: Structure) {
     this.handle = handle;
     this.sectorSize = structure.sectorSize;
     this.sectorCount = structure.sectorCount;
@@ -82,9 +82,11 @@ export class CompoundFile {
     this.root = structure.root;
   }
 
-  /** Null when the file is not a readable compound file, or needs more than the detection bounds. */
-  static async open(path: string): Promise<CompoundFile | null> {
-    const handle = await open(path, "r");
+  /**
+   * Null when the file is not a readable compound file, or needs more than the detection bounds. The reader is
+   * closed with the file, or here when the file is refused or the read fails.
+   */
+  static async from(handle: RandomReader): Promise<CompoundFile | null> {
     try {
       const structure = await readStructure(handle);
       if (structure === null) {
@@ -183,7 +185,7 @@ interface Structure {
   readonly root: CfbNode;
 }
 
-async function readStructure(handle: FileHandle): Promise<Structure | null> {
+async function readStructure(handle: RandomReader): Promise<Structure | null> {
   const headerBytes = await readAt(handle, 0, HEADER_SIZE);
   if (headerBytes.length < HEADER_SIZE) return null;
   if (!SIGNATURE.every((byte, index) => headerBytes[index] === byte)) return null;
@@ -222,7 +224,7 @@ async function readStructure(handle: FileHandle): Promise<Structure | null> {
  * by the count is read, and each sector must be a distinct one inside the file. Null when any of that fails.
  */
 async function readFatSectorIds(
-  handle: FileHandle,
+  handle: RandomReader,
   header: DataView,
   sectorSize: number,
   sectorCount: number,
@@ -399,7 +401,7 @@ function readFatEntries(sectors: Uint8Array): Uint32Array {
   return entries;
 }
 
-async function readSectors(handle: FileHandle, sectors: readonly number[], sectorSize: number): Promise<Uint8Array> {
+async function readSectors(handle: RandomReader, sectors: readonly number[], sectorSize: number): Promise<Uint8Array> {
   const data = new Uint8Array(sectors.length * sectorSize);
   for (const [index, sector] of sectors.entries()) {
     data.set(await readSector(handle, sector, sectorSize), index * sectorSize);
@@ -408,13 +410,13 @@ async function readSectors(handle: FileHandle, sectors: readonly number[], secto
 }
 
 /** One sector, zero padded when the file ends inside it (POI reads a truncated final sector the same way). */
-async function readSector(handle: FileHandle, sector: number, sectorSize: number): Promise<Uint8Array> {
+async function readSector(handle: RandomReader, sector: number, sectorSize: number): Promise<Uint8Array> {
   const buffer = new Uint8Array(sectorSize);
   await handle.read(buffer, 0, sectorSize, (sector + 1) * sectorSize);
   return buffer;
 }
 
-async function readAt(handle: FileHandle, offset: number, length: number): Promise<Uint8Array> {
+async function readAt(handle: RandomReader, offset: number, length: number): Promise<Uint8Array> {
   const buffer = new Uint8Array(length);
   const { bytesRead } = await handle.read(buffer, 0, length, offset);
   return buffer.subarray(0, bytesRead);

@@ -1,6 +1,5 @@
-import { open, type FileHandle } from "node:fs/promises";
 import { MediaType } from "@spikedpunch/ripstream-core";
-import type { RipstreamInputStream } from "@spikedpunch/ripstream-core";
+import type { RandomReader, RipstreamInputStream } from "@spikedpunch/ripstream-core";
 
 const BPLIST = MediaType.parse("application/x-bplist") as MediaType;
 const MEMGRAPH = MediaType.parse("application/x-bplist-memgraph") as MediaType;
@@ -21,7 +20,7 @@ const MAX_KEY_CHARS = 64;
  * readable binary plist (Tika throws there).
  */
 export async function detectBplist(stream: RipstreamInputStream): Promise<MediaType | null> {
-  const handle = await open(await stream.getFile(), "r");
+  const handle = await stream.openReader();
   try {
     const keys = await readRootKeys(handle);
     return keys === null ? null : typeByKeys(keys);
@@ -40,7 +39,7 @@ function typeByKeys(keys: ReadonlySet<string> | "not-a-dictionary"): MediaType {
   return BPLIST;
 }
 
-async function readRootKeys(handle: FileHandle): Promise<ReadonlySet<string> | "not-a-dictionary" | null> {
+async function readRootKeys(handle: RandomReader): Promise<ReadonlySet<string> | "not-a-dictionary" | null> {
   const size = (await handle.stat()).size;
   if (size < 8 + TRAILER_BYTES) return null;
 
@@ -88,7 +87,7 @@ interface Marker {
 }
 
 /** An object's type nibble and its length or entry count, which the low nibble holds up to 14 and an int object beyond. */
-async function readMarker(handle: FileHandle, offset: number): Promise<Marker | null> {
+async function readMarker(handle: RandomReader, offset: number): Promise<Marker | null> {
   const first = await readAt(handle, offset, 1);
   if (first === null) return null;
   const type = first[0]! >> 4;
@@ -105,7 +104,7 @@ async function readMarker(handle: FileHandle, offset: number): Promise<Marker | 
 }
 
 /** An ASCII (0x5), UTF-16BE (0x6) or UTF-8 (0x7) string; null for any other object or one too long to be a rule's key. */
-async function readString(handle: FileHandle, offset: number): Promise<string | null> {
+async function readString(handle: RandomReader, offset: number): Promise<string | null> {
   const marker = await readMarker(handle, offset);
   if (marker === null || marker.count > MAX_KEY_CHARS) return null;
   if (marker.type === 0x5 || marker.type === 0x7) {
@@ -127,7 +126,7 @@ function readBigEndian(data: Uint8Array, offset: number, width: number): number 
 }
 
 /** Exactly `length` bytes at `offset`, or null when the file ends first or the offset is not a safe position. */
-async function readAt(handle: FileHandle, offset: number, length: number): Promise<Uint8Array | null> {
+async function readAt(handle: RandomReader, offset: number, length: number): Promise<Uint8Array | null> {
   if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0) return null;
   const buffer = new Uint8Array(length);
   const { bytesRead } = await handle.read(buffer, 0, length, offset);

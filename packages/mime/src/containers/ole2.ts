@@ -59,7 +59,7 @@ export async function detectOle2Container(
   /** Which of Tika's two detectors run; a configuration can turn either off. */
   run: { readonly poifs: boolean; readonly misc: boolean } = { poifs: true, misc: true },
 ): Promise<MediaType | null> {
-  const file = await CompoundFile.open(await stream.getFile());
+  const file = await CompoundFile.from(await stream.openReader());
   if (file === null) return null;
   try {
     const topLevelNames = (file.root.children ?? []).map((node) => node.name);
