@@ -59,19 +59,24 @@ test("a pool parses on its workers as a ripstream in this thread does", async ()
 
 test("each worker parses one document at a time, taking them in the order they came", async () => {
   await withPool({ size: 2 }, async (pool) => {
-    const results = await Promise.all(Array.from({ length: 6 }, (_, index) => pool.parse(bytes(String(index)), { filename: "wait:40" })));
-    const byThread = new Map<string, { begun: number; ended: number }[]>();
+    // Document `index` is `index + 1` bytes long and the worker reports the length it read, so the order the pool handed
+    // documents out is read from what each worker received. The cross-worker check compared two workers' start clocks,
+    // which differ by more than the 40 ms parse when a loaded machine starves one worker thread (tikajs-51hh).
+    const results = await Promise.all(Array.from({ length: 8 }, (_, index) => pool.parse(bytes("x".repeat(index + 1)), { filename: "wait:40" })));
+    const byThread = new Map<string, { index: number; begun: number; ended: number }[]>();
     for (const result of results) {
       const runs = byThread.get(result.metadata.get("thread")!) ?? [];
-      runs.push({ begun: Number(result.metadata.get("begun")), ended: Number(result.metadata.get("ended")) });
+      runs.push({ index: Number(result.metadata.get("bytes")) - 1, begun: Number(result.metadata.get("begun")), ended: Number(result.metadata.get("ended")) });
       byThread.set(result.metadata.get("thread")!, runs);
     }
     assert.equal(byThread.size, 2);
     for (const runs of byThread.values()) {
-      for (let index = 1; index < runs.length; index += 1) assert.ok(runs[index]!.begun >= runs[index - 1]!.ended);
+      runs.sort((left, right) => left.begun - right.begun);
+      for (let index = 1; index < runs.length; index += 1) {
+        assert.ok(runs[index]!.begun >= runs[index - 1]!.ended, "a worker parsed two documents at once");
+        assert.ok(runs[index]!.index > runs[index - 1]!.index, `a worker took document ${runs[index]!.index} after document ${runs[index - 1]!.index}`);
+      }
     }
-    const begun = results.map((result) => Number(result.metadata.get("begun")));
-    for (let index = 2; index < begun.length; index += 1) assert.ok(begun[index]! >= begun[index - 2]!);
   });
 });
 
