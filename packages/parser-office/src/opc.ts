@@ -1,10 +1,10 @@
-import { open, type FileHandle } from "node:fs/promises";
 import { Inflate } from "fflate";
 import {
   LimitExceededError, limitError,
   OutputBudget,
   MalformedDocumentError,
   type ParseLimits,
+  type RandomReader,
   type RipstreamInputStream,
 } from "@spikedpunch/ripstream-core";
 
@@ -26,13 +26,13 @@ const INFLATE_SLICE_BYTES = 16 * 1024;
 
 /** Central-directory OPC reader; decompresses only requested parts. */
 export class OpcPackage {
-  readonly #handle: FileHandle;
+  readonly #handle: RandomReader;
   readonly #entries: ReadonlyMap<string, OpcEntry>;
   readonly #limits: ParseLimits;
   #totalInflated = 0;
 
   private constructor(
-    handle: FileHandle,
+    handle: RandomReader,
     entries: ReadonlyMap<string, OpcEntry>,
     limits: ParseLimits,
   ) {
@@ -45,7 +45,7 @@ export class OpcPackage {
     stream: RipstreamInputStream,
     limits: ParseLimits,
   ): Promise<OpcPackage> {
-    const handle = await open(await stream.getFile(), "r");
+    const handle = await stream.openReader();
     try {
       const entries = await readCentralDirectory(handle, limits);
       return new OpcPackage(handle, entries, limits);
@@ -166,7 +166,7 @@ export class OpcPackage {
 }
 
 async function readCentralDirectory(
-  handle: FileHandle,
+  handle: RandomReader,
   limits: ParseLimits,
 ): Promise<Map<string, OpcEntry>> {
   const { size } = await handle.stat();

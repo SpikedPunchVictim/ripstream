@@ -294,6 +294,7 @@ export {
 export { JsonContentHandler, LinkExtractor } from "./handlers/json-links.ts";
 export {
   RipstreamInputStream,
+  type RandomReader,
   type RipstreamInputStreamOptions,
 } from "./ripstream-input-stream.ts";
 export {

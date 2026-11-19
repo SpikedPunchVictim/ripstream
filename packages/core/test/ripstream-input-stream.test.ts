@@ -243,3 +243,101 @@ test("random chunkings and read/seek/peek/mark/reset sequences match a flat-buff
     await stream.close();
   }
 });
+
+// openReader: ZIP readers read a small input from memory, with no temp file, and fail on a read FileHandle refuses as
+// the file does.
+async function chunked(...parts: string[]): Promise<AsyncIterable<Uint8Array>> {
+  return (async function* () {
+    for (const part of parts) yield encoder.encode(part);
+  })();
+}
+
+async function readAt(reader: { read(t: Uint8Array, o: number, l: number, p: number): Promise<{ bytesRead: number }> }, position: number, length: number): Promise<string> {
+  const target = new Uint8Array(length);
+  const { bytesRead } = await reader.read(target, 0, length, position);
+  return new TextDecoder().decode(target.subarray(0, bytesRead));
+}
+
+test("openReader reads a small input from memory without making a file", async () => {
+  const stream = await RipstreamInputStream.from(encoder.encode("0123456789"));
+  const reader = await stream.openReader();
+  try {
+    assert.equal(stream.hasFile, false);
+    assert.deepEqual(await reader.stat(), { size: 10 });
+    assert.equal(await readAt(reader, 2, 4), "2345");
+    assert.equal(await readAt(reader, 8, 4), "89", "a read past the end is short");
+    assert.equal(await readAt(reader, 10, 4), "", "a read at the end reads nothing");
+    assert.equal(await readAt(reader, 500, 4), "", "a read past the end reads nothing");
+    assert.equal(stream.hasFile, false);
+  } finally {
+    await reader.close();
+    await stream.close();
+  }
+});
+
+test("openReader joins chunks and leaves the stream's cursor and contents alone", async () => {
+  const stream = await RipstreamInputStream.from(await chunked("0123", "4567", "89"));
+  assert.equal(new TextDecoder().decode(await stream.peek(2)), "01");
+  const reader = await stream.openReader();
+  try {
+    assert.equal(await readAt(reader, 3, 5), "34567");
+    assert.equal(new TextDecoder().decode(await stream.read()), "0123456789");
+    assert.equal(stream.position, 10);
+  } finally {
+    await reader.close();
+    await stream.close();
+  }
+  const empty = await RipstreamInputStream.from(new Uint8Array());
+  const emptyReader = await empty.openReader();
+  assert.deepEqual(await emptyReader.stat(), { size: 0 });
+  assert.equal(await readAt(emptyReader, 0, 4), "");
+  await emptyReader.close();
+  await empty.close();
+});
+
+test("openReader reads the file of an input past the threshold, or one a file was already made for", async () => {
+  for (const [text, spoolThreshold, early] of [["0123456789", 4, false], ["0123456789", 1024, true]] as const) {
+    const stream = await RipstreamInputStream.from(encoder.encode(text), { spoolThreshold });
+    if (early) await stream.getFile();
+    const reader = await stream.openReader();
+    try {
+      assert.equal(stream.hasFile, true);
+      assert.equal((await reader.stat()).size, 10);
+      assert.equal(await readAt(reader, 2, 4), "2345");
+    } finally {
+      await reader.close();
+      await stream.close();
+    }
+  }
+});
+
+test("a read the file would refuse fails from memory as it fails from the file", async () => {
+  const bytes = encoder.encode("0123456789");
+  const memory = await RipstreamInputStream.from(bytes);
+  const spilled = await RipstreamInputStream.from(bytes, { spoolThreshold: 0 });
+  const readers = [await memory.openReader(), await spilled.openReader()];
+  try {
+    for (const position of [2 ** 53, 2 ** 60, -5, 1.5]) {
+      const failures = await Promise.all(readers.map((reader) => reader.read(new Uint8Array(4), 0, 4, position).then(
+        () => "read",
+        (error: unknown) => `${(error as { code?: string }).code}: ${(error as Error).message}`,
+      )));
+      assert.equal(failures[0], failures[1], `position ${position}`);
+      assert.notEqual(failures[0], "read", `position ${position}`);
+    }
+    // The refused offset is the only thing that made the file; a plain read still comes from memory.
+    assert.equal(await readAt(readers[0]!, 2, 4), "2345");
+    assert.equal(memory.hasFile, true);
+    for (const [offset, length] of [[-1, 2], [0, 5], [3, 2]] as const) {
+      const failures = await Promise.all(readers.map((reader) => reader.read(new Uint8Array(4), offset, length, 0).then(
+        () => "read",
+        (error: unknown) => (error as { code?: string }).code,
+      )));
+      assert.equal(failures[0], failures[1], `offset ${offset} length ${length}`);
+    }
+  } finally {
+    for (const reader of readers) await reader.close();
+    await memory.close();
+    await spilled.close();
+  }
+});

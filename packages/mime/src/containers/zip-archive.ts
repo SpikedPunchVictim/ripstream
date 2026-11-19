@@ -1,6 +1,6 @@
-import { open, type FileHandle } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { createInflateRaw, crc32 } from "node:zlib";
-import { inflateBounded } from "@spikedpunch/ripstream-core";
+import { inflateBounded, type RandomReader } from "@spikedpunch/ripstream-core";
 
 export interface ZipEntry {
   readonly name: string;
@@ -37,10 +37,10 @@ const MAX_DETECT_DIRECTORY_BYTES = 8 * 1024 * 1024;
  */
 export class ZipArchive {
   readonly entries: readonly ZipEntry[];
-  private readonly handle: FileHandle;
+  private readonly handle: RandomReader;
   private readonly byName: ReadonlyMap<string, ZipEntry>;
 
-  private constructor(handle: FileHandle, entries: readonly ZipEntry[]) {
+  private constructor(handle: RandomReader, entries: readonly ZipEntry[]) {
     this.handle = handle;
     this.entries = entries;
     const byName = new Map<string, ZipEntry>();
@@ -52,7 +52,11 @@ export class ZipArchive {
 
   /** Null when the file has no readable central directory, or one past the detection bounds. */
   static async open(path: string): Promise<ZipArchive | null> {
-    const handle = await open(path, "r");
+    return ZipArchive.from(await open(path, "r"));
+  }
+
+  /** `open` over a reader, which the archive closes (when it is not a ZIP, here, and else with `close`). */
+  static async from(handle: RandomReader): Promise<ZipArchive | null> {
     try {
       const entries = await readCentralDirectory(handle);
       if (entries === null) {
@@ -123,7 +127,7 @@ export class ZipArchive {
   }
 }
 
-async function readCentralDirectory(handle: FileHandle): Promise<ZipEntry[] | null> {
+async function readCentralDirectory(handle: RandomReader): Promise<ZipEntry[] | null> {
   const stat = await handle.stat();
   if (stat.size < EOCD_LENGTH) return null;
 
@@ -269,7 +273,7 @@ function readZip64Extra(
 }
 
 async function readZip64(
-  handle: FileHandle,
+  handle: RandomReader,
   tail: Uint8Array,
   eocdIndex: number,
 ): Promise<{ entryCount: number; centralOffset: number } | null> {
@@ -302,7 +306,7 @@ function findSignatureBackwards(data: Uint8Array, signature: number, recordLengt
  * Reads at an offset taken from the file, which a hostile one sets anywhere up to 2^64: an offset that is not a safe
  * integer reads nothing, like one past the end, rather than throwing out of detection.
  */
-async function readAt(handle: FileHandle, offset: number, length: number): Promise<Uint8Array> {
+async function readAt(handle: RandomReader, offset: number, length: number): Promise<Uint8Array> {
   if (!Number.isSafeInteger(offset) || offset < 0) return new Uint8Array();
   const buffer = new Uint8Array(length);
   const { bytesRead } = await handle.read(buffer, 0, length, offset);

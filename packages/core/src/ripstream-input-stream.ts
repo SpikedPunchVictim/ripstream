@@ -6,6 +6,21 @@ import { limitError } from "./errors.ts";
 import type { ParseContext } from "./parse-context.ts";
 import { toAsyncIterable, type StreamOptions } from "./streams.ts";
 
+/**
+ * Positioned reads of the whole input, the part of a `FileHandle` the ZIP readers use (a `FileHandle` is one). Reads
+ * past the end are short, and a read whose arguments `FileHandle.read` would refuse is refused as it refuses it.
+ */
+export interface RandomReader {
+  read(
+    target: Uint8Array,
+    offset: number,
+    length: number,
+    position: number,
+  ): Promise<{ readonly bytesRead: number }>;
+  stat(): Promise<{ readonly size: number }>;
+  close(): Promise<void>;
+}
+
 export interface RipstreamInputStreamOptions extends StreamOptions {
   readonly spoolThreshold?: number;
   readonly context?: ParseContext;
@@ -153,6 +168,18 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
     return this.path!;
   }
 
+  /**
+   * Positioned reads of the whole input. An input that never reached the spool threshold is read from memory, as it
+   * is, with no temp file made for it (making one cost more than reading a small docx's parts); a larger one, or one
+   * a file was already made for, is read from that file. Either way the reader is the caller's to close, and the
+   * stream's own cursor does not move.
+   */
+  async openReader(): Promise<RandomReader> {
+    await this.drain();
+    if (this.path !== null) return open(this.path, "r");
+    return new MemoryReader(this.wholeInput(), () => this.getFile());
+  }
+
   async *[Symbol.asyncIterator](): AsyncGenerator<Uint8Array> {
     for (;;) {
       const chunk = await this.read();
@@ -233,6 +260,23 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
     }
   }
 
+  /** Every byte of an input held in memory, as one chunk (the chunks are joined once, and stay joined). */
+  private wholeInput(): Uint8Array {
+    if (this.chunks.length === 0) return new Uint8Array();
+    if (this.chunks.length === 1) return this.chunks[0]!;
+    const whole = new Uint8Array(this.bytesStored);
+    let offset = 0;
+    for (const chunk of this.chunks) {
+      whole.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    this.chunks.length = 0;
+    this.chunks.push(whole);
+    this.scanIndex = 0;
+    this.scanStart = 0;
+    return whole;
+  }
+
   private async spill(): Promise<void> {
     if (this.path !== null) return;
 
@@ -296,5 +340,49 @@ export class RipstreamInputStream implements AsyncIterable<Uint8Array>, AsyncDis
       offset += part.byteLength;
     }
     return result;
+  }
+}
+
+/**
+ * `RandomReader` over bytes in memory. A read `FileHandle.read` would refuse (an offset past 2^53, which a hostile ZIP64
+ * field names, or a negative one) is made on the input's file instead, so it fails exactly as it did before there was a
+ * memory reader; it is the only case that makes the file.
+ */
+class MemoryReader implements RandomReader {
+  private readonly bytes: Uint8Array;
+  private readonly file: () => Promise<string>;
+  private handle: FileHandle | null = null;
+
+  constructor(bytes: Uint8Array, file: () => Promise<string>) {
+    this.bytes = bytes;
+    this.file = file;
+  }
+
+  async read(
+    target: Uint8Array,
+    offset: number,
+    length: number,
+    position: number,
+  ): Promise<{ readonly bytesRead: number }> {
+    const plain =
+      Number.isInteger(offset) && offset >= 0 && Number.isInteger(length) && length >= 0 &&
+      offset + length <= target.byteLength &&
+      Number.isSafeInteger(position) && position >= 0 && Number.isSafeInteger(position + length);
+    if (!plain) {
+      this.handle ??= await open(await this.file(), "r");
+      return this.handle.read(target, offset, length, position);
+    }
+    const part = this.bytes.subarray(position, position + length);
+    target.set(part, offset);
+    return { bytesRead: part.byteLength };
+  }
+
+  stat(): Promise<{ readonly size: number }> {
+    return Promise.resolve({ size: this.bytes.byteLength });
+  }
+
+  async close(): Promise<void> {
+    await this.handle?.close();
+    this.handle = null;
   }
 }

@@ -36,7 +36,7 @@ const RULES: readonly ZipRule[] = [
 export async function detectZipContainer(
   stream: RipstreamInputStream,
 ): Promise<MediaType | null> {
-  const zip = await ZipArchive.open(await stream.getFile());
+  const zip = await ZipArchive.from(await stream.openReader());
   if (zip === null) return null;
   try {
     for (const rule of RULES) {
