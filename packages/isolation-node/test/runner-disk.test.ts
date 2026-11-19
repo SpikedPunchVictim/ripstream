@@ -59,7 +59,10 @@ test("a child over the disk budget is a LimitExceededError, its directory is gon
 });
 
 test("the default budget is 1024 MiB: the walk bound is still enforced under it, and the message says so", async () => {
-  const { tempDir, runner } = setup(["many-files", "10001"], { diskPollMs: 20 });
+  // Creating 10,001 files took 22 s of the 20 s task budget when the full suite ran in parallel (tikajs-51hh), and the
+  // budget ended the child as a ParseTimeoutError before the walk bound could. The test asserts the bound, not speed, so
+  // the budget is only a backstop for a child that never creates the files.
+  const { tempDir, runner } = setup(["many-files", "10001"], { diskPollMs: 20, maxTaskMillis: 120_000 });
   const error = await runner.run({ input: bytes("x") }).then(() => undefined, (e: unknown) => e);
   assert.ok(error instanceof LimitExceededError, String(error));
   assert.match(error.message, /temporary disk budget of 1024 MiB exceeded/);
