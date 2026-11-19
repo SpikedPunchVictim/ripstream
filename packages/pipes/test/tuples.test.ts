@@ -153,13 +153,27 @@ test("a tuple's onParseException overrides the run's", async () => {
 });
 
 test("bytes are read inside the worker, at most `concurrency` at a time, however slow the fetch", async () => {
+  const concurrency = 8;
   let inFlight = 0;
   let peak = 0;
   let started = 0;
+  // The first fetches wait until `concurrency` of them are in flight at once. Asserting a wall time for 40 fetches
+  // (under 600 ms) failed on a loaded machine (616 ms, tikajs-51hh); this asserts the same thing, that the workers read
+  // in parallel up to the cap, without a clock. Fewer in flight than the cap never reaches it, so the backstop ends the
+  // wait and `peak` shows the shortfall.
+  let gaveUp = false;
+  let full!: () => void;
+  const allInFlight = new Promise<void>((resolve) => (full = resolve));
   const fetcher: Fetcher = {
     async fetch() {
       started++;
       peak = Math.max(peak, ++inFlight);
+      if (inFlight >= concurrency) full();
+      if (!gaveUp) {
+        let backstop: NodeJS.Timeout | undefined;
+        await Promise.race([allInFlight, new Promise<void>((resolve) => (backstop = setTimeout(() => ((gaveUp = true), resolve()), 30_000)))]);
+        clearTimeout(backstop);
+      }
       await sleep(20);
       inFlight--;
       return encoder.encode("x");
@@ -167,14 +181,10 @@ test("bytes are read inside the worker, at most `concurrency` at a time, however
   };
   const all = Array.from({ length: 40 }, (_, index): FetchEmitTuple => ({ id: `t${index}`, fetcher: "slow", fetchKey: `k${index}` }));
   const emitter = new MemoryEmitter();
-  const begun = performance.now();
-  await run({ iterator: tuples(...all), fetchers: { slow: fetcher }, emitter, concurrency: 8, maxQueue: 64 });
-  const elapsed = performance.now() - begun;
+  await run({ iterator: tuples(...all), fetchers: { slow: fetcher }, emitter, concurrency, maxQueue: 64 });
   assert.equal(started, 40);
   assert.equal(emitter.documents.length, 40);
-  assert.ok(peak > 1 && peak <= 8, `peak in flight ${peak}`);
-  // One at a time this is 40 x 20 ms; eight at a time it is about a fifth of that.
-  assert.ok(elapsed < 600, `${elapsed.toFixed(0)} ms for 40 fetches of 20 ms at concurrency 8`);
+  assert.equal(peak, concurrency, `peak in flight ${peak}`);
 });
 
 test("the queue holds tuples, not bytes: a fetch has not started for a tuple no worker has taken", async () => {
