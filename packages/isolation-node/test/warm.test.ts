@@ -274,6 +274,10 @@ test("an idle child does not keep the parent's event loop alive", async () => {
 
 // ---- faults: each retires the child, the next request runs in a fresh one ----------------------------
 
+// The budget is per request and the first request on a runner also spawns the child, so it must cover a child start on a
+// machine busy with the rest of the suite (over 1.5 s there), not only the hang (tikajs-ffom).
+const HANG_BUDGET_MS = 5000;
+
 const FAULTS: readonly {
   readonly command: string;
   readonly expect: (error: unknown) => boolean;
@@ -287,8 +291,8 @@ const FAULTS: readonly {
     reason: "error_frame",
   },
   { command: "segv", expect: (e) => e instanceof IsolationError && e.reason === "crash", reason: "exit" },
-  { command: "hang-sync", expect: (e) => e instanceof ParseTimeoutError, reason: "timeout", options: { maxTaskMillis: 1500 } },
-  { command: "hang-async", expect: (e) => e instanceof ParseTimeoutError, reason: "timeout", options: { maxTaskMillis: 1500 } },
+  { command: "hang-sync", expect: (e) => e instanceof ParseTimeoutError, reason: "timeout", options: { maxTaskMillis: HANG_BUDGET_MS } },
+  { command: "hang-async", expect: (e) => e instanceof ParseTimeoutError, reason: "timeout", options: { maxTaskMillis: HANG_BUDGET_MS } },
   { command: "oom", expect: (e) => e instanceof LimitExceededError, reason: "exit", options: { heapMb: 64 } },
 ];
 
