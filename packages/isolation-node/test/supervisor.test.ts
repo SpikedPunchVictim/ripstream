@@ -177,7 +177,14 @@ test("a protocol violation kills the child and is an IsolationError crash, never
 
 test("a meta frame with too many keys kills the child at once: LimitExceededError, metadata_cap", async () => {
   // 1,000,001 empty-valued keys is ~17 MB of JSON: raise the byte caps so the key bound is what trips, not the frame cap.
-  const { outcome, diag } = await supervised("meta-flood", { maxFrameBytes: 32 * 1024 * 1024, maxResultBytes: 32 * 1024 * 1024 });
+  // The child builds and serialises a 17 MB object and the parent parses it, which took over the 10 s default deadline
+  // under full-suite load, so the deadline killed the child before the key bound did (tikajs-51hh). The metadata_cap
+  // assertions are what tell the two apart; the deadline is only a backstop for a child that never sends the frame.
+  const { outcome, diag } = await supervised("meta-flood", {
+    maxFrameBytes: 32 * 1024 * 1024,
+    maxResultBytes: 32 * 1024 * 1024,
+    deadlineMs: 120_000,
+  });
   const error = failure(outcome);
   assert.ok(error instanceof LimitExceededError, String(error));
   assert.match((error as Error).message, /metadata/i);
