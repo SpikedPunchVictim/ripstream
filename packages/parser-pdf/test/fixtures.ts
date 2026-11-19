@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { deflateSync } from "node:zlib";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
 export async function samplePdf(): Promise<Uint8Array> {
@@ -213,4 +214,60 @@ export function onePageObjects(text: string): string[] {
     streamObject(`BT /F1 24 Tf 72 700 Td (${text}) Tj ET`),
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
+}
+
+/** A structure element, one kid of a structure tree root. */
+export const STRUCT_ELEMENT = "<< /Type /StructElem /S /P /P 6 0 R /Pg 3 0 R /K 0 >>";
+
+/** One page whose objects (all but the content stream) sit in one object stream: `fillers` members first, the catalog last. */
+export function objectStreamPdf(fillers: number, withKids: boolean): Uint8Array {
+  const filler = `(${"x".repeat(150)})`;
+  const members: [number, string][] = [];
+  for (let index = 0; index < fillers; index++) members.push([100 + index, filler]);
+  members.push(
+    [1, "<< /Type /Catalog /Pages 2 0 R /StructTreeRoot 6 0 R >>"],
+    [2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"],
+    [3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"],
+    [5, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"],
+    [6, withKids ? "<< /Type /StructTreeRoot /K 7 0 R >>" : "<< /Type /StructTreeRoot /K [] >>"],
+    [7, STRUCT_ELEMENT],
+  );
+  let header = "";
+  let body = "";
+  for (const [num, text] of members) {
+    header += `${num} ${body.length} `;
+    body += `${text} `;
+  }
+  const objectStream = deflateSync(Buffer.from(header + body, "latin1"));
+  const content = streamObject("BT /F1 24 Tf 72 700 Td (Hello) Tj ET");
+  const lastNum = 100 + fillers - 1;
+  const head = "%PDF-1.5\n";
+  const contentAt = head.length;
+  const contentObject = `4 0 obj\n${content}\nendobj\n`;
+  const streamAt = contentAt + contentObject.length;
+  const streamObject10 = `10 0 obj\n<< /Type /ObjStm /N ${members.length} /First ${header.length} /Filter /FlateDecode /Length ${objectStream.length} >>\nstream\n`;
+  const xrefAt = streamAt + streamObject10.length + objectStream.length + "\nendstream\nendobj\n".length;
+  // Entries of 1 + 4 + 2 bytes for objects 0..lastNum: free, in the file (4, 10, the xref stream), or in object stream 10.
+  const entries = Buffer.alloc((lastNum + 1) * 7);
+  const put = (num: number, type: number, a: number, b: number): void => {
+    entries.writeUInt8(type, num * 7);
+    entries.writeUInt32BE(a, num * 7 + 1);
+    entries.writeUInt16BE(b, num * 7 + 5);
+  };
+  members.forEach(([num], index) => put(num, 2, 10, index));
+  put(4, 1, contentAt, 0);
+  put(10, 1, streamAt, 0);
+  put(11, 1, xrefAt, 0);
+  const xrefData = deflateSync(entries);
+  const file = Buffer.concat([
+    Buffer.from(head + contentObject + streamObject10, "latin1"),
+    objectStream,
+    Buffer.from(
+      `\nendstream\nendobj\n11 0 obj\n<< /Type /XRef /Size ${lastNum + 1} /W [1 4 2] /Root 1 0 R /Filter /FlateDecode /Length ${xrefData.length} >>\nstream\n`,
+      "latin1",
+    ),
+    xrefData,
+    Buffer.from(`\nendstream\nendobj\nstartxref\n${xrefAt}\n%%EOF\n`, "latin1"),
+  ]);
+  return new Uint8Array(file);
 }

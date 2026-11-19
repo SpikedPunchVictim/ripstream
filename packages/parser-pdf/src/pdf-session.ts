@@ -8,10 +8,9 @@ import { ownerPasswordMatches, streamDecryptor } from "./pdf-decrypt.ts";
 import { eofOffsets } from "./pdf-eof.ts";
 import { respaced, type GlyphFont } from "./pdf-glyph-gaps.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
-import { indexObjects, MAX_INDEX_DECODED_BYTES, type ObjectIndex } from "./pdf-objects.ts";
+import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
 import { preflightPdf, preflightPdfChunks } from "./pdf-preflight.ts";
 import { structTreeHasKids } from "./pdf-struct.ts";
-import { type DecodeBudget } from "./pdf-syntax.ts";
 import { diagnosePdf, latin1, rebuildPdf, type RebuiltPdf, type RepairStep } from "./pdf-rebuild.ts";
 import { isMissingCatalogError, recoverDocumentDetailed } from "./pdf-recover.ts";
 
@@ -204,9 +203,6 @@ const CONTENT_SCAN_LIMIT = 64 * 1024 * 1024;
 
 /** pdf.js's range size for a file read through the range transport (its default is 65,536). */
 const RANGE_CHUNK_BYTES = 1024 * 1024;
-
-/** The decoded bytes the second, roomier index may use when the first ran out before the catalog was read. */
-const STRUCT_INDEX_BYTES = 4 * MAX_INDEX_DECODED_BYTES;
 
 /**
  * pdf.js keeps parsed state for every page it has served until the document is destroyed: measured on a 5,000-page,
@@ -460,16 +456,9 @@ export class PdfSession {
     if (text.includes("/Encrypt")) this.#ownerAccess = ownerPasswordMatches(text, input.password ?? "");
     const diagnosis = diagnosePdf(text);
     let sourceIndex: ObjectIndex | undefined;
-    const budget: DecodeBudget = { left: MAX_INDEX_DECODED_BYTES };
-    const indexed = (): ObjectIndex => (sourceIndex ??= indexObjects(text, budget));
+    const indexed = (): ObjectIndex => (sourceIndex ??= indexObjects(text));
     let rebuilt: RebuiltPdf | null | undefined;
-    this.#structKids = () => {
-      const answer = structTreeHasKids(indexed());
-      // An object stream of tens of thousands of members can use up the budget before the catalog is read; a roomier
-      // index settles it, and costs far less than the walk it saves.
-      if (answer !== null || budget.left > 0) return answer;
-      return structTreeHasKids(indexObjects(text, { left: STRUCT_INDEX_BYTES }));
-    };
+    this.#structKids = () => structTreeHasKids(indexed());
     const rebuild = (): RebuiltPdf | null => (rebuilt === undefined ? (rebuilt = rebuildPdf(source, indexed())) : rebuilt);
     const attempt = async (data: Uint8Array, steps: readonly RepairStep[] | undefined): Promise<PdfDocument> => {
       await this.#loading?.destroy();

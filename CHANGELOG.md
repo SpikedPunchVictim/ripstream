@@ -44,6 +44,10 @@ Not output changes but easy to mistake for one: `metadata` gained keys on PDF (`
 
 ## Unreleased
 
+### PDF: a large object stream is indexed whole (`tikajs-hjuh`)
+
+Fixed: the object index charged its 16 MiB decode budget for a decoded object stream and again for every member read from it, so a stream decoding to more than about 8 MiB lost its last members. On `bug1978317.pdf` (one stream of 65,542 members, the catalog last) the index read 13,694 and the file diagnosed `no catalog`. Members are now charged only for what they hold beyond the decoded length (overlapping members still are), and the decoded size is still capped, so a decompression bomb is refused as before. The second, larger index that `tikajs-5w1z` added for the structure-tree check is removed as no longer needed. Not an output change: text and metadata are identical on the repository's PDF fixtures and on `bug1978317.pdf`; a damaged file's failure message no longer lists a false `no catalog` cause for such a stream.
+
 ### Isolation: opt-in permission model for the child (`tikajs-bcnh`)
 
 Added: `permission?: boolean` on `createNodeIsolator` / `createStandardIsolation` and the exported `permissionArgs({ childModule, tempDir? })`. With it the child, and the availability probe, run under `--permission=true`: reads limited to the child's packages (their

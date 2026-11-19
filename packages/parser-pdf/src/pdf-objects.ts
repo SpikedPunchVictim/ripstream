@@ -168,14 +168,17 @@ function objectStreamMembers(text: string, container: PdfObject, budget: DecodeB
   if (decoded === null) return null;
   const header = decoded.slice(0, first).trim().split(/\s+/).map(Number);
   const members = new Map<number, string>();
+  let kept = 0;
   for (let i = 0; i < count && 2 * i + 1 < header.length; i++) {
     const num = header[2 * i]!;
     const offset = header[2 * i + 1]!;
     if (!Number.isInteger(num) || !Number.isInteger(offset) || members.has(num)) continue;
     const next = 2 * i + 3 < header.length ? header[2 * i + 3]! : decoded.length - first;
     const body = decoded.slice(first + offset, first + Math.max(offset, next));
-    // Members may overlap (each can claim the whole stream), so what is kept is charged too.
-    budget.left -= body.length;
+    // The decoded stream was charged when it was inflated, and members that tile it are slices of it. Members may
+    // overlap (each can claim the whole stream), so only what is kept beyond the decoded length is charged again.
+    kept += body.length;
+    if (kept > decoded.length) budget.left -= Math.min(body.length, kept - decoded.length);
     if (budget.left < 0) break;
     members.set(num, body);
   }
