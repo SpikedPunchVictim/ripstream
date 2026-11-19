@@ -515,13 +515,25 @@ test("pipes in UNPACK mode refuses an unpack-config key it cannot honor, naming 
 // `pipes --workers` (tikajs-ow39): the documents are parsed on worker threads. The pool itself is tested in
 // packages/pipes/test/parse-pool.test.ts; these are what the CLI decides around it.
 
-/** A pool that parses in this thread and records what it was asked for, and how many parses ran at once. */
-function recordingPool(): { log: { workers: number[]; closed: number; running: number; most: number }; createParsePool: NonNullable<CliDeps["createParsePool"]> } {
+/**
+ * A pool that parses in this thread and records what it was asked for, and how many parses ran at once.
+ *
+ * `saturateAt` makes "most at once" independent of machine load (tikajs-ffom): no parse finishes until that many are
+ * in flight (once reached it stays reached; the default 1 never waits), or 10 s pass. Without it the count depends on
+ * how fast the engine feeds the pool against a 20 ms parse, and a loaded machine drains the pool before it fills.
+ */
+function recordingPool(saturateAt = 1): { log: { workers: number[]; closed: number; running: number; most: number }; createParsePool: NonNullable<CliDeps["createParsePool"]> } {
   const log = { workers: [] as number[], closed: 0, running: 0, most: 0 };
+  let saturated = false;
   const createParsePool = (async (options: { workers: number }) => {
     log.workers.push(options.workers);
     const parse = async () => {
       log.most = Math.max(log.most, ++log.running);
+      const giveUpAt = Date.now() + 10_000;
+      while (!saturated && Date.now() < giveUpAt) {
+        if (log.running >= saturateAt) saturated = true;
+        else await new Promise((resolve) => setTimeout(resolve, 5));
+      }
       await new Promise((resolve) => setTimeout(resolve, 20));
       log.running--;
       return { text: "from a worker", metadata: new Metadata() };
@@ -562,11 +574,11 @@ test("pipes --workers parses on worker threads and writes what an in-process run
 test("pipes --workers keeps two documents per worker in flight unless numClients says otherwise, and closes the pool", async () => {
   const paths = workspace(tenFiles, { pipes: { parseMode: "CONTENT_ONLY", numClients: undefined } });
   try {
-    let { log, createParsePool } = recordingPool();
+    let { log, createParsePool } = recordingPool(6);
     assert.equal(await main(["pipes", "--config", paths.config, "--workers", "3"], io(), { env: {}, createParsePool }), 0);
     assert.deepEqual([log.workers, log.most, log.closed], [[3], 6, 1]);
 
-    ({ log, createParsePool } = recordingPool());
+    ({ log, createParsePool } = recordingPool(4));
     assert.equal(await main(["pipes", "--config", paths.config, "--workers=1"], io(), { env: {}, createParsePool }), 0);
     assert.deepEqual([log.workers, log.most], [[1], 4], "never fewer than the engine's own 4");
 
@@ -583,7 +595,7 @@ test("pipes --workers keeps two documents per worker in flight unless numClients
 
   const capped = workspace(tenFiles, { pipes: { parseMode: "CONTENT_ONLY", numClients: 1 } });
   try {
-    const { log, createParsePool } = recordingPool();
+    const { log, createParsePool } = recordingPool(1);
     assert.equal(await main(["pipes", "--config", capped.config, "--workers", "4"], io(), { env: {}, createParsePool }), 0);
     assert.deepEqual([log.workers, log.most], [[4], 1]);
   } finally {
