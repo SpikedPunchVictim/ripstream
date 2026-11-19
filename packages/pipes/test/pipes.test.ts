@@ -390,8 +390,16 @@ test("a run whose signal fires stops starting files, aborts the parses in flight
       { ripstream: slowParser(20, started, aborted), signal: controller.signal },
     );
     const run = client.run();
-    setTimeout(() => controller.abort(new Error("client went away")), 150);
-    await assert.rejects(run, /client went away/);
+    // Abort once some files are written, not after a fixed time: on a machine busy with the rest of the suite 150 ms passed
+    // before any file finished and the run left nothing on disk (tikajs-51hh). 100 files at 20 ms each give the poll
+    // plenty of turns before the run could end by itself.
+    const abortWhenWritten = setInterval(() => {
+      if (readdirSync(output).length >= 3) {
+        clearInterval(abortWhenWritten);
+        controller.abort(new Error("client went away"));
+      }
+    }, 2);
+    await assert.rejects(run, /client went away/).finally(() => clearInterval(abortWhenWritten));
     const written = readdirSync(output).length;
     assert.ok(written > 0 && written < 100, `partial output stays on disk: ${written} of 100`);
     const startedAtAbort = started.length;
