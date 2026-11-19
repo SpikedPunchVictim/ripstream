@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { PageContentScanner, type PageContent } from "./pdf-content.ts";
 import { ownerPasswordMatches, streamDecryptor } from "./pdf-decrypt.ts";
 import { eofOffsets } from "./pdf-eof.ts";
-import { respaced, type GlyphFont } from "./pdf-glyph-gaps.ts";
+import { createGapBuffers, respaced, type GlyphFont } from "./pdf-glyph-gaps.ts";
 import { lines, type PdfTextItem } from "./pdf-lines.ts";
 import { indexObjects, type ObjectIndex } from "./pdf-objects.ts";
 import { preflightPdf, preflightPdfChunks } from "./pdf-preflight.ts";
@@ -273,6 +273,8 @@ export class PdfSession {
    */
   #reopenRepaired: (() => Promise<PdfDocument | null>) | undefined;
   #ops: Record<string, number> | undefined;
+  /** The columns each page's glyphs are read into for word spacing: one set for the document, not one per page. */
+  readonly #gapBuffers = createGapBuffers();
 
   constructor(input: PdfSessionInput) {
     this.#input = input;
@@ -671,6 +673,7 @@ export class PdfSession {
           list,
           ops,
           view,
+          buffers: this.#gapBuffers,
           font: (name) => {
             try {
               return objs?.get(name) as GlyphFont | undefined;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BodyContentHandler, Metadata, ParseContext, RipstreamInputStream } from "@spikedpunch/ripstream-core";
 import { PdfParser } from "../src/index.ts";
-import { respaced, type GapInput } from "../src/pdf-glyph-gaps.ts";
+import { createGapBuffers, respaced, type GapInput } from "../src/pdf-glyph-gaps.ts";
 import { lines, type PdfTextItem } from "../src/pdf-lines.ts";
 import { classicPdf, onePageObjects, streamObject } from "./fixtures.ts";
 
@@ -76,6 +76,28 @@ test("items that do not line up with the glyphs are left alone (null), whatever 
   assert.equal(respaced([item("1 2 3 4 5")], input(digits("1234", 0.12))), null);
   assert.equal(respaced([item("1 2", { dir: "rtl" })], input(digits("12", 0.12))), null);
   assert.equal(respaced([item("1 2")], input([])), null);
+});
+
+test("a format character is no glyph, a combining mark has no width, and any whitespace character is a glyph pdf.js writes no item for", () => {
+  const between = (middle: object): Op[] => [["beginText", []], ["setFont", ["F1", 11]], ["moveText", [20, 0]], ["showText", [[glyph("1"), middle, glyph("2")]]]];
+  // U+00AD takes no room and has no item: the 2 follows the 1 directly.
+  assert.deepEqual(strings(respaced([item("1 2")], input(between(glyph("\u00ad"))))), ["12"]);
+  // U+0301 is in the item and at the end of the 1 (its advance is nothing): the 2 follows it directly.
+  assert.deepEqual(strings(respaced([item("1\u0301 2")], input(between(glyph("\u0301"))))), ["1\u03012"]);
+  for (const space of ["\u00a0", "\t", "\u2003"]) {
+    for (const text of ["1 2", "12"]) assert.deepEqual(strings(respaced([item(text)], input(between(glyph(space, 278))))), [text], JSON.stringify(space));
+  }
+});
+
+test("the glyph columns kept between pages leave nothing of a longer page for a shorter one", () => {
+  const buffers = createGapBuffers();
+  const pages: Array<[string, number]> = [["123456789", 0.12], ["12", 0.2], ["1234", 0.12], ["12345678901234567890", 0.2], ["1234", 0.2]];
+  for (const [text, gap] of pages) {
+    const operators = digits(text, gap);
+    const fresh = respaced([item(text.split("").join(" "))], input(operators));
+    assert.deepEqual(respaced([item(text.split("").join(" "))], { ...input(operators), buffers }), fresh);
+  }
+  assert.deepEqual(strings(respaced([item("1234")], { ...input(digits("1234", 0.2)), buffers })), ["1 2 3 4"]);
 });
 
 test("vertical fonts and unknown fonts are not read", () => {
