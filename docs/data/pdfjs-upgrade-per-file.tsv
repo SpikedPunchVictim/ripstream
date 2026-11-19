@@ -1,0 +1,487 @@
+set	file	base_len	base_status	base_exc	base_repaired	base_ms	new_len	new_ms	new_status	new_exc	new_repaired	new_md_changed	new_text	new_vs_tika	new6_len	new6_ms	new6_status	new6_exc	new6_repaired	new6_md_changed	new6_text	new6_vs_tika	new6_tokens_delta	new6_chars_delta	new6_hunks	new6_hunk_votes	new6_f1_base	new6_f1_cand	new6_tika_exc	new_tokens_delta	new_chars_delta	new_hunks	new_hunk_votes	new_f1_base	new_f1_cand	new_tika_exc
+allpdf	00b78b716b006a71e268b86b1222383c98da03dd.pdf	2458	ok			445	2458	494	ok				identical		2458	543	ok				identical															
+allpdf	015fea585eb79a8bc99e19660b76eafdb4cffe0d.pdf	5753	ok			459	5753	413	ok				identical		5753	487	ok				identical															
+allpdf	03cb3defa3319aecf18594f6b4669b60c6d33590.pdf	54	ok		true	21	54	23	ok		true		identical		54	76	ok		true		identical															
+allpdf	045cc4e7e6c8fdf4eb73cc0f04e611119dc2145b.pdf	0	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no page tree)		13	0	14	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no page tree)			identical		0	6	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no page tree)			identical															
+allpdf	04974821510ae269e205357dfce8033915a4900d.pdf	21062	ok			160	21062	327	ok				identical		21062	207	ok				identical															
+allpdf	063fc8745c2ecbd77268dfa79a41baf5404bfa8e.pdf	4681	ok			134	4681	99	ok				identical		4681	83	ok				identical															
+allpdf	072587f02ad2f9c43a23d8f6a92a58af5ab733b1.pdf	39	ok			14	39	8	ok				identical		39	17	ok				identical															
+allpdf	074cc0479b7bccaeac0ddff776aed736998df026.pdf	63	ok			25	63	10	ok				identical		63	13	ok				identical															
+allpdf	0811f26556d691429976c388a8e79f23ac582e68.pdf	1708	ok			99	1708	99	ok				identical		1708	159	ok				identical															
+allpdf	0817d11875fd60b337d1fd76c1f425a6a8679844.pdf	2606	ok			45	2606	103	ok				identical		2606	143	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	0a91d97cd83023af422ed170d00d46d9573818e7.pdf	29	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 2 is cut off; page 1 content could not be checked	true	7	29	4	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 2 is cut off; page 1 content could not be checked	true		identical		29	6	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 2 is cut off; page 1 content could not be checked	true		identical															
+allpdf	0b26c621423a9c044656204ffbd25c1d65048ade.pdf	32	ok			10	32	13	ok				identical		32	29	ok				identical															
+allpdf	0b801eeb5a3c8875b02a44d9f544b7b57b043151.pdf	7508	ok			161	7508	286	ok				identical		7508	411	ok				identical															
+allpdf	0dcc76ada1e51bb57898204cf6b172aa36225057.pdf	8869	ok			310	8869	381	ok				identical		8869	323	ok				identical															
+allpdf	0dde19b947a6dc87ecdd2d2d828e7ff4ea7b86ce.pdf	34	ok			17	34	28	ok				identical		34	29	ok				identical															
+allpdf	0dee12de44e52f722713db44daf7fa04a6952a35.pdf	41465	ok			656	41465	676	ok				identical		41464	761	ok			pdf:chars-per-page	content	closer	1	-1	2	base:0 cand:0 both:0 neither:2	0.97542	0.97565								
+allpdf	0dfce370ab5a4da7f3923b09b3b96d01507bf149.pdf	36	ok			34	36	24	ok				identical		36	29	ok				identical															
+allpdf	0e05a4106aabeab16dbde269abd3708048fa4eff.pdf	28569	ok			554	28569	647	ok				identical		28569	888	ok				identical															
+allpdf	0ea91b42a07dda9533293c42e10faa31c59b2b43.pdf	706	ok			89	706	69	ok				identical		706	88	ok				identical															
+allpdf	0f7d0663ff3c071fe2ddd91a6aaed797d5c185e0.pdf	7564	ok			253	7564	444	ok				identical		7564	326	ok				identical															
+allpdf	0ff5e707786e43ea5252339df3c4b1e4f2aa9cf3.pdf	34	ok			91	34	49	ok				identical		34	50	ok				identical															
+allpdf	0ffd21868a709120c96c86ff09dbad4ed9c729cb.pdf	63	ok			31	63	51	ok				identical		63	41	ok				identical															
+allpdf	10c0734f64217e7d7b1b2de2a091737a45665452.pdf	2111	ok			162	2111	178	ok				identical		2111	103	ok				identical															
+allpdf	10ce04f7bb7a15962d2b9bcdcdd78cf92b87ca3e.pdf	57	ok			30	57	48	ok				identical		57	31	ok				identical															
+allpdf	111d1004df0da6f1f75fd11a4788c6da52b8ba90.pdf	789	ok			56	789	74	ok				identical		789	30	ok				identical															
+allpdf	11abc05e5674fbd40ab598c746245b8e74b2fb65.pdf	27	ok			10	27	20	ok				identical		27	19	ok				identical															
+allpdf	12f8afd575a6c2af17171bd37b62ee2ae6fcd7bd.pdf	29	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true	9	29	18	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true		identical		29	13	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true		identical															
+allpdf	142c495963e43556bfd292e314499e747d2d0047.pdf	46857	ok			944	46857	887	ok				identical		46857	530	ok				identical															
+allpdf	1468a27d563d221e7571c08f0a48abbaf1f9cdb3.pdf	79	ok			25	79	30	ok				identical		79	14	ok				identical															
+allpdf	154e9c97679e7fd757af2d2e59e6e6b9c79fb185.pdf	36	ok			26	36	22	ok				identical		36	17	ok				identical															
+allpdf	15b0bb92f0208e10d2d45e91354c00d57ecdad95.pdf	374	ok			25	374	40	ok				identical		374	44	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	16ad82a75a1c65ed8256164c85ead281c67524d4.pdf	696	ok			54	696	46	ok				identical		696	56	ok				identical															
+allpdf	17047c984166516bd8d5dd54d29691ac98bac3c8.pdf	27	ok			13	27	20	ok				identical		27	15	ok				identical															
+allpdf	17bc47c8b5c59ca9c6b16b2258ec93cbc473935c.pdf	55	ok			28	55	27	ok				identical		55	34	ok				identical															
+allpdf	1809cb8eed393bcc3215b403cf6f64397d4a7451.pdf	74354	ok			755	74354	1814	ok				identical		74356	1645	ok			pdf:chars-per-page	word-spacing-only	closer	3	2	2	base:0 cand:0 both:0 neither:2	0.96695	0.96707								
+allpdf	189c8c54b33a0363ef6f3395a69ac23ebf54a323.pdf	9510	ok			197	9510	267	ok				identical		9510	220	ok				identical															
+allpdf	195980a72198e28cdc680b417352c884bc49fc53.pdf	11193	ok			360	11193	215	ok				identical		11188	239	ok			pdf:chars-per-page	word-spacing-only	farther	-1	-5	1	base:0 cand:0 both:0 neither:1	0.96829	0.96802								
+allpdf	19c64968e5cdb000a2584cca4df65a1f5b5e81a7.pdf	15580	ok			1294	15580	1202	ok				identical		15580	1155	ok			pdf:chars-per-page	word-spacing-only	closer	3	0	6	base:0 cand:0 both:0 neither:6	0.97974	0.98131								
+allpdf	19f5343dd30adfbd69bcbb3aa40d32ed02dc70d3.pdf	0	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page tree object 4 is missing; 1 page could not be read)	true	27	0	10	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page tree object 4 is missing; 1 page could not be read)	true		identical		0	20	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page tree object 4 is missing; 1 page could not be read)	true		identical															
+allpdf	1a7c7578642237b985a4e589a755063158a347ce.pdf	12329	ok			329	12329	333	ok				identical		12333	570	ok			pdf:chars-per-page	word-spacing-only	closer	5	4	4	base:0 cand:0 both:0 neither:4	0.96691	0.96718								
+allpdf	1b391bfe67bce6a5ea6f611547f51b32656efc3f.pdf	39	ok			31	39	15	ok				identical		39	29	ok				identical															
+allpdf	1cae259b8081b278fd8fd017607fdc22418448dd.pdf	55	ok			23	55	24	ok				identical		55	17	ok				identical															
+allpdf	1d17ad386a7a3296535f690efce8dadd3705a035.pdf	3415	ok			36	3415	36	ok				identical		3415	40	ok				identical															
+allpdf	1e2a463e316ebb076b6636dbbeee7d6ce36b151c.pdf	1177	ok			35	1177	68	ok				identical		1177	69	ok				identical															
+allpdf	1e6622afba93ad82e25271bdf3bc1573feba10f3.pdf	39	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page 1 content is missing; page 2 content is missing; page 3 content is missing; pag	true	17	39	16	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page 1 content is missing; page 2 content is missing; page 3 content is missing; pag	true		identical		39	22	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; page 1 content is missing; page 2 content is missing; page 3 content is missing; pag	true		identical															
+allpdf	1e902ed1bcc6f34fa07a951c5c199addcab30f1e.pdf	0	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)		10	0	12	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)			identical		0	13	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)			identical															
+allpdf	1ea04f0c350e1682724956ae21b8ec9fbc592c28.pdf	0	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is missing; 1 page could not be read)	true	15	0	21	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is missing; 1 page could not be read)	true		identical		0	22	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is missing; 1 page could not be read)	true		identical															
+allpdf	1ea3d69bc95c2ca20f8bafdfcb609eda14491ed9.pdf	15359	ok			311	15359	384	ok				identical		15359	390	ok				identical															
+allpdf	1f1e3246ee304ec55b5c870f029a47bd19e47545.pdf	2202	ok			133	2202	65	ok				identical		2202	59	ok				identical															
+allpdf	2266a3fa7e00e2d14a7f77e7b6400c326f00b4e7.pdf	40	ok			88	40	13	ok				identical		40	21	ok				identical															
+allpdf	2387cae493ede621b99826a7244c8067a96bc3f4.pdf	39	ok			33	39	14	ok				identical		39	12	ok				identical															
+allpdf	2641c691bfe20798aac6f1c65654fdf9ce03fba3.pdf	34	ok			17	34	15	ok				identical		34	15	ok				identical															
+allpdf	265a4ac645ecd457254e0fc5a68644d73dc4451f.pdf	54	ok		true	28	54	13	ok		true		identical		54	12	ok		true		identical															
+allpdf	26f5cc22ec23f15fac1b3d962fb89755b9612db3.pdf	41	ok			28	41	9	ok				identical		41	12	ok				identical															
+allpdf	27779d1de5e36ccb3b6d0f1f52d6b47c3d266d20.pdf	2860	ok			35	2860	28	ok				identical		2860	23	ok				identical															
+allpdf	284912dae31c387ede61430a0e177e4e59823f9d.pdf	34	ok			21	34	11	ok				identical		34	11	ok				identical															
+allpdf	2858123808209a1415bfb030901bef4921569d22.pdf	23847	ok			1111	23847	1321	ok				identical		23853	793	ok			pdf:chars-per-page	word-spacing-only	closer	7	6	8	base:0 cand:0 both:0 neither:8	0.95763	0.95957								
+allpdf	28c67c5d387a5d522a73bc83a03e69d55f50c7a9.pdf	66117	ok			857	66117	2214	ok				identical		66117	1711	ok				identical															
+allpdf	28e153b0fc53b92d44874274c91856e14428a7d2.pdf	34433	ok			715	34433	751	ok				identical		34437	1644	ok			pdf:chars-per-page	word-spacing-only	closer	15	4	18	base:0 cand:0 both:0 neither:18	0.95395	0.95680								
+allpdf	2938996d896ed8692f0393272bdcc10a9fb37e55.pdf	39	ok			47	39	12	ok				identical		39	46	ok				identical															
+allpdf	294328c746cb1da8665f785fbf495a1358846c59.pdf	4653	ok			83	4653	49	ok				identical		4653	198	ok				identical															
+allpdf	2b01426dc0af2c2f531adc90e632819f0464c7f3.pdf	2809	ok			737	2809	380	ok				identical		2809	403	ok				identical															
+allpdf	2badeb86ff94266567dd00998ef4bb5901089fea.pdf	41	ok			50	41	9	ok				identical		41	39	ok				identical															
+allpdf	2c80fe861e3ccd047b9afaf6cd5092b5929e6cdd.pdf	2647	ok			307	2647	50	ok				identical		2647	76	ok				identical															
+allpdf	2cfacf54913504436fede4cf8387ffa1b5fa6483.pdf	276	ok			274	276	50	ok				identical		276	54	ok				identical															
+allpdf	2d18ddfbc17766d9fd343f39fba34459d183b932.pdf	44545	ok			1170	44545	1802	ok				identical		44545	1737	ok				identical															
+allpdf	2d8d27a8ddec2079d0cd6bf1a22a96ba375cefb1.pdf	10465	ok			65	10465	59	ok				identical		10465	59	ok				identical															
+allpdf	2e120b102181586fbf5dcea5f9950d652b9b6d0f.pdf	5176	ok			129	5176	92	ok				identical		5176	311	ok				identical															
+allpdf	2e954c01b713385afd20b45a6a532b3bb191ffb6.pdf	379	ok			109	379	22	ok				identical		379	37	ok				identical															
+allpdf	2f095e791677dff25320a14cc780672996e77728.pdf	41	ok			93	41	7	ok				identical		41	15	ok				identical															
+allpdf	2fce2ff4961a9c06118624dedcf51fec8813db85.pdf	1332	ok			62	1332	26	ok				identical		1332	32	ok				identical															
+allpdf	2fe260c002f519edfb3277ce55cd343fc3b98a85.pdf	11961	ok			349	11961	270	ok				identical		11961	279	ok				identical															
+allpdf	2ffd02f1f51221908f4756b4418a98bb5a23aa7f.pdf	563	ok			51	563	43	ok				identical		563	9	ok				identical															
+allpdf	317bdd60ad9b74887b1ecf4a3234ac4c264044e9.pdf	87	ok			17	87	15	ok				identical		87	18	ok				identical															
+allpdf	319985d16734f5facb6a83970965db03fcb7f16e.pdf	63	ok			25	63	13	ok				identical		63	13	ok				identical															
+allpdf	328c8ef34177a11995a681796c2f4b3d126d8fe9.pdf	13959	ok			499	13959	274	ok				identical		13959	261	ok				identical															
+allpdf	329f55a653d01e5cebd3a6a01680964e4bda1db8.pdf	72634	ok			1005	72634	1280	ok				identical		72638	1216	ok			pdf:chars-per-page	word-spacing-only	closer	6	4	10	base:0 cand:0 both:0 neither:10	0.91606	0.91683								
+allpdf	32e11f88c1c43c8a8bbd6e2c210a2bb53b81c98f.pdf	27	ok			19	27	26	ok				identical		27	49	ok				identical															
+allpdf	343a6e33374774f9342a4443b86b310aa3063999.pdf	27	ok			6	27	6	ok				identical		27	20	ok				identical															
+allpdf	360f1060c7b94fc618d6ae4abe0584df868e478f.pdf	42953	ok			344	42953	751	ok				identical		42953	452	ok				identical															
+allpdf	3762c46dc552b4d51691768007261e046930bfb6.pdf	7608	ok			176	7608	177	ok				identical		7608	136	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	3794db37bbbb1ce28b51080ebb7b50e3dc767340.pdf	26078	ok			175	26078	202	ok				identical		26078	152	ok				identical															
+allpdf	37c4a890102727e232bb50f28f7c8c8aa24c9a5a.pdf	27	ok			11	27	15	ok				identical		27	12	ok				identical															
+allpdf	3818e8728af8b5f0217fbf01a09fa0131d635408.pdf	8415	ok			93	8415	126	ok				identical		8415	128	ok				identical															
+allpdf	39016bfc1538cb0280633532bec8dfb38e29961e.pdf	50	ok			17	50	9	ok				identical		50	6	ok				identical															
+allpdf	39a2d7169cf0fd95dc5388f5994e1ecf7181f0a0.pdf	64	ok			105	64	7	ok				identical		64	11	ok				identical															
+allpdf	39ce350936d080942bb8d4f4420476b3da7ed980.pdf	70	ok			7	70	20	ok				identical		70	6	ok				identical															
+allpdf	39e6c3313800c063dc657574da327a22aeb22c13.pdf	86670	ok			1051	86670	1037	ok				identical		86672	1037	ok			pdf:chars-per-page	word-spacing-only	neutral	0	2	4	base:0 cand:0 both:0 neither:4	0.93593	0.93600								
+allpdf	3a099cb7296e872397b3e7946dbc074e6041befe.pdf	82	ok			60	82	10	ok				identical		82	23	ok				identical															
+allpdf	3c582edb66895dd6c945e59a50a9f576db49187a.pdf	41706	ok			479	41706	529	ok				identical		41706	505	ok				identical															
+allpdf	3c6e39404f851c207050442735b3c3516ea38472.pdf	39	ok			16	39	13	ok				identical		39	11	ok				identical															
+allpdf	3ca6496ff226e1a0be1260f4c543fc38006850fa.pdf	14993	ok			91	14993	71	ok				identical		14993	80	ok				identical															
+allpdf	3d1eaec331030565239033564662450e39cec991.pdf	35798	ok			284	35798	422	ok				identical		35798	396	ok				identical															
+allpdf	3d6fa9a8dec19690d7c9236b2759fbe9afbc5c33.pdf	47	ok		true	15	47	37	ok		true		identical		47	39	ok		true		identical															
+allpdf	3e5d61f51a2bbe1bac2392463f272be436ccda49.pdf	71199	ok			1474	71199	3594	ok				identical		71199	3345	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.92673	0.92673								
+allpdf	402296c15dd4ebfdd7128752336399390b892875.pdf	27	ok			9	27	40	ok				identical		27	73	ok				identical															
+allpdf	4073fc8c15e38997f617126939f4afc1b3f7a948.pdf	1143	ok			146	1143	217	ok				identical		1143	327	ok				identical															
+allpdf	416cdf791a2e2bf6551ffad7d0db2cf56e4bf631.pdf	8154	ok			76	8154	249	ok				identical		8154	365	ok				identical															
+allpdf	41c407dc3218683c3cf21e63d22f8c31dbbdc1ad.pdf	3019	ok			53	3019	37	ok				identical		3019	84	ok				identical															
+allpdf	41e28d017a88446241fc74524df1bf9510f8b259.pdf	27	ok			10	27	9	ok				identical		27	7	ok				identical															
+allpdf	41f692c1a00db4dee41547cd79bef2c2f238d1c8.pdf	32	ok			9	32	8	ok				identical		32	10	ok				identical															
+allpdf	42371a2f4331c1161e3a93f2661bbd192e4296c2.pdf	34	ok			13	34	12	ok				identical		34	13	ok				identical															
+allpdf	4307494bc13cdc59f7a1db27c1e695069ceacfef.pdf	69	ok			12	69	11	ok				identical		69	17	ok				identical															
+allpdf	438ba11ea6d0d55e24f4f09f99465b0d499fa521.pdf	87	ok			17	87	17	ok				identical		87	17	ok				identical															
+allpdf	442837a13f43a30228ebe04fcfdb64fcf39f687b.pdf	63	ok			13	63	10	ok				identical		63	19	ok				identical															
+allpdf	456103835dd5547fe640c25061c54e090747e7fb.pdf	39	ok			7	39	10	ok				identical		39	13	ok				identical															
+allpdf	4611c918184d56ddd0c13faf037f926ac176cb69.pdf	81	ok			9	81	10	ok				identical		81	15	ok				identical															
+allpdf	461c51e6b95d87d93b22ff72a7a60c2cc85d54a6.pdf	5872	ok			39	5872	77	ok				identical		5872	52	ok				identical															
+allpdf	46939ddac01c313166cdcae102eeef34893f972d.pdf	27	ok			6	27	16	ok				identical		27	16	ok				identical															
+allpdf	472c302c0e04111f322fcb7e5e709b33e692610a.pdf	16152	ok			244	16162	192	ok			pdf:chars-per-page	word-spacing-only	farther	16158	181	ok			pdf:chars-per-page	content	farther	8	6	13	base:1 cand:0 both:0 neither:12	0.98266	0.97757		9	10	9	base:1 cand:0 both:0 neither:8	0.98266	0.97738	
+allpdf	48175bb6c6ff5a2f43c16c62927f1098519e09fe.pdf	39	ok			41	39	16	ok				identical		39	10	ok				identical															
+allpdf	48ce146ec7bc9c50cfcd75afb63a6b576b280e7c.pdf	35	ok			28	35	4	ok				identical		35	5	ok				identical															
+allpdf	49d1910b8f22c9e313f47fd166d7120437ffaade.pdf	7451	ok			128	7451	98	ok				identical		7451	87	ok				identical															
+allpdf	4a0708f8ec7f7061ccf2de25a93b993117c3f29c.pdf	2022	ok			29	2022	18	ok				identical		2022	27	ok				identical															
+allpdf	4a0af57de862c5b812fd87a51a0fa341eddbef31.pdf	25076	ok			438	25076	331	ok				identical		25078	309	ok			pdf:chars-per-page	word-spacing-only	farther	-5	2	14	base:0 cand:0 both:0 neither:14	0.88708	0.88692								
+allpdf	4adaf654ea8de22434922852c66fe58a3384fe23.pdf	32	ok			33	32	8	ok				identical		32	7	ok				identical															
+allpdf	4ae3fdb040eb9abce8e33453e1ebcb9abbd54849.pdf	46	ok			21	46	7	ok				identical		46	11	ok				identical															
+allpdf	4b18f93d340e20cb79fd2edb73b0e20ec739a339.pdf	3297	ok			186	3297	121	ok				identical		3297	60	ok				identical															
+allpdf	4c4af5ee7b51c4c3bc0dd2f64469b0893e03bc74.pdf	59	ok			22	59	68	ok				identical		59	7	ok				identical															
+allpdf	4c5cc6dc5fecc52770ee51aa98bdacaa7965bff5.pdf	37789	ok			655	37789	470	ok				identical		37789	604	ok				identical															
+allpdf	4f218951c065c3ec2e55f6408776aa8f95cabee2.pdf	2022	ok			54	2022	29	ok				identical		2022	21	ok				identical															
+allpdf	4f2db4203ed6beb4d09377980d4f680264daac53.pdf	3601	ok			99	3601	67	ok				identical		3601	39	ok				identical															
+allpdf	4f9f99b13a0a3461fdbfec44351dc2c87a5e9927.pdf	3761	ok			122	3761	29	ok				identical		3761	34	ok				identical															
+allpdf	50a2dd5b00d60e9a9e82ab5eaba15158321ba795.pdf	48094	ok			2211	48094	738	ok				identical		48094	636	ok				identical															
+allpdf	50ab8da84394b9483f23af31930e58a81df21b68.pdf	52140	ok			748	52140	1013	ok				identical		52137	1051	ok			pdf:chars-per-page	word-spacing-only	neutral	1	-3	1	base:0 cand:0 both:0 neither:1	0.98131	0.98137								
+allpdf	5163d421eaf67dc32a6ae2313ac9cbd451621936.pdf	5536	ok			48	5536	94	ok				identical		5536	65	ok				identical															
+allpdf	517a58db3a48cac6eb4f7f0076a26580afd62744.pdf	47	ok			19	47	7	ok				identical		47	15	ok				identical															
+allpdf	51d176e789746ac41de1b21db81f3684e4e3b733.pdf	48	ok			6	48	7	ok				identical		48	6	ok				identical															
+allpdf	5212d41da90ef6fa601e23f399b191740bbba3e8.pdf	32	ok			5	32	8	ok				identical		32	5	ok				identical															
+allpdf	5221fd2c45f8a974454a3f247aa73c00bdaba4d5.pdf	32052	ok			506	32052	521	ok				identical		32052	477	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.97271	0.97271								
+allpdf	52432daaa726e5cabb1172de06d00a70387b9571.pdf	35	ok			21	35	31	ok				identical		35	16	ok				identical															
+allpdf	52d31c2d0a5ebec82edf7a79c4dd3f8c82a2fcb8.pdf	9421	ok			73	9421	121	ok				identical		9421	120	ok				identical															
+allpdf	544b71d76d1b6beafe96690254b42caa55f672ea.pdf	3798	ok			56	3798	34	ok				identical		3798	26	ok				identical															
+allpdf	547c5019a55c1135598a66461a115c312a859857.pdf	28995	ok			688	28995	321	ok				identical		28995	342	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.98433	0.98433								
+allpdf	54d841c3f62e7b039378ccd64e95905c75aca704.pdf	67	ok			11	67	10	ok				identical		67	9	ok				identical															
+allpdf	54f8e80b0641122ed9a7c2f2b064e553d929290e.pdf	55	ok		true	7	55	9	ok		true		identical		55	10	ok		true		identical															
+allpdf	55ffd5dec06253ef11f6f298e0c7ee107a90885d.pdf	49	ok			6	49	17	ok				identical		49	6	ok				identical															
+allpdf	567d464568799ad9e7bc11d4a67f53e596394ab8.pdf	66	ok			14	66	15	ok				identical		66	5	ok				identical															
+allpdf	567e23d5b80d34b98680313ea0103701b1df6195.pdf	1818	ok			51	1820	67	ok			pdf:chars-per-page	word-spacing-only	closer	1820	30	ok			pdf:chars-per-page	word-spacing-only	closer	2	2	2	base:0 cand:2 both:0 neither:0	0.97682	0.98680		2	2	2	base:0 cand:2 both:0 neither:0	0.97682	0.98680	
+allpdf	5799a525ddc459ff381d7bb0ab22deb4b69e4f44.pdf	11037	ok			211	11037	229	ok				identical		11037	171	ok				identical															
+allpdf	58ec356b973c787f21b9e921e2af839acc7f755f.pdf	34	ok			8	34	10	ok				identical		34	7	ok				identical															
+allpdf	59f8b1d1834c140d3018ba12bd23cade944f4c68.pdf	3447	ok			28	3447	59	ok				identical		3447	45	ok				identical															
+allpdf	5a7f18d523fde056606c8fc2a82fe15918a26fed.pdf	79	ok			7	79	6	ok				identical		79	12	ok				identical															
+allpdf	5d01d47fb0657ef5ee12718edffd40c7c765a597.pdf	3560	ok			42	3560	31	ok				identical		3560	52	ok				identical															
+allpdf	5df3af1728417b4eadf2f80caa48b032604e573e.pdf	2305	ok			98	2305	93	ok				identical		2305	81	ok				identical															
+allpdf	5e267e444a3413a6f4613ad7aa5fb603176be096.pdf	3785	ok			109	3785	79	ok				identical		3785	74	ok				identical															
+allpdf	61089ef556cb8f4b819818d9d7516b3a1f88faed.pdf	1880	ok			384	1880	295	ok				identical		1880	174	ok				identical															
+allpdf	620621ec8a5ebd14c8406e1461b28380aa04f03c.pdf	39	ok			36	39	15	ok				identical		39	13	ok				identical															
+allpdf	6322d282570d2f6f2a2407ce1e32a1431f9f7ab1.pdf	101	ok		true	11	101	38	ok		true		identical		101	7	ok		true		identical															
+allpdf	632b514a9a01363627b9a378e2f8db662c56c1a9.pdf	29	ok			14	29	12	ok				identical		29	15	ok				identical															
+allpdf	63a464738a0dcc9fd4baa2d86144f1312e668865.pdf	3946	ok			76	3946	67	ok				identical		3946	58	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	6603a948180c33fd4489154fd1b00d8e29aa0458.pdf	67	ok			8	67	16	ok				identical		67	8	ok				identical															
+allpdf	661fa00387949f31a550104560e21c881be4a722.pdf	63	ok			10	63	13	ok				identical		63	7	ok				identical															
+allpdf	669dcd3cd0d7fb13d2a49e94effa27f850132ea0.pdf	44026	ok			279	44026	586	ok				identical		44026	468	ok				identical															
+allpdf	669f1da0fe0589c9bf28e4c9e310deb25d32c06d.pdf	19441	ok			175	19441	385	ok				identical		19442	385	ok			pdf:chars-per-page	word-spacing-only	farther	1	1	1	base:0 cand:0 both:0 neither:1	0.95150	0.95107								
+allpdf	695ae5c9b3c7f22be02064d4a29b278715f803be.pdf	379	ok			7	379	22	ok				identical		379	57	ok				identical															
+allpdf	6a576a5aaea74862e399e62e6a88e516e6d7a27f.pdf	36	ok			12	36	27	ok				identical		36	7	ok				identical															
+allpdf	6abfdbb37ebbfb7d821145e8998376503249721e.pdf	39	ok			4	39	39	ok				identical		39	7	ok				identical															
+allpdf	6afac14684e2b95bf68bce9239f05179f4117645.pdf	38	ok			7	38	22	ok				identical		38	7	ok				identical															
+allpdf	6b6101cad6e76a49cba80f00684e9b7615824884.pdf	612	ok			16	612	48	ok				identical		612	28	ok				identical															
+allpdf	6b6f9e740b8b7b9193d4b208c540ab07e2a30db6.pdf	38	ok			6	38	22	ok				identical		38	6	ok				identical															
+allpdf	6bd3c620b3263d3311a07675b738b1f30cb6314b.pdf	46	ok			5	46	6	ok				identical		46	9	ok				identical															
+allpdf	6ca0fd3e112e9ad1de8a5f7d4aae3a6bf5e38432.pdf	45	ok		true	5	45	5	ok		true		identical		45	14	ok		true		identical															
+allpdf	6cfc9095024e66e72c345c34264c4444f6f8798b.pdf	1548	ok			27	1548	46	ok				identical		1548	46	ok				identical															
+allpdf	6e355850b6dda3aa1c9b29ae115f48aa3f3f6fd9.pdf	67	ok		true	7	67	5	ok		true		identical		67	14	ok		true		identical															
+allpdf	70336468c7e6332012b6e76e25eae8dc8b7b3d6b.pdf	2966	ok			26	2966	36	ok				identical		2966	54	ok				identical															
+allpdf	70da48394e9a5cfa86f3e1bfb477164b75dcdc3e.pdf	58	ok		true	8	58	11	ok		true		identical		58	17	ok		true		identical															
+allpdf	714c6951f2d7dac75ee722da2713c6a7ca1ecf5c.pdf	2000	ok			19	2000	28	ok				identical		2000	77	ok				identical															
+allpdf	716035cece46ca242e0390f6cb995a6fe6a108b4.pdf	34	ok			5	34	8	ok				identical		34	15	ok				identical															
+allpdf	74bc6a3efe195bda9dc86d9a3a49fff1b91e0acc.pdf	61394	ok			477	61394	2149	ok				identical		61396	1303	ok			pdf:chars-per-page	word-spacing-only	neutral	7	2	8	base:0 cand:0 both:0 neither:8	0.96595	0.96601								
+allpdf	7561e0809c6f2af8732b604bbdc84d585f6df120.pdf	50	ok			11	50	59	ok				identical		50	65	ok				identical															
+allpdf	757b375d32eea94f3b6539621d41cf42a7a67012.pdf	43423	ok			644	43423	2905	ok				identical		43423	2956	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.97605	0.97605								
+allpdf	760fba0f422e42174ad9dde4b096bd5c4db1040f.pdf	32	ok			13	32	35	ok				identical		32	49	ok				identical															
+allpdf	7752f10b8dc2b9ac72caafd4159e5e65e115a51c.pdf	30	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true	5	30	16	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true		identical		30	32	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page 1 content is missing)	true		identical															
+allpdf	7759d559316c0b851e45952c40771df84600af2a.pdf	255	ok			12	255	36	ok				identical		255	40	ok				identical															
+allpdf	778f7a53b1219f588227f810c29c9d2473d3b523.pdf	5741	ok			1189	5741	2268	ok				identical		5714	2352	ok			pdf:chars-per-page	content	closer	-28	-27	61	base:2 cand:9 both:0 neither:50	0.61127	0.64966								
+allpdf	77fda4d7f240c7a646c6b8b65fd5877c49b40cbc.pdf	31	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; page 1 is cut off)	true	14	31	32	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; page 1 is cut off)	true		identical		31	36	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; page 1 is cut off)	true		identical															
+allpdf	789a70277a91c6b5cb7a146e8baae614cfb74dc4.pdf	652	ok			32	652	101	ok				identical		652	71	ok				identical															
+allpdf	7b5c248c0a4ff3897db8db50f5161c92c152db99.pdf	32	ok			33	32	58	ok				identical		32	44	ok				identical															
+allpdf	7b98173e43320b82b93390456e4265fabcb95cea.pdf	46	ok		true	33	46	39	ok		true		identical		46	63	ok		true		identical															
+allpdf	7bb37017a54bd4be2290a0947373d1cd04eb49de.pdf	41641	ok			1200	41641	1948	ok				identical		41636	1544	ok			pdf:chars-per-page	content	closer	-3	-5	11	base:0 cand:0 both:0 neither:11	0.92448	0.92486								
+allpdf	7be82a1067615065de8ada217ba796aed0916b81.pdf	274	ok			124	274	44	ok				identical		274	34	ok				identical															
+allpdf	7dc178cae64fade868d8e1e4ce5c8ddc908ea6a0.pdf	51	ok		true	71	51	33	ok		true		identical		51	34	ok		true		identical															
+allpdf	7e7e6a3b751323ac0b73e27556972ee8c6c01959.pdf	34	ok		true	46	34	17	ok		true		identical		34	27	ok		true		identical															
+allpdf	7f35f33e881146fbad36a79b5bb75d370a013299.pdf	48	ok		true	38	48	20	ok		true		identical		48	26	ok		true		identical															
+allpdf	7f949a6aad69df806d90d2382f43f0c9a76747ba.pdf	5054	ok			628	5054	521	ok				identical		5054	259	ok				identical															
+allpdf	7fe6604bcc84c8f3c62deacdcc0083c3ac26c2e2.pdf	63	ok			38	63	86	ok				identical		63	34	ok				identical															
+allpdf	7ffa81c85fad8cbf282e31c3c8329ac9a9586680.pdf	64140	ok			2331	64140	2806	ok				identical		64140	1396	ok				identical															
+allpdf	83249e86036bed206cf8d7312f1971ad1a732d1d.pdf	2085	ok			133	2085	187	ok				identical		2085	173	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	8391ba5e7d958a6c535fcefd23e3056a2e64480e.pdf	43468	ok			3556	43468	29066	ok				identical		43468	4867	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.97464	0.97464								
+allpdf	83ffe81c85e53ff5baaf7007ba03db80800d57cc.pdf	50	ok		true	72	50	43	ok		true		identical		50	31	ok		true		identical															
+allpdf	8415696ecd7ebbc531191d9bd7a80eb46ebdf0d2.pdf	56	ok			21	56	55	ok				identical		56	37	ok				identical															
+allpdf	84a7932249d5feef4658cc2dbf507769fbaadf1e.pdf	39	ok			80	39	29	ok				identical		39	44	ok				identical															
+allpdf	84ad802b8ed55b6604171a3dee55fb02cf67938f.pdf	10368	ok			143	10368	883	ok				identical		10368	353	ok				identical															
+allpdf	8604de99a23a6f46f9acaf8f07615a70337c9071.pdf	11632	ok			143	11632	667	ok				identical		11632	258	ok				identical															
+allpdf	86ace8cbb454f837ac0408a36d83622222e82ac1.pdf	53	ok			19	53	43	ok				identical		53	55	ok				identical															
+allpdf	8809c0a0ba2dbe236cde46f78e77183ef97d08e9.pdf	5075	ok			550	5075	313	ok				identical		5075	169	ok				identical															
+allpdf	8851a3581f041e20a3486b705b7a6390363f4464.pdf	117876	ok			1113	117876	1133	ok				identical		117877	881	ok			pdf:chars-per-page	content	closer	0	1	5	base:0 cand:1 both:0 neither:4	0.98193	0.98205								
+allpdf	88be9f82fd87ccedc309a958554d8b246eef3abf.pdf	216	ok			60	216	71	ok				identical		216	43	ok				identical															
+allpdf	8bdcea6763d47a3e28eea51c3a256dc8e5a6cb06.pdf	21045	ok			295	21045	555	ok				identical		21045	331	ok				identical															
+allpdf	8c0eb5c2db89ad5e4bfb0c59dcfa36d55907e3a5.pdf	63	ok			51	63	36	ok				identical		63	36	ok				identical															
+allpdf	8c20187a471beb632e7b04712fb526c34cf45ca7.pdf	60	ok			32	60	26	ok				identical		60	10	ok				identical															
+allpdf	8d01e94c7e0ae58aa9212ca281219fd22b6877bf.pdf	2364	ok			167	2364	207	ok				identical		2364	76	ok				identical															
+allpdf	8dfd455725a338c3e682a698378de4b1c25b6e18.pdf	27	ok			45	27	21	ok				identical		27	20	ok				identical															
+allpdf	8e2560ce556c3282b8e4da8516c903ff285ea24d.pdf	27	ok			35	27	12	ok				identical		27	13	ok				identical															
+allpdf	8e553b46fbc8acd47f39d08fc0bdd2352511e693.pdf	27	ok			26	27	21	ok				identical		27	20	ok				identical															
+allpdf	8ea1ba74a8621ad38fa008dc80dad880008143da.pdf	3064	ok			240	3064	709	ok				identical		3064	471	ok				identical															
+allpdf	8eefa49d31d2c2a824227dc571a3df72498f1073.pdf	21367	ok			551	21367	738	ok				identical		21367	432	ok				identical															
+allpdf	8f74c4805e8d523de450386db4719a4cabd226f1.pdf	1930	ok			244	1930	94	ok				identical		1930	108	ok				identical															
+allpdf	908b9e4e16ae99e083edd02573704a1d4d3f1be5.pdf	51	ok		true	152	51	53	ok		true		identical		51	75	ok		true		identical															
+allpdf	910572e9d39489e3e3ff7f28b9abc90c18d462ae.pdf	2845	ok			489	2845	59	ok				identical		2845	119	ok				identical															
+allpdf	92c3eca3191ca7d1db78772e6e82e059a30ccfc7.pdf	379	ok			75	379	49	ok				identical		379	45	ok				identical															
+allpdf	92d472e5bd900e9b1df65a7e907a35023e76d499.pdf	42	ok			47	42	61	ok				identical		42	26	ok				identical															
+allpdf	931e24e428d16b01dd4b550d72ebfd14ae4579bf.pdf	5162	ok			57	5162	96	ok				identical		5162	96	ok				identical															
+allpdf	94244d0af33d6066e510c09c50442b43fcaf1868.pdf	7633	ok			234	7633	316	ok				identical		7633	138	ok				identical															
+allpdf	94d6f9647fd36369bc7030a2722215f9b3979a78.pdf	32	ok			40	32	59	ok				identical		32	24	ok				identical															
+allpdf	94db60bd891298c0b10a33908214b06d0af746ea.pdf	27	ok			26	27	26	ok				identical		27	14	ok				identical															
+allpdf	951e4f35efd9046e84872e212732647652be3418.pdf	5885	ok			116	5885	274	ok				identical		5885	90	ok				identical															
+allpdf	967df53947c1f60261c3f40ea9bf8447f87d37e2.pdf	39	ok			13	39	49	ok				identical		39	24	ok				identical															
+allpdf	976a247cb4c9c221a3dd58fde5474072be692b90.pdf	30711	ok			1217	30711	2661	ok				identical		30711	576	ok				identical															
+allpdf	97b3fbc29b8730d1b7cfcf96b58450469f468c08.pdf	749	ok			73	749	98	ok				identical		747	58	ok			pdf:chars-per-page	line-structure-only	neutral	0	-2	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	992757308a26c76fcd6fa73b4b72e7f7d688848a.pdf	9093	ok			491	9093	445	ok				identical		9093	539	ok				identical															
+allpdf	99599276827aa0ba9476eeeb9f51c1296865b971.pdf	41	ok			30	41	35	ok				identical		41	40	ok				identical															
+allpdf	998e8bb8f4b3a178cebd727e513d226ea6de480c.pdf	60	ok			46	60	52	ok				identical		60	57	ok				identical															
+allpdf	99fca1586bde898eb3d95164883da1461df49d25.pdf	27495	ok			273	27495	370	ok				identical		27495	530	ok				identical															
+allpdf	9aee7421c2dac25cd5fda2e173a9e44140e09d21.pdf	7514	ok			146	7514	160	ok				identical		7514	189	ok				identical															
+allpdf	9b2524a71ae7e10ed23e76c345678b4fbb769f3e.pdf	38	ok			25	38	20	ok				identical		38	62	ok				identical															
+allpdf	9d5a081b678b6c9d73fecea22d4e44c31410d31f.pdf	81	ok			22	81	21	ok				identical		81	92	ok				identical															
+allpdf	9e1e8d976e6ec5b3cb9bd188d6daddfc2af38069.pdf	23708	ok			1296	23708	833	ok				identical		23708	2612	ok				identical															
+allpdf	9e31eac9f4ce880f3b9a7c1299967c5b8873571c.pdf	9163	ok			329	9163	213	ok				identical		9163	509	ok				identical															
+allpdf	9e7305186d2090bc7122ed5eff59f593065b223c.pdf	29733	ok			1191	29733	1291	ok				identical		29733	1479	ok				identical															
+allpdf	9ed1e8fabb228cfa0dcc2ad30ed82b453d181049.pdf	1158	ok			76	1158	62	ok				identical		1158	74	ok				identical															
+allpdf	9f435720ddf4b7f438d14c0fdc6bc02ed9d9ca39.pdf	27	ok			43	27	15	ok				identical		27	15	ok				identical															
+allpdf	9fd844f16275dbadbade2e5ded3d84f5fd68051b.pdf	31	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 3 is cut off; page 1 is cut off)	true	25	31	5	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 3 is cut off; page 1 is cut off)	true		identical		31	14	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 3 is cut off; page 1 is cut off)	true		identical															
+allpdf	TAMReview.pdf	60533	ok			719	60535	615	ok			pdf:chars-per-page	word-spacing-only	neutral	60535	743	ok			pdf:chars-per-page	word-spacing-only	neutral	2	2	2	base:0 cand:0 both:0 neither:2	0.71552	0.71544		2	2	2	base:0 cand:0 both:0 neither:2	0.71552	0.71544	
+allpdf	a14631d2c54966ce091ef8199218919c1c3aa2f1.pdf	9509	ok			100	9509	116	ok				identical		9509	162	ok				identical															
+allpdf	a3f93b89ba448ba96e8c4c0881c26306651871d5.pdf	7135	ok			97	7135	191	ok				identical		7135	150	ok				identical															
+allpdf	a4061ffbf393b12478ba148db23d7183ddbc4a3e.pdf	179136	ok			110	179136	147	ok				identical		179136	72	ok				identical															
+allpdf	a41ef88feea692d7497f5d1cab03f99fcd609a37.pdf	41	ok			33	41	9	ok				identical		41	218	ok				identical															
+allpdf	a46e19bea9ab3c57892fab6aef56db38875f82f7.pdf	5076	ok			234	5076	310	ok				identical		5076	370	ok				identical															
+allpdf	a4c2bd78038ef206b8e03d9289409944d8f80b41.pdf	29	ok		true	19	29	19	ok		true		identical		29	28	ok		true		identical															
+allpdf	a57c9fb528d360a6a33ea4cdb876fcaea0d392ce.pdf	971	ok			164	971	68	ok				identical		971	112	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.98868	0.98868								
+allpdf	a57dbdbcb8741a480e70ab7c895a9606405d76b7.pdf	57898	ok			1133	57898	534	ok				identical		57907	1798	ok			pdf:chars-per-page	word-spacing-only	closer	10	9	11	base:0 cand:0 both:0 neither:11	0.88547	0.88629								
+allpdf	a6734962aff4c691c8fa6117f2e6850dab5d7e7d.pdf	27	ok			48	27	14	ok				identical		27	39	ok				identical															
+allpdf	a6766de4884e973640000f7824f3bb45fe199b37.pdf	27	ok			59	27	15	ok				identical		27	17	ok				identical															
+allpdf	a6b11ada6d1016664f4ee2e762769d7b2157b44c.pdf	446	ok			88	446	51	ok				identical		446	136	ok				identical															
+allpdf	a749aa2a86daa49881515fd7f6f516b62821b08c.pdf	25498	ok			576	25498	304	ok				identical		25501	412	ok			pdf:chars-per-page	word-spacing-only	closer	4	3	4	base:0 cand:0 both:0 neither:4	0.92830	0.92878								
+allpdf	a86b309adeea5833564d232de3c2ceea2ae8c13b.pdf	45976	ok			740	45976	378	ok				identical		45976	1070	ok			pdf:chars-per-page	content	closer	0	0	2	base:0 cand:1 both:0 neither:1	0.98319	0.98333								
+allpdf	a90b5fa2c0cb0c7cc2ad466970d9030cb1f2ff64.pdf	33	ok			396	33	15	ok				identical		33	26	ok				identical															
+allpdf	a94c3e400fc5426a0b8a650b924242abcc1e46f2.pdf	47269	ok			1052	47269	702	ok				identical		47269	645	ok				identical															
+allpdf	a95df519b1b0b2ef4352a1ec217d5b36095b4af4.pdf	19825	ok			364	19825	219	ok				identical		19825	296	ok				identical															
+allpdf	a97497857818b7c7c954e6715bbdfe121d28cef1.pdf	1622	ok			87	1622	68	ok				identical		1622	150	ok				identical															
+allpdf	abf24651f98b102e2ae4539c01dc29c45db0de5d.pdf	39	ok			23	39	24	ok				identical		39	40	ok				identical															
+allpdf	ac9df43812f5be60a8d56ffcca2cf59bd3bc2301.pdf	32	ok			25	32	9	ok				identical		32	75	ok				identical															
+allpdf	acba2c929e84dcee151116bcc221871f18de34b4.pdf	33644	ok			436	33644	390	ok				identical		33644	991	ok				identical															
+allpdf	aced005e614b36618982056ee458d346e7055431.pdf	7134	ok			123	7134	241	ok				identical		7134	204	ok				identical															
+allpdf	ad17f94dfd15d6a177c982dc3ccb881898391e4f.pdf	28818	ok			517	28818	1132	ok				identical		28818	809	ok				identical															
+allpdf	ada4a4245d7fae9bf6700dd6664d0e0ffc56e2cd.pdf	27	ok			14	27	28	ok				identical		27	9	ok				identical															
+allpdf	adc65141be35d321ea1f6673961abd9aa38a9271.pdf	1620	ok			48	1620	118	ok				identical		1620	60	ok				identical															
+allpdf	ae49e0bcff1a576b30691349ebdfeb1f8f8e5b40.pdf	32	ok			38	32	19	ok				identical		32	31	ok				identical															
+allpdf	aedeac670a73666b2a7a169b628720f1e5547023.pdf	14261	ok			261	14261	531	ok				identical		14261	374	ok				identical															
+allpdf	af5a6dde37d1fb91052965462caa5064f5c392ff.pdf	32	ok			26	32	8	ok				identical		32	27	ok				identical															
+allpdf	af86e079638b54edfaac961273339c9472ab8960.pdf	0	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no catalog)		20	0	4	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no catalog)			identical		0	6	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; 1 object cut off; no catalog)			identical															
+allpdf	b0526cff969764e996b74d4227b510b4d52c53bc.pdf	27	ok			17	27	11	ok				identical		27	22	ok				identical															
+allpdf	b15ecaf52a1bcd3bf55aea5e3b0ffbecc4a57f23.pdf	45	ok		true	17	45	10	ok		true		identical		45	59	ok		true		identical															
+allpdf	b248a73cde4f222e0442e0c916d2fb2cd2f58dc3.pdf	8314	ok			147	8314	124	ok				identical		8314	170	ok				identical															
+allpdf	b4c8d2af2068a3848233768ee403fca077be7f21.pdf	26728	ok			169	26728	170	ok				identical		26728	267	ok				identical															
+allpdf	b6fba1274609e2dfeb78b294f039185cfda93a26.pdf	18803	ok			325	18803	253	ok				identical		18804	695	ok			pdf:chars-per-page	word-spacing-only	farther	1	1	3	base:0 cand:0 both:0 neither:3	0.92853	0.92839								
+allpdf	b7d701438ba0f9dc8f491bca88aaf967c0c138f6.pdf	42	ok			19	42	9	ok				identical		42	37	ok				identical															
+allpdf	b7ea5ef1bb0bb513739ff6bc0da48849f03b65d7.pdf	3269	ok			80	3269	79	ok				identical		3269	165	ok				identical															
+allpdf	b7f64d06bb8a932630ce809edb622c649a7146ae.pdf	26641	ok			259	26641	215	ok				identical		26641	443	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.98894	0.98894								
+allpdf	b9e29f14c2c9c5a58b3abe78debad50a604c3226.pdf	4085	ok			151	4085	57	ok				identical		4085	269	ok				identical															
+allpdf	ba327de01c58b5fe53f78c2cbdd205e2badf3236.pdf	2168	ok			54	2168	43	ok				identical		2165	150	ok			pdf:chars-per-page	line-structure-only	neutral	0	-3	0	base:0 cand:0 both:0 neither:0	0.96000	0.96000								
+allpdf	ba84d1dccc545ad4bb83c9ee93c9bd10e50d1e7d.pdf	46	ok			28	46	21	ok				identical		46	73	ok				identical															
+allpdf	baf6c1a3fb25f0af5aabbc32aa841e27cb025020.pdf	0	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)		10	0	8	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)			identical		0	26	failed	MalformedDocumentError: Unable to read PDF (missing %%EOF; no startxref; no catalog)			identical															
+allpdf	bd31026ea4ad51d9e4ffef124b778e19331d9a0b.pdf	6172	ok			373	6172	111	ok				identical		6172	313	ok				identical															
+allpdf	bd6ba5b5c7524780d0168011a626046447833f2b.pdf	7449	ok			60	7449	215	ok				identical		7449	228	ok				identical															
+allpdf	be9a7bfad963f69713fa5535a6699cec7bc772f3.pdf	59	ok		true	44	59	25	ok		true		identical		59	40	ok		true		identical															
+allpdf	bf32920fc4b56db0c0e4b43b31ece3100dae7335.pdf	405	ok			29	405	18	ok				identical		405	73	ok				identical															
+allpdf	bf8c2d6490753ff64b2f3bfecd6418d0e8cb3054.pdf	0	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; 1 page could not be read)	true	21	0	8	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; 1 page could not be read)	true		identical		0	9	failed	MalformedDocumentError: PDF is damaged and no text could be recovered (missing %%EOF; no startxref; 1 object cut off; page tree object 4 is cut off; 1 page could not be read)	true		identical															
+allpdf	bug1978317.pdf	770197	ok		true	17393	770199	12138	ok			tk:pdf:repaired,tk:pdf:repair-steps,xmp:CreatorTool,pdf:producer,dcterms:created,pdf:docinfo:creator-tool,pdf:docinfo:producer,pdf:docinfo:created	line-structure-only	neutral	770199	14784	ok			tk:pdf:repaired,tk:pdf:repair-steps,xmp:CreatorTool,pdf:producer,dcterms:created,pdf:docinfo:creator-tool,pdf:docinfo:producer,pdf:docinfo:created	line-structure-only	neutral	0	2	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000		0	2	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000	
+allpdf	c2577f389e4a1f98dd4c06620b2f57a73db45ecb.pdf	49	ok			891	49	44	ok				identical		49	52	ok				identical															
+allpdf	c2bba50ad487232c00316d64db8ae47b87b50ce0.pdf	50	ok		true	38	50	46	ok		true		identical		50	31	ok		true		identical															
+allpdf	c382114eeffcc50ba02467c6f4fec9a7b7bf5af7.pdf	27	ok			18	27	5	ok				identical		27	20	ok				identical															
+allpdf	c3973d8d7ecb41b133160b4883c7a91241cf1ad4.pdf	221	ok			53	221	23	ok				identical		221	30	ok				identical															
+allpdf	c3f36dadd049d664d54648ead8e30fd780520d8f.pdf	43	ok			36	43	26	ok				identical		43	18	ok				identical															
+allpdf	c512614fe1077cdff5ee7e14eb31d60924c4caab.pdf	12027	ok			308	12027	253	ok				identical		12027	192	ok				identical															
+allpdf	c60613c7030f4f41e2a22335dbfc6dd06f9d0c18.pdf	7694	ok			249	7694	197	ok				identical		7694	183	ok				identical															
+allpdf	c6226b29cc7dbf687a505a3e6789747339acde9f.pdf	36216	ok			871	36216	500	ok				identical		36216	466	ok				identical															
+allpdf	c874a6dd6376aac5c41336e17ecd82ed278beffa.pdf	39	ok			107	39	20	ok				identical		39	16	ok				identical															
+allpdf	c95146ee2f5b52fcda2a9a8c020caab436e5e783.pdf	3285	ok			92	3285	72	ok				identical		3285	27	ok				identical															
+allpdf	ca24a705364a54bf3edd9810ffd151172423b8ef.pdf	40	ok		true	39	40	17	ok		true		identical		40	27	ok		true		identical															
+allpdf	ca42834e7b2dfa59f179bf39889c455536ee4b64.pdf	34	ok			73	34	21	ok				identical		34	10	ok				identical															
+allpdf	caae19ce955fa5e2df8fdac2d65ec7ab5c30bbe1.pdf	39	ok			52	39	14	ok				identical		39	10	ok				identical															
+allpdf	cc132339473e5f0a883ae3868d58b2672ac42035.pdf	30538	ok			2312	30538	465	ok				identical		30535	489	ok			pdf:chars-per-page	word-spacing-only	closer	3	-3	6	base:0 cand:1 both:0 neither:5	0.89396	0.89475								
+allpdf	ce478f1a8b2cc5ff69cd4938dbd38bf695668024.pdf	64	ok		true	53	64	13	ok		true		identical		64	32	ok		true		identical															
+allpdf	d0004ac01be2c6b43877de1cd964128c746463e3.pdf	23951	ok			304	23951	190	ok				identical		23951	168	ok				identical															
+allpdf	d02b9fc7442231a9bca2647513c94729df68aae1.pdf	3933	ok			93	3933	80	ok				identical		3933	97	ok				identical															
+allpdf	d11083c0cc4b165b3ec7667622cacad840a8ec47.pdf	20442	ok			152	20442	210	ok				identical		20442	164	ok				identical															
+allpdf	d12fd7a88a0d1307e474b47f8d4e0208e3db0d9c.pdf	3242	ok			173	3242	88	ok				identical		3242	134	ok				identical															
+allpdf	d13d98c7df5114c3f665f4a6ae557d4993cbb402.pdf	49	ok			19	49	17	ok				identical		49	44	ok				identical															
+allpdf	d55cd8a738a2283c4973a4fd8d551fa3e0966e7e.pdf	49464	ok			650	49464	698	ok				identical		49464	787	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.89265	0.89265								
+allpdf	d6dafb1053142d0b5572f408e1e6d7b28f526e1e.pdf	62	ok			15	62	37	ok				identical		62	22	ok				identical															
+allpdf	d7b2e581fc7f4652c6f0c2b0d28d9423b9b7a936.pdf	34	ok			20	34	25	ok				identical		34	9	ok				identical															
+allpdf	d7e7b32ae42bbc3a2aeb8c68a13807a8baf564e2.pdf	31	ok			9	31	8	ok				identical		31	8	ok				identical															
+allpdf	d9f0c89c688f9b34bd48feb47d77e42dd207d627.pdf	87102	ok			480	87102	737	ok				identical		87102	546	ok				identical															
+allpdf	dac745948a7f9cee5f809505a993f7941d682c96.pdf	7155	ok			104	7155	111	ok				identical		7155	61	ok				identical															
+allpdf	db2c7b8652748390e9589aef19db1a56abf815aa.pdf	28549	ok			233	28549	193	ok				identical		28549	206	ok				identical															
+allpdf	db4aafa0ef0af49bee0f6894826296e3a5165359.pdf	34	ok			15	34	16	ok				identical		34	19	ok				identical															
+allpdf	dcb003eedfbd2648a19789d943b80e145c99106c.pdf	43	ok			31	43	19	ok				identical		43	11	ok				identical															
+allpdf	dcbefb6879bed2eeafddca017cbacad98001981b.pdf	2284	ok			45	2284	78	ok				identical		2284	29	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	dd74b51473dd821e6c828ece2a741fcbd2bc84f3.pdf	468	ok			27	468	34	ok				identical		468	24	ok				identical															
+allpdf	dde2db8531411d11032a24e336289acd7aa3f0f4.pdf	27	ok			14	27	8	ok				identical		27	4	ok				identical															
+allpdf	ddf6402e0a66ae795366cef1d511b8c94faea77b.pdf	6127	ok			84	6127	75	ok				identical		6127	340	ok				identical															
+allpdf	ddf662a16d6fe197ae9b49a690511f47a3dfe20b.pdf	95	ok		true	14	95	21	ok		true		identical		95	81	ok		true		identical															
+allpdf	de76573ec40909f24e4d79707bb6afd164bbdc2b.pdf	17144	ok			308	17144	327	ok				identical		17155	780	ok			pdf:chars-per-page	word-spacing-only	closer	14	11	14	base:0 cand:3 both:0 neither:11	0.91623	0.91924								
+allpdf	df2c2498096dba72f9578f29034f1c524881461b.pdf	32650	ok			592	32650	1002	ok				identical		32650	223	ok				identical															
+allpdf	df56462dc1d6b2e5e033646df19aee58695e8bc6.pdf	50	ok		true	12	50	35	ok		true		identical		50	10	ok		true		identical															
+allpdf	e0f037fa6a4591d06802e1b09418ec0662817262.pdf	27	ok			5	27	9	ok				identical		27	4	ok				identical															
+allpdf	e1be4fccd062d332e1c74f93ca9a9edb69e4a2c7.pdf	33	ok			11	33	11	ok				identical		33	7	ok				identical															
+allpdf	e25105daa7dcda4942adddcf5622a96a019643a6.pdf	262	ok			29	262	10	ok				identical		262	15	ok				identical															
+allpdf	e4763419e92873ad15acab4efa560f2285056a3c.pdf	39	ok			24	39	8	ok				identical		39	22	ok				identical															
+allpdf	e4945d339cd7dcd99c1dfce5816ce6bea0a1d33e.pdf	49	ok		true	19	49	10	ok		true		identical		49	11	ok		true		identical															
+allpdf	e546220d690c39d2e84c1efc28a208c1dcd31aed.pdf	65	ok			27	65	9	ok				identical		65	18	ok				identical															
+allpdf	e575a8f17e42d4d6e723d4ee1223c004606ae4e0.pdf	43	ok			18	43	11	ok				identical		43	11	ok				identical															
+allpdf	e76536e8c41b02102625aeb0dcf24d257099f952.pdf	24051	ok			140	24051	354	ok				identical		24051	225	ok				identical															
+allpdf	e8ba60fb4799e6d5ef1319c37cdf36f1a7068920.pdf	7747	ok			168	7747	158	ok				identical		7747	259	ok				identical															
+allpdf	e90369b4d1454a3d2e70e2d03f71b18eb2c6d053.pdf	3017	ok			52	3017	94	ok				identical		3017	185	ok				identical															
+allpdf	ec39b5b8dbe1789ac94d48ebfc68885f07286586.pdf	6357	ok			218	6357	125	ok				identical		6357	295	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.99262	0.99262								
+allpdf	edcc114aa7a176399dbb6120410a4e91b143679a.pdf	24468	ok			110	24468	178	ok				identical		24468	225	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	0.99247	0.99247								
+allpdf	eee0ffb66f6fdf6f37c18b5d113685a67c2acfe1.pdf	2495	ok			90	2495	89	ok				identical		2495	109	ok				identical															
+allpdf	f0ef6ba148f14d7f5ab7587bbcc5998d1a809e53.pdf	4085	ok			121	4085	120	ok				identical		4085	323	ok				identical															
+allpdf	f2184f23dee0cbd5dea2f85fadf20a990e646edb.pdf	63	ok			40	63	13	ok				identical		63	55	ok				identical															
+allpdf	f23cc833eee49d6594c525ad35959a8f6136cfcc.pdf	50729	ok			642	50729	664	ok				identical		50730	1129	ok			pdf:chars-per-page	word-spacing-only	neutral	1	1	1	base:0 cand:0 both:0 neither:1	0.87570	0.87577								
+allpdf	f2c90801405d2aedf99ad5f71a0c3b66185110b1.pdf	82111	ok			455	82111	701	ok				identical		82111	651	ok				identical															
+allpdf	f2e762d4b274d08b3241c9bdb61d10c639e9997b.pdf	50	ok			8	50	45	ok				identical		50	13	ok				identical															
+allpdf	f33a247e5a480513530185b99e7d2443ee6f32cd.pdf	2055	ok			36	2055	64	ok				identical		2055	59	ok			pdf:chars-per-page	line-structure-only	neutral	0	0	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000								
+allpdf	f4d563db740871a41ad2feab7d20aff5af56a52f.pdf	1328	ok			81	1328	64	ok				identical		1331	77	ok			pdf:chars-per-page	word-spacing-only	closer	3	3	3	base:0 cand:0 both:0 neither:3	0.98546	1.00000								
+allpdf	f614b449ee2fd45974214014c109d993aab73343.pdf	24970	ok			220	24970	279	ok				identical		24971	895	ok			pdf:chars-per-page	word-spacing-only	closer	1	1	1	base:0 cand:0 both:0 neither:1	0.97344	0.97357								
+allpdf	f698260ee5136dec85622e97c1da972128ad2afb.pdf	27	ok			12	27	22	ok				identical		27	33	ok				identical															
+allpdf	f6e5e6a6e0f7a7ffa8eb65a21751332b43d38b2c.pdf	0	failed	MalformedDocumentError: Unable to read PDF (no startxref; no page tree)		4	0	12	failed	MalformedDocumentError: Unable to read PDF (no startxref; no page tree)			identical		0	8	failed	MalformedDocumentError: Unable to read PDF (no startxref; no page tree)			identical															
+allpdf	f72cf3fe580f1868bf9a3a7463f621a39b8bc406.pdf	11022	ok			101	11022	144	ok				identical		11038	224	ok			pdf:chars-per-page	word-spacing-only	closer	23	16	24	base:0 cand:0 both:0 neither:24	0.92417	0.94500								
+allpdf	f838f1f91640dc0ee6673fdbe0c222bd41d729cf.pdf	27	ok			12	27	9	ok				identical		27	33	ok				identical															
+allpdf	f86c2f82de71e9b7fcfa2ad0f3f6766bc137ad77.pdf	30922	ok			241	30922	281	ok				identical		30922	206	ok				identical															
+allpdf	f9ad434f709805b530094b1e85b57d251db2e644.pdf	35	ok			114	35	17	ok				identical		35	6	ok				identical															
+allpdf	fad3b7a63cda66d3c9ed469278a86fe8ef586135.pdf	2992	ok			111	2992	64	ok				identical		2992	79	ok				identical															
+allpdf	fb38723e252f527cb8c069a502bc5795abba420b.pdf	1725	ok		true	45	1725	26	ok		true		identical		1725	68	ok		true		identical															
+allpdf	fb5bb9431d1bb86129aa87ec9596e822babfb0db.pdf	11168	ok			532	11168	669	ok				identical		11168	488	ok				identical															
+allpdf	fc6e799aef6dd5677b46a397a4291ac96a0049f7.pdf	6633	ok			240	6633	165	ok				identical		6633	477	ok				identical															
+allpdf	fd3efc19bdd1a2ee9c255879c847ab3ce373b77e.pdf	34	ok			17	34	16	ok				identical		34	26	ok				identical															
+allpdf	fd7cdecc3dabca6cb85ec76d5fa42f379c17bc5d.pdf	47	ok			12	47	15	ok				identical		47	18	ok				identical															
+allpdf	fecc939ae256878f15d0c71955194cc07d1a10ec.pdf	7676	ok			148	7676	159	ok				identical		7676	287	ok				identical															
+allpdf	ff90b8e1adc6943e1bc7fe689ede79edfa6e138a.pdf	16569	ok			324	16569	173	ok				identical		16569	291	ok				identical															
+allpdf	freeculture.pdf	660821	ok			5012	660821	5336	ok				identical		660834	7971	ok			pdf:chars-per-page	word-spacing-only	farther	1	13	3	base:2 cand:0 both:0 neither:1	0.93278	0.93276								
+mut	022b9e9ff3f359d85814365dac5535efc52005f4.pdf	33	ok			306	33	347	ok				identical		33	478	ok				identical															
+mut	02825cc1b5f013041df74e82a93919958013bccc.pdf	36	ok		true	37	36	40	ok		true		identical		36	56	ok		true		identical															
+mut	06c22cfb0bfea1c564794676fbc32ad5dea379a5.pdf	34	ok			29	34	29	ok				identical		34	37	ok				identical															
+mut	06d71032cc5e5b2861df207d6bbbcd61c677304e.pdf	33	ok			24	33	15	ok				identical		33	30	ok				identical															
+mut	090e80ade38fdf3ca198acfe9efcc22647eaf2aa.pdf	33	ok			50	33	23	ok				identical		33	14	ok				identical															
+mut	0e7f45338a7205ad7016b5b570e32933f20e62d4.pdf	35	ok		true	43	35	49	ok		true		identical		35	36	ok		true		identical															
+mut	0ef5f13c5dd68adc457ba1639af9969beb2461b2.pdf	35	ok		true	33	35	29	ok		true		identical		35	32	ok		true		identical															
+mut	101102e567c5c4c5bf4775b83c5c98a30a9c730f.pdf	36	ok		true	24	36	52	ok		true		identical		36	36	ok		true		identical															
+mut	1189fb5d41f087fabb8a831db4f0382b5313cd32.pdf	34	ok			21	34	26	ok				identical		34	36	ok				identical															
+mut	13bda86260f99351dd2ab44a045f2ca8fd640d0d.pdf	35	ok		true	54	35	28	ok		true		identical		35	37	ok		true		identical															
+mut	14675e9522e2599615dc451019b5491805592450.pdf	34	ok			29	34	54	ok				identical		34	40	ok				identical															
+mut	15e6d180e110cd05dd9ffa1c1d97e590e8413a20.pdf	35	ok		true	17	35	33	ok		true		identical		35	23	ok		true		identical															
+mut	1b0cce8c9c231bcd305b8b77d95b6d2cdd3830d1.pdf	34	ok			34	34	18	ok				identical		34	22	ok				identical															
+mut	213cf5a5ef76efb3470dad3b141a4f14984713a4.pdf	35	ok		true	19	35	26	ok		true		identical		35	16	ok		true		identical															
+mut	222569962763775f28eba1682b703090c7055189.pdf	35	ok		true	38	35	17	ok		true		identical		35	26	ok		true		identical															
+mut	23fe70b825731ffaa0a4ad3225869a03e8e43c1f.pdf	35	ok		true	30	35	36	ok		true		identical		35	17	ok		true		identical															
+mut	265677f589c560b890a3aeeda26b6dc7d336741c.pdf	36	ok		true	48	36	31	ok		true		identical		36	34	ok		true		identical															
+mut	26e51faf1bf04a647a45b6dfe5548e8765c1a8eb.pdf	34	ok			50	34	50	ok				identical		34	25	ok				identical															
+mut	278344e98245658c918003b785fbb00c583dfd81.pdf	33	ok			27	33	37	ok				identical		33	58	ok				identical															
+mut	2ac8e7b18260e3951f751089c615fb50f30e5e85.pdf	35	ok		true	22	35	28	ok		true		identical		35	26	ok		true		identical															
+mut	2bfac900931d276ef032b5d6cb9c15e392f5c46f.pdf	35	ok		true	29	35	34	ok		true		identical		35	21	ok		true		identical															
+mut	2f666439acee83309185fd33b672ddcccd259f1d.pdf	33	ok			28	33	33	ok				identical		33	26	ok				identical															
+mut	3408d69b8f5b16814c05ff1a502f509df0b92a3e.pdf	35	ok		true	20	35	17	ok		true		identical		35	36	ok		true		identical															
+mut	38f8534f4ccff41b2a9259ef69962d409ee8299f.pdf	35	ok			19	35	23	ok				identical		35	25	ok				identical															
+mut	3aa0c98642ffa776dc05eac79b7763db908629d7.pdf	33	ok			20	33	25	ok				identical		33	16	ok				identical															
+mut	3b35c747002555fe6094409b7c57f62c992a3055.pdf	33	ok			19	33	20	ok				identical		33	21	ok				identical															
+mut	3c76f7630779a8b740cd676ac1736a1c4539b164.pdf	33	ok			28	33	16	ok				identical		33	21	ok				identical															
+mut	3d5e5617369700fc855de2a506413ca5f454a419.pdf	35	ok		true	47	35	24	ok		true		identical		35	31	ok		true		identical															
+mut	3dd28a5213060a7d9b9a28a5c7619a5affa1c172.pdf	33	ok			48	33	39	ok				identical		33	27	ok				identical															
+mut	3de33092cd4aa0e4556c4d35b6fd20fbb1151536.pdf	33	ok			33	33	50	ok				identical		33	68	ok				identical															
+mut	4239e9db18e416892e87ab5784a70da8d521cd47.pdf	36	ok		true	23	36	36	ok		true		identical		36	43	ok		true		identical															
+mut	43db18bebfef178e539463167237817bc77d229a.pdf	34	ok			28	34	17	ok				identical		34	22	ok				identical															
+mut	465788254a93012f636ffe9f375e878c08df06ca.pdf	33	ok			26	33	25	ok				identical		33	47	ok				identical															
+mut	49e44ee30caa74ba0eef47b64862fac1af96193d.pdf	33	ok			17	33	20	ok				identical		33	25	ok				identical															
+mut	4a8b4f23220b7b0c8eb89f4b07e859c7517c95ee.pdf	34	ok		true	15	34	17	ok		true		identical		34	41	ok		true		identical															
+mut	4c97773434ddc8208317a3b5f6d1cd5123a580e2.pdf	34	ok		true	35	34	17	ok		true		identical		34	30	ok		true		identical															
+mut	4d155ad6df99b60ffd552f661a384610453840c3.pdf	35	ok		true	27	35	36	ok		true		identical		35	46	ok		true		identical															
+mut	506266be4972bba38679affd8cbe78015f7344c9.pdf	33	ok			34	33	28	ok				identical		33	42	ok				identical															
+mut	510e016b78eac639ba0a537c5cb112f3505663bf.pdf	36	ok		true	37	36	31	ok		true		identical		36	38	ok		true		identical															
+mut	51262d1a8ad8981d0f1ffe5436e8b7c06784b5ad.pdf	33	ok			24	33	30	ok				identical		33	21	ok				identical															
+mut	5384fe5db4860e09c2c369cf731b2cd23b27b131.pdf	37	ok		true	23	37	26	ok		true		identical		37	26	ok		true		identical															
+mut	56b12eeb86dc0f2961a7c88e065ac1522cea4906.pdf	33	ok			14	33	25	ok				identical		33	37	ok				identical															
+mut	5ceb3a472ea704a61ef127e0574265333714c29f.pdf	36	ok		true	20	36	17	ok		true		identical		36	28	ok		true		identical															
+mut	5feb1883559e35c8f711e192c27f2f4d0cfaa8bd.pdf	33	ok			33	33	19	ok				identical		33	40	ok				identical															
+mut	633f4ba9153274a2b19024664cb9f303711ceb4a.pdf	34	ok			25	34	29	ok				identical		34	14	ok				identical															
+mut	64be43d10ce2f82813af3470b6b2fe8ad675f1f2.pdf	33	ok			42	33	28	ok				identical		33	40	ok				identical															
+mut	65c6888781e6acc8e64a140c7d449eb551cf5877.pdf	35	ok		true	31	35	39	ok		true		identical		35	38	ok		true		identical															
+mut	6c8cb68a292ffa0f2d029a569f8e0d54c14f1c99.pdf	36	ok		true	41	36	29	ok		true		identical		36	29	ok		true		identical															
+mut	6cfadb076b0407e88dee15ce95d6d26ca3eab568.pdf	33	ok			40	33	37	ok				identical		33	21	ok				identical															
+mut	6e8eee2e0d2da274f862f48e9dcf6a04fa611e8a.pdf	34	ok		true	21	34	36	ok		true		identical		34	21	ok		true		identical															
+mut	7b1d513bcd30d37dabcab9a74f0d7cf6b54d6cb0.pdf	34	ok		true	22	34	25	ok		true		identical		34	26	ok		true		identical															
+mut	7b4352afcb5c4b6aa7ee5530429ed46623356ad7.pdf	33	ok			17	33	19	ok				identical		33	23	ok				identical															
+mut	7c79d8248aba9861c68c2c3607387e798e4f4d04.pdf	34	ok			15	34	12	ok				identical		34	31	ok				identical															
+mut	7ced9a6fd7dcb95a4adac2c33ebcecbe1e57e48c.pdf	34	ok		true	16	34	13	ok		true		identical		34	31	ok		true		identical															
+mut	7d748e4273fa0706758d9c24e61d631c1fd54d9f.pdf	36	ok		true	16	36	15	ok		true		identical		36	43	ok		true		identical															
+mut	7f6b0c71eb19dc547875514f7879664fe6666f8a.pdf	35	ok		true	21	35	17	ok		true		identical		35	34	ok		true		identical															
+mut	82a8877462e1c7125c6a47f6f2a2e0d4bc9ddfe8.pdf	36	ok		true	24	36	21	ok		true		identical		36	37	ok		true		identical															
+mut	88b70c9c429eda2dd54c0b6863ddac78c925c914.pdf	34	ok			21	34	24	ok				identical		34	28	ok				identical															
+mut	8ebba68d83710a82f26764f9c7ea6b3d2ac99783.pdf	34	ok			24	34	29	ok				identical		34	22	ok				identical															
+mut	8ef26e88d8226aaffcd411c8ede4523e9d88d096.pdf	35	ok		true	34	35	22	ok		true		identical		35	18	ok		true		identical															
+mut	92ff3d67df8b1a3ef239d0802f3b0db0aea46f40.pdf	33	ok			18	33	27	ok				identical		33	17	ok				identical															
+mut	930e69b5e97f9a88758361d14411076cd0499a36.pdf	36	ok		true	37	36	34	ok		true		identical		36	16	ok		true		identical															
+mut	97db546b2368627f349d34ebcfa90ad6e6c49cee.pdf	33	ok			30	33	34	ok				identical		33	18	ok				identical															
+mut	9a75b5d31f1792465028fb72a4111acbbfd2c411.pdf	33	ok			19	33	20	ok				identical		33	14	ok				identical															
+mut	9e35678965783cb5e164af6565d7fa0a0208e6f9.pdf	36	ok		true	18	36	19	ok		true		identical		36	24	ok		true		identical															
+mut	9e4872f2a6eb047a9557d763cdef5a4564d6b057.pdf	33	ok			16	33	21	ok				identical		33	45	ok				identical															
+mut	a3ba3f1c232eaf3482319a57847fea82bb7e16c2.pdf	34	ok		true	13	34	14	ok		true		identical		34	28	ok		true		identical															
+mut	a65e5b4e519803049731e02bbeb63d2485942047.pdf	35	ok		true	21	35	18	ok		true		identical		35	21	ok		true		identical															
+mut	a9fa870d78f9ae16ba53f11a2a50c560f7489ce0.pdf	33	ok			21	33	16	ok				identical		33	26	ok				identical															
+mut	ad28e88bcbc8c63f1e6321a1d62e369d030a5d87.pdf	35	ok		true	21	35	18	ok		true		identical		35	23	ok		true		identical															
+mut	ade5cafb5c2c104967f25cf0a867ebb3e8c3ab43.pdf	36	ok		true	41	36	30	ok		true		identical		36	16	ok		true		identical															
+mut	b06007d8af96c14bd9f25144fb55f4a5de5a8ec5.pdf	33	ok			22	33	30	ok				identical		33	23	ok				identical															
+mut	b1f028c33e9b3316b90053a2bad3c7bb2d62f110.pdf	35	ok		true	16	35	16	ok		true		identical		35	16	ok		true		identical															
+mut	b21e2a9bb34fbe6ea544b4a77b44b2624afa4044.pdf	36	ok		true	23	36	24	ok		true		identical		36	25	ok		true		identical															
+mut	b3b786f73ef0db408abdfeb315dca2af26146a4a.pdf	36	ok		true	22	36	24	ok		true		identical		36	26	ok		true		identical															
+mut	b6d79798599489cded51c1ac8bc538625b2324c4.pdf	35	ok		true	12	35	12	ok		true		identical		35	19	ok		true		identical															
+mut	b7bcbfa9d128ffcf7e6030ea3cf5179eaccadf1e.pdf	33	ok			16	33	17	ok				identical		33	18	ok				identical															
+mut	bac069934d2b20134ec54e97881a36c05b16fc5f.pdf	36	ok		true	18	36	18	ok		true		identical		36	16	ok		true		identical															
+mut	bb6b06b81f38aa625fe2207483870f0b8400cbbf.pdf	33	ok			15	33	15	ok				identical		33	32	ok				identical															
+mut	bce61eb13956bcb5173abd5b9413729b350aaecf.pdf	33	ok			24	33	19	ok				identical		33	18	ok				identical															
+mut	be3f879605a5a2ca6754133c7f5f0e6666e46056.pdf	34	ok			29	34	24	ok				identical		34	21	ok				identical															
+mut	beafb0ab4224f37ba3265b40463ebd94bdf9c7da.pdf	33	ok			23	33	25	ok				identical		33	36	ok				identical															
+mut	bff464c1ebbf3d715cad65d5c3dcff6ea1747385.pdf	33	ok			19	33	17	ok				identical		33	51	ok				identical															
+mut	c0ff574c85b920110ce81e387554523b52bd373f.pdf	33	ok			21	33	26	ok				identical		33	73	ok				identical															
+mut	c3074617b61015e8ecde5eeabcb166da3043d592.pdf	33	ok			29	33	27	ok				identical		33	29	ok				identical															
+mut	c33b63d33319a664cae6ed557978c0ca4ca57c40.pdf	33	ok			26	33	20	ok				identical		33	25	ok				identical															
+mut	c445de164de00a7dbdb47e6a2e46368420f6b2bb.pdf	35	ok		true	21	35	16	ok		true		identical		35	13	ok		true		identical															
+mut	c4dd436988ece91bc26aaa53727bacbf58adf8c9.pdf	36	ok		true	27	36	34	ok		true		identical		36	22	ok		true		identical															
+mut	c5f06f2ef3a4784a7bac79902c00df30f0175cdb.pdf	33	ok			42	33	44	ok				identical		33	21	ok				identical															
+mut	c677c3fb83ac86767748e06ac92f593a291745d2.pdf	33	ok			55	33	37	ok				identical		33	51	ok				identical															
+mut	cd7745251bfd52a089c58800a9730e4d985742a4.pdf	34	ok			32	34	38	ok				identical		34	42	ok				identical															
+mut	cf55c2da24bda016360affdf49ed1db895106ee6.pdf	33	ok			27	33	15	ok				identical		33	27	ok				identical															
+mut	d0ad737cd6672b65d5e8711136b5ccdbfd9febd5.pdf	36	ok		true	15	36	22	ok		true		identical		36	35	ok		true		identical															
+mut	d0ae8377433f710b1afef8194e35a99e54b9299a.pdf	34	ok		true	20	34	22	ok		true		identical		34	24	ok		true		identical															
+mut	d0bca9d0bcd3cb9676c4cec9440b1b2b792d6ed3.pdf	35	ok		true	16	35	23	ok		true		identical		35	21	ok		true		identical															
+mut	d2a0b0add34c4548a1ca903084d0e55a0584c62c.pdf	35	ok		true	27	35	26	ok		true		identical		35	23	ok		true		identical															
+mut	d4e3d247d0695668e5b4beb6945260cbc2db17bb.pdf	35	ok		true	29	35	36	ok		true		identical		35	25	ok		true		identical															
+mut	d536f9686e28f124fdd331bae7f0fd9f2a9643af.pdf	33	ok			31	33	24	ok				identical		33	30	ok				identical															
+mut	d56dcb590dcab65b81902ccdb4241860d1e8cfc8.pdf	35	ok		true	18	35	17	ok		true		identical		35	20	ok		true		identical															
+mut	d5c0820de789f69abd9ba33c3d1f832dc40e56fd.pdf	35	ok		true	29	35	34	ok		true		identical		35	23	ok		true		identical															
+mut	d99cdfeb8f0a9b1a227263e34c5b4c1201e0d569.pdf	36	ok		true	25	36	23	ok		true		identical		36	24	ok		true		identical															
+mut	d9f3a108f1795e5ba3266191f2f4389e006feaaa.pdf	33	ok			14	33	11	ok				identical		33	17	ok				identical															
+mut	df52395b29dc658998648ad157b1fcbac9f6c162.pdf	33	ok			21	33	22	ok				identical		33	14	ok				identical															
+mut	dfc5b1c6b02512a8418a0b1538bdd10f8aced91d.pdf	33	ok			14	33	14	ok				identical		33	19	ok				identical															
+mut	e02eefde3f2879b831024f407de9312a32bec4ac.pdf	34	ok		true	19	34	20	ok		true		identical		34	20	ok		true		identical															
+mut	e1245894918d8396a58ba6dab07bfde71e78d327.pdf	34	ok		true	31	34	28	ok		true		identical		34	38	ok		true		identical															
+mut	e167e3e900dbd6e21b4c669b6fbf322d1a5112c4.pdf	34	ok		true	19	34	19	ok		true		identical		34	19	ok		true		identical															
+mut	e2228f285d5920a8c61a36727cda7cb70e24abd2.pdf	33	ok			28	33	30	ok				identical		33	20	ok				identical															
+mut	e2bbffe4948ce05df96dcd31a6f21182668fa97a.pdf	33	ok			18	33	21	ok				identical		33	54	ok				identical															
+mut	e31f1d405dc8a17274eb26f3810a9ad1079f2cfd.pdf	34	ok			19	34	17	ok				identical		34	25	ok				identical															
+mut	e82bb13051ec4f13bb1edb9671920db83da3e1f9.pdf	33	ok			14	33	25	ok				identical		33	27	ok				identical															
+mut	e9a19eccd093ac1129b3199567c586f6d6bb0c6b.pdf	34	ok			27	34	45	ok				identical		34	27	ok				identical															
+mut	ed9b3bf7650432b3e02aca30568fbae0adb9d8a0.pdf	33	ok			40	33	92	ok				identical		33	22	ok				identical															
+mut	edd24f3365e69029f0859fc0fc6eb5f172539ed6.pdf	33	ok			15	33	29	ok				identical		33	24	ok				identical															
+mut	ee09aacf4bc348e9d3d98665056a095c90be0351.pdf	33	ok			16	33	25	ok				identical		33	26	ok				identical															
+mut	eedc4a3219a1861f15dd0d6948b14663375707c7.pdf	33	ok			22	33	25	ok				identical		33	15	ok				identical															
+mut	eee2891612207f2b8d3338b2487db3c07d7abfc6.pdf	33	ok			23	33	33	ok				identical		33	22	ok				identical															
+mut	efff8ad56cf8246ab992f855ce0d534a5de3320f.pdf	33	ok			19	33	12	ok				identical		33	37	ok				identical															
+mut	f06460436f48f3895ac0162cb455c022e6804fbf.pdf	35	ok		true	20	35	22	ok		true		identical		35	29	ok		true		identical															
+mut	f43712a9e39da110e68f9b05fbb69adf4094039d.pdf	34	ok		true	21	34	43	ok		true		identical		34	23	ok		true		identical															
+mut	f5f2636ef101d0dd0c012cd453fb5b99185b3b54.pdf	37	ok		true	52	37	32	ok		true		identical		37	34	ok		true		identical															
+mut	f903682d1c2603897332c42e6b2ecd15f3e518f9.pdf	34	ok		true	121	34	34	ok		true		identical		34	35	ok		true		identical															
+mut	f98f33b74032830a9113b2047b34346799036c41.pdf	35	ok		true	35	35	30	ok		true		identical		35	50	ok		true		identical															
+mut	f9ed79392b75e2d8c241cccdd5e772859b7766fe.pdf	33	ok			42	33	25	ok				identical		33	23	ok				identical															
+mut	fba142c92cc61122600a113706af0911f508feea.pdf	33	ok			30	33	32	ok				identical		33	20	ok				identical															
+mut	fc3a9ce03a34cc8d148f7115aa8595a834f9f292.pdf	33	ok			20	33	16	ok				identical		33	32	ok				identical															
+mut	fc4318b75aa01f288d96fe37ed182d03de0cb4a3.pdf	33	ok			33	33	20	ok				identical		33	23	ok				identical															
+mut	fd3efc19bdd1a2ee9c255879c847ab3ce373b77e.pdf	34	ok			18	34	35	ok				identical		34	30	ok				identical															
+mut	fde1afbc21946d45c7b471397f34e1971d74a78c.pdf	33	ok			21	33	32	ok				identical		33	38	ok				identical															
+review	TAMReview.pdf	60533	ok			1566	60535	1699	ok			pdf:chars-per-page	word-spacing-only	neutral	60535	1605	ok			pdf:chars-per-page	word-spacing-only	neutral	2	2	2	base:0 cand:0 both:0 neither:2	0.71552	0.71544		2	2	2	base:0 cand:0 both:0 neither:2	0.71552	0.71544	
+review	bug1978317.pdf	770197	ok		true	6204	770199	4803	ok			tk:pdf:repaired,tk:pdf:repair-steps,xmp:CreatorTool,pdf:producer,dcterms:created,pdf:docinfo:creator-tool,pdf:docinfo:producer,pdf:docinfo:created	line-structure-only	neutral	770199	4616	ok			tk:pdf:repaired,tk:pdf:repair-steps,xmp:CreatorTool,pdf:producer,dcterms:created,pdf:docinfo:creator-tool,pdf:docinfo:producer,pdf:docinfo:created	line-structure-only	neutral	0	2	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000		0	2	0	base:0 cand:0 both:0 neither:0	1.00000	1.00000	
+review	freeculture.pdf	660821	ok			4907	660821	5330	ok				identical		660834	4663	ok			pdf:chars-per-page	word-spacing-only	farther	1	13	3	base:2 cand:0 both:0 neither:1	0.93278	0.93276								
