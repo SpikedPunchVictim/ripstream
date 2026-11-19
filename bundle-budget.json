@@ -1,5 +1,5 @@
 {
-  "core": 1650,
+  "core": 1735,
   "mime": 1100,
   "parsers": 1145,
   "parser-office": 740,
@@ -8,13 +8,13 @@
   "parser-media": 450,
   "parity": 25,
   "test-corpus": 15,
-  "total": 7500,
+  "total": 7620,
   "cli": 125,
   "language": 110,
   "server": 212,
   "pipes": 665,
   "bundle-standard": 30,
-  "isolation-node": 710,
+  "isolation-node": 745,
   "parser-db": 120,
   "cli-bundle": 4850
 }

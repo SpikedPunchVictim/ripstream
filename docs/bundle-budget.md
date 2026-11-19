@@ -24,6 +24,9 @@ measured size plus about five percent (KiB).
 
 | package | measured | cap | what grew it |
 |---|---|---|---|
+| isolation-node | 727,000 | 745 (was 710) | headroom, not one feature: the work since the last raise (per-request limits across the child boundary, typed limit fields, warnings frames, `maxInputBytes`, `overshootMb` and per-request refusal, reuse diagnostics, the `permission` option) used all but 40 bytes of the cap. Raised on the owner's decision (2026-11-18) so the next feature does not need its own raise |
+| core | 1,689,262 | 1735 (was 1650) | headroom, as above: typed `LimitExceededError`, `AdmissionRefusedError`, warnings and `onLowYield`, `maxInputBytes`, `maxPages`, record status, `tk:extractor-version` left 338 bytes. Raised on the owner's decision (2026-11-18) |
+| total | 7,485,300 | 7620 (was 7500) | the two raises above |
 | parser-pdf | 427,828 | 435 (was 385) | the glyph-gap interpreter that applies PDFBox's word-space rule per glyph (tikajs-4c5k), about 31 KB of dist including its source map and `.d.ts` |
 | parser-archive | 257,380 | 252 (was 250) | typed `limit`, `observed` and `max` at every archive throw site, through core's `limitError` (tikajs-mz56) |
 | parsers | 1,112,011 | 1100 (was 1000) | a hand-written CommonMark/GFM block and inline parser for Markdown (tikajs-8uhs, no new dependency); RTF `\pict` embedded documents (tikajs-3b5g); Tika-exact email body text (tikajs-w12u); the HTML body start (tikajs-x1cd); XML UTF-16 detection (tikajs-dmp7); unversioned WordPerfect as empty (tikajs-mic4). Per-feature bytes not measured |
