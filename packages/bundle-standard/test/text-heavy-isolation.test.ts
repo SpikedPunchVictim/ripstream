@@ -39,10 +39,14 @@ async function withIsolation(
 // and about 40 MiB after (80 MiB).
 const PAGES = 1000;
 const SMALL_HEAP_MB = 128;
+// What these tests assert is heap and output, not speed. The 1,000-page parse takes about 13 s alone and 60 s or more when
+// the whole suite runs in parallel, which is the default maxTaskMillis; give each parse a wall budget it cannot reach
+// (tikajs-ffom). A hung child would still end at this budget.
+const LOAD_PROOF_TASK_MS = 600_000;
 
 test("a 1,000-page text PDF reaches its text in a child with a 128 MiB heap (pdf.js releases per-page state)", async () => {
   const pdf = buildTextHeavyPdf(PAGES);
-  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB } }, async (parse) => {
+  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB, maxTaskMillis: LOAD_PROOF_TASK_MS } }, async (parse) => {
     const records = await parse(pdf, 12_000_000);
     assert.equal(records.length, 1);
     assert.equal(records[0]?.exception, null);
@@ -52,7 +56,7 @@ test("a 1,000-page text PDF reaches its text in a child with a 128 MiB heap (pdf
 
 test("text up to the output cap comes back as a partial result, with the flag, in the same small heap", async () => {
   const pdf = buildTextHeavyPdf(PAGES);
-  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB } }, async (parse) => {
+  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB, maxTaskMillis: LOAD_PROOF_TASK_MS } }, async (parse) => {
     const records = await parse(pdf, 5_000_000);
     assert.equal(records[0]?.content.length, 5_000_000);
     assert.equal(records[0]?.metadata.get("tk:exception:write-limit-reached"), "true");
@@ -73,7 +77,7 @@ test("a child that runs out of heap says so, names heapMb and the child's reside
 
 test("a text-heavy DOCX reaches the cap under truncate in a small heap", async () => {
   const docx = buildTextHeavyDocx(60_000);
-  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB } }, async (parse) => {
+  await withIsolation({ config: { mode: "strict", perChildMb: 768, heapMb: SMALL_HEAP_MB, maxTaskMillis: LOAD_PROOF_TASK_MS } }, async (parse) => {
     const records = await parse(docx, 3_000_000);
     assert.equal(records[0]?.content.length, 3_000_000);
     assert.equal(records[0]?.metadata.get("tk:exception:write-limit-reached"), "true");
